@@ -6,4 +6,3 @@ frontend/node_modules/
 *.db-wal
 deploy/.env
 *.log
-.claude/

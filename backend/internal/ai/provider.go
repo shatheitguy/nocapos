@@ -1,4 +1,4 @@
-// Package ai runs the AI Assistant: provider clients (local Ollama, Claude,
+// Package ai runs the AI Assistant: provider clients (local Ollama, Anthropic,
 // OpenAI-compatible APIs), chat orchestration with saved history, context
 // window management and long-term memory.
 package ai
@@ -76,7 +76,7 @@ const (
 	DefaultOllamaContext    = 8192
 	DefaultOpenAIContext    = 128000
 	DefaultAnthropicContext = 200000
-	DefaultClaudeModel      = "claude-opus-5-5"
+	DefaultAnthropicModel   = "claude-opus-5-5"
 )
 
 // ---------- secret box for API keys ----------

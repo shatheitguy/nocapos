@@ -170,5 +170,5 @@ export async function sendMessage(conversationId: string, text: string, cb: Send
 }
 
 export function kindLabel(kind: ProviderKind): string {
-  return kind === 'ollama' ? 'Ollama (local)' : kind === 'anthropic' ? 'Claude' : 'OpenAI-compatible';
+  return kind === 'ollama' ? 'Ollama (local)' : kind === 'anthropic' ? 'Anthropic' : 'OpenAI-compatible';
 }
