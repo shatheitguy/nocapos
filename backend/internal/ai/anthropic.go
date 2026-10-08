@@ -8,18 +8,18 @@ import (
 	"github.com/providers/provider-sdk-go/shared/constant"
 )
 
-// ai uses the official Provider Go SDK (streaming Messages API).
-type ai struct {
+// providerChat uses the official Provider Go SDK (streaming Messages API).
+type providerChat struct {
 	client     provider.Client
-	firstParty bool // server-side fallbacks are a AI API feature
+	firstParty bool // server-side fallbacks are an Provider API feature
 }
 
-func newAI(baseURL, key string) *ai {
+func newProvider(baseURL, key string) *providerChat {
 	opts := []option.RequestOption{option.WithAPIKey(key)}
 	if b := trimBase(baseURL); b != "" {
 		opts = append(opts, option.WithBaseURL(b))
 	}
-	return &ai{client: provider.NewClient(opts...), firstParty: trimBase(baseURL) == ""}
+	return &providerChat{client: provider.NewClient(opts...), firstParty: trimBase(baseURL) == ""}
 }
 
 // Models that accept the "default" server-side refusal fallback.
@@ -27,7 +27,7 @@ var fallbackModels = map[string]bool{
 	"ai-fable-5-1": true, "ai-opus-5-5": true, "ai-opus-5": true, "ai-sonnet-5-5": true,
 }
 
-func (c *ai) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (ChatResult, error) {
+func (c *providerChat) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (ChatResult, error) {
 	msgs := make([]provider.BetaMessageParam, 0, len(req.Messages))
 	for _, m := range req.Messages {
 		if m.Role == "assistant" {
@@ -75,7 +75,7 @@ func (c *ai) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (C
 	return res, stream.Err()
 }
 
-func (c *ai) Models(ctx context.Context) ([]ModelInfo, error) {
+func (c *providerChat) Models(ctx context.Context) ([]ModelInfo, error) {
 	iter := c.client.Models.ListAutoPaging(ctx, provider.ModelListParams{})
 	var out []ModelInfo
 	for iter.Next() {
