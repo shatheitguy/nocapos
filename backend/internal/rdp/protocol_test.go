@@ -41,7 +41,7 @@ func TestHandshake(t *testing.T) {
 		Encode("ready", "$abc")
 	var sent bytes.Buffer
 	id, err := Handshake(&sent, NewReader(strings.NewReader(server)), Params{
-		Hostname: "192.168.0.170", Username: "me", Password: "p,w;d", IgnoreCert: true, Width: 1280, Height: 800,
+		Hostname: "192.168.1.170", Username: "me", Password: "p,w;d", IgnoreCert: true, Width: 1280, Height: 800,
 	})
 	if err != nil || id != "$abc" {
 		t.Fatalf("Handshake = %q, %v", id, err)
@@ -50,7 +50,7 @@ func TestHandshake(t *testing.T) {
 	for _, frag := range []string{
 		Encode("select", "rdp"),
 		Encode("size", "1280", "800", "96"),
-		Encode("connect", "VERSION_1_5_0", "192.168.0.170", "3389", "me", "p,w;d", "true", ""),
+		Encode("connect", "VERSION_1_5_0", "192.168.1.170", "3389", "me", "p,w;d", "true", ""),
 	} {
 		if !strings.Contains(out, frag) {
 			t.Fatalf("client output missing %q in %q", frag, out)
