@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'LICENSE', 'docs/**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Web UI (typecheck + build)
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Go vet and tests
+        working-directory: backend
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "run gofmt"; exit 1; }
+          go vet ./...
+          GOOS=windows go vet ./...
+          go test ./...

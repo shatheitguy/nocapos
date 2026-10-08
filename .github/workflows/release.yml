@@ -1,0 +1,61 @@
+name: Release
+
+# Every push to main that changes the code publishes a new release, so the
+# one-line installer (releases/latest) always gets the newest build.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['README.md', 'LICENSE', 'docs/**', '.github/workflows/ci.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Test
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build bundles
+        run: bash scripts/package.sh "0.3.${{ github.run_number }}"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.3.${{ github.run_number }}
+          name: NoCapOS 0.3.${{ github.run_number }}
+          make_latest: true
+          body: |
+            Install or update on Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch (amd64, arm64, armv7):
+
+            ```bash
+            curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash
+            ```
+
+            Changes in this build: ${{ github.event.head_commit.message }}
+          files: |
+            dist/nocapos-linux-amd64.tar.gz
+            dist/nocapos-linux-arm64.tar.gz
+            dist/nocapos-linux-armv7.tar.gz
+            dist/SHA256SUMS
+            dist/install.sh
