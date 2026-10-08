@@ -1,0 +1,125 @@
+# Alfa OS core stack.
+#
+#   cp .env.example .env    # set DOCKER_GID: stat -c %g /var/run/docker.sock
+#   docker compose up -d --build
+#
+# NVIDIA hosts: docker compose -f docker-compose.yml -f docker-compose.nvidia.yml up -d --build
+
+name: alfaos
+
+services:
+  # Read-only, GET-only view of the Docker API for Traefik's service discovery.
+  # Traefik never touches the real socket.
+  socket-proxy:
+    image: ${SOCKET_PROXY_IMAGE:-tecnativa/docker-socket-proxy:latest}
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      EVENTS: 1
+      PING: 1
+      VERSION: 1
+      POST: 0
+    volumes:
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    networks: [alfa-socket]
+    security_opt: [no-new-privileges:true]
+    labels:
+      alfa.system: "true"
+
+  traefik:
+    image: ${TRAEFIK_IMAGE:-traefik:v3.5}
+    restart: unless-stopped
+    depends_on: [socket-proxy]
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --log.level=INFO
+      - --accesslog=true
+      - --ping=true
+      - --providers.docker=true
+      - --providers.docker.endpoint=tcp://socket-proxy:2375
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=alfa-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+    ports:
+      - "${ALFA_HTTP_PORT:-80}:80"
+      - "${ALFA_HTTPS_PORT:-443}:443"
+    networks: [alfa-edge, alfa-socket]
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      alfa.system: "true"
+
+  alfad:
+    # From the repo: builds from source. From a release bundle: install.sh sets
+    # ALFA_BUILD_CONTEXT=. and ALFA_DOCKERFILE=Dockerfile.bundle (prebuilt binary).
+    build:
+      context: ${ALFA_BUILD_CONTEXT:-../backend}
+      dockerfile: ${ALFA_DOCKERFILE:-Dockerfile}
+      args:
+        VERSION: ${ALFA_VERSION:-dev}
+    image: alfaos/alfad:${ALFA_VERSION:-dev}
+    restart: unless-stopped
+    user: "65532:65532"
+    # Grants socket access without running as root. Must match the host's
+    # docker group: `stat -c %g /var/run/docker.sock` (Docker Desktop: 0).
+    group_add: ["${DOCKER_GID:-999}"]
+    environment:
+      ALFA_LOG_LEVEL: ${ALFA_LOG_LEVEL:-info}
+      ALFA_ALLOWED_ORIGINS: ${ALFA_ALLOWED_ORIGINS:-}
+      ALFA_SETUP_TOKEN: ${ALFA_SETUP_TOKEN:-}
+      # Files app locations (paths inside the container; see the storage mount below).
+      ALFA_FILE_ROOTS: ${ALFA_FILE_ROOTS:-Alfa Drive=/storage}
+    volumes:
+      # NAS storage on the host, owned by uid 65532 (install.sh prepares it).
+      - ${ALFA_STORAGE_DIR:-./storage}:/storage
+      # A socket mount grants full engine control regardless of :ro; alfad is
+      # the only container trusted with it.
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+      - alfa-data:/data
+      # Read-only host views for telemetry and accelerator discovery.
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /etc/hostname:/host/etc/hostname:ro
+    tmpfs: [/tmp]
+    networks: [alfa-edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "/alfad", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    labels:
+      alfa.system: "true"
+      traefik.enable: "true"
+      # alfad serves the Web OS, API and WebSocket. Lowest priority catch-all, so
+      # App Store apps can claim their own hostnames with more specific rules.
+      traefik.http.routers.alfad.rule: PathPrefix(`/`)
+      traefik.http.routers.alfad.entrypoints: websecure
+      traefik.http.routers.alfad.priority: "1"
+      traefik.http.services.alfad.loadbalancer.server.port: "8080"
+
+networks:
+  # Fixed name so App Store apps can join it later.
+  alfa-edge:
+    name: alfa-edge
+  alfa-socket:
+    internal: true
+
+volumes:
+  alfa-data:
