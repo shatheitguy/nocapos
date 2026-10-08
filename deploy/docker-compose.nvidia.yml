@@ -1,0 +1,15 @@
+# Overlay for hosts with NVIDIA GPUs and the NVIDIA Container Toolkit.
+# Injects nvidia-smi (the "utility" capability) into alfad for live GPU
+# metrics; it does not give alfad CUDA compute.
+services:
+  alfad:
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, utility]

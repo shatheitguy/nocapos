@@ -1,0 +1,10 @@
+# Image for release bundles: packages the prebuilt, arch-specific alfad binary
+# (UI embedded) so target devices need no Go/Node toolchain.
+FROM gcr.io/distroless/base-debian12:nonroot
+COPY alfad /alfad
+# Pre-create /data owned by nonroot so a fresh named volume inherits it.
+COPY --chown=65532:65532 rootfs/data /data
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/alfad"]
+CMD ["serve"]
