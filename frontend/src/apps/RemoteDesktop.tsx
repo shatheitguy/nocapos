@@ -85,7 +85,7 @@ export function RemoteDesktop() {
         <div className="rdp-empty glass">
           <Icon name="desktop" size={30} />
           <b>No saved PCs yet</b>
-          <p className="muted small">Add a PC by its IP address or name, e.g. 192.168.0.170. Remote Desktop must be enabled on it.</p>
+          <p className="muted small">Add a PC by its IP address or name, e.g. 192.168.1.20. Remote Desktop must be enabled on it.</p>
           <button type="button" onClick={() => setEditing(blank())}>
             <Icon name="plus" size={14} /> Add a PC
           </button>
@@ -159,7 +159,7 @@ function HostForm({
       <b>{initial.id ? 'Edit connection' : 'New connection'}</b>
       <label className="row-field">
         <span className="muted small">PC address</span>
-        <input autoFocus required value={f.hostname} placeholder="192.168.0.170" onChange={(e) => setF({ ...f, hostname: e.target.value })} />
+        <input autoFocus required value={f.hostname} placeholder="192.168.1.20" onChange={(e) => setF({ ...f, hostname: e.target.value })} />
       </label>
       <label className="row-field">
         <span className="muted small">User name</span>
