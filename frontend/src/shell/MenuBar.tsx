@@ -12,6 +12,7 @@ import { usePrefs } from '../state/prefs';
 import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { ClockPanel } from './ClockPanel';
+import { useSpotlight } from '../state/spotlight';
 import { QuickSettings } from './QuickSettings';
 
 /**
@@ -68,6 +69,9 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
             <Icon name="moon" size={15} />
           </button>
         )}
+        <button type="button" className="mb-icon" title="Search (Ctrl+Space)" aria-label="Search" onClick={() => useSpotlight.getState().toggle()}>
+          <Icon name="search" size={15} />
+        </button>
         <button
           ref={ccRef}
           type="button"
