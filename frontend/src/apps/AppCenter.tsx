@@ -40,7 +40,7 @@ export function AppCenter({ win }: { win?: WinState }) {
   }, []);
 
   // Poll faster while something is installing / updating / uninstalling.
-  const busy = !!apps?.some((a) => a.installed?.job && !a.installed.job.done);
+  const busy = !!apps?.some((a) => a.job && !a.job.done);
   useEffect(() => {
     void load();
   }, [load]);
@@ -51,7 +51,7 @@ export function AppCenter({ win }: { win?: WinState }) {
   }, [apps, busy, load]);
 
   const categories = useMemo(() => ['All', ...Array.from(new Set((apps ?? []).map((a) => a.category))).sort()], [apps]);
-  const installed = (apps ?? []).filter((a) => a.installed && a.installed.status !== 'installing');
+  const installed = (apps ?? []).filter((a) => a.installed);
   const updates = installed.filter((a) => a.installed?.update_available);
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -182,8 +182,9 @@ function AppTileIcon({ app, size = 44 }: { app: StoreApp; size?: number }) {
 
 function stateLabel(a: StoreApp): { text: string; tone: string } | null {
   const i = a.installed;
-  if (!i) return null;
-  if (i.job && !i.job.done) return { text: i.job.action === 'uninstall' ? 'Removing…' : i.job.action === 'update' ? 'Updating…' : 'Installing…', tone: 'warn' };
+  const j = a.job;
+  if (j && !j.done) return { text: j.action === 'uninstall' ? 'Removing…' : j.action === 'update' ? 'Updating…' : 'Installing…', tone: 'warn' };
+  if (!i) return j?.error && j.action === 'install' ? { text: 'Install failed', tone: 'bad' } : null;
   if (i.status === 'running') return { text: 'Running', tone: 'good' };
   if (i.status === 'stopped') return { text: 'Stopped', tone: '' };
   if (i.status === 'partial') return { text: 'Partly running', tone: 'warn' };
@@ -208,7 +209,7 @@ function AppCard({ app, onOpen }: { app: StoreApp; onOpen: () => void }) {
 function InstalledRow({ app, onOpen, onChanged }: { app: StoreApp; onOpen: () => void; onChanged: () => void }) {
   const st = stateLabel(app);
   const i = app.installed!;
-  const working = !!i.job && !i.job.done;
+  const working = !!app.job && !app.job.done;
   return (
     <div className="store-row">
       <button type="button" className="store-row-main" onClick={onOpen}>
@@ -222,7 +223,7 @@ function InstalledRow({ app, onOpen, onChanged }: { app: StoreApp; onOpen: () =>
         </span>
       </button>
       {st && <span className={`chip tiny ${st.tone}`}>{st.text}</span>}
-      {working && <span className="store-row-bar"><Bar value={i.job!.percent} /></span>}
+      {working && <span className="store-row-bar"><Bar value={app.job!.percent} /></span>}
       {i.update_available && !working && (
         <button type="button" className="small" onClick={async () => { const r = await storeApi.act(app.id, 'update'); if (!r.ok) toast('error', `Could not update ${app.name}`, r.error); onChanged(); }}>
           Update
@@ -239,7 +240,7 @@ function InstalledRow({ app, onOpen, onChanged }: { app: StoreApp; onOpen: () =>
 
 function AppPage({ app, docker, onBack, onChanged }: { app: StoreApp; docker: boolean; onBack: () => void; onChanged: () => void }) {
   const i = app.installed;
-  const job = i?.job;
+  const job = app.job;
   const working = !!job && !job.done;
   const [reveal, setReveal] = useState(false);
   const lastJob = useRef<string | undefined>(undefined);
