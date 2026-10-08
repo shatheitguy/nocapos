@@ -6,6 +6,7 @@
 package files
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -472,98 +473,8 @@ func (s *Service) Delete(rootID string, rels []string, permanent bool) error {
 // Transfer copies or moves items into destDir, renaming on conflict. It
 // returns the new relative paths.
 func (s *Service) Transfer(rootID string, rels []string, destDir string, move bool) ([]string, error) {
-	if move {
-		for _, rel := range rels {
-			if err := s.guard(rootID, rel); err != nil {
-				return nil, err
-			}
-		}
-	}
-	rt, err := s.open(rootID)
-	if err != nil {
-		return nil, err
-	}
-	defer rt.Close()
-	if st, err := rt.Stat(native(destDir)); err != nil {
-		return nil, err
-	} else if !st.IsDir() {
-		return nil, ErrNotDir
-	}
-	var out []string
-	for _, rel := range rels {
-		if rel == "." {
-			return out, ErrIsRoot
-		}
-		if destDir == rel || strings.HasPrefix(destDir+"/", rel+"/") {
-			return out, ErrIntoSelf
-		}
-		if move && path.Dir(rel) == destDir {
-			out = append(out, rel) // already there
-			continue
-		}
-		dst := uniqueName(rt, destDir, path.Base(rel))
-		if move {
-			err = rt.Rename(native(rel), native(dst))
-		} else {
-			err = copyTree(rt, rel, dst, 0)
-		}
-		if err != nil {
-			return out, err
-		}
-		out = append(out, dst)
-	}
-	return out, nil
-}
-
-func copyTree(rt *os.Root, src, dst string, depth int) error {
-	if depth > maxCopyDepth {
-		return fmt.Errorf("copy %s: folder nesting too deep", src)
-	}
-	st, err := rt.Lstat(native(src))
-	if err != nil {
-		return err
-	}
-	switch {
-	case st.Mode()&fs.ModeSymlink != 0:
-		return nil // links are not followed or duplicated
-	case st.IsDir():
-		if err := rt.Mkdir(native(dst), 0o755); err != nil {
-			return err
-		}
-		f, err := rt.Open(native(src))
-		if err != nil {
-			return err
-		}
-		des, err := f.ReadDir(-1)
-		f.Close()
-		if err != nil {
-			return err
-		}
-		for _, de := range des {
-			if err := copyTree(rt, path.Join(src, de.Name()), path.Join(dst, de.Name()), depth+1); err != nil {
-				return err
-			}
-		}
-		return nil
-	case st.Mode().IsRegular():
-		in, err := rt.Open(native(src))
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := rt.OpenFile(native(dst), os.O_WRONLY|os.O_CREATE|os.O_EXCL, st.Mode().Perm()|0o600)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
-			_ = rt.Remove(native(dst))
-			return err
-		}
-		return out.Close()
-	default:
-		return nil // devices, sockets, pipes
-	}
+	res, err := s.TransferWith(context.Background(), rootID, rels, destDir, TransferOptions{Move: move, Conflict: ConflictRename})
+	return res.Paths, err
 }
 
 // Upload streams r into dir/name (renamed on conflict) via a temp file, so a

@@ -10,8 +10,14 @@ export interface ConfirmRequest {
   timeoutSec?: number;
 }
 
+export interface Choice {
+  id: string;
+  label: string;
+  danger?: boolean;
+}
+
 interface ConfirmStore {
-  current: (ConfirmRequest & { resolve: (ok: boolean) => void }) | null;
+  current: (ConfirmRequest & { resolve: (ok: boolean) => void; choices?: Choice[]; pick?: (id: string) => void }) | null;
 }
 
 export const useConfirm = create<ConfirmStore>(() => ({ current: null }));
@@ -29,5 +35,17 @@ export function confirmDialog(req: ConfirmRequest): Promise<boolean> {
         },
       },
     });
+  });
+}
+
+/** Ask the user to pick one of several answers. Resolves the choice id, or null if dismissed. */
+export function choiceDialog(req: ConfirmRequest & { choices: Choice[] }): Promise<string | null> {
+  return new Promise((resolve) => {
+    useConfirm.getState().current?.resolve(false);
+    const done = (v: string | null) => {
+      useConfirm.setState({ current: null });
+      resolve(v);
+    };
+    useConfirm.setState({ current: { ...req, resolve: () => done(null), pick: (id) => done(id) } });
   });
 }
