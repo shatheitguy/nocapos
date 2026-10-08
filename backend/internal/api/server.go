@@ -85,6 +85,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/auth/totp/setup", s.authed(s.totpSetup))
 	mux.Handle("POST /api/v1/auth/totp/enable", s.authed(s.totpEnable))
 	mux.Handle("POST /api/v1/auth/totp/disable", s.authed(s.totpDisable))
+	mux.Handle("GET /api/v1/auth/avatar", s.authed(s.avatarGet))
+	mux.Handle("PUT /api/v1/auth/avatar", s.authed(s.avatarPut))
+	mux.Handle("DELETE /api/v1/auth/avatar", s.authed(s.avatarDelete))
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))
