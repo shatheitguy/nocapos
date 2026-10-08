@@ -1,0 +1,9 @@
+backend/bin/
+dist/
+frontend/node_modules/
+*.db
+*.db-shm
+*.db-wal
+deploy/.env
+*.log
+.claude/
