@@ -24,6 +24,7 @@ import (
 	"alfaos/alfad/internal/accounts"
 	"alfaos/alfad/internal/ai"
 	"alfaos/alfad/internal/api"
+	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
@@ -186,10 +187,16 @@ func serve() error {
 	defer braveMgr.Close()
 	guacd := rdp.NewGuacd(log, dc, cfg.GuacdAddr)
 
+	catalog, err := appstore.LoadCatalog()
+	if err != nil {
+		return err
+	}
+	appMgr := appstore.NewManager(catalog, dc, st)
+
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
-		Scripts: scripts.NewRunner(cfg.AllowHostTerminal),
+		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
