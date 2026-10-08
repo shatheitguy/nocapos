@@ -882,11 +882,15 @@ function FilePane({
                       onContextMenu={(ev) => onContext(ev, e.name)}
                     >
                       <td>
-                        <span className={`row-icon kind-${kind}`}>
-                          <Icon name={KIND_ICON[kind]} size={17} />
-                        </span>
-                        {e.name}
-                        {e.symlink && <span className="chip tiny">link</span>}
+                        <div className="name-cell">
+                          <span className={`row-icon kind-${kind}`}>
+                            <Icon name={KIND_ICON[kind]} size={17} />
+                          </span>
+                          <span className="name-text" title={e.name}>
+                            {e.name}
+                          </span>
+                          {e.symlink && <span className="chip tiny">link</span>}
+                        </div>
                       </td>
                       <td className="muted">{new Date(e.mod_time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
                       <td className="num muted">{e.dir ? '—' : fmtBytes(e.size)}</td>

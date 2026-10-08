@@ -61,14 +61,16 @@ type Manager struct {
 	// portFree reports whether a host port can be bound (swappable in tests).
 	portFree func(port int, proto string) bool
 
-	mu     sync.Mutex
-	jobs   map[string]*job
-	active map[string]string // app id → running job id
+	mu       sync.Mutex
+	jobs     map[string]*job
+	active   map[string]string // app id → running job id
+	last     map[string]string // app id → most recent job id (shown for a while after it ends)
+	reserved map[int]string    // web ports picked by installs that haven't saved yet
 }
 
 func NewManager(apps []App, engine Engine, db Store) *Manager {
 	m := &Manager{apps: apps, byID: map[string]*App{}, engine: engine, db: db, portFree: hostPortFree,
-		jobs: map[string]*job{}, active: map[string]string{}}
+		jobs: map[string]*job{}, active: map[string]string{}, last: map[string]string{}, reserved: map[int]string{}}
 	for i := range apps {
 		m.byID[apps[i].ID] = &apps[i]
 	}
@@ -101,7 +103,6 @@ type Installed struct {
 	Containers      []ContainerState `json:"containers"`
 	Credentials     *Credentials     `json:"credentials,omitempty"`
 	InstalledAt     time.Time        `json:"installed_at"`
-	Job             *Job             `json:"job,omitempty"`
 }
 
 // Status returns every installed app's state, keyed by app id.
@@ -144,18 +145,29 @@ func (m *Manager) Status(ctx context.Context) (map[string]*Installed, error) {
 		}
 		out[id] = in
 	}
-	m.mu.Lock()
-	for id, jid := range m.active {
-		if j := m.jobs[jid]; j != nil {
-			snap := j.snapshot()
-			if out[id] == nil {
-				out[id] = &Installed{Status: "installing"}
-			}
-			out[id].Job = &snap
-		}
-	}
-	m.mu.Unlock()
 	return out, nil
+}
+
+// recentJobWindow is how long a finished job (and its error) stays visible.
+const recentJobWindow = 5 * time.Minute
+
+// Jobs returns each app's running job, or its last job if it ended recently.
+func (m *Manager) Jobs() map[string]Job {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]Job{}
+	for app, jid := range m.last {
+		j := m.jobs[jid]
+		if j == nil {
+			continue
+		}
+		snap := j.snapshot()
+		if snap.Done && time.Since(snap.Ended) > recentJobWindow {
+			continue
+		}
+		out[app] = snap
+	}
+	return out
 }
 
 // ---------- jobs ----------
@@ -170,6 +182,7 @@ type Job struct {
 	Done    bool      `json:"done"`
 	Error   string    `json:"error,omitempty"`
 	Started time.Time `json:"started"`
+	Ended   time.Time `json:"ended,omitempty"`
 }
 
 // job is a running Job guarded by a mutex.
@@ -210,12 +223,13 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 	j := &job{Job: Job{ID: randomString(16), App: app, Action: action, Phase: "Starting…", Started: time.Now().UTC()}}
 	m.jobs[j.ID] = j
 	m.active[app] = j.ID
+	m.last[app] = j.ID
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 		defer cancel()
 		err := fn(ctx, j)
 		j.mu.Lock()
-		j.Done = true
+		j.Done, j.Ended = true, time.Now().UTC()
 		if err != nil {
 			j.Error = err.Error()
 		} else {
@@ -224,6 +238,11 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 		j.mu.Unlock()
 		m.mu.Lock()
 		delete(m.active, app)
+		for p, owner := range m.reserved {
+			if owner == app {
+				delete(m.reserved, p)
+			}
+		}
 		m.mu.Unlock()
 		if onDone != nil {
 			onDone(err)
@@ -485,8 +504,15 @@ func (m *Manager) freeWebPort(ctx context.Context, app string) (int, error) {
 			used[r.WebPort] = true
 		}
 	}
+	// Reserve under the lock so simultaneous installs never pick the same port.
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for p := portLow; p <= portHigh; p++ {
+		if owner, taken := m.reserved[p]; taken && owner != app {
+			continue
+		}
 		if !used[p] && m.portFree(p, "tcp") {
+			m.reserved[p] = app
 			return p, nil
 		}
 	}
