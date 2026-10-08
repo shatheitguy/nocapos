@@ -34,6 +34,7 @@ type Deps struct {
 	Sampler   *hardware.Sampler
 	Files     *files.Service
 	FileIndex *files.Index
+	FileJobs  *files.Jobs
 	AI        *ai.Service
 	Terminal  *terminal.Service
 	Brave     *webapps.Brave
@@ -162,6 +163,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/files/roots", s.admin(s.filesRoots))
 	mux.Handle("GET /api/v1/files/list", s.admin(s.filesList))
 	mux.Handle("GET /api/v1/files/search", s.admin(s.filesSearch))
+	mux.Handle("POST /api/v1/files/conflicts", s.admin(s.filesConflicts))
+	mux.Handle("GET /api/v1/files/jobs", s.admin(s.filesJobs))
+	mux.Handle("GET /api/v1/files/jobs/{id}", s.admin(s.filesJob))
+	mux.Handle("POST /api/v1/files/jobs/{id}/cancel", s.admin(s.filesJobCancel))
 	mux.Handle("GET /api/v1/files/text", s.admin(s.filesReadText))
 	mux.Handle("PUT /api/v1/files/text", s.admin(s.touchIndex(s.filesWriteText)))
 	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.touchIndex(s.filesMkdir)))

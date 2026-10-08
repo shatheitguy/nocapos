@@ -49,9 +49,22 @@ export function ConfirmHost() {
           <button ref={cancelRef} type="button" className="ghost" onClick={() => req.resolve(false)}>
             {req.cancelLabel ?? 'Cancel'}
           </button>
-          <button type="button" className={req.danger ? 'danger-solid' : ''} onClick={() => req.resolve(true)}>
-            {req.confirmLabel ?? 'Continue'}
-          </button>
+          {req.choices && req.pick ? (
+            req.choices.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                className={c.danger ? 'danger-solid' : i < req.choices!.length - 1 ? 'ghost' : ''}
+                onClick={() => req.pick!(c.id)}
+              >
+                {c.label}
+              </button>
+            ))
+          ) : (
+            <button type="button" className={req.danger ? 'danger-solid' : ''} onClick={() => req.resolve(true)}>
+              {req.confirmLabel ?? 'Continue'}
+            </button>
+          )}
         </div>
       </div>
     </div>,

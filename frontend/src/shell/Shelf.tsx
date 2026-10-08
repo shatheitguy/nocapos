@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as RMouseEvent } from 'react';
+import { TransfersButton } from './Transfers';
 import { UserAvatar } from '../components/UserAvatar';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
@@ -215,6 +216,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
 
       {showTray && (
         <div className="tray">
+          <TransfersButton className="tray-btn" />
           <button
             ref={trayRef}
             type="button"

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -284,10 +285,12 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 type transferRequest struct {
-	Root  string   `json:"root"`
-	Paths []string `json:"paths"`
-	Dest  string   `json:"dest"`
-	Move  bool     `json:"move"`
+	Root     string   `json:"root"`
+	Paths    []string `json:"paths"`
+	Dest     string   `json:"dest"`
+	Move     bool     `json:"move"`
+	Conflict string   `json:"conflict"`   // rename (default) | replace | skip
+	Async    bool     `json:"background"` // run as a job with progress
 }
 
 func (s *Server) filesTransfer(w http.ResponseWriter, r *http.Request) {
@@ -305,28 +308,105 @@ func (s *Server) filesTransfer(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
-	out, err := s.Files.Transfer(req.Root, rels, dest, req.Move)
+	conflict, err := files.ParseConflict(req.Conflict)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	action := "files.copy"
 	if req.Move {
 		action = "files.move"
 	}
-	s.audit(r, userFrom(r.Context()).ID, action, req.Root+":"+strings.Join(rels, ", ")+" → "+display(dest), err == nil, "")
+	what := req.Root + ":" + strings.Join(rels, ", ") + " → " + display(dest)
+	uid := userFrom(r.Context()).ID
+
+	if req.Async {
+		// The job outlives this request: audit with a detached copy of it.
+		ar := r.Clone(context.WithoutCancel(r.Context()))
+		j := s.FileJobs.Start(uid, req.Root, rels, dest, req.Move, conflict, display, func(j files.Job) {
+			s.audit(ar, uid, action, what, j.Status == "done", j.Status+" "+j.Error)
+			if s.FileIndex != nil {
+				s.FileIndex.Touch()
+			}
+		})
+		writeJSON(w, http.StatusAccepted, j)
+		return
+	}
+
+	res, err := s.Files.TransferWith(r.Context(), req.Root, rels, dest, files.TransferOptions{Move: req.Move, Conflict: conflict})
+	s.audit(r, uid, action, what, err == nil, "")
 	if err != nil {
 		s.fileError(w, r, err)
 		return
 	}
-	for i := range out {
-		out[i] = display(out[i])
+	for i := range res.Paths {
+		res.Paths[i] = display(res.Paths[i])
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"paths": out})
+	for i := range res.Skipped {
+		res.Skipped[i] = display(res.Skipped[i])
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
-// filesUpload streams multipart parts straight to disk (no buffering in memory).
+// filesConflicts lists which of the items already exist in the destination,
+// so the UI can ask "keep both / replace / skip" before starting.
+func (s *Server) filesConflicts(w http.ResponseWriter, r *http.Request) {
+	var req transferRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	rels, err := cleanAll(req.Paths)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "invalid paths")
+		return
+	}
+	dest, err := files.Clean(req.Dest)
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	names, err := s.Files.Conflicts(req.Root, rels, dest)
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	if names == nil {
+		names = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"names": names})
+}
+
+func (s *Server) filesJobs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.FileJobs.List(userFrom(r.Context()).ID))
+}
+
+func (s *Server) filesJob(w http.ResponseWriter, r *http.Request) {
+	j, ok := s.FileJobs.Get(r.PathValue("id"), userFrom(r.Context()).ID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "no such transfer")
+		return
+	}
+	writeJSON(w, http.StatusOK, j)
+}
+
+func (s *Server) filesJobCancel(w http.ResponseWriter, r *http.Request) {
+	if !s.FileJobs.Cancel(r.PathValue("id"), userFrom(r.Context()).ID) {
+		writeError(w, http.StatusNotFound, "not_found", "no such transfer")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "canceling"})
+}
+
 func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	dir, err := files.Clean(q.Get("path"))
 	if err != nil {
 		s.fileError(w, r, err)
+		return
+	}
+	conflict, err := files.ParseConflict(q.Get("conflict"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, s.Config.MaxUpload)
@@ -335,7 +415,7 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "expected multipart/form-data")
 		return
 	}
-	var saved []string
+	saved, skipped := []string{}, []string{}
 	for {
 		part, err := mr.NextPart()
 		if err != nil {
@@ -357,7 +437,7 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		// Browsers send a bare name; strip any path a client might add.
 		name = path.Base(strings.ReplaceAll(name, `\`, "/"))
-		rel, err := s.Files.Upload(q.Get("root"), dir, name, part)
+		rel, err := s.Files.UploadWith(q.Get("root"), dir, name, part, conflict)
 		part.Close()
 		s.audit(r, userFrom(r.Context()).ID, "files.upload", q.Get("root")+":"+display(path.Join(dir, name)), err == nil, "")
 		if err != nil {
@@ -369,9 +449,13 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 			s.fileError(w, r, err)
 			return
 		}
+		if rel == "" {
+			skipped = append(skipped, name)
+			continue
+		}
 		saved = append(saved, display(rel))
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"paths": saved})
+	writeJSON(w, http.StatusCreated, map[string]any{"paths": saved, "skipped": skipped})
 }
 
 type ticketRequest struct {

@@ -29,6 +29,20 @@ export const inRecycle = (p: string) => p === RECYCLE || p.startsWith(RECYCLE + 
 
 const q = (params: Record<string, string>) => new URLSearchParams(params).toString();
 
+export type Conflict = 'rename' | 'replace' | 'skip';
+
+export interface TransferJob {
+  id: string;
+  kind: 'copy' | 'move';
+  root: string;
+  sources: string[];
+  dest: string;
+  status: 'running' | 'done' | 'failed' | 'canceled';
+  progress: { bytes_done: number; bytes_total: number; items_done: number; items_total: number; current: string };
+  result?: { paths: string[]; skipped: string[] };
+  error?: string;
+}
+
 export const fileApi = {
   roots: () => api<FileRoot[]>('/api/v1/files/roots'),
   list: (root: string, path: string) =>
@@ -39,8 +53,13 @@ export const fileApi = {
     api<{ path: string }>('/api/v1/files/rename', { method: 'POST', body: { root, path, name } }),
   remove: (root: string, paths: string[], permanent = false) =>
     api('/api/v1/files/delete', { method: 'POST', body: { root, paths, permanent } }),
-  transfer: (root: string, paths: string[], dest: string, move: boolean) =>
-    api<{ paths: string[] }>('/api/v1/files/transfer', { method: 'POST', body: { root, paths, dest, move } }),
+  transfer: (root: string, paths: string[], dest: string, move: boolean, conflict: Conflict = 'rename') =>
+    api<{ paths: string[]; skipped: string[] }>('/api/v1/files/transfer', { method: 'POST', body: { root, paths, dest, move, conflict } }),
+  transferJob: (root: string, paths: string[], dest: string, move: boolean, conflict: Conflict) =>
+    api<TransferJob>('/api/v1/files/transfer', { method: 'POST', body: { root, paths, dest, move, conflict, background: true } }),
+  job: (id: string) => api<TransferJob>(`/api/v1/files/jobs/${encodeURIComponent(id)}`),
+  cancelJob: (id: string) => api(`/api/v1/files/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+  conflicts: (root: string, paths: string[], dest: string) => api<{ names: string[] }>('/api/v1/files/conflicts', { method: 'POST', body: { root, paths, dest } }),
   readText: (root: string, path: string) =>
     api<{ content: string; size: number; mod_time: string }>(`/api/v1/files/text?${q({ root, path })}`),
   writeText: (root: string, path: string, content: string, mod_time?: string) =>
@@ -87,12 +106,20 @@ export interface UploadProgress {
   total: number;
 }
 
-function sendUpload(root: string, dir: string, files: File[], onProgress: (p: UploadProgress) => void): Promise<ApiResult<{ paths: string[] }>> {
+function sendUpload(root: string, dir: string, files: File[], onProgress: (p: UploadProgress) => void, opts: UploadOptions): Promise<ApiResult<{ paths: string[]; skipped?: string[] }>> {
   return new Promise((resolve) => {
     const form = new FormData();
     for (const f of files) form.append('file', f, f.name);
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/v1/files/upload?${q({ root, path: dir })}`);
+    xhr.open('POST', `/api/v1/files/upload?${q({ root, path: dir, conflict: opts.conflict ?? 'rename' })}`);
+    if (opts.signal) {
+      if (opts.signal.aborted) {
+        resolve({ ok: false, status: -1, data: { paths: [] }, error: 'Canceled' });
+        return;
+      }
+      opts.signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    }
+    xhr.onabort = () => resolve({ ok: false, status: -1, data: { paths: [] }, error: 'Canceled' });
     const token = getAccessToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress({ loaded: e.loaded, total: e.total });
@@ -116,9 +143,14 @@ function sendUpload(root: string, dir: string, files: File[], onProgress: (p: Up
   });
 }
 
-export async function upload(root: string, dir: string, files: File[], onProgress: (p: UploadProgress) => void) {
-  let r = await sendUpload(root, dir, files, onProgress);
-  if (r.status === 401 && (await refresh())) r = await sendUpload(root, dir, files, onProgress);
+export interface UploadOptions {
+  conflict?: Conflict;
+  signal?: AbortSignal;
+}
+
+export async function upload(root: string, dir: string, files: File[], onProgress: (p: UploadProgress) => void, opts: UploadOptions = {}) {
+  let r = await sendUpload(root, dir, files, onProgress, opts);
+  if (r.status === 401 && (await refresh())) r = await sendUpload(root, dir, files, onProgress, opts);
   return r;
 }
 

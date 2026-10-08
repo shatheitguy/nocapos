@@ -11,7 +11,6 @@ import {
   joinPath,
   parentPath,
   rawUrl,
-  upload,
   type FileEntry,
   type FileKind,
   type FileRoot,
@@ -24,6 +23,7 @@ import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { FilePreview, PermBadges } from './FilesParts';
+import { startTransfer, startUpload, useTransfers } from '../state/transfers';
 
 // Clipboard shared by all Files windows.
 interface Clip {
@@ -272,7 +272,6 @@ function FilePane({
   const [filter, setFilter] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number; target: string | null } | null>(null);
   const [dialog, setDialog] = useState<DialogSpec | null>(null);
-  const [uploading, setUploading] = useState<{ names: string; loaded: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [thumbTicket, setThumbTicket] = useState<string | null>(null);
   const clip = useClipboard((s) => s.clip);
@@ -313,6 +312,16 @@ function FilePane({
     if (reloadN) void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadN]);
+  // Any upload, copy or move finished (here or in another window): refresh.
+  const transfersVersion = useTransfers((s) => s.version);
+  useEffect(() => {
+    if (!transfersVersion) return;
+    void reload();
+    onRootsChanged();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transfersVersion]);
+  // Transfers into this folder, for the status bar.
+  const incoming = useTransfers((s) => s.list).filter((t) => t.status === 'running' && t.root === root && t.dest === path);
 
   // A folder-scoped link for image thumbnails.
   const hasImages = useMemo(() => entries.some((e) => fileKind(e.name, e.dir) === 'image'), [entries]);
@@ -501,12 +510,9 @@ function FilePane({
       toast('error', 'Paste across storage locations is not supported yet');
       return;
     }
-    const r = await fileApi.transfer(root, clip.paths, path, clip.move);
-    if (!r.ok) toast('error', clip.move ? 'Move failed' : 'Copy failed', r.error);
-    else if (clip.move) setClip(null);
-    await reload();
-    if (r.ok) setSelected(new Set(r.data.paths.map(baseName)));
-    onRootsChanged();
+    const move = clip.move;
+    const ok = await startTransfer(root, clip.paths, path, move);
+    if (ok && move) setClip(null);
   };
 
   const toOther = async (move: boolean) => {
@@ -520,17 +526,8 @@ function FilePane({
       toast('error', 'Both panes show the same folder');
       return;
     }
-    const r = await fileApi.transfer(root, paths, other.path, move);
-    if (!r.ok) {
-      toast('error', move ? 'Move failed' : 'Copy failed', r.error);
-      return;
-    }
-    const n = paths.length;
-    toast('success', `${move ? 'Moved' : 'Copied'} ${n} item${n > 1 ? 's' : ''}`, `to ${other.path === '/' ? 'the top folder' : baseName(other.path)}`);
     setSelected(new Set());
-    await reload();
-    onTransferred();
-    onRootsChanged();
+    if (await startTransfer(root, paths, other.path, move)) onTransferred();
   };
 
   const download = async (names: string[]) => {
@@ -543,16 +540,7 @@ function FilePane({
 
   const doUpload = async (list: File[]) => {
     if (!list.length || !root) return;
-    const total = list.reduce((a, f) => a + f.size, 0);
-    const names = list.length === 1 ? list[0].name : `${list.length} files`;
-    setUploading({ names, loaded: 0, total });
-    const r = await upload(root, path, list, (p) => setUploading({ names, loaded: p.loaded, total: p.total }));
-    setUploading(null);
-    if (r.ok) toast('success', `Uploaded ${names}`, fmtBytes(total));
-    else toast('error', `Upload of ${names} failed`, r.error);
-    await reload();
-    if (r.ok) setSelected(new Set(r.data.paths.map(baseName)));
-    onRootsChanged();
+    await startUpload(root, path, list);
   };
 
   // ---------- selection ----------
@@ -921,11 +909,13 @@ function FilePane({
         </div>
 
         <div className="statusbar small">
-          {uploading ? (
+          {incoming.length ? (
             <span className="upload-status">
-              <Icon name="upload" size={13} /> Uploading {uploading.names} — {fmtBytes(uploading.loaded)} of {fmtBytes(uploading.total)}
+              <Icon name={incoming[0].kind === 'upload' ? 'upload' : 'copy'} size={13} /> {incoming[0].kind === 'upload' ? 'Uploading' : incoming[0].kind === 'move' ? 'Moving' : 'Copying'}{' '}
+              {incoming[0].title}
+              {incoming.length > 1 ? ` and ${incoming.length - 1} more` : ''}
               <span className="upload-bar">
-                <Bar value={uploading.total ? (uploading.loaded / uploading.total) * 100 : 0} />
+                <Bar value={incoming[0].total ? (incoming[0].done / incoming[0].total) * 100 : 0} />
               </span>
             </span>
           ) : selected.size ? (
