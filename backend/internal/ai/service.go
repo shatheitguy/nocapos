@@ -140,7 +140,7 @@ func (s *Service) SaveProvider(ctx context.Context, id string, in ProviderInput)
 		p.APIKeyEnc = s.box.Seal(k)
 	}
 	if p.Kind == KindAnthropic && len(p.APIKeyEnc) == 0 {
-		return nil, fmt.Errorf("%w: Claude needs an API key", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: Anthropic needs an API key", ErrInvalidInput)
 	}
 	var err error
 	if id == "" {
@@ -194,7 +194,7 @@ func (s *Service) client(p *store.AIProvider) (Provider, error) {
 	case KindOllama:
 		return newOllama(p.BaseURL), nil
 	case KindAnthropic:
-		return newClaude(p.BaseURL, key), nil
+		return newAnthropic(p.BaseURL, key), nil
 	case KindOpenAI:
 		return newOpenAICompat(p.BaseURL, key), nil
 	default:
@@ -211,7 +211,7 @@ func (s *Service) pickModel(p *store.AIProvider, requested string) string {
 	}
 	switch p.Kind {
 	case KindAnthropic:
-		return DefaultClaudeModel
+		return DefaultAnthropicModel
 	default:
 		return ""
 	}

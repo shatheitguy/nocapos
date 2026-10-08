@@ -8,18 +8,18 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
 
-// claude uses the official Anthropic Go SDK (streaming Messages API).
-type claude struct {
+// anthropicChat uses the official Anthropic Go SDK (streaming Messages API).
+type anthropicChat struct {
 	client     anthropic.Client
-	firstParty bool // server-side fallbacks are a Claude API feature
+	firstParty bool // server-side fallbacks are an Anthropic API feature
 }
 
-func newClaude(baseURL, key string) *claude {
+func newAnthropic(baseURL, key string) *anthropicChat {
 	opts := []option.RequestOption{option.WithAPIKey(key)}
 	if b := trimBase(baseURL); b != "" {
 		opts = append(opts, option.WithBaseURL(b))
 	}
-	return &claude{client: anthropic.NewClient(opts...), firstParty: trimBase(baseURL) == ""}
+	return &anthropicChat{client: anthropic.NewClient(opts...), firstParty: trimBase(baseURL) == ""}
 }
 
 // Models that accept the "default" server-side refusal fallback.
@@ -27,7 +27,7 @@ var fallbackModels = map[string]bool{
 	"claude-fable-5-1": true, "claude-opus-5-5": true, "claude-opus-5": true, "claude-sonnet-5-5": true,
 }
 
-func (c *claude) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (ChatResult, error) {
+func (c *anthropicChat) Chat(ctx context.Context, req ChatRequest, onDelta func(string)) (ChatResult, error) {
 	msgs := make([]anthropic.BetaMessageParam, 0, len(req.Messages))
 	for _, m := range req.Messages {
 		if m.Role == "assistant" {
@@ -75,7 +75,7 @@ func (c *claude) Chat(ctx context.Context, req ChatRequest, onDelta func(string)
 	return res, stream.Err()
 }
 
-func (c *claude) Models(ctx context.Context) ([]ModelInfo, error) {
+func (c *anthropicChat) Models(ctx context.Context) ([]ModelInfo, error) {
 	iter := c.client.Models.ListAutoPaging(ctx, anthropic.ModelListParams{})
 	var out []ModelInfo
 	for iter.Next() {
