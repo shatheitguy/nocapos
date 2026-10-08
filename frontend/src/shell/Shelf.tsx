@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as RMouseEvent } from 'react';
+import { UserAvatar } from '../components/UserAvatar';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
@@ -231,7 +232,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
             {fmtTime(now, prefs)}
           </button>
           <button type="button" className="tray-btn tray-avatar" onClick={() => setQsOpen((v) => !v)} aria-label="Account and Control Center">
-            <span className="avatar">{user.username.slice(0, 1).toUpperCase()}</span>
+            <UserAvatar name={user.username} />
           </button>
         </div>
       )}

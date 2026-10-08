@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { loadAvatar } from './lib/avatar';
 import { Logo } from './components/Logo';
 import { getUser, logout, onSessionChange, refresh, setupRequired } from './api/client';
 import type { User } from './api/types';
@@ -57,6 +58,13 @@ export function App() {
     })();
     return off;
   }, []);
+
+  // Profile photo for the dock / Control Center, and remember this user for
+  // the login screen.
+  const deskUser = phase.kind === 'desktop' ? phase.user.username : null;
+  useEffect(() => {
+    if (deskUser) void loadAvatar(deskUser);
+  }, [deskUser]);
 
   // Lock = end the server session but keep the username and window layout,
   // so unlocking requires the password and restores the desktop as it was.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { UserAvatar } from '../components/UserAvatar';
 import { Logo } from '../components/Logo';
 import { getUser } from '../api/client';
 import { Icon, type IconName } from '../components/Icon';
@@ -118,7 +119,7 @@ export function Settings({ win }: { win: WinState }) {
       <nav className="sidebar settings-nav">
         {user && (
           <button type="button" className={`settings-profile ${section === 'users' ? 'on' : ''}`} onClick={() => go('users')} title="Your account">
-            <span className="avatar">{user.username.slice(0, 1).toUpperCase()}</span>
+            <UserAvatar name={user.username} />
             <span className="settings-profile-text">
               <b>{user.username}</b>
               <span>{isAdmin ? 'Administrator' : 'Standard user'}</span>

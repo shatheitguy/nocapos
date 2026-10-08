@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { UserAvatar } from '../components/UserAvatar';
 import { logout } from '../api/client';
 import { hostApi, type NetworkState } from '../api/hostctl';
 import type { User } from '../api/types';
@@ -167,7 +168,7 @@ export function QuickSettings({
   return (
     <div ref={ref} className="popover quick-settings control-center" role="dialog" aria-label="Control Center">
       <div className="qs-user">
-        <span className="avatar lg">{user.username.slice(0, 1).toUpperCase()}</span>
+        <UserAvatar name={user.username} size="lg" />
         <div>
           <b>{user.username}</b>
           <div className="muted small">
