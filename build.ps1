@@ -1,4 +1,4 @@
-# Builds Alfa OS as a native app: the Web OS (frontend) is bundled and embedded
+# Builds NoCapOS as a native app: the Web OS (frontend) is bundled and embedded
 # into alfad, producing a single executable in backend\bin.
 #   .\build.ps1                      # alfad.exe for this machine
 #   .\build.ps1 -Target linux/arm64  # cross-compile, e.g. for a Raspberry Pi
@@ -13,8 +13,9 @@ $ErrorActionPreference = "Stop"
 if (-not $SkipUI) {
     Push-Location "$PSScriptRoot\frontend"
     try {
-        if (-not (Test-Path node_modules)) { npm install --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw "npm install failed" } }
-        npm run build
+        # Through cmd: Windows PowerShell 5.1 turns npm's stderr progress into errors under "Stop".
+        if (-not (Test-Path node_modules)) { cmd /c "npm install --no-audit --no-fund 2>&1"; if ($LASTEXITCODE -ne 0) { throw "npm install failed" } }
+        cmd /c "npm run build 2>&1" | Select-String -Pattern "built in|error" | ForEach-Object { $_.Line }
         if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
     }
     finally { Pop-Location }

@@ -89,7 +89,27 @@ type Service struct {
 	// Delete, move and rename refuse them, anything inside them, and any
 	// folder that contains them.
 	protected []string
+	// points are folders that must not be deleted, moved or renamed
+	// themselves (nor any folder containing them), but whose contents are
+	// ordinary files — e.g. /home or /srv on a root install.
+	points []string
 }
+
+// ProtectPoints marks folders that may not themselves be removed or moved.
+func (s *Service) ProtectPoints(dirs ...string) {
+	for _, d := range dirs {
+		if abs, err := filepath.Abs(d); err == nil {
+			s.points = append(s.points, filepath.Clean(abs))
+		}
+	}
+}
+
+// SystemTrees are the core OS folders a root install protects completely.
+var SystemTrees = []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/proc", "/run", "/sbin", "/sys", "/usr", "/var/lib", "/snap"}
+
+// SystemPoints are top-level folders a root install keeps in place while
+// leaving their contents usable.
+var SystemPoints = []string{"/", "/home", "/root", "/srv", "/opt", "/var", "/mnt", "/media", "/tmp"}
 
 // Protect marks folders NoCapOS needs to run. Storage locations that live
 // inside a protected folder (e.g. NoCap Drive in the data folder) stay usable.
@@ -124,6 +144,11 @@ func (s *Service) guard(rootID, rel string) error {
 	full := filepath.Clean(filepath.Join(r.Path, native(rel)))
 	if real, err := filepath.EvalSymlinks(full); err == nil {
 		full = real
+	}
+	for _, p := range s.points {
+		if within(p, full) { // the item is a protected folder or contains one
+			return ErrProtected
+		}
 	}
 	for _, p := range s.protected {
 		if within(p, full) { // the item is a protected folder or contains one

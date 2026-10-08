@@ -50,6 +50,10 @@ type Config struct {
 	// for native runs, off inside a container (where it'd just be the container).
 	AllowHostTerminal bool
 
+	// SystemRoot adds the whole filesystem ("/") to Files as "System". On by
+	// default for native Linux installs running as root, off in containers.
+	SystemRoot bool
+
 	// GuacdAddr points Remote Desktop at an existing guacd (host:port). Empty =
 	// find or provision one automatically.
 	GuacdAddr string
@@ -151,9 +155,15 @@ func Load() (*Config, error) {
 	if c.FileRoots, err = parseFileRoots(os.Getenv("ALFA_FILE_ROOTS"), c.DataDir); err != nil {
 		return nil, err
 	}
+	if c.SystemRoot, err = envBool("ALFA_SYSTEM_ROOT", runtime.GOOS == "linux" && os.Geteuid() == 0 && !InContainer()); err != nil {
+		return nil, err
+	}
+	if c.SystemRoot {
+		c.FileRoots = append(c.FileRoots, FileRoot{ID: "system", Name: "System", Path: "/"})
+	}
 	// Default: allow the host terminal unless we're clearly in a container
 	// (the container mount point exists). An explicit env var overrides.
-	if c.AllowHostTerminal, err = envBool("ALFA_ALLOW_HOST_TERMINAL", !fileExists("/.dockerenv")); err != nil {
+	if c.AllowHostTerminal, err = envBool("ALFA_ALLOW_HOST_TERMINAL", !InContainer()); err != nil {
 		return nil, err
 	}
 
@@ -289,6 +299,9 @@ func isLoopback(listenAddr string) bool {
 	ip, err := netip.ParseAddr(host)
 	return err == nil && ip.IsLoopback()
 }
+
+// InContainer reports whether alfad runs inside a Docker/Podman container.
+func InContainer() bool { return fileExists("/.dockerenv") || fileExists("/run/.containerenv") }
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
