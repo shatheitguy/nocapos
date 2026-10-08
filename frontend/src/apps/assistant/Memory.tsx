@@ -68,7 +68,7 @@ export function Memory() {
       <div className="panel">
         <div className="mem-add">
           <input
-            placeholder="Add something to remember, e.g. “My main server is 192.168.0.170”"
+            placeholder="Add something to remember, e.g. “My main server is 192.168.1.20”"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void add()}
