@@ -44,6 +44,7 @@ function useCat() {
   const [flash, setFlash] = useState<'error' | 'happy' | null>(null);
   const [pulse, setPulse] = useState(0);
   const [look, setLook] = useState(0);
+  const [hasPass, setHasPass] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -52,13 +53,14 @@ function useCat() {
     setFlash(m);
     timer.current = window.setTimeout(() => setFlash(null), ms);
   };
-  const mood: CatMood = flash ?? (focus === 'pass' ? (shown ? 'peek' : 'shy') : focus === 'user' ? 'watch' : 'idle');
+  const mood: CatMood = flash ?? (focus === 'pass' && hasPass ? (shown ? 'peek' : 'shy') : focus === 'user' ? 'watch' : 'idle');
   return {
     mood,
     look,
     pulse,
     shown,
     setShown,
+    setHasPass,
     react,
     clear: () => setFlash(null),
     focusUser: () => setFocus('user'),
@@ -91,9 +93,13 @@ function PasswordPill({
   busy: boolean;
   shake: number;
 }) {
+  // The cat hides its face only once there is a password to hide.
+  const { setHasPass } = cat;
+  useEffect(() => setHasPass(value.length > 0), [value, setHasPass]);
+  const wrap = useRef<HTMLDivElement>(null);
   return (
-    <div className="mac-pass-wrap">
-      <CyberCat mood={cat.mood} look={cat.look} pulse={cat.pulse} />
+    <div className="mac-pass-wrap" ref={wrap}>
+      <CyberCat mood={cat.mood} look={cat.look} pulse={cat.pulse} anchor={wrap} />
       <div key={shake} className={`mac-pill pass ${shake ? 'shake' : ''}`}>
         <input
           type={cat.shown ? 'text' : 'password'}
