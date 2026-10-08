@@ -1,0 +1,30 @@
+[Unit]
+Description=NoCapOS — web OS for this server
+Documentation=https://github.com/shatheitguy/nocapos
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root on purpose: NoCapOS manages this server like OMV or umbrelOS
+# (Linux users, network, power, storage, a root terminal, Docker apps). Every
+# such action is admin-only inside NoCapOS and recorded in its audit log.
+EnvironmentFile=/etc/nocapos/nocapos.env
+ExecStart=/usr/local/bin/nocapos serve
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65536
+# Host terminals and scripts started from NoCapOS stop with it.
+KillMode=mixed
+TimeoutStopSec=20
+
+# Hardening that doesn't get in the way of managing the server.
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

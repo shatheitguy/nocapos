@@ -77,7 +77,9 @@ func (f *fakeEngine) setState(id, st string) error {
 	f.containers[id] = c
 	return nil
 }
-func (f *fakeEngine) StartContainer(_ context.Context, id string) error { return f.setState(id, "running") }
+func (f *fakeEngine) StartContainer(_ context.Context, id string) error {
+	return f.setState(id, "running")
+}
 func (f *fakeEngine) StopContainer(_ context.Context, id string, _ time.Duration) error {
 	return f.setState(id, "exited")
 }
