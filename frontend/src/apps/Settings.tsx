@@ -83,6 +83,8 @@ const GROUPS: { title: string; items: Item[] }[] = [
   },
 ];
 const ALL = GROUPS.flatMap((g) => g.items);
+/** Every Settings page, for universal search. */
+export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconName; admin?: boolean; keywords?: string }[] = ALL;
 const isSection = (v: string | undefined): v is Section => !!v && ALL.some((i) => i.id === v);
 // Older links ("account") now live in Users & Roles.
 const resolve = (v: string | undefined): Section | undefined => (v === 'account' ? 'users' : isSection(v) ? v : undefined);

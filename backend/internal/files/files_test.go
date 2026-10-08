@@ -265,3 +265,39 @@ func TestProtectPointsKeepContentsUsable(t *testing.T) {
 		t.Errorf("delete inside /srv: %v", err)
 	}
 }
+
+func TestIndexSearch(t *testing.T) {
+	s, dir := newTestService(t)
+	for _, f := range []string{"Q3 report.pdf", "projects/report-draft.docx", "projects/old/annual report 2024.pdf", "photos/beach.jpg", ".recycle/report.pdf", "node_modules/x/report.js"} {
+		p := filepath.Join(dir, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ix := &Index{svc: s, kick: make(chan struct{}, 1)}
+	ix.rebuild()
+	hits := ix.Search("report", 10)
+	var names []string
+	for _, h := range hits {
+		names = append(names, h.Path)
+	}
+	if len(hits) != 3 {
+		t.Fatalf("hits = %v (recycle bin and node_modules must be skipped)", names)
+	}
+	// Names starting with the query rank first, then word-start matches, shallow before deep.
+	if hits[0].Name != "report-draft.docx" || hits[1].Path != "/Q3 report.pdf" {
+		t.Errorf("ranking = %v", names)
+	}
+	if got := ix.Search("annual 2024", 10); len(got) != 1 || got[0].Name != "annual report 2024.pdf" {
+		t.Errorf("multi-word search = %+v", got)
+	}
+	if got := ix.Search("photos", 10); len(got) != 1 || !got[0].Dir {
+		t.Errorf("folder search = %+v", got)
+	}
+	if n, building, _ := ix.Stats(); n == 0 || building {
+		t.Errorf("stats = %d %v", n, building)
+	}
+}

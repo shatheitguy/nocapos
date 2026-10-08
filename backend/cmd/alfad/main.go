@@ -201,6 +201,7 @@ func serve() error {
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
+		FileIndex: files.NewIndex(fsvc, ctx.Done()),
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

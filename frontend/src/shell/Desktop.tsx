@@ -16,6 +16,8 @@ import { hasMenuBar } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { Launcher } from './Launcher';
+import { Spotlight } from './Spotlight';
+import { useSpotlight } from '../state/spotlight';
 import { MenuBar } from './MenuBar';
 import { PowerOverlay } from './PowerOverlay';
 import { Screensaver } from './Screensaver';
@@ -60,16 +62,19 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       useWidgets.getState()._reset();
       useDock.getState()._reset();
       useDesktopIcons.getState()._reset();
+      useSpotlight.getState().set(false);
     };
   }, [user.id]);
 
-  // Keyboard: Ctrl+Space toggles the launcher (the OS keeps the Win/Meta key).
+  // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);
+  const spotlight = useSpotlight((s) => s.open);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault();
-        toggleLauncher();
+        setLauncher(false);
+        useSpotlight.getState().toggle();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -157,6 +162,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       {menuBar && <MenuBar user={user} onLock={onLock} onLauncher={toggleLauncher} />}
       <Shelf user={user} onLauncher={toggleLauncher} onLock={onLock} showTray={!menuBar} />
       {launcher && <Launcher isAdmin={isAdmin} onClose={() => setLauncher(false)} />}
+      {spotlight && <Spotlight isAdmin={isAdmin} onLock={onLock} />}
       {deskMenu && <ContextMenu x={deskMenu.x} y={deskMenu.y} items={deskMenuItems()} onClose={() => setDeskMenu(null)} />}
       <DragGhost />
       <ConfirmHost />
