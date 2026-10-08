@@ -192,7 +192,7 @@ func TestFillIPv4Windows(t *testing.T) {
 	f := &fakeNM{answers: map[string]string{"netsh interface ipv4 show config": `
 Configuration for interface "Ethernet 5"
     DHCP enabled:                         Yes
-    IP Address:                           192.168.0.170
+    IP Address:                           192.168.1.170
     Subnet Prefix:                        192.168.0.0/23 (mask 255.255.254.0)
     Default Gateway:                      192.168.0.1
     Gateway Metric:                       0
@@ -210,7 +210,7 @@ Configuration for interface "Loopback Pseudo-Interface 1"
 	fillIPv4Windows(context.Background(), st)
 	ip := st.Interfaces[0].IPv4
 	if ip == nil || ip.Method != "auto" || ip.Gateway != "192.168.0.1" || ip.Editable ||
-		strings.Join(ip.Addresses, ",") != "192.168.0.170/23" || strings.Join(ip.DNS, ",") != "192.168.0.1,8.8.8.8" {
+		strings.Join(ip.Addresses, ",") != "192.168.1.170/23" || strings.Join(ip.DNS, ",") != "192.168.0.1,8.8.8.8" {
 		t.Fatalf("windows ipv4 = %+v", ip)
 	}
 }
