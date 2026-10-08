@@ -55,11 +55,12 @@ export const APPS: Record<string, AppMeta> = {
   },
   appcenter: {
     id: 'appcenter',
-    title: 'App Center',
+    title: 'App Store',
     icon: 'store',
     tile: ['#ff9f43', '#ee5a24'],
-    size: { w: 980, h: 660 },
-    description: 'Discover self-hosted apps',
+    size: { w: 1040, h: 700 },
+    description: 'Install, open and update self-hosted apps',
+    adminOnly: true,
   },
   browser: {
     id: 'browser',

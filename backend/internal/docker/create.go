@@ -73,19 +73,40 @@ type RestartPolicy struct {
 	Name string `json:"Name"`
 }
 
+// MountSpec attaches a named volume (Type "volume") or host path (Type "bind").
+type MountSpec struct {
+	Type     string `json:"Type"`
+	Source   string `json:"Source"`
+	Target   string `json:"Target"`
+	ReadOnly bool   `json:"ReadOnly,omitempty"`
+}
+
 type HostConfig struct {
 	PortBindings  map[string][]PortBinding `json:"PortBindings,omitempty"`
 	ShmSize       int64                    `json:"ShmSize,omitempty"`
 	RestartPolicy *RestartPolicy           `json:"RestartPolicy,omitempty"`
 	SecurityOpt   []string                 `json:"SecurityOpt,omitempty"`
+	Mounts        []MountSpec              `json:"Mounts,omitempty"`
+	NetworkMode   string                   `json:"NetworkMode,omitempty"`
+}
+
+// EndpointConfig gives a container DNS aliases on a user network.
+type EndpointConfig struct {
+	Aliases []string `json:"Aliases,omitempty"`
+}
+
+type NetworkingConfig struct {
+	EndpointsConfig map[string]EndpointConfig `json:"EndpointsConfig,omitempty"`
 }
 
 type CreateConfig struct {
-	Image        string              `json:"Image"`
-	Env          []string            `json:"Env,omitempty"`
-	Labels       map[string]string   `json:"Labels,omitempty"`
-	ExposedPorts map[string]struct{} `json:"ExposedPorts,omitempty"`
-	HostConfig   HostConfig          `json:"HostConfig"`
+	Image            string              `json:"Image"`
+	Cmd              []string            `json:"Cmd,omitempty"`
+	Env              []string            `json:"Env,omitempty"`
+	Labels           map[string]string   `json:"Labels,omitempty"`
+	ExposedPorts     map[string]struct{} `json:"ExposedPorts,omitempty"`
+	HostConfig       HostConfig          `json:"HostConfig"`
+	NetworkingConfig *NetworkingConfig   `json:"NetworkingConfig,omitempty"`
 }
 
 // CreateContainer creates a container and returns its id.
@@ -143,4 +164,49 @@ func (c *Client) FindContainer(ctx context.Context, name string) (id string, run
 		return "", false, false, err
 	}
 	return out.ID, out.State.Running, true, nil
+}
+
+// --- networks & volumes (App Store apps) ---
+
+// CreateNetwork creates a bridge network unless one with that name exists.
+func (c *Client) CreateNetwork(ctx context.Context, name string, labels map[string]string) error {
+	err := c.doBody(ctx, http.MethodPost, "/networks/create", nil,
+		map[string]any{"Name": name, "Driver": "bridge", "CheckDuplicate": true, "Labels": labels}, nil)
+	if apiErr, ok := err.(*APIError); ok && apiErr.Status == http.StatusConflict {
+		return nil
+	}
+	return err
+}
+
+// RemoveNetwork deletes a network; a missing one is not an error.
+func (c *Client) RemoveNetwork(ctx context.Context, name string) error {
+	err := c.do(ctx, http.MethodDelete, "/networks/"+url.PathEscape(name), nil, nil)
+	if IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+// RemoveVolume deletes a named volume; a missing one is not an error.
+func (c *Client) RemoveVolume(ctx context.Context, name string) error {
+	err := c.do(ctx, http.MethodDelete, "/volumes/"+url.PathEscape(name), url.Values{"force": {"1"}}, nil)
+	if IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+// ContainersByLabel lists containers (running or not) carrying label=value.
+func (c *Client) ContainersByLabel(ctx context.Context, label, value string) ([]Container, error) {
+	all, err := c.ListContainers(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	var out []Container
+	for _, ct := range all {
+		if ct.Labels[label] == value {
+			out = append(out, ct)
+		}
+	}
+	return out, nil
 }

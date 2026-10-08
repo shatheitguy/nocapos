@@ -10,6 +10,7 @@ import (
 
 	"alfaos/alfad/internal/accounts"
 	"alfaos/alfad/internal/ai"
+	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
@@ -38,6 +39,7 @@ type Deps struct {
 	Guacd    *rdp.Guacd
 	Accounts accounts.Directory
 	Scripts  *scripts.Runner
+	AppStore *appstore.Manager
 	Version  string
 }
 
@@ -120,6 +122,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/containers/{id}", s.admin(s.inspectContainer))
 	mux.Handle("POST /api/v1/containers/{id}/{action}", s.admin(s.containerAction))
 	mux.Handle("GET /api/v1/images", s.admin(s.listImages))
+
+	// App Store: one-click installs (admin, audited).
+	mux.Handle("GET /api/v1/appstore", s.admin(s.appstoreList))
+	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
+	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
 
 	// Quick Script Launcher: saved scripts run on the host (admin, audited).
 	mux.Handle("GET /api/v1/scripts", s.admin(s.scriptsList))

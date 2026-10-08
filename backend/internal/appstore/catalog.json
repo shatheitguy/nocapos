@@ -1,0 +1,334 @@
+{
+  "apps": [
+    {
+      "id": "uptime-kuma",
+      "name": "Uptime Kuma",
+      "tagline": "Monitor your services and get alerts",
+      "description": "A friendly self-hosted monitoring tool. Watch websites, APIs, ports, DNS and containers, see uptime history and response times, and get notified on Telegram, Discord, email and 90+ other services when something goes down.",
+      "category": "Network",
+      "developer": "Louis Lam",
+      "website": "https://github.com/louislam/uptime-kuma",
+      "icon": "monitor",
+      "tile": ["#5cdd8b", "#2a9d58"],
+      "featured": true,
+      "version": "1.23",
+      "web": { "service": "app", "port": 3001 },
+      "first_run": "Create your admin account on the first visit.",
+      "services": [
+        { "name": "app", "image": "louislam/uptime-kuma:1", "ports": [{ "container": 3001 }], "volumes": [{ "name": "data", "path": "/app/data" }] }
+      ],
+      "releases": [{ "version": "1.23", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "jellyfin",
+      "name": "Jellyfin",
+      "tagline": "Stream your movies, shows and music",
+      "description": "The free media system: organize your movies, TV, music and photos and stream them to any device — browser, phone, TV or console. No accounts, no tracking, no fees.",
+      "category": "Media",
+      "developer": "Jellyfin project",
+      "website": "https://jellyfin.org",
+      "icon": "play",
+      "tile": ["#aa5cc3", "#00a4dc"],
+      "featured": true,
+      "version": "10.10",
+      "web": { "service": "app", "port": 8096 },
+      "first_run": "Follow the setup wizard on the first visit, then add your media libraries.",
+      "services": [
+        {
+          "name": "app",
+          "image": "jellyfin/jellyfin:10.10.7",
+          "ports": [{ "container": 8096 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "cache", "path": "/cache" }, { "name": "media", "path": "/media" }]
+        }
+      ],
+      "releases": [{ "version": "10.10", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "open-webui",
+      "name": "Open WebUI + Ollama",
+      "tagline": "Chat with local AI models, privately",
+      "description": "A ChatGPT-style interface for open models running on your own hardware. Ollama downloads and runs the models (Llama, Qwen, Gemma, Mistral, …); Open WebUI gives you chats, documents, web search and multiple users.",
+      "category": "AI",
+      "developer": "Open WebUI · Ollama",
+      "website": "https://openwebui.com",
+      "icon": "sparkles",
+      "tile": ["#5b5bd6", "#2f2f8f"],
+      "featured": true,
+      "version": "0.6",
+      "web": { "service": "webui", "port": 8080 },
+      "first_run": "The first account you create becomes the admin. Download a model under Settings → Models (e.g. llama3.2).",
+      "services": [
+        { "name": "ollama", "image": "ollama/ollama:latest", "volumes": [{ "name": "ollama", "path": "/root/.ollama" }] },
+        {
+          "name": "webui",
+          "image": "ghcr.io/open-webui/open-webui:main",
+          "env": { "OLLAMA_BASE_URL": "http://ollama:11434", "WEBUI_SECRET_KEY": "{{secret:webui_key}}" },
+          "ports": [{ "container": 8080 }],
+          "volumes": [{ "name": "data", "path": "/app/backend/data" }]
+        }
+      ],
+      "releases": [{ "version": "0.6", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store. Ollama runs beside Open WebUI on a private network." }]
+    },
+    {
+      "id": "vaultwarden",
+      "name": "Vaultwarden",
+      "tagline": "Your own Bitwarden-compatible password manager",
+      "description": "A lightweight Bitwarden server. Use the official Bitwarden apps and browser extensions with your passwords stored on your own hardware.",
+      "category": "Security",
+      "developer": "Daniel García",
+      "website": "https://github.com/dani-garcia/vaultwarden",
+      "icon": "lock",
+      "tile": ["#175ddc", "#0c3a8f"],
+      "version": "1.34",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "The web vault needs HTTPS to log in from other devices (browsers block its encryption on plain HTTP). It works right away from this computer via localhost; for other devices put it behind HTTPS (Tailscale is coming to NoCapOS).",
+      "services": [
+        { "name": "app", "image": "vaultwarden/server:latest", "ports": [{ "container": 80 }], "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "1.34", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "nextcloud",
+      "name": "Nextcloud",
+      "tagline": "Files, calendar and contacts in your own cloud",
+      "description": "The most popular self-hosted productivity platform: sync files across devices, share links, and run calendars, contacts, notes, office documents and hundreds of other Nextcloud apps.",
+      "category": "Cloud",
+      "developer": "Nextcloud GmbH",
+      "website": "https://nextcloud.com",
+      "icon": "files",
+      "tile": ["#0082c9", "#00569a"],
+      "version": "31",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Create the admin account on the first visit (the built-in SQLite database is fine for a few users).",
+      "services": [
+        { "name": "app", "image": "nextcloud:31-apache", "ports": [{ "container": 80 }], "volumes": [{ "name": "html", "path": "/var/www/html" }] }
+      ],
+      "releases": [{ "version": "31", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "syncthing",
+      "name": "Syncthing",
+      "tagline": "Continuous peer-to-peer file sync",
+      "description": "Keep folders in sync between your computers and phones directly, without any cloud in between. Encrypted, open source and fast.",
+      "category": "Cloud",
+      "developer": "Syncthing Foundation",
+      "website": "https://syncthing.net",
+      "icon": "restart",
+      "tile": ["#0891d1", "#065b86"],
+      "version": "1.30",
+      "web": { "service": "app", "port": 8384 },
+      "first_run": "Set a GUI password under Actions → Settings → GUI on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "syncthing/syncthing:latest",
+          "ports": [{ "container": 8384 }, { "container": 22000, "host": 22000 }, { "container": 22000, "host": 22000, "protocol": "udp" }, { "container": 21027, "host": 21027, "protocol": "udp" }],
+          "volumes": [{ "name": "data", "path": "/var/syncthing" }]
+        }
+      ],
+      "releases": [{ "version": "1.30", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "filebrowser",
+      "name": "File Browser",
+      "tagline": "A simple web file manager to share with others",
+      "description": "Upload, download, preview and share files from a clean web interface — handy for giving family or friends their own space.",
+      "category": "Cloud",
+      "developer": "File Browser",
+      "website": "https://filebrowser.org",
+      "icon": "folder",
+      "tile": ["#40c4ff", "#0277bd"],
+      "version": "2",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Sign in as admin. The first-run password is printed in the app's log: open Logs below and look for \"randomly generated password\".",
+      "services": [
+        {
+          "name": "app",
+          "image": "filebrowser/filebrowser:v2",
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "srv", "path": "/srv" }, { "name": "db", "path": "/database" }]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "gitea",
+      "name": "Gitea",
+      "tagline": "Lightweight self-hosted Git service",
+      "description": "Git hosting with pull requests, issues, wikis, packages and CI (Gitea Actions) — like GitHub, on your own server.",
+      "category": "Developer",
+      "developer": "Gitea",
+      "website": "https://about.gitea.com",
+      "icon": "terminal",
+      "tile": ["#609926", "#3b5f17"],
+      "version": "1.24",
+      "web": { "service": "app", "port": 3000 },
+      "first_run": "Finish the installer on the first visit (the default SQLite database is fine).",
+      "services": [
+        {
+          "name": "app",
+          "image": "gitea/gitea:1.24",
+          "env": { "USER_UID": "1000", "USER_GID": "1000" },
+          "ports": [{ "container": 3000 }, { "container": 22, "host": 2222 }],
+          "volumes": [{ "name": "data", "path": "/data" }]
+        }
+      ],
+      "releases": [{ "version": "1.24", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store. SSH is on port 2222." }]
+    },
+    {
+      "id": "code-server",
+      "name": "code-server",
+      "tagline": "VS Code in your browser",
+      "description": "The full VS Code editor running on your server — extensions, terminal and all — reachable from any browser.",
+      "category": "Developer",
+      "developer": "Coder",
+      "website": "https://github.com/coder/code-server",
+      "icon": "fileCode",
+      "tile": ["#007acc", "#004f85"],
+      "version": "4",
+      "web": { "service": "app", "port": 8443 },
+      "first_run": "Sign in with the password below.",
+      "credentials": { "password": "{{secret:password}}" },
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/code-server:latest",
+          "env": { "PASSWORD": "{{secret:password}}", "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 8443 }],
+          "volumes": [{ "name": "config", "path": "/config" }]
+        }
+      ],
+      "releases": [{ "version": "4", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "n8n",
+      "name": "n8n",
+      "tagline": "Workflow automation with AI",
+      "description": "Connect 400+ apps and APIs with visual workflows, add AI agents and code where you need it — a self-hosted Zapier alternative.",
+      "category": "AI",
+      "developer": "n8n GmbH",
+      "website": "https://n8n.io",
+      "icon": "sliders",
+      "tile": ["#ea4b71", "#9b1c3d"],
+      "version": "1",
+      "web": { "service": "app", "port": 5678 },
+      "first_run": "Create the owner account on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "n8nio/n8n:latest",
+          "env": { "N8N_SECURE_COOKIE": "false", "N8N_ENCRYPTION_KEY": "{{secret:enc_key}}" },
+          "ports": [{ "container": 5678 }],
+          "volumes": [{ "name": "data", "path": "/home/node/.n8n" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "navidrome",
+      "name": "Navidrome",
+      "tagline": "Your personal music streaming server",
+      "description": "Stream your music collection from anywhere, with a modern web player and support for Subsonic apps on every phone.",
+      "category": "Media",
+      "developer": "Deluan Quintão",
+      "website": "https://www.navidrome.org",
+      "icon": "sound",
+      "tile": ["#0b86d1", "#0a4f7a"],
+      "version": "0.56",
+      "web": { "service": "app", "port": 4533 },
+      "first_run": "Create the admin account on the first visit, then copy music into the app's music folder.",
+      "services": [
+        {
+          "name": "app",
+          "image": "deluan/navidrome:latest",
+          "ports": [{ "container": 4533 }],
+          "volumes": [{ "name": "data", "path": "/data" }, { "name": "music", "path": "/music", "read_only": true }]
+        }
+      ],
+      "releases": [{ "version": "0.56", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "memos",
+      "name": "Memos",
+      "tagline": "Quick notes, like a private Twitter",
+      "description": "Capture thoughts, links and to-dos in Markdown on a timeline only you (or your team) can see.",
+      "category": "Productivity",
+      "developer": "usememos",
+      "website": "https://usememos.com",
+      "icon": "pencil",
+      "tile": ["#f6c445", "#d08a00"],
+      "version": "0.24",
+      "web": { "service": "app", "port": 5230 },
+      "first_run": "The first account you create is the host (admin).",
+      "services": [
+        { "name": "app", "image": "neosmemo/memos:stable", "ports": [{ "container": 5230 }], "volumes": [{ "name": "data", "path": "/var/opt/memos" }] }
+      ],
+      "releases": [{ "version": "0.24", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "actual",
+      "name": "Actual Budget",
+      "tagline": "Private, fast personal finance",
+      "description": "Envelope budgeting that is fast and private: track spending, plan ahead and sync between your devices.",
+      "category": "Productivity",
+      "developer": "Actual Budget",
+      "website": "https://actualbudget.org",
+      "icon": "grid",
+      "tile": ["#8719e0", "#4a0d80"],
+      "version": "25",
+      "web": { "service": "app", "port": 5006 },
+      "first_run": "Choose a server password on the first visit.",
+      "services": [
+        { "name": "app", "image": "actualbudget/actual-server:latest", "ports": [{ "container": 5006 }], "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "25", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "stirling-pdf",
+      "name": "Stirling PDF",
+      "tagline": "Every PDF tool you need, offline",
+      "description": "Merge, split, compress, convert, sign, OCR and redact PDFs locally — your documents never leave your server.",
+      "category": "Productivity",
+      "developer": "Stirling Tools",
+      "website": "https://www.stirlingpdf.com",
+      "icon": "filePdf",
+      "tile": ["#ff5252", "#b71c1c"],
+      "version": "1",
+      "web": { "service": "app", "port": 8080 },
+      "services": [
+        { "name": "app", "image": "stirlingtools/stirling-pdf:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "configs", "path": "/configs" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "it-tools",
+      "name": "IT-Tools",
+      "tagline": "Handy developer and admin utilities",
+      "description": "Dozens of small tools in one place: hashes, UUIDs, JWT and Base64 decoders, subnet calculators, QR codes, cron helpers and more.",
+      "category": "Developer",
+      "developer": "Corentin Thomasset",
+      "website": "https://it-tools.tech",
+      "icon": "sliders",
+      "tile": ["#18a058", "#0c5c32"],
+      "version": "2024",
+      "web": { "service": "app", "port": 80 },
+      "services": [{ "name": "app", "image": "corentinth/it-tools:latest", "ports": [{ "container": 80 }] }],
+      "releases": [{ "version": "2024", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "excalidraw",
+      "name": "Excalidraw",
+      "tagline": "Hand-drawn style whiteboard",
+      "description": "Sketch diagrams and ideas on an infinite canvas with a lovely hand-drawn look. Drawings stay in your browser.",
+      "category": "Productivity",
+      "developer": "Excalidraw",
+      "website": "https://excalidraw.com",
+      "icon": "pencil",
+      "tile": ["#6965db", "#3d39a8"],
+      "version": "1",
+      "web": { "service": "app", "port": 80 },
+      "services": [{ "name": "app", "image": "excalidraw/excalidraw:latest", "ports": [{ "container": 80 }] }],
+      "releases": [{ "version": "1", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    }
+  ]
+}
