@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { removeAvatar, uploadAvatar, useAvatar } from '../lib/avatar';
+import { UserAvatar } from '../components/UserAvatar';
 import { getUser, logout } from '../api/client';
 import { usersApi, type PeopleList, type Person } from '../api/users';
 import { Icon } from '../components/Icon';
@@ -9,6 +11,44 @@ import { Choice, Row, Section } from './Personalize';
 
 // Settings → Users & Roles. On a native Linux install these are the machine's
 // real Linux accounts; in Docker / on Windows they're NoCapOS accounts.
+
+/** Your profile photo: click to change it; it shows on the login screen too. */
+function PhotoPicker({ username }: { username: string }) {
+  const input = useRef<HTMLInputElement>(null);
+  const has = useAvatar((s) => !!s.url);
+  const [busy, setBusy] = useState(false);
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    const err = await uploadAvatar(file, username).catch(() => 'That image could not be read.');
+    setBusy(false);
+    if (err) toast('error', 'Could not set your photo', err);
+    else toast('success', 'Profile photo updated', 'It also shows on the login screen of this device.');
+  };
+  return (
+    <div className="photo-picker">
+      <button type="button" className="photo-btn" title="Change photo" disabled={busy} onClick={() => input.current?.click()}>
+        <UserAvatar name={username} size="xl" />
+        <span className="photo-edit">{busy ? <span className="spinner sm" /> : <Icon name="edit" size={13} />}</span>
+      </button>
+      {has && (
+        <button type="button" className="link small" onClick={() => void removeAvatar(username)}>
+          Remove
+        </button>
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        hidden
+        onChange={(e) => {
+          void pick(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+    </div>
+  );
+}
 
 /** Your own account: shown to everyone at the top of Users & Roles. */
 function YourAccount({ onSecurity }: { onSecurity: () => void }) {
@@ -21,7 +61,7 @@ function YourAccount({ onSecurity }: { onSecurity: () => void }) {
   return (
     <Section title="Your account">
       <div className="settings-row account-card">
-        <span className="avatar xl">{user.username.slice(0, 1).toUpperCase()}</span>
+        <PhotoPicker username={user.username} />
         <span className="settings-row-text">
           <span className="account-name">{user.username}</span>
           <span className="settings-row-hint">
