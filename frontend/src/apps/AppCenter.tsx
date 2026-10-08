@@ -4,6 +4,7 @@ import { Bar } from '../components/Charts';
 import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { Empty } from './Monitor';
 
@@ -12,14 +13,19 @@ import { Empty } from './Monitor';
 
 type Tab = 'discover' | 'installed' | 'updates';
 
-export function AppCenter() {
+export function AppCenter({ win }: { win?: WinState }) {
   const [apps, setApps] = useState<StoreApp[] | null>(null);
   const [docker, setDocker] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('discover');
   const [cat, setCat] = useState('All');
   const [q, setQ] = useState('');
-  const [detail, setDetail] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(win?.props?.app ?? null);
+  // Opened again at a specific app (e.g. from search): show that app.
+  const wanted = win?.props?.app;
+  useEffect(() => {
+    if (wanted) setDetail(wanted);
+  }, [wanted]);
   const timer = useRef<number | undefined>(undefined);
 
   const load = useCallback(async () => {

@@ -26,21 +26,22 @@ import (
 )
 
 type Deps struct {
-	Config   *config.Config
-	Log      *slog.Logger
-	Store    *store.Store
-	Auth     *auth.Service
-	Docker   *docker.Client
-	Sampler  *hardware.Sampler
-	Files    *files.Service
-	AI       *ai.Service
-	Terminal *terminal.Service
-	Brave    *webapps.Brave
-	Guacd    *rdp.Guacd
-	Accounts accounts.Directory
-	Scripts  *scripts.Runner
-	AppStore *appstore.Manager
-	Version  string
+	Config    *config.Config
+	Log       *slog.Logger
+	Store     *store.Store
+	Auth      *auth.Service
+	Docker    *docker.Client
+	Sampler   *hardware.Sampler
+	Files     *files.Service
+	FileIndex *files.Index
+	AI        *ai.Service
+	Terminal  *terminal.Service
+	Brave     *webapps.Brave
+	Guacd     *rdp.Guacd
+	Accounts  accounts.Directory
+	Scripts   *scripts.Runner
+	AppStore  *appstore.Manager
+	Version   string
 }
 
 type Server struct {
@@ -160,13 +161,14 @@ func (s *Server) Handler() http.Handler {
 	// Files (admin only for now; per-user shares come with multi-user storage)
 	mux.Handle("GET /api/v1/files/roots", s.admin(s.filesRoots))
 	mux.Handle("GET /api/v1/files/list", s.admin(s.filesList))
+	mux.Handle("GET /api/v1/files/search", s.admin(s.filesSearch))
 	mux.Handle("GET /api/v1/files/text", s.admin(s.filesReadText))
-	mux.Handle("PUT /api/v1/files/text", s.admin(s.filesWriteText))
-	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.filesMkdir))
-	mux.Handle("POST /api/v1/files/rename", s.admin(s.filesRename))
-	mux.Handle("POST /api/v1/files/delete", s.admin(s.filesDelete))
-	mux.Handle("POST /api/v1/files/transfer", s.admin(s.filesTransfer))
-	mux.Handle("POST /api/v1/files/upload", s.admin(s.filesUpload))
+	mux.Handle("PUT /api/v1/files/text", s.admin(s.touchIndex(s.filesWriteText)))
+	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.touchIndex(s.filesMkdir)))
+	mux.Handle("POST /api/v1/files/rename", s.admin(s.touchIndex(s.filesRename)))
+	mux.Handle("POST /api/v1/files/delete", s.admin(s.touchIndex(s.filesDelete)))
+	mux.Handle("POST /api/v1/files/transfer", s.admin(s.touchIndex(s.filesTransfer)))
+	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
 
