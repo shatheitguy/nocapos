@@ -160,7 +160,7 @@ func setup(t *testing.T) (*Manager, *fakeEngine, *fakeStore) {
 
 func wait(t *testing.T, m *Manager, jobID string) Job {
 	t.Helper()
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 1000; i++ { // up to 10 s on a busy machine
 		if j, _ := m.Job(jobID); j.Done {
 			return j
 		}
@@ -315,5 +315,45 @@ func TestControlStopStart(t *testing.T) {
 	}
 	if err := m.Control(context.Background(), "nope", "start"); !errors.Is(err, ErrNotInstall) {
 		t.Fatal(err)
+	}
+}
+
+func TestSimultaneousInstallsGetDifferentPorts(t *testing.T) {
+	m, _, st := setup(t)
+	ids := []string{"it-tools", "memos", "excalidraw"}
+	var jobs []string
+	for _, id := range ids {
+		j, err := m.Install(context.Background(), id, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		jobs = append(jobs, j)
+	}
+	for _, j := range jobs {
+		if r := wait(t, m, j); r.Error != "" {
+			t.Fatal(r.Error)
+		}
+	}
+	seen := map[int]string{}
+	for _, id := range ids {
+		p := st.apps[id].WebPort
+		if other, dup := seen[p]; dup {
+			t.Fatalf("%s and %s both got port %d", id, other, p)
+		}
+		seen[p] = id
+	}
+	// Finished jobs stay visible (with their outcome) for a while.
+	if js := m.Jobs(); len(js) != 3 || !js["memos"].Done {
+		t.Fatalf("recent jobs = %+v", js)
+	}
+}
+
+func TestFailedInstallStaysVisible(t *testing.T) {
+	m, eng, _ := setup(t)
+	eng.pullErr = errors.New("registry unreachable")
+	j, _ := m.Install(context.Background(), "memos", nil)
+	wait(t, m, j)
+	if got := m.Jobs()["memos"]; !got.Done || !strings.Contains(got.Error, "registry unreachable") {
+		t.Fatalf("job = %+v", got)
 	}
 }

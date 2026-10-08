@@ -14,12 +14,11 @@ export interface StoreJob {
 export interface StoreInstalled {
   version: string;
   web_port: number;
-  status: 'running' | 'stopped' | 'partial' | 'missing' | 'installing';
+  status: 'running' | 'stopped' | 'partial' | 'missing';
   update_available: boolean;
   containers: { service: string; id: string; state: string }[] | null;
   credentials?: { username?: string; password?: string };
   installed_at: string;
-  job?: StoreJob;
 }
 
 export interface StoreApp {
@@ -39,6 +38,8 @@ export interface StoreApp {
   services: { name: string; image: string; ports?: { container: number; host?: number; protocol?: string }[]; volumes?: { name: string; path: string }[] }[];
   releases: { version: string; date: string; notes: string }[];
   installed?: StoreInstalled;
+  /** Running job, or the last one if it ended in the last few minutes. */
+  job?: StoreJob;
 }
 
 const path = (id: string) => `/api/v1/appstore/${encodeURIComponent(id)}`;

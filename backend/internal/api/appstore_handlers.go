@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -14,6 +15,7 @@ import (
 type storeApp struct {
 	appstore.App
 	Installed *appstore.Installed `json:"installed,omitempty"`
+	Job       *appstore.Job       `json:"job,omitempty"` // running, or ended in the last few minutes
 }
 
 func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
@@ -22,9 +24,14 @@ func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	jobs := s.AppStore.Jobs()
 	apps := make([]storeApp, 0, len(s.AppStore.Catalog()))
 	for _, a := range s.AppStore.Catalog() {
-		apps = append(apps, storeApp{App: a, Installed: status[a.ID]})
+		sa := storeApp{App: a, Installed: status[a.ID]}
+		if j, ok := jobs[a.ID]; ok {
+			sa.Job = &j
+		}
+		apps = append(apps, sa)
 	}
 	dockerUp := s.Docker.Ping(r.Context()) == nil
 	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "docker": dockerUp})
@@ -33,8 +40,10 @@ func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 	id, action := r.PathValue("id"), r.PathValue("action")
 	u := userFrom(r.Context())
+	// Install/update/uninstall finish after this request: audit with a detached copy.
+	ar := r.Clone(context.WithoutCancel(r.Context()))
 	audit := func(err error) {
-		s.audit(r, u.ID, "app."+action, id, err == nil, errText(err))
+		s.audit(ar, u.ID, "app."+action, id, err == nil, errText(err))
 	}
 	ctx := r.Context()
 	if err := s.Docker.Ping(ctx); err != nil {

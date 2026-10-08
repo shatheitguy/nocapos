@@ -714,7 +714,8 @@ button.widget:active { transform: none; }
 .kind-code { color: #12a4a4; }
 .kind-archive { color: #d58a00; }
 .kind-file { color: var(--muted); }
-.files-table td:first-child { display: flex; align-items: center; gap: 10px; }
+.files-table .name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.files-table .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .files-table tbody tr { cursor: default; }
 .files-table tbody tr:hover { background: var(--surface-2); }
 .files-table .num { text-align: right; }
@@ -1645,11 +1646,13 @@ input.nc-range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px color-mix
 .cgrid-widget, .scripts-widget { cursor: default; }
 .cgrid { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; align-content: start; padding: 1px; }
 .ccard {
+  /* "Running" colour: green in the NoCap theme (its accent is red), the neon accent in Cyber-Deck. */
+  --live: var(--ok);
   position: relative; display: flex; flex-direction: column; gap: 3px; padding: 9px 10px 8px; min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--live) 35%, transparent);
   border-radius: var(--widget-radius, 10px);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
-  box-shadow: inset 0 0 12px color-mix(in srgb, var(--accent) 10%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--live) 12%, transparent), transparent 70%);
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--live) 10%, transparent);
 }
 .ccard.up { animation: ccard-pulse 2.8s ease-in-out infinite; }
 .ccard.down {
@@ -1658,11 +1661,11 @@ input.nc-range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px color-mix
   box-shadow: none; opacity: 0.82;
 }
 @keyframes ccard-pulse {
-  0%, 100% { box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent) 8%, transparent), 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
-  50% { box-shadow: inset 0 0 14px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 12px color-mix(in srgb, var(--accent) 28%, transparent); }
+  0%, 100% { box-shadow: inset 0 0 10px color-mix(in srgb, var(--live) 8%, transparent), 0 0 0 color-mix(in srgb, var(--live) 0%, transparent); }
+  50% { box-shadow: inset 0 0 14px color-mix(in srgb, var(--live) 18%, transparent), 0 0 12px color-mix(in srgb, var(--live) 28%, transparent); }
 }
 .ccard-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.ccard-pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.ccard-pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 8px var(--live); }
 .ccard.up .ccard-pulse { animation: ccard-dot 1.6s ease-in-out infinite; }
 .ccard.down .ccard-pulse { background: var(--bad); box-shadow: none; }
 @keyframes ccard-dot { 50% { opacity: 0.35; } }
@@ -2109,3 +2112,7 @@ button.cal-day.picked:not(.today) { box-shadow: inset 0 0 0 1.5px var(--accent);
 .xfer-list.compact .xfer-row { padding: 6px 8px; }
 .xfer-panel { width: min(360px, calc(100vw - 24px)); }
 .tray .xfer-btn svg { display: inline-block !important; }
+
+:root:not([data-ui="classic"]) .ccard { --live: var(--accent); }
+/* Edge adds its own password-reveal button; ours (with the cat peeking) replaces it. */
+.mac-pill input::-ms-reveal, .mac-pill input::-ms-clear { display: none; }
