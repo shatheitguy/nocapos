@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoCapOS — your server, as a desktop</title>
+<meta name="description" content="NoCapOS turns any Linux server into a personal cloud with a full desktop in your browser: App Store, Files, Terminal, users, network and Docker apps. Free and open source (MIT).">
+<meta name="theme-color" content="#07070a">
+<meta property="og:title" content="NoCapOS">
+<meta property="og:description" content="A web desktop that turns any Linux server into your personal cloud. Free & open source.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://shatheitguy.github.io/nocapos/screenshots/desktop.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230e1117'/%3E%3Cg transform='translate(9 9) scale(.82)'%3E%3Cpath d='M40.5 43A33 33 0 0 1 95 27l-7 6A24 24 0 0 0 51 44Z' fill='%23aab0bb'/%3E%3Cpath d='M6 10l15 15v67L6 80Z' fill='%23aab0bb'/%3E%3Cpath d='M6 10h13l40 56q9 12 29 3l7 5q-29 22-45 2Z' fill='%23aab0bb'/%3E%3Cpath d='M85 38a17 17 0 1 0 0 24l-6-5a9.5 9.5 0 1 1 0-14Z' fill='%23ff2a2a'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07070a; --bg2:#0d0d12; --card:rgba(18,18,24,.72); --line:rgba(255,255,255,.08);
+  --text:#f2f2f5; --text2:rgba(242,242,245,.66); --text3:rgba(242,242,245,.42);
+  --accent:#ff2d3d; --accent-soft:rgba(255,45,61,.16); --accent-glow:rgba(255,45,61,.35);
+  --radius:22px; --mono:'JetBrains Mono',ui-monospace,monospace; --sans:'Space Grotesk',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-2;background:
+  radial-gradient(900px 600px at 85% -10%, var(--accent-glow), transparent 60%),
+  radial-gradient(800px 600px at -10% 110%, rgba(255,45,61,.18), transparent 60%),
+  repeating-conic-gradient(rgba(255,255,255,.035) 0 25%, transparent 0 50%) 0 0/8px 8px,
+  linear-gradient(#101014,#050507)}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.mono{font-family:var(--mono)}
+.tag{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+
+nav{position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(7,7,10,.62);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:28px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.04em}
+.brand svg{width:30px;height:30px}
+.brand small{font-family:var(--mono);font-weight:400;color:var(--text3);font-size:11px;letter-spacing:.18em}
+nav .links{margin-left:auto;display:flex;gap:24px;font-size:14px;color:var(--text2)}
+nav .links a:hover{color:var(--text)}
+nav .gh{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;font-size:13px}
+nav .gh:hover{border-color:var(--accent)}
+nav .gh svg{width:16px;height:16px}
+
+.hero{padding:76px 0 40px;text-align:center}
+.hero h1{font-size:clamp(40px,6.4vw,78px);font-weight:300;line-height:1.02;letter-spacing:-.02em;margin:18px auto 20px;max-width:900px}
+.hero h1 b{font-weight:600;color:var(--accent)}
+.hero p.lead{font-size:19px;color:var(--text2);max-width:720px;margin:0 auto}
+.cmd{display:flex;align-items:center;gap:12px;max-width:820px;margin:34px auto 0;padding:14px 14px 14px 20px;border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.45);text-align:left}
+.cmd code{flex:1;font-family:var(--mono);font-size:14px;color:var(--text);overflow-x:auto;white-space:nowrap}
+.cmd code::before{content:"$ ";color:var(--accent)}
+.copy{flex:none;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);font:500 13px var(--sans);padding:8px 14px;border-radius:999px;cursor:pointer}
+.copy:hover{border-color:var(--accent)}
+.cta{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:26px}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 24px;border-radius:999px;font-weight:500;font-size:16px;transition:transform .15s ease,box-shadow .2s ease,border-color .2s}
+.btn.primary{background:var(--accent);color:#09090b;box-shadow:0 10px 40px -10px var(--accent-glow)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 16px 50px -10px var(--accent-glow)}
+.btn.ghost{border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.btn.ghost:hover{border-color:rgba(255,255,255,.3)}
+.btn svg{width:18px;height:18px}
+.meta{margin-top:22px;display:flex;flex-wrap:wrap;justify-content:center;gap:18px;font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:.06em}
+.meta span::before{content:"\25CF";color:var(--accent);margin-right:8px}
+
+.frame{margin:52px auto 0;max-width:1100px;border-radius:18px;padding:10px;background:linear-gradient(145deg,#1a1a20,#08080b);box-shadow:0 0 0 1px rgba(255,255,255,.08),0 50px 140px -40px var(--accent-glow)}
+.frame .bar{display:flex;gap:7px;padding:4px 6px 10px}
+.frame .bar i{width:11px;height:11px;border-radius:50%;background:#2a2a32}
+.frame .bar i:first-child{background:#ff5f57}.frame .bar i:nth-child(2){background:#febc2e}.frame .bar i:nth-child(3){background:#28c840}
+.frame img{border-radius:10px;width:100%}
+
+section{padding:88px 0 0}
+.head{max-width:720px;margin-bottom:40px}
+.head h2{font-size:clamp(28px,3.6vw,44px);font-weight:400;letter-spacing:-.01em;margin:12px 0 10px}
+.head h2 b{font-weight:600;color:var(--accent)}
+.head p{color:var(--text2);font-size:17px}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px;backdrop-filter:blur(10px)}
+.card .ic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);margin-bottom:16px}
+.card .ic svg{width:22px;height:22px}
+.card h3{font-size:19px;font-weight:600;margin-bottom:8px}
+.card p{color:var(--text2);font-size:15px}
+
+.shots{display:grid;grid-template-columns:repeat(2,1fr);gap:22px}
+.shot{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
+.shot img{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top}
+.shot figcaption{padding:14px 18px;font-size:14px;color:var(--text2)}
+.shot figcaption b{color:var(--text);font-weight:600;margin-right:6px}
+.shot a{display:block}
+
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.step{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+.step h3{font-size:18px;font-weight:600;margin-bottom:10px;display:flex;gap:10px;align-items:baseline}
+.step h3 span{font-family:var(--mono);color:var(--accent);font-size:13px}
+.step p{color:var(--text2);font-size:15px;margin-bottom:12px}
+.step pre{font-family:var(--mono);font-size:13px;background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;color:var(--text)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{color:var(--text3);font-weight:500;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+td code{font-family:var(--mono);font-size:13px;color:var(--accent)}
+
+.about{display:flex;gap:28px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:32px}
+.about img{width:120px;height:120px;border-radius:50%;flex:none;box-shadow:0 0 0 2px var(--accent-soft)}
+.about h3{font-size:22px;font-weight:600}
+.about p{color:var(--text2);margin:8px 0 14px}
+.about .links{display:flex;flex-wrap:wrap;gap:16px;font-size:14px}
+.about .links a{color:var(--accent)}
+
+footer{margin-top:96px;border-top:1px solid var(--line);padding:30px 0 40px;color:var(--text3);font-size:13px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between}
+footer a{color:var(--text2)}
+
+@media (max-width:900px){.grid{grid-template-columns:1fr 1fr}.shots,.steps{grid-template-columns:1fr}nav .links{display:none}}
+@media (max-width:600px){.grid{grid-template-columns:1fr}.about{flex-direction:column;text-align:center}.about .links{justify-content:center}.hero{padding-top:48px}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2e5ea"/><stop offset=".5" stop-color="#9ca1ab"/><stop offset="1" stop-color="#626772"/></linearGradient></defs><path d="M40.5 43A33 33 0 0 1 95 27l-7 6A24 24 0 0 0 51 44Z" fill="url(#s)"/><path d="M6 10l15 15v67L6 80Z" fill="url(#s)"/><path d="M6 10h13l40 56q9 12 29 3l7 5q-29 22-45 2Z" fill="url(#s)"/><path d="M12 6l45 58q9 12 30 3" fill="none" stroke="#ff2a2a" stroke-width="2.6"/><path d="M85 38a17 17 0 1 0 0 24l-6-5a9.5 9.5 0 1 1 0-14Z" fill="#ff2a2a"/></svg>
+      NoCapOS <small>WEB OS</small>
+    </a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#install">Install</a>
+      <a href="#about">About</a>
+    </div>
+    <a class="gh" href="https://github.com/shatheitguy/nocapos">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.4-4-1.4-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.7 18 5 18 5c.7 1.7.3 2.9.1 3.2.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<header class="hero wrap">
+  <span class="tag">Self-hosted · Open source · Freedom to do more</span>
+  <h1>Your Linux server, <b>as a desktop.</b></h1>
+  <p class="lead">NoCapOS installs on top of Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch and turns the machine into a personal cloud: a full windowed desktop in your browser with an App Store, files, a root terminal, users and network — like umbrelOS or OpenMediaVault, with a real desktop.</p>
+  <div class="cmd">
+    <code id="cmd">curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash</code>
+    <button class="copy" type="button" data-copy="cmd">Copy</button>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="#install">Install guide</a>
+    <a class="btn ghost" href="https://github.com/shatheitguy/nocapos/releases/latest">Downloads</a>
+    <a class="btn ghost" href="https://github.com/shatheitguy/nocapos">Source on GitHub</a>
+  </div>
+  <div class="meta"><span>amd64 · arm64 · armv7</span><span>Raspberry Pi 4 / 5</span><span>MIT licensed</span><span>Single 7 MB binary</span></div>
+  <figure class="frame">
+    <div class="bar"><i></i><i></i><i></i></div>
+    <img src="screenshots/desktop.png" alt="The NoCapOS desktop with clock, system monitor, network, containers and calendar widgets" width="1440" height="900">
+  </figure>
+</header>
+
+<section id="features" class="wrap">
+  <div class="head">
+    <span class="tag">Features</span>
+    <h2>Everything your server does, <b>one click away.</b></h2>
+    <p>NoCapOS runs as root on your machine, so it can manage the whole box — and every change is admin-only and written to an audit log.</p>
+  </div>
+  <div class="grid">
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></svg></div><h3>App Store</h3><p>One-click installs of Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden, Syncthing, Gitea, code-server, n8n and more — with updates, release notes and uninstall that keeps your data.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h7l2 2h9v11H3z"/></svg></div><h3>Files</h3><p>Dual-pane file manager with previews, syntax highlighting, permission badges, a recycle bin and background copies with progress, conflict choices and cancel.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM7 9l3 3-3 3M13 15h4"/></svg></div><h3>Root terminal</h3><p>A real shell on the server — or inside any container — right in the browser, with a CRT mode and a clear badge when you're root.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 14a4 4 0 1 0-8 0M12 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 20c0-3 3.6-5 8-5s8 2 8 5"/></svg></div><h3>Your Linux users</h3><p>Sign in with the machine's own accounts, root included. Create users, set roles, reset passwords and turn on two-factor sign-in.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/></svg></div><h3>Network & power</h3><p>Join Wi-Fi, switch between DHCP and static addresses with automatic rollback, restart or shut down — from a macOS-style Control Center.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><h3>Universal search</h3><p>Ctrl+Space finds apps, settings, files and actions in one box, with a live file index and keyboard navigation.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div><h3>Live monitoring</h3><p>CPU per core, memory, disks, network and GPUs, plus container stats and logs — as widgets or full apps.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg></div><h3>Remote Desktop & more</h3><p>RDP to your PCs, a real Brave browser, one-click scripts, and an AI assistant that runs local models with Ollama.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7z"/></svg></div><h3>Secure by default</h3><p>argon2id passwords, rotating sessions, two-factor sign-in, a strict content-security policy, and protected system folders that Files can't delete.</p></div>
+  </div>
+</section>
+
+<section id="screenshots" class="wrap">
+  <div class="head">
+    <span class="tag">Screenshots</span>
+    <h2>Looks like an OS, <b>because it is one.</b></h2>
+    <p>Real screenshots of NoCapOS running on a Linux server.</p>
+  </div>
+  <div class="shots">
+    <figure class="shot"><a href="screenshots/app-store.png"><img src="screenshots/app-store.png" alt="App Store" loading="lazy" width="1440" height="900"></a><figcaption><b>App Store</b>Featured apps, categories, installs and updates.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/login.png"><img src="screenshots/login.png" alt="Lock screen with the cyber cat" loading="lazy" width="1440" height="900"></a><figcaption><b>Lock screen</b>Your photo, and a cyber cat that covers its eyes while you type.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/files-dual.png"><img src="screenshots/files-dual.png" alt="Dual-pane Files with code preview" loading="lazy" width="1440" height="900"></a><figcaption><b>Files</b>Dual pane, permission badges and syntax-highlighted previews.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/search.png"><img src="screenshots/search.png" alt="Universal search" loading="lazy" width="1440" height="900"></a><figcaption><b>Search</b>Apps, settings, files and actions with Ctrl+Space.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/settings.png"><img src="screenshots/settings.png" alt="Settings" loading="lazy" width="1440" height="900"></a><figcaption><b>Settings</b>Themes, wallpaper, dock, users, network and more.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/cyber-deck.png"><img src="screenshots/cyber-deck.png" alt="Cyber-Deck theme" loading="lazy" width="1440" height="900"></a><figcaption><b>Cyber-Deck</b>An optional sci-fi theme with holographic widgets.</figcaption></figure>
+  </div>
+</section>
+
+<section id="install" class="wrap">
+  <div class="head">
+    <span class="tag">Install</span>
+    <h2>Up and running <b>in two minutes.</b></h2>
+    <p>Any 64-bit or ARM Linux machine with systemd: a mini PC, an old laptop, a NAS box or a Raspberry Pi 4/5.</p>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <h3><span>01</span>Run the installer</h3>
+      <p>It picks the build for your CPU, checks its SHA-256 checksum, installs Docker if needed and starts the <code class="mono">nocapos</code> service.</p>
+      <pre>curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash</pre>
+    </div>
+    <div class="step">
+      <h3><span>02</span>Open it and create your admin</h3>
+      <p>The installer prints the address and a one-time setup token. Open <span class="mono">https://your-server-ip/</span>, accept the self-signed certificate once and enter the token.</p>
+      <pre>==&gt; NoCapOS is running.
+   Open:  https://192.168.1.20/
+   First-run setup token:  6962a448-…</pre>
+    </div>
+    <div class="step" style="grid-column:1/-1">
+      <h3><span>03</span>Options</h3>
+      <table>
+        <tr><th>Option</th><th>What it does</th></tr>
+        <tr><td><code>--storage /path</code></td><td>Where NoCap Drive keeps your files (default <code>/srv/nocapos</code>)</td></tr>
+        <tr><td><code>--port 8443</code></td><td>HTTPS port if 443 is taken</td></tr>
+        <tr><td><code>--no-docker</code></td><td>Skip Docker (the App Store stays off until it's installed)</td></tr>
+        <tr><td><code>--docker</code></td><td>Run NoCapOS itself in Docker — apps only, no control of the server</td></tr>
+        <tr><td><code>--uninstall</code></td><td>Remove NoCapOS; your files are never deleted (<code>--purge</code> also removes accounts and settings)</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="about" class="wrap">
+  <div class="about">
+    <img src="https://avatars.githubusercontent.com/u/61654902?v=4&amp;s=240" alt="Sharqan Ahamed" width="120" height="120">
+    <div>
+      <span class="tag">About the developer</span>
+      <h3>Sharqan Ahamed, Sha The IT Guy</h3>
+      <p>Senior IT Infrastructure Engineer and Cloud &amp; Cybersecurity Strategist, Dubai, UAE. NoCapOS is the home server I wanted: every tool I reach for, on hardware I own, behind one clean desktop.</p>
+      <div class="links">
+        <a href="https://shatheitguy.in">shatheitguy.in</a>
+        <a href="https://github.com/shatheitguy">GitHub</a>
+        <a href="https://ae.linkedin.com/in/sharqan-ahamed-8555b8169">LinkedIn</a>
+        <a href="https://www.youtube.com/@shatheitguy">YouTube</a>
+        <a href="https://x.com/Sha_The_IT_Guy">X</a>
+        <a href="https://shatheitguy.github.io/alfa-launcher/">ALFA Launcher</a>
+        <a href="https://github.com/shatheitguy/it-vault">IT-Vault</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>NoCapOS is open source under the <a href="https://github.com/shatheitguy/nocapos/blob/main/LICENSE">MIT License</a>. © 2026 Sharqan Ahamed (Sha The IT Guy).</span>
+    <span><a href="https://github.com/shatheitguy/nocapos">GitHub</a> · <a href="https://github.com/shatheitguy/nocapos/releases">Releases</a> · <a href="https://github.com/shatheitguy/nocapos/issues">Issues</a></span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = document.getElementById(b.dataset.copy).textContent;
+    navigator.clipboard.writeText(t).then(function () {
+      b.textContent = 'Copied';
+      setTimeout(function () { b.textContent = 'Copy'; }, 1500);
+    });
+  });
+});
+</script>
+</body>
+</html>

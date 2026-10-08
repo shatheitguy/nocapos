@@ -1,8 +1,17 @@
 # NoCapOS
 
+[![Website](https://img.shields.io/badge/website-nocapos-ff2d3d)](https://shatheitguy.github.io/nocapos/)
+[![Latest release](https://img.shields.io/github/v/release/shatheitguy/nocapos?color=ff2d3d)](../../releases/latest)
+[![CI](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml/badge.svg)](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a desktop in your
 browser — like umbrelOS or OpenMediaVault on top of Raspberry Pi OS, but with a full windowed desktop.
 It installs on top of your existing Linux, manages the machine as root, and runs apps in Docker.
+
+🌐 **Website:** https://shatheitguy.github.io/nocapos/
+
+![The NoCapOS desktop](docs/screenshots/desktop.png)
 
 ## Install
 
@@ -44,6 +53,20 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 - **Security** — argon2id passwords, two-factor sign-in, rotating sessions, audit log of every admin
   action, strict Content-Security-Policy.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![App Store](docs/screenshots/app-store.png) **App Store** — one-click apps, updates and release notes | ![Lock screen](docs/screenshots/login.png) **Lock screen** — your photo and a cyber cat that covers its eyes while you type |
+| ![Files](docs/screenshots/files-dual.png) **Files** — dual pane, permissions and code previews | ![Search](docs/screenshots/search.png) **Search** — apps, settings, files and actions (Ctrl+Space) |
+| ![Settings](docs/screenshots/settings.png) **Settings** — themes, wallpaper, dock, users, network | ![Cyber-Deck](docs/screenshots/cyber-deck.png) **Cyber-Deck** — optional sci-fi theme with holographic widgets |
+
+## Updating
+
+Run the installer again — it upgrades in place and keeps your accounts, settings and files. Every push
+to `main` is built by GitHub Actions and published under [Releases](../../releases), so `releases/latest`
+always has the newest build.
+
 ## Build from source
 
 Requirements: Go 1.25+, Node 20+.
@@ -56,6 +79,7 @@ Requirements: Go 1.25+, Node 20+.
 ```bash
 cd frontend && npm install && npm run build   # builds the UI into backend/web/dist
 cd ../backend && CGO_ENABLED=0 go build -o bin/alfad ./cmd/alfad
+bash scripts/package.sh 0.3.0                 # (from the repo root) Linux bundles in dist/
 ```
 
 Run it locally with `backend/bin/alfad` and open `http://127.0.0.1:8080`; the first start prints the
@@ -85,3 +109,18 @@ deploy/             installer, systemd unit, Docker Compose files
   to delete it.
 - File links are short-lived tickets; files that could run script (HTML, SVG) always download instead
   of rendering.
+
+## About the developer
+
+<img src="https://avatars.githubusercontent.com/u/61654902?v=4&s=120" width="72" align="left" alt="Sharqan Ahamed" />
+
+**Sharqan Ahamed, Sha The IT Guy**: Senior IT Infrastructure Engineer and Cloud & Cybersecurity Strategist, Dubai, UAE.
+NoCapOS is the home server I wanted: every tool I reach for, on hardware I own, behind one clean desktop.
+
+[shatheitguy.in](https://shatheitguy.in) · [GitHub](https://github.com/shatheitguy) · [LinkedIn](https://ae.linkedin.com/in/sharqan-ahamed-8555b8169) · [YouTube](https://www.youtube.com/@shatheitguy) · [X](https://x.com/Sha_The_IT_Guy)
+
+Also by me: [ALFA Launcher](https://github.com/shatheitguy/alfa-launcher), a sci-fi Android home screen, and [IT-Vault](https://github.com/shatheitguy/it-vault), a self-hosted IT asset register and helpdesk.
+
+## License
+
+NoCapOS is open source under the [MIT License](LICENSE). © 2026 Sharqan Ahamed (Sha The IT Guy).
