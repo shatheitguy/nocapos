@@ -19,7 +19,8 @@ export type WidgetType =
   | 'netwave'
   | 'gauges'
   | 'containerGrid'
-  | 'scripts';
+  | 'scripts'
+  | 'transfers';
 
 export interface WidgetDef {
   type: WidgetType;
@@ -48,6 +49,7 @@ export const WIDGETS: WidgetDef[] = [
   { type: 'gauges', name: 'Storage gauges', icon: 'disk', min: { w: 220, h: 150 }, max: { w: 640, h: 420 }, default: { w: 320, h: 180 } },
   { type: 'containerGrid', name: 'Container cards', icon: 'containers', min: { w: 280, h: 170 }, max: { w: 860, h: 640 }, default: { w: 420, h: 280 }, adminOnly: true },
   { type: 'scripts', name: 'Quick scripts', icon: 'fileCode', min: { w: 240, h: 130 }, max: { w: 640, h: 560 }, default: { w: 320, h: 230 }, adminOnly: true },
+  { type: 'transfers', name: 'Transfers', icon: 'swap', min: { w: 260, h: 140 }, max: { w: 560, h: 560 }, default: { w: 320, h: 220 }, adminOnly: true },
   { type: 'accelerators', name: 'AI accelerators', icon: 'gpu', min: { w: 240, h: 120 }, max: { w: 520, h: 320 }, default: { w: 320, h: 180 } },
 ];
 

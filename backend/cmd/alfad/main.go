@@ -202,6 +202,7 @@ func serve() error {
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 		FileIndex: files.NewIndex(fsvc, ctx.Done()),
+		FileJobs:  files.NewJobs(fsvc),
 	})
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,

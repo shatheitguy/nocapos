@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { TransfersButton } from './Transfers';
 import { LogoMark } from '../components/Logo';
 import { logout } from '../api/client';
 import type { User } from '../api/types';
@@ -69,6 +70,7 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
             <Icon name="moon" size={15} />
           </button>
         )}
+        <TransfersButton className="mb-icon" />
         <button type="button" className="mb-icon" title="Search (Ctrl+Space)" aria-label="Search" onClick={() => useSpotlight.getState().toggle()}>
           <Icon name="search" size={15} />
         </button>

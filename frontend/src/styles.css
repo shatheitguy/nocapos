@@ -1492,12 +1492,12 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
 
 /* ============ confirm dialog & power overlay ============ */
 .confirm-backdrop { position: fixed; inset: 0; z-index: 2147482000; display: grid; place-items: center; padding: 16px; background: rgba(4, 7, 14, 0.55); backdrop-filter: blur(3px); }
-.confirm-dialog { width: min(420px, 100%); padding: 22px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.confirm-dialog { width: min(440px, 100%); min-width: 0; box-sizing: border-box; padding: 22px; border-radius: 16px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
 .confirm-dialog h3 { margin: 0; font-size: 17px; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
 .confirm-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .confirm-icon.danger { background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 button.danger-solid { background: var(--bad); color: #fff; }
 .power-overlay { position: fixed; inset: 0; z-index: 2147483100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #05070d; color: #e8ecf5; text-align: center; }
 .power-overlay h2 { margin: 0; }
@@ -2081,3 +2081,31 @@ button.cal-day.picked:not(.today) { box-shadow: inset 0 0 0 1.5px var(--accent);
 .sl-preview dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .sl-hint { margin-top: auto; font-size: 11px; color: var(--muted); padding-top: 12px; }
 @media (max-width: 640px) { .sl-body { grid-template-columns: 1fr; } .sl-preview { display: none; } .spotlight-backdrop { padding-top: 8vh; } }
+
+/* ---------- Transfers ---------- */
+.xfer-ring .track { fill: none; stroke: color-mix(in srgb, currentColor 25%, transparent); stroke-width: 2.6; }
+.xfer-ring .value { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; transition: stroke-dasharray 0.4s ease; }
+.xfer-btn.failed { color: var(--bad); }
+.xfer-panel { width: 360px; max-height: min(480px, 70vh); display: flex; flex-direction: column; gap: 8px; }
+.xfer-head { display: flex; align-items: baseline; justify-content: space-between; }
+.xfer-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; }
+.xfer-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.xfer-icon { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.xfer-row.failed .xfer-icon { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+.xfer-row.done .xfer-icon { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.xfer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.xfer-title { display: flex; flex-direction: column; min-width: 0; }
+.xfer-title b { font-size: 13px; }
+.xfer-bar { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.xfer-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s ease; }
+.xfer-row.done .xfer-bar span { background: var(--ok); }
+.xfer-row.failed .xfer-bar span, .xfer-row.canceled .xfer-bar span { background: var(--bad); }
+.xfer-status { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xfer-row.failed .xfer-status { color: var(--bad); white-space: normal; }
+.xfer-clear { align-self: flex-end; }
+.xfer-empty { margin: 4px 0; }
+.xfer-widget { display: flex; flex-direction: column; overflow: hidden; }
+.xfer-widget .xfer-list { flex: 1; }
+.xfer-list.compact .xfer-row { padding: 6px 8px; }
+.xfer-panel { width: min(360px, calc(100vw - 24px)); }
+.tray .xfer-btn svg { display: inline-block !important; }

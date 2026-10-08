@@ -1,4 +1,5 @@
 import { useRef, type PointerEvent as RPointerEvent } from 'react';
+import { TransfersWidget } from './Transfers';
 import { Icon } from '../components/Icon';
 import { WIDGETS, useWidgets, widgetDef, type WidgetInstance, type WidgetType } from '../state/widgets';
 import { AcceleratorWidget, ClockWidget, NetworkWidget, SystemWidget } from './Widgets';
@@ -134,6 +135,8 @@ function WidgetBody({ type, username }: { type: WidgetType; username: string }) 
       return <ContainerGridWidget />;
     case 'scripts':
       return <ScriptLauncherWidget />;
+    case 'transfers':
+      return <TransfersWidget />;
   }
 }
 
