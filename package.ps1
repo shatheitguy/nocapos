@@ -19,38 +19,45 @@ foreach ($t in $Targets) {
     if ($first) { & "$root\build.ps1" -Target $t -Version $Version } else { & "$root\build.ps1" -Target $t -Version $Version -SkipUI }
     $first = $false
 
-    $name = "alfaos-$Version-$os-$label"
+    $name = "nocapos-$Version-$os-$label"
     $stage = Join-Path $dist $name
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     New-Item -ItemType Directory -Force "$stage\rootfs\data" | Out-Null
 
     Copy-Item "$root\backend\bin\alfad-$os-$label" "$stage\alfad"
-    foreach ($f in "install.sh", "alfad.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
+    foreach ($f in "install.sh", "nocapos.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
         Copy-Item "$root\deploy\$f" "$stage\$f"
     }
     Set-Content -NoNewline -Encoding ascii "$stage\VERSION" $Version
     Set-Content -NoNewline -Encoding ascii "$stage\ARCH" $label
     Set-Content -NoNewline -Encoding ascii "$stage\rootfs\data\.keep" ""
     @"
-Alfa OS $Version for Linux ($label)
+NoCapOS $Version for Linux ($label)
 
-Install (Docker mode, recommended: Traefik + HTTPS on ports 80/443):
+Install (recommended): NoCapOS runs as root and manages this server -
+Linux users, network, power, storage, a root terminal and one-click
+Docker apps (Docker is installed if missing):
     sudo bash install.sh
 
-Install without Docker containers (systemd service, HTTPS on port 443):
-    sudo bash install.sh --native
+Run NoCapOS itself in Docker instead (apps only, no host control):
+    sudo bash install.sh --docker
 
-Options:  --storage /path/for/files   --install-docker   --yes
+Options:  --storage /path/for/files   --port 8443   --no-docker   --yes
 Remove:   sudo bash install.sh --uninstall   (your files are never deleted)
 "@ | Set-Content -Encoding ascii "$stage\README.txt"
 
-    $tgz = Join-Path $dist "$name.tar.gz"
+    # Stable file name so "releases/latest/download/nocapos-linux-<arch>.tar.gz" works.
+    $file = "nocapos-$os-$label.tar.gz"
+    $tgz = Join-Path $dist $file
     if (Test-Path $tgz) { Remove-Item $tgz }
     tar.exe -czf $tgz -C $dist $name
     if ($LASTEXITCODE -ne 0) { throw "tar failed for $name" }
     Remove-Item -Recurse -Force $stage
     $hash = (Get-FileHash -Algorithm SHA256 $tgz).Hash.ToLower()
-    $sums += "$hash  $name.tar.gz"
-    Write-Host ("packaged {0} ({1:N1} MB)" -f "$name.tar.gz", ((Get-Item $tgz).Length / 1MB))
+    $sums += "$hash  $file"
+    Write-Host ("packaged {0} ({1:N1} MB)" -f $file, ((Get-Item $tgz).Length / 1MB))
 }
-$sums | Set-Content -Encoding ascii (Join-Path $dist "SHA256SUMS")
+# LF line endings: sha256sum and the installer read this on Linux.
+[IO.File]::WriteAllText((Join-Path $dist "SHA256SUMS"), (($sums -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+# The installer itself, for: curl -fsSL <release-url>/install.sh | sudo bash
+Copy-Item "$root\deploy\install.sh" (Join-Path $dist "install.sh")

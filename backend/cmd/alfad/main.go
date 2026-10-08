@@ -142,6 +142,10 @@ func serve() error {
 	// Files must never delete, move or rename NoCapOS itself: its data, the
 	// folder it runs from, and (when run from a checkout) the source tree.
 	fsvc.Protect(cfg.DataDir)
+	if cfg.SystemRoot {
+		fsvc.Protect(files.SystemTrees...)
+		fsvc.ProtectPoints(files.SystemPoints...)
+	}
 	if exe, err := os.Executable(); err == nil {
 		fsvc.Protect(filepath.Dir(exe))
 	}

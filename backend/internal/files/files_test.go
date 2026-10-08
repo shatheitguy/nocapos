@@ -235,3 +235,33 @@ func TestProtectedFolders(t *testing.T) {
 		t.Errorf("copy from protected folder: %v", err)
 	}
 }
+
+func TestProtectPointsKeepContentsUsable(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"home/alice/docs", "srv/media"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := New([]Root{{ID: "system", Name: "System", Path: root}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.ProtectPoints(filepath.Join(root, "home"), filepath.Join(root, "srv"))
+
+	for _, rel := range []string{"home", "srv"} {
+		if err := s.Delete("system", []string{rel}, true); !errors.Is(err, ErrProtected) {
+			t.Errorf("delete %s = %v, want ErrProtected", rel, err)
+		}
+		if _, err := s.Rename("system", rel, "x"); !errors.Is(err, ErrProtected) {
+			t.Errorf("rename %s = %v, want ErrProtected", rel, err)
+		}
+	}
+	// Contents stay ordinary files and folders.
+	if _, err := s.Rename("system", "home/alice/docs", "papers"); err != nil {
+		t.Errorf("rename inside /home: %v", err)
+	}
+	if err := s.Delete("system", []string{"srv/media"}, true); err != nil {
+		t.Errorf("delete inside /srv: %v", err)
+	}
+}
