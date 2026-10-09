@@ -10,10 +10,13 @@ import { Stat } from './Monitor';
 import { Appearance, DesktopSettings, DockSettings, Wallpaper, WindowSettings } from './Personalize';
 import { FocusSettings, NetworkSettings, PowerSettings } from './SystemPages';
 import { UsersSettings } from './UsersSettings';
+import { FileSharingSettings, NetworkDrivesSettings } from './NetworkDrives';
 import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings } from './SettingsSections';
 
 export type Section =
   | 'network'
+  | 'drives'
+  | 'sharing'
   | 'appearance'
   | 'wallpaper'
   | 'dock'
@@ -44,7 +47,11 @@ interface Item {
 const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: 'Network',
-    items: [{ id: 'network', label: 'Network', icon: 'wifi', admin: true, keywords: 'wifi wi-fi ethernet internet ip address interface lan' }],
+    items: [
+      { id: 'network', label: 'Network', icon: 'wifi', admin: true, keywords: 'wifi wi-fi ethernet internet ip address interface lan' },
+      { id: 'drives', label: 'Network Drives', icon: 'drive', admin: true, keywords: 'nas smb cifs nfs mount share windows connect server' },
+      { id: 'sharing', label: 'File Sharing', icon: 'folder', admin: true, keywords: 'smb samba webdav share folder windows mac phone' },
+    ],
   },
   {
     title: 'Personalization',
@@ -159,6 +166,8 @@ export function Settings({ win }: { win: WinState }) {
       <div className="app-content">
         <h2 className="settings-title">{current.label}</h2>
         {section === 'network' && <NetworkSettings />}
+        {section === 'drives' && <NetworkDrivesSettings />}
+        {section === 'sharing' && <FileSharingSettings />}
         {section === 'appearance' && <Appearance />}
         {section === 'wallpaper' && <Wallpaper />}
         {section === 'dock' && <DockSettings />}
