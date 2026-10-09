@@ -7,6 +7,7 @@ import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { useViewport } from '../lib/hooks';
 import { usePrefs } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
+import { useFolders } from '../state/folders';
 import { useDock } from '../state/dock';
 import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
@@ -48,6 +49,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     useWidgets.getState().restore(user.id);
     useDock.getState().restore(user.id);
     useDesktopIcons.getState().restore(user.id);
+    useFolders.getState().restore(user.id);
     const sys = useSystem.getState();
     void api<SystemInfo>('/api/v1/system/info').then((r) => r.ok && sys.setInfo(r.data));
     void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
@@ -62,6 +64,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       useWidgets.getState()._reset();
       useDock.getState()._reset();
       useDesktopIcons.getState()._reset();
+      useFolders.getState()._reset();
       useSpotlight.getState().set(false);
     };
   }, [user.id]);
