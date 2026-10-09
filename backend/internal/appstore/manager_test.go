@@ -22,6 +22,7 @@ type fakeEngine struct {
 	volumes    map[string]bool // volumes "in use" (created by mounts)
 	removedVol []string
 	pullErr    error
+	connected  []string // "network@container"
 }
 
 func newFake() *fakeEngine {
@@ -77,6 +78,12 @@ func (f *fakeEngine) setState(id, st string) error {
 	f.containers[id] = c
 	return nil
 }
+func (f *fakeEngine) ConnectNetwork(_ context.Context, n docker.NetLink, container string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.connected = append(f.connected, n.Name+"@"+container)
+	return nil
+}
 func (f *fakeEngine) StartContainer(_ context.Context, id string) error {
 	return f.setState(id, "running")
 }
@@ -107,8 +114,37 @@ func (f *fakeEngine) ContainersByLabel(_ context.Context, label, value string) (
 }
 
 type fakeStore struct {
-	mu   sync.Mutex
-	apps map[string]*store.InstalledApp
+	mu        sync.Mutex
+	apps      map[string]*store.InstalledApp
+	overrides map[string]map[string]string
+}
+
+func (s *fakeStore) AppOverrides(_ context.Context, app string) (map[string]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	for k, v := range s.overrides[app] {
+		out[k] = v
+	}
+	return out, nil
+}
+func (s *fakeStore) SaveAppOverride(_ context.Context, app, svc, spec string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.overrides == nil {
+		s.overrides = map[string]map[string]string{}
+	}
+	if s.overrides[app] == nil {
+		s.overrides[app] = map[string]string{}
+	}
+	s.overrides[app][svc] = spec
+	return nil
+}
+func (s *fakeStore) DeleteAppOverrides(_ context.Context, app string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.overrides, app)
+	return nil
 }
 
 func (s *fakeStore) InstalledApps(context.Context) (map[string]*store.InstalledApp, error) {
@@ -355,5 +391,61 @@ func TestFailedInstallStaysVisible(t *testing.T) {
 	wait(t, m, j)
 	if got := m.Jobs()["memos"]; !got.Done || !strings.Contains(got.Error, "registry unreachable") {
 		t.Fatalf("job = %+v", got)
+	}
+}
+
+func TestSavedChangesSurviveUpdates(t *testing.T) {
+	m, eng, st := setup(t)
+	j, _ := m.Install(context.Background(), "code-server", nil)
+	wait(t, m, j)
+	orig := eng.created["nocap-code-server-app"]
+
+	// Someone moves the data to a folder on a drive, pins the port, adds a
+	// variable, joins a macvlan network and limits memory.
+	spec := docker.Spec{
+		Name: "nocap-code-server-app", Image: "ignored:old", Restart: "always", NetworkMode: "bridge",
+		Env:      []docker.EnvVar{{Key: "TZ", Value: "Asia/Dubai"}},
+		Ports:    []docker.PortMap{{Host: 8443, Container: 8443, Protocol: "tcp"}},
+		Mounts:   []docker.SpecMount{{Type: "bind", Source: "/srv/nocapos/code", Target: "/config"}},
+		Networks: []docker.NetLink{{Name: "lan", IPv4: "192.168.1.70"}},
+		MemoryMB: 512,
+	}
+	if err := m.SaveOverride(context.Background(), "code-server", "app", spec); err != nil {
+		t.Fatal(err)
+	}
+	st.apps["code-server"].Version = "old"
+	j, _ = m.Update(context.Background(), "code-server", nil)
+	if r := wait(t, m, j); r.Error != "" {
+		t.Fatal(r.Error)
+	}
+	cfg := eng.created["nocap-code-server-app"]
+	if cfg.Image != orig.Image {
+		t.Errorf("image should follow the catalog: %s", cfg.Image)
+	}
+	if cfg.Labels[LabelApp] != "code-server" {
+		t.Error("app labels lost")
+	}
+	env := strings.Join(cfg.Env, " ")
+	if !strings.Contains(env, "TZ=Asia/Dubai") || !strings.Contains(env, "PASSWORD=") {
+		t.Errorf("env not merged: %v", cfg.Env)
+	}
+	if len(cfg.HostConfig.Mounts) != 1 || cfg.HostConfig.Mounts[0].Type != "bind" || cfg.HostConfig.Mounts[0].Source != "/srv/nocapos/code" {
+		t.Errorf("storage not kept: %+v", cfg.HostConfig.Mounts)
+	}
+	if b := cfg.HostConfig.PortBindings["8443/tcp"]; len(b) != 1 || b[0].HostPort != "8443" {
+		t.Errorf("port not kept: %+v", cfg.HostConfig.PortBindings)
+	}
+	if cfg.HostConfig.Memory != 512<<20 || cfg.HostConfig.RestartPolicy.Name != "always" {
+		t.Errorf("limits/restart not kept: %+v", cfg.HostConfig)
+	}
+	if len(eng.connected) != 1 || !strings.HasPrefix(eng.connected[0], "lan@") {
+		t.Errorf("extra network not joined: %v", eng.connected)
+	}
+
+	// Uninstalling and deleting the data forgets the changes too.
+	j, _ = m.Uninstall(context.Background(), "code-server", true, nil)
+	wait(t, m, j)
+	if ov, _ := st.AppOverrides(context.Background(), "code-server"); len(ov) != 0 {
+		t.Error("saved changes kept after deleting the app's data")
 	}
 }

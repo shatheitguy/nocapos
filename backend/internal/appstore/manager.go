@@ -3,6 +3,7 @@ package appstore
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -43,6 +44,7 @@ type Engine interface {
 	RestartContainer(ctx context.Context, id string, timeout time.Duration) error
 	RemoveContainer(ctx context.Context, id string) error
 	ContainersByLabel(ctx context.Context, label, value string) ([]docker.Container, error)
+	ConnectNetwork(ctx context.Context, n docker.NetLink, container string) error
 }
 
 // Store is the part of the database the App Store uses.
@@ -51,6 +53,9 @@ type Store interface {
 	InstalledApp(ctx context.Context, id string) (*store.InstalledApp, error)
 	SaveInstalledApp(ctx context.Context, a *store.InstalledApp) error
 	DeleteInstalledApp(ctx context.Context, id string) error
+	AppOverrides(ctx context.Context, appID string) (map[string]string, error)
+	SaveAppOverride(ctx context.Context, appID, service, spec string) error
+	DeleteAppOverrides(ctx context.Context, appID string) error
 }
 
 type Manager struct {
@@ -329,6 +334,8 @@ func (m *Manager) Uninstall(ctx context.Context, id string, deleteData bool, onD
 		if deleteData {
 			j.set("Deleting app data…", 70)
 			m.removeVolumes(ctx, a)
+			// Saved changes go with the data (they may point at its folders).
+			_ = m.db.DeleteAppOverrides(ctx, id)
 		}
 		return m.db.DeleteInstalledApp(ctx, id)
 	}, onDone)
@@ -417,6 +424,10 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 		}
 	}
 	gen := func() string { return randomString(24) }
+	overrides, err := m.db.AppOverrides(ctx, a.ID)
+	if err != nil {
+		return fmt.Errorf("read saved changes: %w", err)
+	}
 	for i, s := range a.Services {
 		j.set(fmt.Sprintf("Starting %s…", s.Name), 85+10*i/len(a.Services))
 		cfg := docker.CreateConfig{
@@ -462,15 +473,69 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 			cfg.HostConfig.NetworkMode = netName(a.ID)
 			cfg.NetworkingConfig = &docker.NetworkingConfig{EndpointsConfig: map[string]docker.EndpointConfig{netName(a.ID): {Aliases: []string{s.Name}}}}
 		}
+		var extra []docker.NetLink
+		if raw, ok := overrides[s.Name]; ok {
+			var ov docker.Spec
+			if err := json.Unmarshal([]byte(raw), &ov); err != nil {
+				return fmt.Errorf("saved changes for %s: %w", s.Name, err)
+			}
+			cfg, extra = applyOverride(cfg, ov)
+		}
 		id, err := m.engine.CreateContainer(ctx, containerName(a.ID, s.Name), cfg)
 		if err != nil {
 			return fmt.Errorf("create %s: %w", s.Name, err)
+		}
+		for _, n := range extra {
+			if err := m.engine.ConnectNetwork(ctx, n, id); err != nil {
+				return fmt.Errorf("join network %s: %w", n.Name, err)
+			}
 		}
 		if err := m.engine.StartContainer(ctx, id); err != nil {
 			return fmt.Errorf("start %s: %w", s.Name, err)
 		}
 	}
 	return nil
+}
+
+// applyOverride uses the changes someone saved for a container: their ports,
+// storage, networks, restart policy and limits win; the image and labels
+// always come from the catalog (so updates still update), and environment
+// variables are merged, theirs winning.
+func applyOverride(catalog docker.CreateConfig, ov docker.Spec) (docker.CreateConfig, []docker.NetLink) {
+	ov.Image = catalog.Image
+	cfg := ov.CreateConfig(catalog.Labels)
+	if len(ov.Cmd) == 0 {
+		cfg.Cmd = catalog.Cmd
+	}
+	idx := map[string]int{}
+	env := append([]string(nil), catalog.Env...)
+	for i, kv := range env {
+		k, _, _ := strings.Cut(kv, "=")
+		idx[k] = i
+	}
+	for _, e := range ov.Env {
+		if i, ok := idx[e.Key]; ok {
+			env[i] = e.Key + "=" + e.Value
+		} else {
+			idx[e.Key] = len(env)
+			env = append(env, e.Key+"="+e.Value)
+		}
+	}
+	cfg.Env = env
+	return cfg, ov.ExtraNetworks()
+}
+
+// SaveOverride remembers the changes made to one of an app's containers, so
+// they are applied again when the app is updated.
+func (m *Manager) SaveOverride(ctx context.Context, appID, service string, spec docker.Spec) error {
+	if _, err := m.App(appID); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+	return m.db.SaveAppOverride(ctx, appID, service, string(raw))
 }
 
 func (m *Manager) removeContainers(ctx context.Context, app string) {

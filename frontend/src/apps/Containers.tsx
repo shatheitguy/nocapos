@@ -9,6 +9,12 @@ import { resubscribe } from '../api/socket';
 import { toast } from '../state/toasts';
 import { openApp } from './meta';
 import { Empty, Stat } from './Monitor';
+import { ContainerEditor } from './ContainerEditor';
+import { DockerNetworks } from './DockerNetworks';
+import { Stacks } from './Stacks';
+import { Choice } from './Personalize';
+import { dockerApi } from '../api/docker';
+import { confirmDialog } from '../state/confirm';
 
 type Action = 'start' | 'stop' | 'restart';
 
@@ -19,7 +25,11 @@ export function Containers() {
   const [showStopped, setShowStopped] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [tab, setTab] = useState<'containers' | 'stacks' | 'networks'>('containers');
+  /** The container being edited ('new' = adding one). */
+  const [editing, setEditing] = useState<string | null>(null);
   const reloadTimer = useRef<number | undefined>(undefined);
+  const quietUntil = useRef(new Map<string, number>());
 
   const load = useCallback(async () => {
     const r = await api<Container[]>('/api/v1/containers');
@@ -44,7 +54,9 @@ export function Containers() {
       if (ev.type !== 'container') return;
       window.clearTimeout(reloadTimer.current);
       reloadTimer.current = window.setTimeout(() => void load(), 300);
-      if (ev.action === 'die' && ev.exit_code && ev.exit_code !== '0') {
+      // 143 is a normal stop; containers being edited stop on purpose too.
+      const quiet = ev.name !== undefined && (quietUntil.current.get(ev.name) ?? 0) > Date.now();
+      if (ev.action === 'die' && ev.exit_code && ev.exit_code !== '0' && ev.exit_code !== '143' && !quiet) {
         toast('error', `${ev.name ?? 'Container'} exited`, `Exit code ${ev.exit_code}`);
       }
     },
@@ -92,9 +104,61 @@ export function Containers() {
   const running = list.filter((c) => c.state === 'running').length;
   const current = list.find((c) => c.id === selected) ?? null;
 
+  const remove = async (c: Container) => {
+    const ok = await confirmDialog({
+      title: `Remove ${c.name}?`,
+      message: 'The container is deleted. Its named volumes and folders on the server stay.',
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await dockerApi.remove(c.id);
+    if (!r.ok) return toast('error', `Could not remove ${c.name}`, r.error);
+    setSelected(null);
+    void load();
+  };
+
+  if (editing) {
+    return (
+      <div className="containers">
+        <ContainerEditor
+          containerId={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onApplying={(name) => quietUntil.current.set(name, Date.now() + 120_000)}
+          onSaved={() => {
+            setEditing(null);
+            setSelected(null);
+            void load();
+          }}
+        />
+      </div>
+    );
+  }
+
+  const tabs = (
+    <Choice
+      value={tab}
+      options={[
+        { id: 'containers', label: 'Containers' },
+        { id: 'stacks', label: 'Stacks' },
+        { id: 'networks', label: 'Networks' },
+      ]}
+      onChange={setTab}
+    />
+  );
+  if (tab === 'networks' || tab === 'stacks') {
+    return (
+      <div className="containers">
+        <div className="toolbar">{tabs}</div>
+        <div className="containers-scroll">{tab === 'stacks' ? <Stacks /> : <DockerNetworks />}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="containers">
       <div className="toolbar">
+        {tabs}
         <label className="search compact">
           <Icon name="search" size={15} />
           <input placeholder="Filter by name, image or project" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -107,6 +171,9 @@ export function Containers() {
         <span className="chip">{list.length} total</span>
         <button type="button" className="ghost icon-btn" aria-label="Refresh" onClick={() => void load()}>
           <Icon name="restart" size={15} />
+        </button>
+        <button type="button" onClick={() => setEditing('new')}>
+          <Icon name="plus" size={14} /> Add Container
         </button>
       </div>
 
@@ -150,7 +217,9 @@ export function Containers() {
             </table>
           )}
         </div>
-        {current && <Detail c={current} onClose={() => setSelected(null)} onAct={act} busy={busy === current.id} />}
+        {current && (
+          <Detail c={current} onClose={() => setSelected(null)} onAct={act} busy={busy === current.id} onEdit={() => setEditing(current.id)} onRemove={() => void remove(current)} />
+        )}
       </div>
     </div>
   );
@@ -206,7 +275,21 @@ function ActionButtons({ c, busy, onAct }: { c: Container; busy: boolean; onAct:
   );
 }
 
-function Detail({ c, onClose, onAct, busy }: { c: Container; onClose: () => void; onAct: (c: Container, a: Action) => void; busy: boolean }) {
+function Detail({
+  c,
+  onClose,
+  onAct,
+  busy,
+  onEdit,
+  onRemove,
+}: {
+  c: Container;
+  onClose: () => void;
+  onAct: (c: Container, a: Action) => void;
+  busy: boolean;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
   const [detail, setDetail] = useState<ContainerDetail | null>(null);
   const [stats, setStats] = useState<ContainerStats | null>(null);
   const [cpuHist, setCpuHist] = useState<number[]>([]);
@@ -237,6 +320,18 @@ function Detail({ c, onClose, onAct, busy }: { c: Container; onClose: () => void
         {detail?.privileged && <span className="chip warn">privileged</span>}
       </div>
       <ActionButtons c={c} busy={busy} onAct={onAct} />
+      {!c.system && (
+        <div className="ct-edit">
+          <button type="button" className="ghost" disabled={!!c.project} title={c.project ? `Part of the stack ${c.project}` : undefined} onClick={onEdit}>
+            <Icon name="pencil" size={14} /> Edit
+          </button>
+          {!c.labels?.['nocapos.app'] && !c.project && (
+            <button type="button" className="ghost danger" onClick={onRemove}>
+              <Icon name="trash" size={14} /> Remove
+            </button>
+          )}
+        </div>
+      )}
 
       {stats && (
         <div className="panel tight">

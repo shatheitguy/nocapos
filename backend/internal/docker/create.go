@@ -81,8 +81,19 @@ type MountSpec struct {
 	ReadOnly bool   `json:"ReadOnly,omitempty"`
 }
 
+// DeviceMapping passes a host device (e.g. /dev/dri) into a container.
+type DeviceMapping struct {
+	PathOnHost        string `json:"PathOnHost"`
+	PathInContainer   string `json:"PathInContainer"`
+	CgroupPermissions string `json:"CgroupPermissions"`
+}
+
 type HostConfig struct {
 	PortBindings  map[string][]PortBinding `json:"PortBindings,omitempty"`
+	Memory        int64                    `json:"Memory,omitempty"`
+	NanoCpus      int64                    `json:"NanoCpus,omitempty"`
+	Privileged    bool                     `json:"Privileged,omitempty"`
+	Devices       []DeviceMapping          `json:"Devices,omitempty"`
 	ShmSize       int64                    `json:"ShmSize,omitempty"`
 	RestartPolicy *RestartPolicy           `json:"RestartPolicy,omitempty"`
 	SecurityOpt   []string                 `json:"SecurityOpt,omitempty"`
@@ -92,7 +103,13 @@ type HostConfig struct {
 
 // EndpointConfig gives a container DNS aliases on a user network.
 type EndpointConfig struct {
-	Aliases []string `json:"Aliases,omitempty"`
+	Aliases    []string      `json:"Aliases,omitempty"`
+	IPAMConfig *EndpointIPAM `json:"IPAMConfig,omitempty"`
+}
+
+// EndpointIPAM pins a container's address on a network.
+type EndpointIPAM struct {
+	IPv4Address string `json:"IPv4Address,omitempty"`
 }
 
 type NetworkingConfig struct {
@@ -101,6 +118,7 @@ type NetworkingConfig struct {
 
 type CreateConfig struct {
 	Image            string              `json:"Image"`
+	Hostname         string              `json:"Hostname,omitempty"`
 	Cmd              []string            `json:"Cmd,omitempty"`
 	Env              []string            `json:"Env,omitempty"`
 	Labels           map[string]string   `json:"Labels,omitempty"`
