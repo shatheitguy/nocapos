@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { accountsMode, login, setup } from '../api/client';
 import { resetPassword } from '../api/account';
-import { CyberCat, type CatMood } from '../components/CyberCat';
 import { Icon } from '../components/Icon';
 import { Logo, LogoMark } from '../components/Logo';
 import { UserAvatar } from '../components/UserAvatar';
@@ -12,7 +11,7 @@ import { usePrefs } from '../state/prefs';
 
 export type AuthMode = 'setup' | 'login' | 'locked';
 
-/** macOS-style login / lock screen: big clock, user photo, password pill (with a cyber cat on it). */
+/** macOS-style login / lock screen: big clock, user photo, password pill. */
 export function AuthScreen({ mode, lockedUser }: { mode: AuthMode; lockedUser?: string }) {
   const now = useClock(1000);
   const tp = usePrefs.getState();
@@ -37,43 +36,7 @@ export function AuthScreen({ mode, lockedUser }: { mode: AuthMode; lockedUser?: 
   );
 }
 
-/** Mood + reactions for the cat, shared by the forms. */
-function useCat() {
-  const [focus, setFocus] = useState<'none' | 'user' | 'pass'>('none');
-  const [shown, setShown] = useState(false);
-  const [flash, setFlash] = useState<'error' | 'happy' | null>(null);
-  const [pulse, setPulse] = useState(0);
-  const [look, setLook] = useState(0);
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
-
-  const react = (m: 'error' | 'happy', ms = 1600) => {
-    window.clearTimeout(timer.current);
-    setFlash(m);
-    timer.current = window.setTimeout(() => setFlash(null), ms);
-  };
-  const mood: CatMood = flash ?? (focus === 'pass' ? (shown ? 'peek' : 'shy') : focus === 'user' ? 'watch' : 'idle');
-  return {
-    mood,
-    look,
-    pulse,
-    shown,
-    setShown,
-    react,
-    clear: () => setFlash(null),
-    focusUser: () => setFocus('user'),
-    focusPass: () => setFocus('pass'),
-    blur: () => setFocus('none'),
-    typed: (value: string, caret: number | null) => {
-      setPulse((n) => n + 1);
-      // Eyes follow the caret along the field: -1 (left) … 1 (right).
-      setLook(Math.max(-1, Math.min(1, ((caret ?? value.length) / 18) * 2 - 1)));
-    },
-  };
-}
-
 function PasswordPill({
-  cat,
   value,
   onChange,
   autoFocus,
@@ -82,7 +45,6 @@ function PasswordPill({
   busy,
   shake,
 }: {
-  cat: ReturnType<typeof useCat>;
   value: string;
   onChange: (v: string) => void;
   autoFocus?: boolean;
@@ -91,20 +53,14 @@ function PasswordPill({
   busy: boolean;
   shake: number;
 }) {
+  const [shown, setShown] = useState(false);
   return (
     <div className="mac-pass-wrap">
-      <CyberCat mood={cat.mood} look={cat.look} pulse={cat.pulse} />
       <div key={shake} className={`mac-pill pass ${shake ? 'shake' : ''}`}>
         <input
-          type={cat.shown ? 'text' : 'password'}
+          type={shown ? 'text' : 'password'}
           value={value}
-          onChange={(e) => {
-            onChange(e.target.value);
-            cat.typed(e.target.value, e.target.selectionStart);
-            cat.clear();
-          }}
-          onFocus={cat.focusPass}
-          onBlur={cat.blur}
+          onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
           placeholder={placeholder}
           aria-label="Password"
@@ -115,10 +71,10 @@ function PasswordPill({
         <button
           type="button"
           className="mac-eye"
-          aria-label={cat.shown ? 'Hide password' : 'Show password'}
-          title={cat.shown ? 'Hide password' : 'Show password'}
+          aria-label={shown ? 'Hide password' : 'Show password'}
+          title={shown ? 'Hide password' : 'Show password'}
           onMouseDown={(e) => e.preventDefault()} // keep focus in the field
-          onClick={() => cat.setShown(!cat.shown)}
+          onClick={() => setShown(!shown)}
         >
           <Icon name="eye" size={14} />
         </button>
@@ -141,7 +97,6 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
   const [linux, setLinux] = useState(false);
-  const cat = useCat();
   useEffect(() => {
     void accountsMode().then((m) => setLinux(m === 'system'));
   }, []);
@@ -152,14 +107,12 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
     if (!name || !password) return;
     setError('');
     setBusy(true);
-    cat.react('happy', 4000);
     const err = await login(name, password);
     setBusy(false);
     if (err) {
       setError(err);
       setPassword('');
       setShake((n) => n + 1);
-      cat.react('error');
     }
   };
 
@@ -172,12 +125,7 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
         <div className="mac-pill user">
           <input
             value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-              cat.typed(e.target.value, e.target.selectionStart);
-            }}
-            onFocus={cat.focusUser}
-            onBlur={cat.blur}
+            onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
             placeholder="Name"
             aria-label="User name"
@@ -189,7 +137,6 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
         </div>
       )}
       <PasswordPill
-        cat={cat}
         value={password}
         onChange={setPassword}
         autoFocus={!!known}
@@ -198,8 +145,8 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
         busy={busy}
         shake={shake}
       />
-      <p className="mac-hint" role="alert">
-        {error || (linux && !known ? "Use this computer's Linux account" : mode === 'locked' ? 'Locked' : ' ')}
+      <p className={`mac-hint ${error ? 'err' : ''}`} role="alert">
+        {error || (linux && !known ? "Use this computer's Linux account" : '')}
       </p>
       <button type="button" className="mac-link" onClick={onForgot}>
         Forgot password?
@@ -246,7 +193,6 @@ function SetupForm() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
-  const cat = useCat();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -254,17 +200,14 @@ function SetupForm() {
     if (!token.trim()) return setError('Enter the setup token printed in the NoCapOS console.');
     if (password.length < 10) {
       setShake((n) => n + 1);
-      cat.react('error');
       return setError('Use a password of at least 10 characters.');
     }
     setBusy(true);
-    cat.react('happy', 4000);
     const err = await setup(token.trim(), username.trim(), password);
     setBusy(false);
     if (err) {
       setError(err);
       setShake((n) => n + 1);
-      cat.react('error');
     }
   };
 
@@ -278,12 +221,7 @@ function SetupForm() {
       <div className="mac-pill user">
         <input
           value={username}
-          onChange={(e) => {
-            setUsername(e.target.value);
-            cat.typed(e.target.value, e.target.selectionStart);
-          }}
-          onFocus={cat.focusUser}
-          onBlur={cat.blur}
+          onChange={(e) => setUsername(e.target.value)}
           placeholder="Administrator name"
           aria-label="Administrator name"
           autoComplete="username"
@@ -293,9 +231,9 @@ function SetupForm() {
           required
         />
       </div>
-      <PasswordPill cat={cat} value={password} onChange={setPassword} autoComplete="new-password" placeholder="Choose a password (10+ characters)" busy={busy} shake={shake} />
-      <p className="mac-hint" role="alert">
-        {error || ' '}
+      <PasswordPill value={password} onChange={setPassword} autoComplete="new-password" placeholder="Choose a password (10+ characters)" busy={busy} shake={shake} />
+      <p className={`mac-hint ${error ? 'err' : ''}`} role="alert">
+        {error}
       </p>
     </form>
   );
