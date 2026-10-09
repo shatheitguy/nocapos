@@ -16,6 +16,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/store"
@@ -42,6 +43,7 @@ type Deps struct {
 	Accounts  accounts.Directory
 	Scripts   *scripts.Runner
 	AppStore  *appstore.Manager
+	Photos    *photos.Library
 	Version   string
 }
 
@@ -176,6 +178,17 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
+
+	mux.Handle("GET /api/v1/photos", s.admin(s.photosList))
+	mux.Handle("POST /api/v1/photos/tickets", s.admin(s.photosTickets))
+	mux.HandleFunc("GET /api/v1/photos/thumb", s.photosThumb) // authorized by a Photos ticket
+	mux.Handle("POST /api/v1/photos/favorite", s.admin(s.photosFavorite))
+	mux.Handle("POST /api/v1/photos/delete", s.admin(s.touchIndex(s.photosDelete)))
+	mux.Handle("GET /api/v1/photos/albums", s.admin(s.photosAlbums))
+	mux.Handle("POST /api/v1/photos/albums", s.admin(s.photosAlbumCreate))
+	mux.Handle("PATCH /api/v1/photos/albums/{id}", s.admin(s.photosAlbumRename))
+	mux.Handle("DELETE /api/v1/photos/albums/{id}", s.admin(s.photosAlbumDelete))
+	mux.Handle("POST /api/v1/photos/albums/{id}/items", s.admin(s.photosAlbumItems))
 
 	// AI Assistant. Providers hold API keys, so configuring them is admin-only;
 	// chatting and personal memory are per-user.

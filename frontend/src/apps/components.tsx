@@ -7,6 +7,7 @@ import { Containers } from './Containers';
 import { Files } from './Files';
 import { Logs } from './Logs';
 import { Monitor } from './Monitor';
+import { Photos } from './Photos';
 import { RemoteDesktop } from './RemoteDesktop';
 import { Scripts } from './Scripts';
 import { Settings } from './Settings';
@@ -20,6 +21,7 @@ export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = 
   files: Files,
   terminal: Terminal,
   monitor: Monitor,
+  photos: Photos,
   containers: Containers,
   appcenter: AppCenter,
   settings: Settings,
