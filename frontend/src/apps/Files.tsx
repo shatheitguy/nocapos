@@ -212,7 +212,7 @@ export function Files({ win }: { win: WinState }) {
             </button>
           );
         })}
-        <NetworkSidebar drives={net.drives} sharing={net.sharing} currentRoot={cur?.root} onGo={(r) => go(r, '/')} onChanged={netChanged} />
+        <NetworkSidebar drives={net.drives} sharing={net.sharing} currentRoot={cur?.root} roots={roots ?? []} onGo={(r, p) => go(r, p ?? '/')} onChanged={netChanged} />
         <div className="side-spacer" />
         <button type="button" className={inRecycle(cur?.path ?? '/') ? 'on' : ''} onClick={() => cur && go(cur.root, RECYCLE)} disabled={!cur}>
           <Icon name="trash" size={16} /> Recycle Bin

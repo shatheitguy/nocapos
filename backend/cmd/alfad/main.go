@@ -27,6 +27,7 @@ import (
 	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
 	"alfaos/alfad/internal/backup"
+	"alfaos/alfad/internal/cloudimport"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
@@ -210,6 +211,8 @@ func serve() error {
 	go backups.RunScheduler(ctx)
 	netDrives := netdrive.NewManager(st, box, fsvc, cfg.DataDir, log)
 	go netDrives.Run(ctx) // reconnect saved network drives
+	cloud := cloudimport.NewManager(st, box, fsvc, cfg.DataDir, log)
+	go cloud.RunScheduler(ctx)
 
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
@@ -219,6 +222,7 @@ func serve() error {
 		Photos:    photoLib,
 		Backup:    backups,
 		NetDrives: netDrives,
+		Cloud:     cloud,
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	httpSrv := &http.Server{
