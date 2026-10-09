@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { WinState } from '../state/windows';
 import { AppCenter } from './AppCenter';
 import { Assistant } from './assistant/Assistant';
+import { Backups } from './Backups';
 import { Browser } from './Browser';
 import { Containers } from './Containers';
 import { Files } from './Files';
@@ -17,6 +18,7 @@ import { Viewer } from './Viewer';
 export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = {
   assistant: Assistant,
   browser: Browser,
+  backups: Backups,
   remotedesktop: RemoteDesktop,
   files: Files,
   terminal: Terminal,

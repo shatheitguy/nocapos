@@ -12,6 +12,7 @@ import (
 	"alfaos/alfad/internal/ai"
 	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
+	"alfaos/alfad/internal/backup"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
@@ -44,6 +45,7 @@ type Deps struct {
 	Scripts   *scripts.Runner
 	AppStore  *appstore.Manager
 	Photos    *photos.Library
+	Backup    *backup.Manager
 	Version   string
 }
 
@@ -178,6 +180,22 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
+
+	mux.Handle("GET /api/v1/backup", s.admin(s.backupOverview))
+	mux.Handle("POST /api/v1/backup/install", s.admin(s.backupInstall))
+	mux.Handle("POST /api/v1/backup/repos", s.admin(s.backupAddRepo))
+	mux.Handle("DELETE /api/v1/backup/repos/{id}", s.admin(s.backupDeleteRepo))
+	mux.Handle("POST /api/v1/backup/repos/{id}/key", s.admin(s.backupRepoKey))
+	mux.Handle("POST /api/v1/backup/plans", s.admin(s.backupSavePlan))
+	mux.Handle("PUT /api/v1/backup/plans/{id}", s.admin(s.backupSavePlan))
+	mux.Handle("DELETE /api/v1/backup/plans/{id}", s.admin(s.backupDeletePlan))
+	mux.Handle("POST /api/v1/backup/plans/{id}/run", s.admin(s.backupRunPlan))
+	mux.Handle("GET /api/v1/backup/plans/{id}/snapshots", s.admin(s.backupSnapshots))
+	mux.Handle("GET /api/v1/backup/plans/{id}/snapshots/{snap}/ls", s.admin(s.backupBrowse))
+	mux.Handle("GET /api/v1/backup/plans/{id}/snapshots/{snap}/dump", s.admin(s.backupDump))
+	mux.Handle("POST /api/v1/backup/restore", s.admin(s.touchIndex(s.backupRestore)))
+	mux.Handle("GET /api/v1/backup/jobs/{job}", s.admin(s.backupJob))
+	mux.Handle("POST /api/v1/backup/jobs/{job}/cancel", s.admin(s.backupCancel))
 
 	mux.Handle("GET /api/v1/photos", s.admin(s.photosList))
 	mux.Handle("POST /api/v1/photos/tickets", s.admin(s.photosTickets))

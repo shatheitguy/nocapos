@@ -13,6 +13,7 @@ import {
   usePrefs,
 } from '../state/prefs';
 import { toast } from '../state/toasts';
+import { openApp } from './meta';
 import { Choice, Row, Section, Slider, Toggle } from './Personalize';
 
 // ---------------- Date & Time ----------------
@@ -367,6 +368,16 @@ export function Backup() {
   };
   return (
     <div className="stack">
+      <div className="panel">
+        <b>Automatic backups</b>
+        <p className="muted small">
+          Back up your drives and NoCapOS itself on a schedule, encrypted, to a USB disk, another server or the cloud, and bring
+          back any file from any day with Rewind.
+        </p>
+        <button type="button" onClick={() => openApp('backups')}>
+          <Icon name="rewind" size={15} /> Open Backups
+        </button>
+      </div>
       <div className="panel">
         <b>Back up NoCapOS</b>
         <p className="muted small">

@@ -26,6 +26,7 @@ import (
 	"alfaos/alfad/internal/api"
 	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
+	"alfaos/alfad/internal/backup"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
@@ -204,12 +205,16 @@ func serve() error {
 		log.Warn("photos: no library folder", "err", err)
 	}
 
+	backups := backup.NewManager(st, box, fsvc, cfg.DataDir, log)
+	go backups.RunScheduler(ctx)
+
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 		FileIndex: fileIndex,
 		Photos:    photoLib,
+		Backup:    backups,
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	httpSrv := &http.Server{
