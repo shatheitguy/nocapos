@@ -85,6 +85,8 @@ const paths: Record<string, string> = {
   brain: 'M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 2 4 2.5 2.5 0 0 0 5 .5V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-2 4 2.5 2.5 0 0 1-5 .5',
   pencil: 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  heart: 'M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z',
+  albums: 'M4 9h16v11H4zM6 6h12M8 3h8',
 };
 
 export type IconName = keyof typeof paths;

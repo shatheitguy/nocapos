@@ -36,6 +36,15 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Browse, upload and manage your files',
     adminOnly: true,
   },
+  photos: {
+    id: 'photos',
+    title: 'Photos',
+    icon: 'image',
+    tile: ['#ff8a5c', '#e2366f'],
+    size: { w: 1080, h: 700 },
+    description: 'Your photos and videos: timeline, favorites and albums',
+    adminOnly: true,
+  },
   monitor: {
     id: 'monitor',
     title: 'Resource Monitor',
