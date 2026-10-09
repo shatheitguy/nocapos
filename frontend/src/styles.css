@@ -2372,3 +2372,32 @@ button.nd-addr code { font-size: 12.5px; }
 .nd-addshare select, .nd-addshare input { flex: 1 1 140px; min-width: 0; }
 .nd-ro { font-size: 12.5px; }
 .nd-note { margin: 0; padding: 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+
+/* ---------- Files: Network section and dialogs ---------- */
+.fn-drive { display: flex; align-items: center; border-radius: var(--radius-sm); }
+.fn-drive:hover { background: var(--surface-3); }
+.fn-drive.on { background: var(--accent-soft); }
+.fn-drive.on .fn-drive-main { color: var(--accent); }
+.sidebar .fn-drive-main { flex: 1; min-width: 0; gap: 8px; background: transparent; }
+.sidebar .fn-drive-main:hover:not(:disabled) { background: transparent; }
+.fn-drive.off .fn-drive-main { color: var(--muted); }
+.fn-drive-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar button.fn-eject { flex: none; padding: 6px 8px; color: var(--muted); background: transparent; }
+.sidebar button.fn-eject:hover:not(:disabled) { color: var(--text); background: var(--surface-3); }
+.sidebar button.fn-link { gap: 8px; color: var(--muted); font-weight: 500; font-size: 13px; justify-content: flex-start; white-space: nowrap; text-align: left; }
+.sidebar button.fn-link:hover:not(:disabled) { color: var(--text); }
+.fn-pill { margin-left: auto; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.dialog.fn-modal { width: min(640px, calc(100% - 32px)); max-height: calc(100% - 40px); padding: 0; gap: 0; overflow: hidden; }
+.fn-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
+.fn-modal-head h3 { margin: 0; font-size: 16px; }
+.fn-modal-body { overflow: auto; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.fn-modal-body .settings-section { margin: 0; }
+.fn-intro { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.fn-form { display: flex; flex-direction: column; gap: 12px; }
+.fn-form label:not(.settings-row) { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
+.fn-form .settings-row { padding: 6px 0; }
+.fn-done { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 6px 0; }
+.fn-done p { margin: 0; color: var(--muted); }
+.fn-done-icon { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--ok); }
+button.fn-addr { gap: 8px; font-weight: 400; max-width: 100%; }
+button.fn-addr code { font-size: 12.5px; overflow-wrap: anywhere; }

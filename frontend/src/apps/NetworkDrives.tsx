@@ -2,12 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { fileApi, type FileRoot } from '../api/files';
 import { netApi, type NetDrive, type NetSupport, type Sharing } from '../api/netdrive';
 import { Icon } from '../components/Icon';
-import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
-import { openApp } from './meta';
 import { Choice, Row, Section, Toggle } from './Personalize';
 
-function useNetwork() {
+export function useNetwork() {
   const [support, setSupport] = useState<NetSupport | null>(null);
   const [drives, setDrives] = useState<NetDrive[]>([]);
   const [sharing, setSharing] = useState<Sharing | null>(null);
@@ -63,14 +61,12 @@ function NotNative() {
 
 // ---------------- Network drives ----------------
 
-export function NetworkDrivesSettings() {
-  const { support, drives, error, load } = useNetwork();
+/** "Connect to Server" in Files: install missing support, then the form. */
+export function ConnectServerPanel({ onConnected }: { onConnected: () => void }) {
+  const { support, error, load } = useNetwork();
   if (!support) return error ? <p className="error">{error}</p> : <span className="spinner" />;
   return (
     <div className="stack">
-      <p className="settings-section-hint">
-        Connect shared folders from a NAS, a Windows PC or another server. They show up in Files, Photos and Backups like any other drive.
-      </p>
       {!support.native && <NotNative />}
       {support.native && (!support.smb || !support.nfs) && (
         <Section title="Support">
@@ -78,68 +74,15 @@ export function NetworkDrivesSettings() {
           {!support.nfs && <InstallRow label="NFS support" hint="For Linux servers and NAS exports" tool="nfs" support={support} cmd="sudo apt install nfs-common" onDone={load} />}
         </Section>
       )}
-      {drives.length > 0 && (
-        <Section title="Network drives">
-          {drives.map((d) => (
-            <DriveRow key={d.id} drive={d} reload={load} />
-          ))}
-        </Section>
+      {support.native && (support.smb || support.nfs) && (
+        <AddDrive
+          support={support}
+          onAdded={async () => {
+            await load();
+            onConnected();
+          }}
+        />
       )}
-      {support.native && (support.smb || support.nfs) && <AddDrive support={support} onAdded={load} />}
-    </div>
-  );
-}
-
-function DriveRow({ drive: d, reload }: { drive: NetDrive; reload: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const toggle = async () => {
-    setBusy(true);
-    const r = await netApi.connect(d.id, !d.mounted);
-    setBusy(false);
-    if (!r.ok) toast('error', d.mounted ? 'Could not disconnect' : 'Could not connect', r.error);
-    void reload();
-  };
-  const remove = async () => {
-    const ok = await confirmDialog({
-      title: `Remove “${d.name}”?`,
-      message: 'NoCapOS disconnects it and forgets it. The files stay on the other device.',
-      confirmLabel: 'Remove',
-      danger: true,
-    });
-    if (!ok) return;
-    const r = await netApi.remove(d.id);
-    if (!r.ok) toast('error', 'Could not remove it', r.error);
-    void reload();
-  };
-  return (
-    <div className="nd-drive">
-      <span className={`nd-icon ${d.mounted ? 'on' : ''}`}>
-        <Icon name="drive" size={18} />
-      </span>
-      <div className="nd-main">
-        <b>{d.name}</b>
-        <span className="muted small">
-          {d.kind.toUpperCase()} · {d.address}
-          {d.username ? ` · ${d.username}` : ''}
-        </span>
-        <span className={`nd-status ${d.mounted ? 'ok' : d.error ? 'bad' : ''}`}>{d.mounted ? 'Connected' : d.error ? d.error : 'Not connected'}</span>
-        <label className="nd-auto toggle">
-          <input type="checkbox" role="switch" checked={d.auto} onChange={(e) => void netApi.setAuto(d.id, e.target.checked).then(() => reload())} /> Connect at startup
-        </label>
-      </div>
-      <div className="nd-actions">
-        {d.mounted && (
-          <button type="button" className="ghost" onClick={() => openApp('files', { props: { root: d.root_id, path: '/' } })}>
-            <Icon name="folder" size={14} /> Open
-          </button>
-        )}
-        <button type="button" className="ghost" disabled={busy} onClick={() => void toggle()}>
-          {busy ? <span className="spinner sm" /> : null} {d.mounted ? 'Disconnect' : 'Connect'}
-        </button>
-        <button type="button" className="ghost danger" aria-label={`Remove ${d.name}`} title="Remove" onClick={() => void remove()}>
-          <Icon name="trash" size={14} />
-        </button>
-      </div>
     </div>
   );
 }
@@ -243,7 +186,8 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
 
 // ---------------- File sharing ----------------
 
-export function FileSharingSettings() {
+/** File Sharing in Files: the sharing account, protocols and shared folders. */
+export function FileSharingPanel() {
   const { support, sharing, error, load } = useNetwork();
   const [roots, setRoots] = useState<FileRoot[]>([]);
   useEffect(() => {
