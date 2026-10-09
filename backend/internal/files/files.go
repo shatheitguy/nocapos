@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -85,6 +86,7 @@ func permBits(m fs.FileMode) uint32 {
 }
 
 type Service struct {
+	mu    sync.RWMutex // guards roots (network drives come and go)
 	roots []Root
 	// protected trees (NoCapOS's own program, data and source folders):
 	// Delete, move and rename refuse them, anything inside them, and any
@@ -159,7 +161,7 @@ func (s *Service) guard(rootID, rel string) error {
 			// Inside a protected folder: allowed only within a storage location
 			// that itself lives there.
 			inRoot := false
-			for _, sr := range s.roots {
+			for _, sr := range s.Roots() {
 				if rp, err := filepath.Abs(sr.Path); err == nil && within(rp, p) && within(full, rp) && !within(rp, full) {
 					inRoot = true
 					break
@@ -190,16 +192,56 @@ func New(roots []Root) (*Service, error) {
 	return &Service{roots: roots}, nil
 }
 
-func (s *Service) Roots() []Root { return s.roots }
+// Roots returns a copy of the storage locations.
+func (s *Service) Roots() []Root {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]Root(nil), s.roots...)
+}
 
+// Root returns a copy of one storage location.
 func (s *Service) Root(id string) (*Root, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for i := range s.roots {
 		if s.roots[i].ID == id {
-			return &s.roots[i], nil
+			r := s.roots[i]
+			return &r, nil
 		}
 	}
 	return nil, ErrUnknownRoot
 }
+
+// AddRoot adds a storage location while running (a network drive that was
+// just mounted). Adding an id that exists replaces it.
+func (s *Service) AddRoot(r Root) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.roots {
+		if s.roots[i].ID == r.ID {
+			s.roots[i] = r
+			return
+		}
+	}
+	s.roots = append(s.roots, r)
+}
+
+// RemoveRoot drops a storage location (a network drive that was unmounted).
+func (s *Service) RemoveRoot(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := s.roots[:0]
+	for _, r := range s.roots {
+		if r.ID != id {
+			out = append(out, r)
+		}
+	}
+	s.roots = out
+}
+
+// CheckChange reports whether a path may be deleted, moved or renamed
+// (ErrProtected for NoCapOS's own and core OS folders).
+func (s *Service) CheckChange(rootID, rel string) error { return s.guard(rootID, rel) }
 
 func (s *Service) open(id string) (*os.Root, error) {
 	r, err := s.Root(id)

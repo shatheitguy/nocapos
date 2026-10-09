@@ -12,8 +12,8 @@ import (
 
 // Index is an in-memory list of file names across the storage locations, for
 // universal search. It is rebuilt in the background on a timer and shortly
-// after any change made through Files. The whole-disk "system" location is
-// skipped (too large to index; browse it instead).
+// after any change made through Files. The whole-disk "system" location and
+// network drives are skipped (too large to index; browse them instead).
 
 const (
 	maxIndexed      = 300_000
@@ -103,7 +103,9 @@ func (ix *Index) rebuild() {
 	var out []indexEntry
 	capped := false
 	for _, r := range ix.svc.Roots() {
-		if r.ID == "system" || capped {
+		// Skip the whole-disk System view and network drives (a big NAS would
+		// crowd out the local files; browse those instead).
+		if r.ID == "system" || strings.HasPrefix(r.ID, "net:") || capped {
 			continue
 		}
 		base := filepath.Clean(r.Path)
