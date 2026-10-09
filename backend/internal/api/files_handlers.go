@@ -44,11 +44,15 @@ type fileTicketStore struct {
 }
 
 func (t *fileTicketStore) issue(userID, root, prefix string) (string, time.Time) {
+	return t.issueTTL(userID, root, prefix, fileTicketTTL)
+}
+
+func (t *fileTicketStore) issueTTL(userID, root, prefix string, ttl time.Duration) (string, time.Time) {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
 	tok := base64.RawURLEncoding.EncodeToString(b)
 	now := time.Now()
-	exp := now.Add(fileTicketTTL)
+	exp := now.Add(ttl)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.m == nil {
@@ -281,6 +285,7 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	s.FileIndex.Remove(req.Root, rels)
 	w.WriteHeader(http.StatusNoContent)
 }
 

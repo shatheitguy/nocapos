@@ -9,6 +9,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	golang.org/x/crypto v0.40.0
+	golang.org/x/image v0.24.0
 	golang.org/x/sys v0.35.0
 	modernc.org/sqlite v1.34.5
 )
