@@ -2345,3 +2345,30 @@ button.bk-entry-name:hover:not(:disabled) { filter: none; text-decoration: under
   .bk-entry { grid-template-columns: auto minmax(0, 1fr) auto; }
   .bk-entry-size, .bk-entry-date { display: none; }
 }
+
+/* ---------- Network Drives & File Sharing (Settings) ---------- */
+.nd-drive { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.nd-drive + .nd-drive { border-top: 1px solid var(--border); }
+.nd-icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: var(--surface-3); }
+.nd-icon.on { color: var(--accent); background: var(--accent-soft); }
+.nd-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nd-main .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-status { font-size: 12.5px; color: var(--muted); }
+.nd-status.ok { color: var(--ok); }
+.nd-status.bad { color: var(--bad); }
+.nd-auto { font-size: 12.5px; font-weight: 400; margin-top: 2px; }
+.nd-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.nd-actions button { padding: 6px 10px; }
+.nd-inline { display: flex; gap: 6px; }
+.nd-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; }
+button.nd-chip { padding: 5px 10px; border-radius: 99px; background: var(--surface-3); color: var(--text); font-weight: 500; font-size: 12.5px; }
+button.nd-chip.on { background: var(--accent-soft); color: var(--accent); }
+.nd-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px 14px; }
+.nd-pad { padding: 0 14px; }
+.nd-cmd, .nd-user { padding: 5px 10px; border-radius: 8px; background: var(--surface-3); font-size: 12.5px; user-select: all; }
+button.nd-addr { gap: 8px; font-weight: 400; }
+button.nd-addr code { font-size: 12.5px; }
+.nd-addshare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
+.nd-addshare select, .nd-addshare input { flex: 1 1 140px; min-width: 0; }
+.nd-ro { font-size: 12.5px; }
+.nd-note { margin: 0; padding: 14px; font-size: 13px; line-height: 1.5; color: var(--muted); }

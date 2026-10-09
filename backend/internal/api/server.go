@@ -17,6 +17,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
@@ -46,6 +47,7 @@ type Deps struct {
 	AppStore  *appstore.Manager
 	Photos    *photos.Library
 	Backup    *backup.Manager
+	NetDrives *netdrive.Manager
 	Version   string
 }
 
@@ -180,6 +182,23 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
+
+	mux.Handle("GET /api/v1/netdrives", s.admin(s.netOverview))
+	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))
+	mux.Handle("POST /api/v1/netdrives/install", s.admin(s.netInstall))
+	mux.Handle("GET /api/v1/netdrives/exports", s.admin(s.netExports))
+	mux.Handle("POST /api/v1/netdrives/{id}/{action}", s.admin(s.netConnect))
+	mux.Handle("PATCH /api/v1/netdrives/{id}", s.admin(s.netUpdate))
+	mux.Handle("DELETE /api/v1/netdrives/{id}", s.admin(s.netDelete))
+	mux.Handle("PUT /api/v1/sharing/password", s.admin(s.sharePassword))
+	mux.Handle("PUT /api/v1/sharing", s.admin(s.shareProtocols))
+	mux.Handle("POST /api/v1/sharing/shares", s.admin(s.shareAdd))
+	mux.Handle("PATCH /api/v1/sharing/shares/{id}", s.admin(s.shareUpdate))
+	mux.Handle("DELETE /api/v1/sharing/shares/{id}", s.admin(s.shareDelete))
+	// WebDAV for other devices: its own Basic-auth sharing account (any method).
+	dav := s.NetDrives.DAVHandler(func(r *http.Request) string { return clientIP(r, s.Config.TrustedProxies) })
+	mux.Handle(netdrive.DAVPrefix+"/", dav)
+	mux.Handle(netdrive.DAVPrefix, http.RedirectHandler(netdrive.DAVPrefix+"/", http.StatusMovedPermanently))
 
 	mux.Handle("GET /api/v1/backup", s.admin(s.backupOverview))
 	mux.Handle("POST /api/v1/backup/install", s.admin(s.backupInstall))
