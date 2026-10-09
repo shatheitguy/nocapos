@@ -1891,97 +1891,73 @@ button.cal-day.picked:not(.today) { box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* ---------- macOS-style login / lock screen ---------- */
-.auth-screen.mac { justify-content: space-between; padding: 7vh 16px 5vh; gap: 16px; position: relative; isolation: isolate; }
-.auth-screen.mac::before { content: ''; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2); background: rgba(0, 0, 0, 0.18); }
-.mac-clock { text-align: center; color: #fff; text-shadow: 0 2px 24px rgba(0, 0, 0, 0.45); }
-.mac-date { font-size: 20px; font-weight: 600; opacity: 0.92; }
-.mac-time { font-size: clamp(72px, 13vw, 128px); font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.auth-screen.mac { justify-content: flex-start; padding: 8vh 16px 0; gap: 0; position: relative; isolation: isolate; }
+.auth-screen.mac::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  backdrop-filter: blur(22px) saturate(1.25); -webkit-backdrop-filter: blur(22px) saturate(1.25);
+  background: radial-gradient(120% 80% at 50% 0%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.32));
+}
+.mac-clock { text-align: center; color: #fff; text-shadow: 0 2px 30px rgba(0, 0, 0, 0.35); animation: mac-in 0.6s ease both; }
+.mac-date { font-size: 19px; font-weight: 500; letter-spacing: 0.01em; opacity: 0.85; }
+.mac-time { font-size: clamp(76px, 12vw, 132px); font-weight: 600; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 4px; }
 :root:not([data-ui="classic"]) .mac-time { font-family: var(--display); font-weight: 600; letter-spacing: 0.02em; }
 
-.mac-login { display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(100%, 320px); color: #fff; }
-.mac-login .avatar.xxl { box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.18); }
-.mac-name { font-size: 20px; font-weight: 600; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5); margin-bottom: 2px; }
-.mac-sub { margin: 0; text-align: center; font-size: 13px; opacity: 0.85; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+/* The user card sits in the middle of the space left under the clock, clear of the bottom buttons. */
+.mac-login {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 280px);
+  margin: auto 0; padding-bottom: 120px; color: #fff; animation: mac-fade 0.6s 0.1s ease both;
+}
+.mac-login .avatar.xxl { width: 92px; height: 92px; font-size: 36px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.14); }
+.mac-name { font-size: 19px; font-weight: 600; letter-spacing: 0.01em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45); margin: 2px 0 4px; }
+.mac-sub { margin: 0 0 4px; text-align: center; font-size: 13px; line-height: 1.45; opacity: 0.85; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+.mac-login.setup { width: min(100%, 300px); gap: 10px; }
 
 .mac-pill {
-  position: relative; display: flex; align-items: center; width: 100%; height: 40px; border-radius: 20px; padding: 0 6px 0 16px;
-  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  position: relative; display: flex; align-items: center; width: 100%; height: 38px; border-radius: 19px; padding: 0 5px 0 16px;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
-.mac-pill:focus-within { border-color: color-mix(in srgb, var(--accent) 70%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent), 0 6px 24px rgba(0, 0, 0, 0.25); }
+.mac-pill:focus-within {
+  background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08), 0 8px 28px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
 .mac-pill input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; outline: none; color: #fff; font: inherit; font-size: 14px; padding: 0; }
-.mac-pill input::placeholder { color: rgba(255, 255, 255, 0.62); }
+.mac-pill input[type="password"]:not(:placeholder-shown) { letter-spacing: 0.18em; }
+.mac-pill input::placeholder { color: rgba(255, 255, 255, 0.6); letter-spacing: normal; }
 .mac-pill input:focus { outline: none; }
-.mac-pill.shake { animation: mac-shake 0.42s ease; }
-@keyframes mac-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } }
-.mac-eye, .mac-go { flex: none; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: rgba(255, 255, 255, 0.8); }
-.mac-eye:hover:not(:disabled) { filter: none; color: #fff; }
-.mac-go { background: rgba(255, 255, 255, 0.22); color: #fff; margin-left: 2px; }
+.mac-pill.shake { animation: mac-shake 0.5s ease; }
+@keyframes mac-shake { 0%, 70% { border-color: rgba(255, 110, 120, 0.75); } 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } }
+@keyframes mac-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes mac-fade { from { opacity: 0; } to { opacity: 1; } }
+.mac-eye, .mac-go { flex: none; width: 28px; height: 28px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: rgba(255, 255, 255, 0.7); transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease; }
+.mac-eye:hover:not(:disabled) { filter: none; color: #fff; background: rgba(255, 255, 255, 0.1); }
+.mac-go { background: rgba(255, 255, 255, 0.2); color: #fff; margin-left: 2px; }
 .mac-go:not(:disabled):hover { background: var(--accent); filter: none; }
-.mac-go:disabled { opacity: 0.35; }
-.mac-hint { margin: 2px 0 0; min-height: 18px; font-size: 13px; text-align: center; color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); opacity: 0.92; }
-.mac-link { background: transparent; color: rgba(255, 255, 255, 0.8); font-size: 12.5px; padding: 2px 8px; }
+.mac-go:disabled { opacity: 0.3; }
+.mac-hint { margin: 0; font-size: 13px; text-align: center; color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.mac-hint:empty { display: none; }
+.mac-hint.err { color: #ffd2d6; }
+.mac-link { background: transparent; color: rgba(255, 255, 255, 0.7); font-size: 12.5px; padding: 2px 8px; margin-top: -2px; }
 .mac-link:hover:not(:disabled) { color: #fff; filter: none; text-decoration: underline; }
-.mac-actions { display: flex; gap: 26px; margin-top: 18px; }
-.mac-action { display: flex; flex-direction: column; align-items: center; gap: 6px; background: transparent; color: #fff; font-size: 12px; padding: 0; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55); }
+
+/* Switch user / Other user / Forget: pinned to the bottom of the screen. */
+.mac-actions { position: absolute; left: 50%; bottom: max(28px, 5vh); transform: translateX(-50%); display: flex; gap: 30px; }
+.mac-actions:empty { display: none; }
+.mac-action { display: flex; flex-direction: column; align-items: center; gap: 7px; background: transparent; color: rgba(255, 255, 255, 0.9); font-size: 12px; padding: 0; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55); white-space: nowrap; }
 .mac-action span {
-  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
-  background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); transition: background 0.15s ease, transform 0.15s ease;
 }
-.mac-action:hover:not(:disabled) { filter: none; }
-.mac-action:hover span { background: rgba(255, 255, 255, 0.28); }
+.mac-action:hover:not(:disabled) { filter: none; color: #fff; }
+.mac-action:hover span { background: rgba(255, 255, 255, 0.26); transform: translateY(-1px); }
 .mac-login .logo-word { color: #fff; }
-
-/* ---------- cyber cat (sits on the password pill) ---------- */
-.mac-pass-wrap { position: relative; width: 100%; margin-top: 64px; }
-.cyber-cat { position: absolute; left: 50%; bottom: 22px; width: 140px; height: auto; transform: translateX(-50%); overflow: visible; pointer-events: none; z-index: 1; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45)); }
-.mac-pass-wrap .mac-pill { z-index: 2; }
-.cyber-cat .cat-face { fill: url(#cat-fur); stroke: #ff2a2a; stroke-width: 1.6; filter: drop-shadow(0 0 4px rgba(255, 42, 42, 0.55)); }
-.cyber-cat .cat-ear { fill: url(#cat-fur); stroke: #ff2a2a; stroke-width: 1.6; stroke-linejoin: round; }
-.cyber-cat .cat-ear-in { fill: none; stroke: #9ca1ab; stroke-width: 1.1; opacity: 0.7; }
-.cyber-cat .cat-led { fill: #ff2a2a; animation: cat-led 2.4s ease-in-out infinite; }
-.cyber-cat .cat-circuit { fill: none; stroke: #ff2a2a; stroke-width: 1; opacity: 0.55; }
-.cyber-cat .cat-node { fill: #ff5a5a; }
-.cyber-cat .cat-eye-shape { fill: url(#cat-eye); stroke: #ff6b6b; stroke-width: 0.8; filter: drop-shadow(0 0 5px rgba(255, 42, 42, 0.9)); }
-.cyber-cat .cat-pupil { fill: #12060a; }
-.cyber-cat .cat-glint { fill: #fff; opacity: 0.9; }
-.cyber-cat .cat-pupils { transition: transform 0.18s ease-out; }
-.cyber-cat .cat-eye-open { transform-box: fill-box; transform-origin: center; animation: cat-blink 5.5s infinite; transition: opacity 0.15s; }
-.cyber-cat .cat-eye-happy, .cyber-cat .cat-eye-x { fill: none; stroke: #ff4a4a; stroke-width: 2.6; stroke-linecap: round; opacity: 0; transition: opacity 0.15s; filter: drop-shadow(0 0 4px rgba(255, 42, 42, 0.9)); }
-.cyber-cat .cat-nose { fill: #ff4a6a; }
-.cyber-cat .cat-mouth, .cyber-cat .cat-whisk { fill: none; stroke: #c9ced8; stroke-width: 1.1; stroke-linecap: round; opacity: 0.75; }
-.cyber-cat .cat-tail { stroke: #ff2a2a; stroke-width: 5; stroke-linecap: round; opacity: 0.9; transform-origin: 128px 96px; animation: cat-tail 3.2s ease-in-out infinite; filter: drop-shadow(0 0 3px rgba(255, 42, 42, 0.6)); }
-.cyber-cat .cat-paw ellipse { fill: url(#cat-fur); stroke: #ff2a2a; stroke-width: 1.4; }
-.cyber-cat .cat-paw path { fill: none; stroke: #9ca1ab; stroke-width: 1; }
-.cyber-cat .cat-paw { transition: transform 0.38s cubic-bezier(0.34, 1.4, 0.64, 1); }
-.cyber-cat .cat-head { transform-box: fill-box; transform-origin: 50% 90%; transition: transform 0.3s ease; }
-.cyber-cat .cat-ears { transform-box: fill-box; transform-origin: 50% 100%; transition: transform 0.3s ease; }
-.cyber-cat .cat-ears.twitch { animation: cat-twitch 0.22s ease; }
-
-.cyber-cat.mood-watch .cat-head { transform: translateY(2px) rotate(-1deg); }
-.cyber-cat.mood-shy .cat-paw.l, .cyber-cat.mood-peek .cat-paw.l { transform: translate(8px, -42px); }
-.cyber-cat.mood-shy .cat-paw.r { transform: translate(-8px, -42px); }
-.cyber-cat.mood-peek .cat-paw.r { transform: translate(-6px, -22px); }
-.cyber-cat.mood-shy .cat-ears, .cyber-cat.mood-peek .cat-ears { transform: scaleY(0.92); }
-.cyber-cat.mood-error .cat-eye-open, .cyber-cat.mood-happy .cat-eye-open { opacity: 0; }
-.cyber-cat.mood-error .cat-eye-x { opacity: 1; }
-.cyber-cat.mood-error .cat-ears { transform: scaleY(0.72); }
-.cyber-cat.mood-error .cat-head { animation: cat-no 0.5s ease 2; }
-.cyber-cat.mood-error .cat-face { stroke: #ff0033; }
-.cyber-cat.mood-happy .cat-eye-happy { opacity: 1; }
-.cyber-cat.mood-happy .cat-ears { transform: scaleY(1.08); }
-.cyber-cat.mood-happy .cat-head { transform: translateY(-2px); }
-.cyber-cat.mood-happy .cat-tail { animation-duration: 0.9s; }
-
-@keyframes cat-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } }
-@keyframes cat-tail { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-14deg); } }
-@keyframes cat-twitch { 0% { transform: scaleY(1); } 40% { transform: scaleY(0.86) rotate(-2deg); } 100% { transform: scaleY(1); } }
-@keyframes cat-no { 0%, 100% { transform: translateX(0) rotate(0); } 25% { transform: translateX(-4px) rotate(-4deg); } 75% { transform: translateX(4px) rotate(4deg); } }
-@keyframes cat-led { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
-:root[data-reduce-motion] .cyber-cat *, :root[data-reduce-motion] .mac-pill.shake { animation: none !important; transition-duration: 0.01s !important; }
-@media (prefers-reduced-motion: reduce) { .cyber-cat *, .mac-pill.shake { animation: none !important; } }
-@media (max-height: 640px) { .mac-time { font-size: 64px; } .auth-screen.mac { padding-top: 4vh; } .mac-login .avatar.xxl { width: 84px; height: 84px; } }
+.mac-pass-wrap { position: relative; width: 100%; }
+:root[data-reduce-motion] .mac-pill.shake, :root[data-reduce-motion] .mac-clock, :root[data-reduce-motion] .mac-login { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .mac-pill.shake, .mac-clock, .mac-login { animation: none !important; } }
+@media (max-height: 640px) { .auth-screen.mac { padding-top: 4vh; } .mac-time { font-size: 64px; } .mac-login { padding-bottom: 92px; gap: 10px; } .mac-login .avatar.xxl { width: 76px; height: 76px; font-size: 30px; } }
 .mac-login .logo-tag { white-space: nowrap; letter-spacing: 0.3em; font-size: 10px; }
 
 /* ---------- App Store ---------- */
