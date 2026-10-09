@@ -36,6 +36,7 @@ import (
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
+	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/tlsutil"
@@ -223,6 +224,7 @@ func serve() error {
 		Backup:    backups,
 		NetDrives: netDrives,
 		Cloud:     cloud,
+		Stacks:    stacks.NewManager(cfg.DataDir, cfg.DockerHost, log),
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	httpSrv := &http.Server{
