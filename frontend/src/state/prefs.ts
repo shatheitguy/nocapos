@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { saveLater } from '../lib/saveLater';
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
@@ -214,13 +215,16 @@ export const usePrefs = create<Prefs>((set, get) => ({
   ...load(),
   set: (p) => {
     set(p);
-    const s = get();
-    const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ ...values, brand1: true, glass1: true }));
-    } catch {
-      /* ignore */
-    }
+    // Sliders call this on every move; the write is batched (flushed on unload).
+    saveLater(
+      KEY,
+      () => {
+        const s = get();
+        const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
+        return JSON.stringify({ ...values, brand1: true, glass1: true });
+      },
+      300,
+    );
   },
 }));
 
@@ -228,12 +232,17 @@ export const usePrefs = create<Prefs>((set, get) => ({
 
 const WALL_KEY = 'alfa.wallpaper.custom';
 
+// The image is large; read it once and keep it, rather than on every pref change.
+let customWall: string | null | undefined;
+
 export function loadCustomWallpaper(): string | null {
+  if (customWall !== undefined) return customWall;
   try {
-    return localStorage.getItem(WALL_KEY);
+    customWall = localStorage.getItem(WALL_KEY);
   } catch {
-    return null;
+    customWall = null;
   }
+  return customWall;
 }
 
 /** Downscale an image file to at most 2560px and store it as a JPEG data URL. */
@@ -249,6 +258,7 @@ export async function saveCustomWallpaper(file: File): Promise<string> {
     const url = canvas.toDataURL('image/jpeg', q);
     try {
       localStorage.setItem(WALL_KEY, url);
+      customWall = url;
       return url;
     } catch {
       /* too big for storage — try a smaller encoding */
@@ -294,6 +304,8 @@ export function workArea(p: PrefValues = usePrefs.getState()) {
 
 const MAGNIFY: Record<Magnify, number> = { off: 1, small: 1.12, large: 1.38 };
 
+let appliedBg = '';
+
 /** Applies every look-and-feel pref to <html>/<body>. */
 export function applyPrefs(p: PrefValues) {
   const root = document.documentElement;
@@ -332,7 +344,12 @@ export function applyPrefs(p: PrefValues) {
   const body = document.body;
   body.dataset.wallpaper = p.wallpaper;
   const custom = p.wallpaper === 'custom' ? loadCustomWallpaper() : null;
-  body.style.backgroundImage = custom ? `url("${custom}")` : '';
+  const bg = custom ? `url("${custom}")` : '';
+  // Re-assigning a multi-MB data URL on every slider tick is expensive.
+  if (bg !== appliedBg) {
+    body.style.backgroundImage = bg;
+    appliedBg = bg;
+  }
   root.style.setProperty('--wall-dim', String(p.wallpaperDim / 100));
   // Brightness: a dark veil over everything (browsers can't drive the backlight).
   const b = Math.min(100, Math.max(30, p.brightness));

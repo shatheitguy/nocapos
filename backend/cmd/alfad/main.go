@@ -324,6 +324,11 @@ func purgeTokens(ctx context.Context, st *store.Store, log *slog.Logger) {
 			} else if n > 0 {
 				log.Debug("purged expired refresh tokens", "count", n)
 			}
+			if n, err := st.PurgeAudit(ctx, time.Now().Add(-store.AuditRetention)); err != nil {
+				log.Error("purge old audit entries", "err", err)
+			} else if n > 0 {
+				log.Debug("purged old audit entries", "count", n)
+			}
 		}
 	}
 }

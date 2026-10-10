@@ -5,7 +5,7 @@ import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
-import { fmtDate, fmtTime } from '../lib/time';
+import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
 import { useClock, useViewport } from '../lib/hooks';
 import { pressApp, useAppDrag } from '../state/appDrag';
 import { useDesktopIcons } from '../state/desktopIcons';
@@ -108,7 +108,6 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   const prefs = usePrefs();
   useViewport(); // phones force a bottom dock, so follow the viewport
   const { position, autoHide } = effectiveDock(prefs);
-  const now = useClock(prefs.clockSeconds ? 1000 : 15_000);
   const [qsOpen, setQsOpen] = useState(false);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -232,8 +231,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
             <Icon name="sound" size={16} />
           </button>
           <button ref={clockRef} type="button" className={`tray-btn tray-clock ${clockOpen ? 'open' : ''}`} onClick={() => setClockOpen((v) => !v)} title="Clock & calendar">
-            {prefs.clockDate && <span className="tray-date">{fmtDate(now, prefs, 'short')}</span>}
-            {fmtTime(now, prefs)}
+            <TrayClock />
           </button>
           <button type="button" className="tray-btn tray-avatar" onClick={() => setQsOpen((v) => !v)} aria-label="Account and Control Center">
             <UserAvatar name={user.username} />
@@ -244,5 +242,17 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
       {showTray && qsOpen && <QuickSettings user={user} anchor={trayRef} onClose={() => setQsOpen(false)} onLock={onLock} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
     </footer>
+  );
+}
+
+/** The tray clock ticks on its own, so the rest of the dock doesn't re-render every second. */
+function TrayClock() {
+  const tp = useTimePrefs();
+  const now = useClock(tp.clockSeconds ? 1000 : 15_000);
+  return (
+    <>
+      {tp.clockDate && <span className="tray-date">{fmtDate(now, tp, 'short')}</span>}
+      {fmtTime(now, tp)}
+    </>
   );
 }
