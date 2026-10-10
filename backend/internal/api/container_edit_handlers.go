@@ -118,6 +118,7 @@ func (s *Server) containerEdit(w http.ResponseWriter, r *http.Request) {
 	if app != "" {
 		spec.Name = d.Name // App Store containers keep their names
 	}
+	s.crashes.Expect(d.ID, d.Name) // the old container is stopped on purpose
 	newID, err := s.Docker.Recreate(r.Context(), d.ID, spec, s.pullFor(r.Context()))
 	s.audit(r, uid, "container.edit", d.Name, err == nil || newID != "", errText(err))
 	if err != nil && newID == "" {
@@ -203,6 +204,7 @@ func (s *Server) containerRemove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "stack", "this container belongs to a stack; remove the stack instead")
 		return
 	}
+	s.crashes.Expect(d.ID, d.Name)
 	err = s.Docker.RemoveContainer(r.Context(), d.ID)
 	s.audit(r, userFrom(r.Context()).ID, "container.remove", d.Name, err == nil, errText(err))
 	if err != nil {

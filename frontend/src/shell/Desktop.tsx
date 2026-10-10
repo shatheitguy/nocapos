@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
-import { showStorageAlerts } from '../api/storage';
 import type { Snapshot, SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
@@ -19,6 +18,8 @@ import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
+import { watchNotifications } from '../state/notifications';
+import { NotificationLayer } from './Notifications';
 import { Launcher } from './Launcher';
 import { Spotlight } from './Spotlight';
 import { useSpotlight } from '../state/spotlight';
@@ -73,8 +74,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     };
   }, [user.id]);
 
-  // Disk and pool health alerts (admins): a toast when a pool degrades or SMART fails.
-  useEffect(() => (isAdmin ? subscribe('storage.alerts', showStorageAlerts) : undefined), [isAdmin, user.id]);
+  // System notifications (admins): updates, app problems, disk health, failed backups.
+  useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
 
   // Installed App Store apps for the home screen and Launchpad.
   useEffect(() => (isAdmin ? watchStoreApps() : undefined), [isAdmin]);
@@ -181,6 +182,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       <DragGhost />
       <ConfirmHost />
       <PowerOverlay />
+      {isAdmin && <NotificationLayer />}
       <Toasts />
     </div>
   );

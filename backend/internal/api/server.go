@@ -19,6 +19,7 @@ import (
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
 	"alfaos/alfad/internal/netdrive"
+	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
@@ -67,6 +68,8 @@ type Server struct {
 	loginLimiter    *auth.Limiter
 	brave           *webapps.Brave
 	braveKey        []byte
+	notify          *notify.Service
+	crashes         *notify.CrashWatch
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -80,6 +83,11 @@ func New(ctx context.Context, d Deps) *Server {
 		braveKey:     randomKey(32),
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
+	s.notify = notify.New(d.Store, d.Log)
+	s.crashes = notify.NewCrashWatch()
+	if d.AppStore != nil {
+		s.crashes.Busy = d.AppStore.Busy
+	}
 	if d.Storage != nil {
 		d.Storage.InUse = s.storageInUse
 	}
@@ -306,6 +314,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Storage: disks, SMART, ZFS pools, datasets and snapshots (admin, audited).
 	s.storageRoutes(mux)
+
+	// Notification Center (admin).
+	s.notifyRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
