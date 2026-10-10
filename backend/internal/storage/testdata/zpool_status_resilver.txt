@@ -1,0 +1,19 @@
+  pool: tank
+ state: DEGRADED
+status: One or more devices is currently being resilvered.  The pool will
+	continue to function, possibly in a degraded state.
+action: Wait for the resilver to complete.
+  scan: resilver in progress since Sat Oct 10 09:15:22 2026
+	2.10T / 3.45T scanned at 1.02G/s, 1.47T / 3.45T issued at 735M/s
+	1.47T resilvered, 42.75% done, 00:47:03 to go
+config:
+
+	NAME                                                     STATE     READ WRITE CKSUM
+	tank                                                     DEGRADED     0     0     0
+	  mirror-0                                               DEGRADED     0     0     0
+	    /dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1AAAA-part1  ONLINE       0     0     0
+	    replacing-1                                          DEGRADED     0     0     0
+	      12738119237561112241                               UNAVAIL      0     0     0  was /dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1BBBB-part1
+	      /dev/disk/by-id/ata-WDC_WD40EFRX-68N32N0_WD-WCC7K1234567-part1  ONLINE       0     0     0  (resilvering)
+
+errors: No known data errors

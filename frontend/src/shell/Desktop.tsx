@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
+import { showStorageAlerts } from '../api/storage';
 import type { Snapshot, SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
@@ -70,6 +71,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       useSpotlight.getState().set(false);
     };
   }, [user.id]);
+
+  // Disk and pool health alerts (admins): a toast when a pool degrades or SMART fails.
+  useEffect(() => (isAdmin ? subscribe('storage.alerts', showStorageAlerts) : undefined), [isAdmin, user.id]);
 
   // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);
