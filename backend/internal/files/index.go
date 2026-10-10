@@ -224,3 +224,48 @@ func score(e *indexEntry, words []string, q string) float64 {
 	}
 	return s
 }
+
+// Under returns the files (not folders) inside the top-level folder named
+// folder of every location, whose lower-case name passes match.
+// Photos uses it to find the library without walking the disk itself.
+func (ix *Index) Under(folder string, match func(lowerName string) bool) []Hit {
+	prefix := folder + "/"
+	var hits []Hit
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	for i := range ix.entries {
+		e := &ix.entries[i]
+		if e.dir || !strings.HasPrefix(e.rel, prefix) || !match(e.lower) {
+			continue
+		}
+		hits = append(hits, Hit{Root: e.root, Path: "/" + e.rel, Name: e.name, Size: e.size, ModTime: e.modTime})
+	}
+	return hits
+}
+
+// Remove drops paths (and anything inside them) right away, so a deleted file
+// doesn't show up again before the next rebuild. rels are root-relative.
+func (ix *Index) Remove(root string, rels []string) {
+	if ix == nil {
+		return
+	}
+	ix.mu.Lock()
+	defer ix.mu.Unlock()
+	out := ix.entries[:0]
+	for _, e := range ix.entries {
+		gone := false
+		if e.root == root {
+			for _, r := range rels {
+				r = strings.Trim(r, "/")
+				if e.rel == r || strings.HasPrefix(e.rel, r+"/") {
+					gone = true
+					break
+				}
+			}
+		}
+		if !gone {
+			out = append(out, e)
+		}
+	}
+	ix.entries = out
+}
