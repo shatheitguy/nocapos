@@ -8,6 +8,8 @@ import { dropHint, pressApp, useAppDrag } from '../state/appDrag';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { folderKey, ungroup, useFolders } from '../state/folders';
 import { FolderView } from './FolderView';
+import { StoreAppGrid } from './StoreAppGrid';
+import { shownOnHome, useStoreApps } from '../state/storeApps';
 import { appMenuItems } from './Shelf';
 
 const OPENS_WINDOW = new Set(['Open', 'Show', 'New window']);
@@ -17,6 +19,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const folders = useFolders((s) => s.folders);
+  const [jiggle, setJiggle] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -33,10 +36,11 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const shownFolders = needle ? [] : folders.filter((f) => f.apps.some((id) => all.some((a) => a.id === id)));
   const inFolder = new Set(folders.flatMap((f) => f.apps));
   const apps = needle ? matches : all.filter((a) => !inFolder.has(a.id));
+  const storeApps = useStoreApps((s) => s.apps).filter((a) => shownOnHome(a) && (!needle || `${a.name} ${a.tagline}`.toLowerCase().includes(needle)));
 
   useEffect(() => {
     input.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); // wiggle mode catches Esc first
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -85,8 +89,12 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   };
 
   return (
-    <div className="launcher" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="launcher-panel" ref={panel}>
+    <div className="launcher" onPointerDown={(e) => e.target === e.currentTarget && (jiggle ? setJiggle(false) : onClose())}>
+      <div
+        className="launcher-panel"
+        ref={panel}
+        onPointerDownCapture={(e) => jiggle && !(e.target as Element).closest('.store-grid, .launcher-done') && setJiggle(false)}
+      >
         <label className="search">
           <Icon name="search" size={18} />
           <input
@@ -98,6 +106,20 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
             onKeyDown={(e) => e.key === 'Enter' && apps[0] && launch(apps[0].id, e.shiftKey)}
           />
         </label>
+        {isAdmin && storeApps.length > 0 && (
+          <section className="launcher-section">
+            <div className="launcher-section-head">
+              <h3 className="section-label">Installed apps</h3>
+              {jiggle ? (
+                <button type="button" className="pill small launcher-done" onClick={() => setJiggle(false)}>Done</button>
+              ) : (
+                <span className="muted small">Click and hold to remove</span>
+              )}
+            </div>
+            <StoreAppGrid apps={storeApps} jiggle={jiggle} setJiggle={setJiggle} size={56} onOpened={onClose} className="in-launcher" />
+          </section>
+        )}
+        {isAdmin && storeApps.length > 0 && !needle && <h3 className="section-label launcher-builtin">NoCapOS apps</h3>}
         <div className="launcher-grid" data-drop="launchpad">
           {shownFolders.map((f) => (
             <button
@@ -139,7 +161,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
               <span>{a.title}</span>
             </button>
           ))}
-          {!apps.length && !shownFolders.length && <p className="muted">No apps match “{q}”.</p>}
+          {!apps.length && !shownFolders.length && !storeApps.length && <p className="muted">No apps match “{q}”.</p>}
         </div>
         <p className="launcher-tip muted small">Tip: drop an app onto another to make a folder, or drag it to the Dock or Desktop.</p>
       </div>

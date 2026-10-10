@@ -18,6 +18,7 @@ import { hasMenuBar } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
+import { watchStoreApps } from '../state/storeApps';
 import { Launcher } from './Launcher';
 import { Spotlight } from './Spotlight';
 import { useSpotlight } from '../state/spotlight';
@@ -74,6 +75,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // Disk and pool health alerts (admins): a toast when a pool degrades or SMART fails.
   useEffect(() => (isAdmin ? subscribe('storage.alerts', showStorageAlerts) : undefined), [isAdmin, user.id]);
+
+  // Installed App Store apps for the home screen and Launchpad.
+  useEffect(() => (isAdmin ? watchStoreApps() : undefined), [isAdmin]);
 
   // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);
@@ -159,7 +163,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
         {widgets && compact && <WidgetLayer username={user.username} compact />}
       </div>
 
-      {glass && !compact && !launcher && <HomeHeader username={user.username} />}
+      {glass && !compact && !launcher && <HomeHeader username={user.username} isAdmin={isAdmin} />}
       {!compact && <DesktopIcons isAdmin={isAdmin} />}
       {widgets && !compact && <WidgetLayer username={user.username} compact={false} />}
 
