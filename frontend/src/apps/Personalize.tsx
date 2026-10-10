@@ -94,11 +94,25 @@ export function Slider({ label, hint, value, min, max, step = 1, format, onChang
 
 // ---- Appearance ----
 
+const SOLID_ICONS_KEY = 'alfa.iconsAutoSolid';
+
 export function Appearance() {
   const prefs = usePrefs();
   const set = prefs.set;
   const classic = prefs.uiTheme === 'classic';
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
+  // Glass icons need transparency: turning it down switches them to Colourful,
+  // and turning it back up restores Glass if that switch was ours.
+  const setReduceTransparency = (reduceTransparency: boolean) => {
+    if (reduceTransparency && prefs.iconStyle === 'glass') {
+      set({ reduceTransparency, iconStyle: 'colorful' });
+      try { localStorage.setItem(SOLID_ICONS_KEY, '1'); } catch { /* private mode */ }
+      return;
+    }
+    let ours = false;
+    try { ours = localStorage.getItem(SOLID_ICONS_KEY) === '1'; localStorage.removeItem(SOLID_ICONS_KEY); } catch { /* private mode */ }
+    set(!reduceTransparency && ours && prefs.iconStyle === 'colorful' ? { reduceTransparency, iconStyle: 'glass' } : { reduceTransparency });
+  };
   return (
     <div className="stack settings-page">
       <Section title="Theme" hint={current.blurb}>
@@ -136,7 +150,7 @@ export function Appearance() {
 
 
       <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad and on the desktop. Installed apps keep their own icons.">
-        <Row label="Style" hint={prefs.reduceTransparency && prefs.iconStyle === 'glass' ? 'Reduce transparency is on, so glass icons show as normal tiles' : undefined}>
+        <Row label="Style">
           <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
         </Row>
       </Section>
@@ -151,7 +165,7 @@ export function Appearance() {
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
         <Toggle label="Reduce transparency" hint="Solid panels instead of frosted glass — sharper and faster" checked={prefs.reduceTransparency}
-          onChange={(reduceTransparency) => set({ reduceTransparency })} />
+          onChange={setReduceTransparency} />
         <Toggle label="Reduce motion" hint="Turn off animations, scan sweeps and click pulses" checked={prefs.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
         {classic && (
           <Toggle label="Square corners" hint="Sharper windows and panels" checked={prefs.squareCorners} onChange={(squareCorners) => set({ squareCorners })} />
