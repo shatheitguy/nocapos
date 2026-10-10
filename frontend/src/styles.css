@@ -326,6 +326,13 @@ button.widget:active { transform: none; }
 .app-icon.art, .app-icon:not(.logo) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.24); }
 .app-icon.art { overflow: hidden; }
 .app-icon.art svg { display: block; width: 100%; height: 100%; }
+/* "Match app icons to the wallpaper": tiles and details in the theme's accent. */
+:root[data-icon-tint] {
+  --icon-a: color-mix(in srgb, var(--accent) 72%, #fff);
+  --icon-b: color-mix(in srgb, var(--accent) 78%, #000);
+  --icon-ink: color-mix(in srgb, var(--accent) 72%, #000);
+  --icon-hi: #fff;
+}
 /* Installed apps: their own icon, as it is. */
 .app-icon.logo { background: none; }
 .app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
@@ -868,8 +875,8 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 .dock-item:hover:not(:disabled) .app-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-sep { width: 1px; height: 40px; background: color-mix(in srgb, var(--text) 18%, transparent); margin: 0 5px; align-self: center; }
 .launchpad-icon, .trash-icon { display: grid; place-items: center; width: var(--dock-icon, 44px); height: var(--dock-icon, 44px); border-radius: 13px; box-shadow: 0 6px 16px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.25); }
-.launchpad-icon { background: linear-gradient(145deg, #ff3b3b, #a5101a); color: #fff; }
-.trash-icon { background: linear-gradient(145deg, #8e9bb5, #556179); color: #fff; }
+.launchpad-icon { background: linear-gradient(180deg, var(--icon-a, #ff3b3b), var(--icon-b, #a5101a)); color: #fff; }
+.trash-icon { background: linear-gradient(180deg, var(--icon-a, #8e9bb5), var(--icon-b, #556179)); color: #fff; }
 .dock-item.launchpad:hover .launchpad-icon, .dock-item.trash:hover .trash-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-item.draggable { cursor: grab; touch-action: none; }
 .dock-item img, .dock-item svg, .dock-item .app-icon { -webkit-user-drag: none; user-select: none; }
