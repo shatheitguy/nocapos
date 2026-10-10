@@ -136,7 +136,7 @@ export function Appearance() {
 
 
       <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad and on the desktop. Installed apps keep their own icons.">
-        <Row label="Style">
+        <Row label="Style" hint={prefs.reduceTransparency && prefs.iconStyle === 'glass' ? 'Reduce transparency is on, so glass icons show as normal tiles' : undefined}>
           <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
         </Row>
       </Section>
