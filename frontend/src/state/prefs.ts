@@ -84,7 +84,8 @@ export interface PrefValues {
   wallpaper: WallpaperId;
   wallpaperDim: number; // 0–60 %
   accent: string;
-  reduceTransparency: boolean;
+  reduceTransparency: boolean; // kept in step with transparency === 0
+  transparency: number; // panels: 0 = solid … 100 = full glass
   iconStyle: IconStyle; // how NoCapOS's own app icons look
   reduceMotion: boolean;
   squareCorners: boolean;
@@ -134,6 +135,7 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
+  transparency: 100,
   iconStyle: 'glass',
   reduceMotion: false,
   squareCorners: false,
@@ -169,7 +171,7 @@ export const DEFAULT_PREFS: PrefValues = {
 
 /** The look-and-feel subset that "Reset personalization" restores. */
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
-  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'reduceMotion', 'squareCorners',
+  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'transparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
   'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
 ];
@@ -195,6 +197,8 @@ function load(): Partial<PrefValues> {
       if (out.uiTheme === 'classic') delete out.uiTheme;
       if (out.wallpaper === 'nocap') delete out.wallpaper;
     }
+    // The old on/off switch becomes the far end of the Transparency slider.
+    if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
@@ -321,7 +325,12 @@ export function applyPrefs(p: PrefValues) {
   root.style.setProperty('--dock-mag', String(MAGNIFY[p.dockMagnify]));
   root.toggleAttribute('data-no-indicators', !p.dockIndicators);
 
-  root.toggleAttribute('data-solid', p.reduceTransparency);
+  // Transparency: 0 is fully solid, 100 the full glass look, anything in
+  // between makes the panels proportionally more opaque (see glass.css).
+  const clear = Math.min(100, Math.max(0, p.transparency));
+  root.toggleAttribute('data-solid', clear === 0);
+  root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
+  root.style.setProperty('--clear', String(clear / 100));
   root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
