@@ -13,6 +13,7 @@ import (
 	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/auth"
 	"alfaos/alfad/internal/backup"
+	"alfaos/alfad/internal/cloudimport"
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
@@ -48,6 +49,7 @@ type Deps struct {
 	Photos    *photos.Library
 	Backup    *backup.Manager
 	NetDrives *netdrive.Manager
+	Cloud     *cloudimport.Manager
 	Version   string
 }
 
@@ -182,6 +184,20 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
+
+	mux.Handle("GET /api/v1/cloud", s.admin(s.cloudOverview))
+	mux.Handle("POST /api/v1/cloud/install", s.admin(s.cloudInstall))
+	mux.Handle("POST /api/v1/cloud/accounts", s.admin(s.cloudAddAccount))
+	mux.Handle("POST /api/v1/cloud/signin/start", s.admin(s.cloudSignInStart))
+	mux.Handle("POST /api/v1/cloud/signin/finish", s.admin(s.cloudSignInFinish))
+	mux.Handle("DELETE /api/v1/cloud/accounts/{id}", s.admin(s.cloudDeleteAccount))
+	mux.Handle("GET /api/v1/cloud/accounts/{id}/folders", s.admin(s.cloudFolders))
+	mux.Handle("POST /api/v1/cloud/imports", s.admin(s.cloudSaveImport))
+	mux.Handle("PUT /api/v1/cloud/imports/{id}", s.admin(s.cloudSaveImport))
+	mux.Handle("DELETE /api/v1/cloud/imports/{id}", s.admin(s.cloudDeleteImport))
+	mux.Handle("POST /api/v1/cloud/imports/{id}/run", s.admin(s.cloudRunImport))
+	mux.Handle("GET /api/v1/cloud/jobs/{job}", s.admin(s.cloudJob))
+	mux.Handle("POST /api/v1/cloud/jobs/{job}/cancel", s.admin(s.cloudCancel))
 
 	mux.Handle("GET /api/v1/netdrives", s.admin(s.netOverview))
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))

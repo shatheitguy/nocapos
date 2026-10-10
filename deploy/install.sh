@@ -178,19 +178,22 @@ ensure_docker() { # $1 = required (1) or optional (0)
   warn "Skipping Docker: $NAME runs, the App Store stays off until Docker is installed."
 }
 
-# restic powers Backups; best effort — the Backups app offers to install it later too.
-ensure_restic() {
-  has restic && return 0
-  info "Installing restic (for Backups)"
+# restic powers Backups and rclone powers Cloud Imports; best effort — the
+# apps offer to install them later too.
+ensure_tools() {
+  local pkg missing=()
+  for pkg in restic rclone; do has "$pkg" || missing+=("$pkg"); done
+  [ "${#missing[@]}" -eq 0 ] && return 0
+  info "Installing ${missing[*]} (for Backups and Cloud Imports)"
   if has apt-get; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y restic >/dev/null 2>&1 ||
-      { apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y restic >/dev/null 2>&1; } || true
-  elif has dnf; then dnf install -y restic >/dev/null 2>&1 || true
-  elif has pacman; then pacman -Sy --noconfirm restic >/dev/null 2>&1 || true
-  elif has zypper; then zypper --non-interactive install restic >/dev/null 2>&1 || true
-  elif has apk; then apk add restic >/dev/null 2>&1 || true
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null 2>&1 ||
+      { apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null 2>&1; } || true
+  elif has dnf; then dnf install -y "${missing[@]}" >/dev/null 2>&1 || true
+  elif has pacman; then pacman -Sy --noconfirm "${missing[@]}" >/dev/null 2>&1 || true
+  elif has zypper; then zypper --non-interactive install "${missing[@]}" >/dev/null 2>&1 || true
+  elif has apk; then apk add "${missing[@]}" >/dev/null 2>&1 || true
   fi
-  has restic || warn "Couldn't install restic; Backups will offer to install it later."
+  for pkg in "${missing[@]}"; do has "$pkg" || warn "Couldn't install $pkg; NoCapOS will offer to install it later."; done
 }
 
 finish() { # $1 = URL, $2 = token
@@ -274,7 +277,7 @@ install_native_mode() {
   if [ "$fresh" -eq 1 ] && port_busy "$PORT"; then die "port $PORT is already in use (choose another with --port N)"; fi
 
   ensure_docker 0
-  ensure_restic
+  ensure_tools
 
   info "Installing $BIN"
   systemctl stop nocapos 2>/dev/null || true

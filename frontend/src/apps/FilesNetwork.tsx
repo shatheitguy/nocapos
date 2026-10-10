@@ -3,6 +3,8 @@ import { netApi, type NetDrive, type NetSupport, type Sharing } from '../api/net
 import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import type { FileRoot } from '../api/files';
+import { CloudImportsPanel } from './CloudImports';
 import { ConnectServerPanel, FileSharingPanel } from './NetworkDrives';
 import { Toggle } from './Personalize';
 
@@ -41,16 +43,18 @@ export function NetworkSidebar({
   drives,
   sharing,
   currentRoot,
+  roots,
   onGo,
   onChanged,
 }: {
   drives: NetDrive[];
   sharing: Sharing | null;
   currentRoot?: string;
-  onGo: (root: string) => void;
+  roots: FileRoot[];
+  onGo: (root: string, path?: string) => void;
   onChanged: () => Promise<void>;
 }) {
-  const [dialog, setDialog] = useState<'connect' | 'sharing' | null>(null);
+  const [dialog, setDialog] = useState<'connect' | 'sharing' | 'cloud' | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
 
   const connect = async (d: NetDrive) => {
@@ -115,6 +119,9 @@ export function NetworkSidebar({
       <button type="button" className="fn-link" onClick={() => setDialog('sharing')}>
         <Icon name="users" size={15} /> File Sharing…{sharingOn && <span className="fn-pill">On</span>}
       </button>
+      <button type="button" className="fn-link" onClick={() => setDialog('cloud')}>
+        <Icon name="download" size={15} /> Cloud Imports…
+      </button>
 
       {dialog === 'connect' && (
         <FilesModal title="Connect to Server" onClose={() => setDialog(null)}>
@@ -123,6 +130,17 @@ export function NetworkSidebar({
             onConnected={() => {
               setDialog(null);
               void onChanged();
+            }}
+          />
+        </FilesModal>
+      )}
+      {dialog === 'cloud' && (
+        <FilesModal title="Cloud Imports" onClose={() => setDialog(null)}>
+          <CloudImportsPanel
+            roots={roots}
+            onOpen={(root, path) => {
+              setDialog(null);
+              onGo(root, path);
             }}
           />
         </FilesModal>
