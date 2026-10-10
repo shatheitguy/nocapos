@@ -315,12 +315,15 @@ button.widget:active { transform: none; }
 .desktop-app span:last-child { text-align: center; line-height: 1.2; }
 
 .app-icon {
+  position: relative;
   display: inline-grid;
   place-items: center;
   color: #fff;
   flex: none;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 -2px 4px rgba(0, 0, 0, 0.12);
 }
+.app-icon svg { stroke-width: 2.1; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.28)); }
 
 /* ============ windows ============ */
 /* Own stacking context so ever-growing window z-indexes stay below the shelf. */

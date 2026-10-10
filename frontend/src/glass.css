@@ -179,7 +179,6 @@ body[data-wallpaper='signal'] { background: #121317 url('/wallpapers/signal.jpg'
 :root[data-ui='glass'] .dock-item.active .dot { background: #fff; width: 4px; margin-left: -2px; }
 :root[data-ui='glass'] .tray:hover:not(:disabled), :root[data-ui='glass'] .tray.open,
 :root[data-ui='glass'] .shelf-launcher:hover:not(:disabled) { background: rgba(40, 41, 47, 0.6); }
-:root[data-ui='glass'] .app-icon { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
 
 /* ---------- widgets ---------- */
 :root[data-ui='glass'] .widget {
@@ -237,3 +236,37 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-ui='glass'] .sl-row.on { background: rgba(255, 255, 255, 0.12); color: #fff; }
 :root[data-ui='glass'] .sl-row.on .sl-row-text span { color: rgba(255, 255, 255, 0.6); }
 :root[data-ui='glass'] .sl-body, :root[data-ui='glass'] .sl-preview { border-color: rgba(255, 255, 255, 0.07); }
+
+/* ---------- installed apps: home grid, Launchpad section, wiggle mode ---------- */
+.home-apps { pointer-events: auto; margin-top: 4vh; position: relative; display: flex; flex-direction: column; align-items: center; text-shadow: none; }
+.home-done { position: absolute; top: -40px; right: 0; padding: 5px 16px; background: rgba(255, 255, 255, 0.92); color: #111; }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fill, 96px); justify-content: center; gap: 18px 10px; width: min(640px, max(320px, 100vw - 780px)); }
+.store-grid.in-launcher { width: 100%; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.store-tile { position: relative; display: flex; justify-content: center; }
+.store-tile-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; padding: 6px 2px; border-radius: 16px;
+  color: #fff; font-size: 12.5px; font-weight: 500; text-align: center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+.store-grid.in-launcher .store-tile-btn { width: 100%; padding: 12px 6px; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
+.store-tile-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.store-tile-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.store-tile-icon { position: relative; display: inline-grid; transition: transform 0.15s; }
+.store-tile-btn:active .store-tile-icon { transform: scale(0.94); }
+.store-tile-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
+.store-tile-dot { position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 50%; background: #8e8e93; border: 2px solid rgba(0, 0, 0, 0.35); }
+.store-tile.busy .app-icon { filter: saturate(0.4) brightness(0.75); }
+.store-tile-progress { position: absolute; inset: 0; display: grid; place-items: center; }
+.store-tile-progress > span { width: 46%; aspect-ratio: 1; border-radius: 50%;
+  background: conic-gradient(#fff var(--p), rgba(255, 255, 255, 0.25) 0); -webkit-mask: radial-gradient(circle, transparent 52%, #000 54%); mask: radial-gradient(circle, transparent 52%, #000 54%); }
+.store-tile-x { position: absolute; top: -2px; left: calc(50% - 44px); z-index: 2; width: 22px; height: 22px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(60, 60, 67, 0.92); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); animation: x-pop 0.18s ease-out; }
+.store-grid.in-launcher .store-tile-x { left: calc(50% - 38px); top: 4px; }
+.store-tile-x:hover:not(:disabled) { background: #ff3b30; filter: none; }
+@keyframes x-pop { from { transform: scale(0.4); opacity: 0; } }
+.store-grid.jiggle .store-tile-icon { animation: wiggle 0.28s ease-in-out var(--d, 0s) infinite alternate; }
+.store-grid.jiggle .store-tile-btn:hover { background: transparent; }
+@keyframes wiggle { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+:root[data-reduce-motion] .store-grid.jiggle .store-tile-icon { animation: none; }
+.launcher-section { display: flex; flex-direction: column; gap: 4px; }
+.launcher-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 6px; }
+.launcher-section-head .section-label { margin: 0; color: rgba(255, 255, 255, 0.75); }
+.launcher-section-head .muted { color: rgba(255, 255, 255, 0.6); }
+.launcher-builtin { margin: 4px 6px -12px; color: rgba(255, 255, 255, 0.75); }
