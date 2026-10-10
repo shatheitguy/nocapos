@@ -241,11 +241,9 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 .home-apps { pointer-events: auto; margin-top: 4vh; position: relative; display: flex; flex-direction: column; align-items: center; text-shadow: none; }
 .home-done { position: absolute; top: -40px; right: 0; padding: 5px 16px; background: rgba(255, 255, 255, 0.92); color: #111; }
 .store-grid { display: grid; grid-template-columns: repeat(auto-fill, 96px); justify-content: center; gap: 18px 10px; width: min(640px, max(320px, 100vw - 780px)); }
-.store-grid.in-launcher { width: 100%; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 .store-tile { position: relative; display: flex; justify-content: center; }
 .store-tile-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; padding: 6px 2px; border-radius: 16px;
   color: #fff; font-size: 12.5px; font-weight: 500; text-align: center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
-.store-grid.in-launcher .store-tile-btn { width: 100%; padding: 12px 6px; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
 .store-tile-btn:hover { background: rgba(255, 255, 255, 0.08); }
 .store-tile-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .store-tile-icon { position: relative; display: inline-grid; transition: transform 0.15s; }
@@ -258,15 +256,12 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
   background: conic-gradient(#fff var(--p), rgba(255, 255, 255, 0.25) 0); -webkit-mask: radial-gradient(circle, transparent 52%, #000 54%); mask: radial-gradient(circle, transparent 52%, #000 54%); }
 .store-tile-x { position: absolute; top: -2px; left: calc(50% - 44px); z-index: 2; width: 22px; height: 22px; padding: 0; border-radius: 50%; display: grid; place-items: center;
   background: rgba(60, 60, 67, 0.92); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); animation: x-pop 0.18s ease-out; }
-.store-grid.in-launcher .store-tile-x { left: calc(50% - 38px); top: 4px; }
+.launcher-grid .store-tile { display: block; }
+.launcher-grid .store-tile > .launcher-app { width: 100%; }
+.launcher-grid .store-tile-x { left: calc(50% - 38px); top: 6px; }
 .store-tile-x:hover:not(:disabled) { background: #ff3b30; filter: none; }
 @keyframes x-pop { from { transform: scale(0.4); opacity: 0; } }
-.store-grid.jiggle .store-tile-icon { animation: wiggle 0.28s ease-in-out var(--d, 0s) infinite alternate; }
-.store-grid.jiggle .store-tile-btn:hover { background: transparent; }
+.store-tile.jiggle .store-tile-icon { animation: wiggle 0.28s ease-in-out var(--d, 0s) infinite alternate; }
+.store-tile.jiggle .store-tile-btn:hover, .store-tile.jiggle .launcher-app:hover:not(:disabled) { background: transparent; }
 @keyframes wiggle { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
-:root[data-reduce-motion] .store-grid.jiggle .store-tile-icon { animation: none; }
-.launcher-section { display: flex; flex-direction: column; gap: 4px; }
-.launcher-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 6px; }
-.launcher-section-head .section-label { margin: 0; color: rgba(255, 255, 255, 0.75); }
-.launcher-section-head .muted { color: rgba(255, 255, 255, 0.6); }
-.launcher-builtin { margin: 4px 6px -12px; color: rgba(255, 255, 255, 0.75); }
+:root[data-reduce-motion] .store-tile.jiggle .store-tile-icon { animation: none; }
