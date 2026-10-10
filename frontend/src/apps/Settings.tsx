@@ -8,15 +8,15 @@ import { fmtBytes, fmtUptime } from '../lib/format';
 import { useClock } from '../lib/hooks';
 import { powerHost } from '../lib/hostActions';
 import { fmtTime, useTimePrefs } from '../lib/time';
-import { LANGUAGES, NOTIFY_STYLES, usePrefs } from '../state/prefs';
-import { isApple, notifyApi, resolveStyle, type NotifySettings } from '../state/notifications';
+import { LANGUAGES, usePrefs } from '../state/prefs';
+import { notifyApi, notifyLook, type NotifySettings } from '../state/notifications';
 import { BannerPreview } from '../shell/Notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import type { Snapshot } from '../api/types';
 import { openApp } from './meta';
-import { Appearance, Choice, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
+import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
 import { FocusSettings, PowerSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
@@ -517,7 +517,7 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => {
     if (isAdmin) void notifyApi.settings().then((r) => r.ok && setTopics(r.data));
   }, [isAdmin]);
-  const look = resolveStyle(prefs.notifyStyle);
+  const look = notifyLook();
   const setTopic = (key: keyof NotifySettings, on: boolean) => {
     if (!topics) return;
     const next = { ...topics, [key]: on };
@@ -540,10 +540,10 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="stack settings-page">
       {isAdmin && (
-        <Group title="Banner style" hint="New notifications pop up as banners, then wait in the Notification Center (the bell).">
-          <Row label="Look" hint={`Automatic uses macOS banners on Macs, iPhones and iPads and Windows toasts elsewhere. This device: ${isApple() ? 'macOS' : 'Windows'} style.`}>
-            <Choice value={prefs.notifyStyle} options={NOTIFY_STYLES} onChange={(notifyStyle) => prefs.set({ notifyStyle })} />
-          </Row>
+        <Group
+          title="Banners"
+          hint={`New notifications pop up as banners, then wait in the Notification Center (the bell). They look like ${look === 'mac' ? 'macOS' : 'Windows'} notifications on this device — Macs, iPhones and iPads get the macOS look, everything else the Windows look.`}
+        >
           <Row stacked>
             <div className="nset-preview">
               <BannerPreview look={look} />
