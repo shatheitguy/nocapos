@@ -3,7 +3,7 @@ import { api } from '../api/client';
 import { subscribe } from '../api/socket';
 import { openApp } from '../apps/meta';
 import { playCue } from '../lib/uiSound';
-import { usePrefs } from './prefs';
+import { hasMenuBar, isCompact, usePrefs, type PrefValues } from './prefs';
 
 // System notifications (admins): NoCapOS and app updates, app crashes, storage
 // health and failed backups. New ones arrive on the `notifications` topic and
@@ -103,8 +103,15 @@ export const useNotifications = create<Store>((set, get) => ({
   _reset: () => set({ items: [], unread: 0, banners: [], centerOpen: false }),
 }));
 
-/** The notification look for this device: macOS on Macs, iPhones and iPads, Windows elsewhere. */
-export const notifyLook = (): 'mac' | 'windows' => (isApple() ? 'mac' : 'windows');
+/**
+ * The notification look follows the desktop: with the menu bar (Mac-style
+ * desktop) they look like macOS, with the taskbar like Windows. On a phone,
+ * where there's no menu bar, iPhones get the macOS look.
+ */
+export function notifyLook(p: Pick<PrefValues, 'titleButtons'>): 'mac' | 'windows' {
+  if (hasMenuBar(p)) return 'mac';
+  return isCompact() && isApple() ? 'mac' : 'windows';
+}
 
 export function isApple(): boolean {
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
@@ -112,7 +119,7 @@ export function isApple(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform) || /Macintosh|iPhone|iPad|iPod/.test(nav.userAgent);
 }
 
-export const useNotifyStyle = notifyLook;
+export const useNotifyStyle = () => notifyLook({ titleButtons: usePrefs((s) => s.titleButtons) });
 
 function arrived(n: Notice) {
   const s = useNotifications.getState();
