@@ -165,9 +165,22 @@ function Banners({ look }: { look: Look }) {
 
 // ---------------- Notification Center ----------------
 
-function Card({ n, look }: { n: Notice; look: Look }) {
+type CardProps = {
+  n: Notice;
+  look: Look;
+  /** Instead of opening the notification (a collapsed stack expands). */
+  onPress?: () => void;
+  /** Instead of clearing just this one (a collapsed stack clears them all). */
+  onClear?: () => void;
+  /** Option (Alt) is held: the ✕ becomes "Clear All". */
+  alt?: boolean;
+};
+
+function Card({ n, look, onPress, onClear, alt }: CardProps) {
   const src = useSource(n);
   const remove = useNotifications((s) => s.remove);
+  const clearAll = useNotifications((s) => s.clear);
+  const press = onPress ?? (() => openNotice(n));
   const tp = useTimePrefs();
   const now = useClock(30_000);
   const when =
@@ -181,22 +194,24 @@ function Card({ n, look }: { n: Notice; look: Look }) {
       className={`nc-card ${look} lvl-${n.level}`}
       role="button"
       tabIndex={0}
-      onClick={() => openNotice(n)}
-      onKeyDown={(e) => e.key === 'Enter' && openNotice(n)}
+      onClick={press}
+      onKeyDown={(e) => e.key === 'Enter' && press()}
     >
       <button
         type="button"
-        className="nb-x"
-        aria-label="Clear"
-        title="Clear"
+        className={`nb-x ${alt ? 'all' : ''}`}
+        aria-label={alt ? 'Clear all' : 'Clear'}
+        title={alt ? 'Clear all' : 'Clear'}
         onClick={(e) => {
           e.stopPropagation();
-          remove(n.id);
+          if (alt) clearAll();
+          else if (onClear) onClear();
+          else remove(n.id);
         }}
       >
-        <Icon name="close" size={look === 'mac' ? 9 : 12} />
+        {alt ? 'Clear All' : <Icon name="close" size={look === 'mac' ? 9 : 12} />}
       </button>
-      {look === 'mac' && <AppIcon app={src.app} size={34} />}
+      {look === 'mac' && <AppIcon app={src.app} size={36} />}
       <div className="nb-text">
         <div className="nb-top">
           <b className="nb-title">{n.title}</b>
@@ -217,38 +232,70 @@ function Empty() {
   );
 }
 
-function MacCenter({ items }: { items: Notice[] }) {
-  const clear = useNotifications((s) => s.clear);
-  const now = new Date();
-  const today = items.filter((n) => isToday(n.created_at, now));
-  const earlier = items.filter((n) => !isToday(n.created_at, now));
+/** One app's notifications on a Mac: a stack that opens with a click. */
+function MacStack({ list, alt }: { list: Notice[]; alt: boolean }) {
+  const src = useSource(list[0]);
+  const removeMany = useNotifications((s) => s.removeMany);
+  const clearAll = useNotifications((s) => s.clear);
+  const [open, setOpen] = useState(false);
+  const clearStack = () => removeMany(list.map((n) => n.id));
+
+  if (list.length === 1) return <Card n={list[0]} look="mac" alt={alt} />;
+  if (!open) {
+    return (
+      <div className={`nc-stack n${Math.min(list.length, 3)}`} title={`${list.length} notifications from ${src.name}`}>
+        <Card n={list[0]} look="mac" alt={alt} onPress={() => setOpen(true)} onClear={clearStack} />
+        <div className="nc-peek p1" />
+        {list.length > 2 && <div className="nc-peek p2" />}
+      </div>
+    );
+  }
   return (
-    <>
-      <div className="nc-head">
-        <h2>Notifications</h2>
-        {items.length > 0 && (
-          <button type="button" className="nc-clear" onClick={clear}>
-            Clear all
-          </button>
-        )}
+    <section className="nc-group">
+      <div className="nc-ghead">
+        <b>{src.name}</b>
+        <button type="button" className="nc-pill" onClick={() => setOpen(false)}>
+          Show Less
+        </button>
+        <button
+          type="button"
+          className={`nc-round ${alt ? 'all' : ''}`}
+          aria-label={alt ? 'Clear all' : `Clear ${src.name} notifications`}
+          title={alt ? 'Clear all' : 'Clear'}
+          onClick={alt ? clearAll : clearStack}
+        >
+          {alt ? 'Clear All' : <Icon name="close" size={10} />}
+        </button>
       </div>
-      <div className="nc-scroll">
-        {!items.length && <Empty />}
-        {[
-          ['Today', today],
-          ['Earlier', earlier],
-        ].map(([label, list]) =>
-          (list as Notice[]).length ? (
-            <section key={label as string} className="nc-group">
-              <div className="nc-group-title">{label as string}</div>
-              {(list as Notice[]).map((n) => (
-                <Card key={n.id} n={n} look="mac" />
-              ))}
-            </section>
-          ) : null,
-        )}
-      </div>
-    </>
+      {list.map((n) => (
+        <Card key={n.id} n={n} look="mac" alt={alt} />
+      ))}
+    </section>
+  );
+}
+
+function MacCenter({ items }: { items: Notice[] }) {
+  // Holding Option (Alt) turns every ✕ into "Clear All", as on a Mac.
+  const [alt, setAlt] = useState(false);
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => setAlt(e.altKey);
+    const off = () => setAlt(false);
+    window.addEventListener('keydown', on);
+    window.addEventListener('keyup', on);
+    window.addEventListener('blur', off);
+    return () => {
+      window.removeEventListener('keydown', on);
+      window.removeEventListener('keyup', on);
+      window.removeEventListener('blur', off);
+    };
+  }, []);
+  return (
+    <div className="nc-scroll">
+      {!items.length && <div className="nc-none">No Notifications</div>}
+      {byApp(items).map(([k, list]) => (
+        <MacStack key={k} list={list} alt={alt} />
+      ))}
+    </div>
   );
 }
 
