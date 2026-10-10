@@ -111,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/info", s.authed(s.systemInfo))
 	mux.Handle("GET /api/v1/system/metrics", s.authed(s.systemMetrics))
 	mux.Handle("GET /api/v1/system/backup", s.admin(s.systemBackup))
+	mux.Handle("GET /api/v1/system/logs", s.admin(s.systemLogs))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))
@@ -202,6 +203,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/transfer", s.admin(s.touchIndex(s.filesTransfer)))
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
+	mux.Handle("GET /api/v1/files/recent", s.admin(s.filesRecent))
+	mux.Handle("GET /api/v1/files/favorites", s.admin(s.filesFavorites))
+	mux.Handle("PUT /api/v1/files/favorites", s.admin(s.filesSetFavorites))
+	mux.Handle("GET /api/v1/files/external", s.admin(s.filesExternal))
+	mux.Handle("POST /api/v1/files/compress", s.admin(s.filesCompress))
+	mux.Handle("POST /api/v1/files/extract", s.admin(s.filesExtract))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
 
 	mux.Handle("GET /api/v1/cloud", s.admin(s.cloudOverview))
@@ -261,6 +268,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/v1/photos/albums/{id}", s.admin(s.photosAlbumRename))
 	mux.Handle("DELETE /api/v1/photos/albums/{id}", s.admin(s.photosAlbumDelete))
 	mux.Handle("POST /api/v1/photos/albums/{id}/items", s.admin(s.photosAlbumItems))
+	mux.Handle("PUT /api/v1/photos/albums/{id}/cover", s.admin(s.photosAlbumCover))
+	mux.Handle("GET /api/v1/photos/info", s.admin(s.photosInfo))
+	mux.Handle("GET /api/v1/photos/trash", s.admin(s.photosTrash))
+	mux.Handle("POST /api/v1/photos/trash/restore", s.admin(s.touchIndex(s.photosRestore)))
+	mux.Handle("POST /api/v1/photos/trash/purge", s.admin(s.touchIndex(s.photosPurge)))
 
 	// AI Assistant. Providers hold API keys, so configuring them is admin-only;
 	// chatting and personal memory are per-user.

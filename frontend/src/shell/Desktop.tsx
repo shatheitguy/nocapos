@@ -16,6 +16,7 @@ import { ConfirmHost } from '../components/ConfirmHost';
 import { hasMenuBar } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
+import { HomeHeader } from './HomeHeader';
 import { Launcher } from './Launcher';
 import { Spotlight } from './Spotlight';
 import { useSpotlight } from '../state/spotlight';
@@ -42,6 +43,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const [saverOn, setSaverOn] = useState(false);
   const [deskMenu, setDeskMenu] = useState<{ x: number; y: number } | null>(null);
   const isAdmin = user.role === 'admin';
+  const glass = usePrefs((s) => s.uiTheme === 'glass');
 
   // Session lifetime: restore layouts, open the socket, stream metrics.
   useEffect(() => {
@@ -153,6 +155,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
         {widgets && compact && <WidgetLayer username={user.username} compact />}
       </div>
 
+      {glass && !compact && !launcher && <HomeHeader username={user.username} />}
       {!compact && <DesktopIcons isAdmin={isAdmin} />}
       {widgets && !compact && <WidgetLayer username={user.username} compact={false} />}
 

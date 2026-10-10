@@ -61,6 +61,7 @@ type Item struct {
 	Width    int       `json:"width,omitempty"`
 	Height   int       `json:"height,omitempty"`
 	Video    bool      `json:"video,omitempty"`
+	Duration float64   `json:"duration,omitempty"` // seconds, for videos
 	Favorite bool      `json:"favorite,omitempty"`
 }
 
@@ -119,6 +120,7 @@ func (l *Library) List(ctx context.Context, userID string) (items []Item, scanni
 		it := Item{Root: h.Root, Path: h.Path, Name: h.Name, Size: h.Size, ModTime: h.ModTime, Taken: h.ModTime, Video: videoExt[strings.ToLower(path.Ext(h.Name))], Favorite: favs[k]}
 		if m, ok := metas[k]; ok && m.Size == h.Size && m.MTime == h.ModTime.Unix() {
 			it.Taken, it.Width, it.Height = time.Unix(m.Taken, 0).UTC(), m.Width, m.Height
+			it.Duration = float64(m.DurationMS) / 1000
 		} else {
 			todo = append(todo, h)
 		}
@@ -183,8 +185,11 @@ func (l *Library) readMeta(h files.Hit, m *store.PhotoMeta) {
 	ext := strings.ToLower(path.Ext(h.Name))
 	switch {
 	case videoExt[ext]:
-		if t, err := readMP4Created(f); err == nil {
-			m.Taken = t.Unix()
+		if t, d, err := readMP4Header(f); err == nil {
+			if !t.IsZero() {
+				m.Taken = t.Unix()
+			}
+			m.DurationMS = d.Milliseconds()
 		}
 		return
 	case ext == ".jpg" || ext == ".jpeg":

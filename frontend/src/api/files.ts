@@ -33,7 +33,7 @@ export type Conflict = 'rename' | 'replace' | 'skip';
 
 export interface TransferJob {
   id: string;
-  kind: 'copy' | 'move';
+  kind: 'copy' | 'move' | 'compress' | 'extract';
   root: string;
   sources: string[];
   dest: string;
@@ -64,7 +64,45 @@ export const fileApi = {
     api<{ content: string; size: number; mod_time: string }>(`/api/v1/files/text?${q({ root, path })}`),
   writeText: (root: string, path: string, content: string, mod_time?: string) =>
     api<{ size: number; mod_time: string }>('/api/v1/files/text', { method: 'PUT', body: { root, path, content, mod_time } }),
+  search: (query: string, limit = 100) =>
+    api<{ results: FileHit[]; indexed: number; building: boolean; capped: boolean }>(`/api/v1/files/search?${q({ q: query, limit: String(limit) })}`),
+  recent: (limit = 100) => api<{ results: FileHit[]; indexed: number; building: boolean }>(`/api/v1/files/recent?${q({ limit: String(limit) })}`),
+  favorites: () => api<{ favorites: Favorite[] }>('/api/v1/files/favorites'),
+  setFavorites: (favorites: Favorite[]) => api<{ favorites: Favorite[] }>('/api/v1/files/favorites', { method: 'PUT', body: { favorites } }),
+  external: () => api<ExternalDrive[]>('/api/v1/files/external'),
+  compress: (root: string, paths: string[], dest: string, name: string) =>
+    api<TransferJob>('/api/v1/files/compress', { method: 'POST', body: { root, paths, dest, name } }),
+  extract: (root: string, path: string, dest: string) => api<TransferJob>('/api/v1/files/extract', { method: 'POST', body: { root, paths: [path], dest } }),
 };
+
+/** A file or folder found by search or listed in Recents. */
+export interface FileHit {
+  root: string;
+  path: string;
+  name: string;
+  dir: boolean;
+  size: number;
+  mod_time: string;
+}
+
+/** A folder pinned in the Files sidebar. */
+export interface Favorite {
+  root: string;
+  path: string;
+}
+
+/** A USB or other disk the OS mounted; it opens through `root`. */
+export interface ExternalDrive {
+  name: string;
+  root: string;
+  path: string;
+  device: string;
+  total: number;
+  free: number;
+}
+
+/** Archives Files can extract. */
+export const isArchive = (name: string) => /\.(zip|tar|tgz|tar\.gz)$/i.test(name);
 
 // ---------- scoped links for <img>/<video>/downloads ----------
 

@@ -29,6 +29,10 @@ export interface StoreApp {
   category: string;
   developer: string;
   website: string;
+  /** Source code repository. */
+  source?: string;
+  /** Image URLs for the app page gallery (none = generated banners). */
+  screenshots?: string[];
   icon: IconName;
   tile: [string, string];
   featured?: boolean;

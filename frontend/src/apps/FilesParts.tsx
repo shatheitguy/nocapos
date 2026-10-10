@@ -1,6 +1,7 @@
 // Phase 5 pieces for Files: RWX permission badges and the preview panel.
 import { useEffect, useState } from 'react';
-import { fileApi, fileKind, fileTicket, rawUrl, type FileEntry } from '../api/files';
+import { fileApi, fileKind, fileTicket, rawUrl, type FileEntry, type FileKind } from '../api/files';
+import { FilesModal } from './FilesNetwork';
 import { Icon } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
 import { CodeView, langName } from '../lib/highlight';
@@ -125,5 +126,135 @@ export function FilePreview({ root, path, entry, unix, onClose }: { root: string
         </>
       )}
     </aside>
+  );
+}
+
+// ---------- icons and labels (umbrelOS-style grid) ----------
+
+const KIND_NOUN: Record<FileKind, string> = {
+  folder: 'Folder',
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  pdf: 'document',
+  text: 'document',
+  code: 'source',
+  archive: 'archive',
+  file: 'file',
+};
+
+export const extOf = (name: string) => (name.includes('.') && !name.startsWith('.') ? name.slice(name.lastIndexOf('.') + 1) : '');
+
+/** "PNG image", "PDF document", "Folder", … */
+export function kindLabel(name: string, dir = false): string {
+  if (dir) return 'Folder';
+  const kind = fileKind(name);
+  const ext = extOf(name).toUpperCase();
+  if (!ext) return kind === 'code' ? 'Config file' : 'File';
+  return `${ext} ${KIND_NOUN[kind]}`;
+}
+
+/** A big folder (tinted with the accent colour) or a coloured file-type page. */
+export function FileGlyph({ name, dir = false, size = 64, shared = false }: { name: string; dir?: boolean; size?: number; shared?: boolean }) {
+  if (dir) {
+    return (
+      <span className="fglyph folder" style={{ width: size, height: size }}>
+        <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+          <path className="fg-back" d="M6 15a5 5 0 0 1 5-5h13.5a5 5 0 0 1 3.6 1.5l3.4 3.5H53a5 5 0 0 1 5 5v4H6z" />
+          <path className="fg-front" d="M6 21a4 4 0 0 1 4-4h44a4 4 0 0 1 4 4v28a5 5 0 0 1-5 5H11a5 5 0 0 1-5-5z" />
+          <path className="fg-shine" d="M10 21.5h44" />
+        </svg>
+        {shared && (
+          <span className="fg-badge" title="Shared on the network">
+            <Icon name="network" size={Math.max(10, size * 0.2)} />
+          </span>
+        )}
+      </span>
+    );
+  }
+  const kind = fileKind(name);
+  const ext = extOf(name).toUpperCase().slice(0, 4);
+  return (
+    <span className={`fglyph page fk-${kind}`} style={{ width: size, height: size }}>
+      <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+        <path className="fg-page" d="M15 5h24l13 13v37a4 4 0 0 1-4 4H15a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4z" />
+        <path className="fg-fold" d="M39 5v9a4 4 0 0 0 4 4h9z" />
+        {ext && size >= 28 && (
+          <text x="31.5" y="47" textAnchor="middle" className="fg-ext">
+            {ext}
+          </text>
+        )}
+      </svg>
+    </span>
+  );
+}
+
+// ---------- Get info ----------
+
+export function InfoDialog({ root, rootName, path, entry, unix, shared, onClose }: { root: string; rootName: string; path: string; entry: FileEntry; unix: boolean; shared: boolean; onClose: () => void }) {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!entry.dir) return;
+    let live = true;
+    void fileApi.list(root, path).then((r) => live && r.ok && setCount(r.data.entries.length));
+    return () => {
+      live = false;
+    };
+  }, [root, path, entry.dir]);
+  const where = path.slice(0, path.lastIndexOf('/')) || '/';
+  return (
+    <FilesModal title="Info" onClose={onClose}>
+      <div className="finfo">
+        <div className="finfo-head">
+          <FileGlyph name={entry.name} dir={entry.dir} size={72} shared={shared} />
+          <div className="finfo-title">
+            <b>{entry.name}</b>
+            <span className="muted">{entry.dir ? (count === null ? 'Folder' : `Folder · ${count} item${count === 1 ? '' : 's'}`) : `${kindLabel(entry.name)} · ${fmtBytes(entry.size)}`}</span>
+          </div>
+        </div>
+        <dl className="fp-meta finfo-meta">
+          <dt>Kind</dt>
+          <dd>{kindLabel(entry.name, entry.dir)}</dd>
+          {!entry.dir && (
+            <>
+              <dt>Size</dt>
+              <dd>
+                {fmtBytes(entry.size)} <span className="muted">({entry.size.toLocaleString()} bytes)</span>
+              </dd>
+            </>
+          )}
+          <dt>Where</dt>
+          <dd className="ellipsis" title={`${rootName}${where === '/' ? '' : where}`}>
+            {rootName}
+            {where === '/' ? '' : where}
+          </dd>
+          <dt>Modified</dt>
+          <dd>{new Date(entry.mod_time).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}</dd>
+          {entry.mode && (
+            <>
+              <dt>Access</dt>
+              <dd>
+                <PermBadges entry={entry} unix={unix} />
+              </dd>
+            </>
+          )}
+          {entry.owner && (
+            <>
+              <dt>Owner</dt>
+              <dd>
+                {entry.owner}
+                <span className="muted"> : {entry.group}</span>
+              </dd>
+            </>
+          )}
+          {shared && (
+            <>
+              <dt>Sharing</dt>
+              <dd>Shared on the network</dd>
+            </>
+          )}
+        </dl>
+      </div>
+    </FilesModal>
   );
 }

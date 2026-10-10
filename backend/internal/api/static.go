@@ -15,6 +15,12 @@ func staticHandler(assets fs.FS) http.Handler {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if name != "" && name != "index.html" {
 			if _, err := fs.Stat(assets, name); err == nil {
+				switch {
+				case strings.HasPrefix(name, "assets/"): // content-hashed by the build
+					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case strings.HasPrefix(name, "wallpapers/"):
+					w.Header().Set("Cache-Control", "public, max-age=604800")
+				}
 				files.ServeHTTP(w, r)
 				return
 			}

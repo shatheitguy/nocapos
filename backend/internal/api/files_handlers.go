@@ -9,13 +9,16 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/store"
 )
 
 const (
@@ -99,7 +102,8 @@ func (s *Server) fileError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, files.ErrNotText):
 		writeError(w, http.StatusUnsupportedMediaType, "not_text", err.Error())
 	case errors.Is(err, files.ErrBadPath), errors.Is(err, files.ErrBadName), errors.Is(err, files.ErrIsRoot),
-		errors.Is(err, files.ErrNotDir), errors.Is(err, files.ErrIsDir), errors.Is(err, files.ErrIntoSelf):
+		errors.Is(err, files.ErrNotDir), errors.Is(err, files.ErrIsDir), errors.Is(err, files.ErrIntoSelf),
+		errors.Is(err, files.ErrNotArchive), errors.Is(err, files.ErrUnsafeArchive):
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 	case strings.Contains(err.Error(), "escapes from parent"):
 		// os.Root refused a path (e.g. a symlink pointing outside the root).
@@ -548,4 +552,220 @@ func (s *Server) filesRaw(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Set("Content-Security-Policy", csp)
 	http.ServeContent(w, r, name, st.ModTime(), f)
+}
+
+// ---------- recents, favorites, external storage ----------
+
+// filesRecent lists recently changed files across the locations (from the
+// search index, so it costs no disk walk).
+func (s *Server) filesRecent(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	count, building, _ := s.FileIndex.Stats()
+	writeJSON(w, http.StatusOK, map[string]any{"results": s.FileIndex.Recent(limit), "indexed": count, "building": building})
+}
+
+const maxFavorites = 50
+
+// defaultFavoriteNames are pinned for a user who never changed favorites,
+// when those folders exist at the top of the first location.
+var defaultFavoriteNames = []string{"Documents", "Downloads", "Photos", "Videos", "Music"}
+
+func (s *Server) defaultFavorites() []store.FileFavorite {
+	out := []store.FileFavorite{}
+	for _, rt := range s.Files.Roots() {
+		if rt.ID == "system" || strings.HasPrefix(rt.ID, "net:") {
+			continue
+		}
+		entries, err := s.Files.List(rt.ID, ".")
+		if err != nil {
+			return out
+		}
+		for _, want := range defaultFavoriteNames {
+			for _, e := range entries {
+				if e.Dir && strings.EqualFold(e.Name, want) {
+					out = append(out, store.FileFavorite{Root: rt.ID, Path: "/" + e.Name})
+					break
+				}
+			}
+		}
+		return out
+	}
+	return out
+}
+
+func (s *Server) filesFavorites(w http.ResponseWriter, r *http.Request) {
+	favs, set, err := s.Store.FileFavorites(r.Context(), userFrom(r.Context()).ID)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	if !set {
+		favs = s.defaultFavorites()
+	}
+	if favs == nil {
+		favs = []store.FileFavorite{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"favorites": favs})
+}
+
+func (s *Server) filesSetFavorites(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Favorites []store.FileFavorite `json:"favorites"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Favorites) > maxFavorites {
+		writeError(w, http.StatusBadRequest, "bad_request", "too many favorites")
+		return
+	}
+	out := []store.FileFavorite{}
+	seen := map[string]bool{}
+	for _, f := range req.Favorites {
+		rel, err := files.Clean(f.Path)
+		if err != nil || f.Root == "" || len(f.Root) > 64 {
+			writeError(w, http.StatusBadRequest, "bad_request", "invalid favorite")
+			return
+		}
+		key := f.Root + ":" + rel
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, store.FileFavorite{Root: f.Root, Path: display(rel)})
+	}
+	if err := s.Store.SetFileFavorites(r.Context(), userFrom(r.Context()).ID, out); err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"favorites": out})
+}
+
+type externalView struct {
+	Name   string `json:"name"`
+	Root   string `json:"root"`
+	Path   string `json:"path"`
+	Device string `json:"device"`
+	Total  uint64 `json:"total"`
+	Free   uint64 `json:"free"`
+}
+
+// filesExternal lists USB and other disks the OS has mounted. They open
+// through the whole-disk System location, so they only show when it exists.
+func (s *Server) filesExternal(w http.ResponseWriter, r *http.Request) {
+	out := []externalView{}
+	if _, err := s.Files.Root("system"); err != nil {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	skip := os.Getenv("ALFA_MOUNT_DIR")
+	if skip == "" {
+		skip = "/mnt/nocapos"
+	}
+	for _, m := range files.ExternalMounts(skip) {
+		v := externalView{Name: m.Name, Root: "system", Path: m.Path, Device: m.Device}
+		if total, _, free, err := hardware.DiskUsage(m.Path); err == nil {
+			v.Total, v.Free = total, free
+		}
+		out = append(out, v)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// ---------- compress / extract ----------
+
+type archiveRequest struct {
+	Root  string   `json:"root"`
+	Paths []string `json:"paths"` // compress: the items; extract: the one archive
+	Dest  string   `json:"dest"`  // folder the result goes into
+	Name  string   `json:"name"`  // compress: zip file name
+}
+
+func (s *Server) filesCompress(w http.ResponseWriter, r *http.Request) {
+	var req archiveRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	rels, err := cleanAll(req.Paths)
+	if err != nil || len(rels) == 0 {
+		writeError(w, http.StatusBadRequest, "bad_request", "no paths given")
+		return
+	}
+	dest, err := files.Clean(req.Dest)
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "Archive.zip"
+	}
+	// Check the cheap things now so mistakes show right away, not as a failed job.
+	for _, rel := range rels {
+		if rel == "." {
+			s.fileError(w, r, files.ErrIsRoot)
+			return
+		}
+		if err := s.Files.CheckChange(req.Root, rel); err != nil {
+			s.fileError(w, r, err)
+			return
+		}
+	}
+	s.startArchiveJob(w, r, "compress", req.Root, rels, dest, func(ctx context.Context, p func(files.Progress)) (files.TransferResult, error) {
+		out, err := s.Files.Compress(ctx, req.Root, rels, dest, name, p)
+		return files.TransferResult{Paths: nonEmpty(out)}, err
+	})
+}
+
+func (s *Server) filesExtract(w http.ResponseWriter, r *http.Request) {
+	var req archiveRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	rels, err := cleanAll(req.Paths)
+	if err != nil || len(rels) != 1 {
+		writeError(w, http.StatusBadRequest, "bad_request", "choose one archive")
+		return
+	}
+	dest, err := files.Clean(req.Dest)
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	if files.ArchiveStem(path.Base(rels[0])) == "" {
+		s.fileError(w, r, files.ErrNotArchive)
+		return
+	}
+	s.startArchiveJob(w, r, "extract", req.Root, rels, dest, func(ctx context.Context, p func(files.Progress)) (files.TransferResult, error) {
+		out, err := s.Files.Extract(ctx, req.Root, rels[0], dest, p)
+		return files.TransferResult{Paths: nonEmpty(out)}, err
+	})
+}
+
+func nonEmpty(p string) []string {
+	if p == "" {
+		return []string{}
+	}
+	return []string{display(p)}
+}
+
+func (s *Server) startArchiveJob(w http.ResponseWriter, r *http.Request, kind, root string, rels []string, dest string,
+	work func(ctx context.Context, p func(files.Progress)) (files.TransferResult, error)) {
+	if _, err := s.Files.Root(root); err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	uid := userFrom(r.Context()).ID
+	ar := r.Clone(context.WithoutCancel(r.Context()))
+	what := root + ":" + strings.Join(rels, ", ") + " → " + display(dest)
+	j := s.FileJobs.Run(uid, kind, root, rels, dest, files.ConflictRename, display, work, func(j files.Job) {
+		s.audit(ar, uid, "files."+kind, what, j.Status == "done", j.Status+" "+j.Error)
+		if s.FileIndex != nil {
+			s.FileIndex.Touch()
+		}
+	})
+	writeJSON(w, http.StatusAccepted, j)
 }

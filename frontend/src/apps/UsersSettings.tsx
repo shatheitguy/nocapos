@@ -50,8 +50,8 @@ function PhotoPicker({ username }: { username: string }) {
   );
 }
 
-/** Your own account: shown to everyone at the top of Users & Roles. */
-function YourAccount({ onSecurity }: { onSecurity: () => void }) {
+/** Your own account: Settings → Account (and the top of Users for non-admins). */
+export function YourAccount({ onSecurity }: { onSecurity: () => void }) {
   const user = getUser();
   if (!user) return null;
   const closeOthers = () => {
@@ -69,9 +69,9 @@ function YourAccount({ onSecurity }: { onSecurity: () => void }) {
           </span>
         </span>
       </div>
-      <Row label="Password & two-factor" hint="Change your password or set up an authenticator app">
+      <Row label="Two-factor authentication" hint="Ask for a code from an authenticator app when you sign in">
         <button type="button" className="ghost small" onClick={onSecurity}>
-          <Icon name="shield" size={13} /> Open Security
+          <Icon name="shield" size={13} /> Open
         </button>
       </Row>
       <Row label="Close other windows" hint="Tidy up: closes every window except Settings">
@@ -88,7 +88,8 @@ function YourAccount({ onSecurity }: { onSecurity: () => void }) {
   );
 }
 
-export function UsersSettings({ isAdmin, onSecurity }: { isAdmin: boolean; onSecurity: () => void }) {
+/** Settings → Users. `withAccount` = false leaves out your own account card (it has its own page). */
+export function UsersSettings({ isAdmin, onSecurity, withAccount = true }: { isAdmin: boolean; onSecurity: () => void; withAccount?: boolean }) {
   if (!isAdmin) {
     return (
       <div className="stack settings-page">
@@ -97,10 +98,10 @@ export function UsersSettings({ isAdmin, onSecurity }: { isAdmin: boolean; onSec
       </div>
     );
   }
-  return <ManagePeople onSecurity={onSecurity} />;
+  return <ManagePeople onSecurity={onSecurity} withAccount={withAccount} />;
 }
 
-function ManagePeople({ onSecurity }: { onSecurity: () => void }) {
+function ManagePeople({ onSecurity, withAccount }: { onSecurity: () => void; withAccount: boolean }) {
   const [data, setData] = useState<PeopleList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resetFor, setResetFor] = useState<string | null>(null);
@@ -156,7 +157,7 @@ function ManagePeople({ onSecurity }: { onSecurity: () => void }) {
 
   return (
     <div className="stack settings-page">
-      <YourAccount onSecurity={onSecurity} />
+      {withAccount && <YourAccount onSecurity={onSecurity} />}
       <div className={`users-mode ${linux ? 'linux' : ''}`}>
         <Icon name={linux ? 'terminal' : 'users'} size={18} />
         <div>

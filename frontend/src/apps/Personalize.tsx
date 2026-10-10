@@ -100,27 +100,25 @@ export function Appearance() {
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
   return (
     <div className="stack settings-page">
-      <Section title="Theme">
+      <Section title="Theme" hint={current.blurb}>
         <Row>
           <div className="theme-gallery">
             {UI_THEMES.map((t) => (
               <button key={t.id} type="button" className={`theme-card ${prefs.uiTheme === t.id ? 'on' : ''}`} data-preview={t.id}
                 onClick={() => set({ uiTheme: t.id })} aria-pressed={prefs.uiTheme === t.id}>
                 <span className="theme-preview">
-                  <span className="theme-preview-window" style={{ borderColor: t.swatch[0], boxShadow: `0 0 12px ${t.swatch[0]}66` }}>
-                    <span style={{ background: t.swatch[0] }} />
-                    <span style={{ background: t.swatch[1] }} />
+                  <span className="theme-preview-window" style={t.id === 'cyberdeck' ? { borderColor: t.swatch[0], boxShadow: `0 0 12px ${t.swatch[0]}66` } : undefined}>
+                    <span style={{ background: t.id === 'glass' ? 'var(--accent)' : t.swatch[0] }} />
+                    <span style={{ background: t.id === 'glass' ? 'rgba(255,255,255,.75)' : t.swatch[1] }} />
                   </span>
                 </span>
-                <span className="theme-name">{t.name}</span>
+                <span className="theme-name">
+                  {t.name === 'NoCap' ? 'NoCap classic' : t.name}
+                  {prefs.uiTheme === t.id && <Icon name="check" size={14} />}
+                </span>
               </button>
             ))}
           </div>
-        </Row>
-        <Row label={current.name} hint={current.blurb}>
-          <span className="theme-dots">
-            {current.swatch.map((c, i) => <span key={i} style={{ background: c }} />)}
-          </span>
         </Row>
         {classic && (
           <Row label="Light or dark" hint="Auto follows your device's light or dark mode">
@@ -129,8 +127,15 @@ export function Appearance() {
             ]} />
           </Row>
         )}
-        <Row label="Accent color" hint={classic ? 'Highlights, selections, sliders and switches' : 'Recolors the neon glow, highlights and switches'}>
+        <Row label="Accent color" stacked
+          hint={prefs.uiTheme === 'glass' ? 'Follows the wallpaper unless you pick a color' : classic ? 'Highlights, selections, sliders and switches' : 'Recolors the neon glow, highlights and switches'}>
           <AccentPicker />
+        </Row>
+      </Section>
+
+      <Section title="Wallpaper" hint="Click one to use it. Settings → Wallpaper has every option, including dimming.">
+        <Row>
+          <WallpaperStrip strip />
         </Row>
       </Section>
 
@@ -140,7 +145,7 @@ export function Appearance() {
       </Section>
 
       <Section title="Effects">
-        {!classic && (
+        {prefs.uiTheme === 'cyberdeck' && (
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
         <Toggle label="Reduce transparency" hint="Solid panels instead of frosted glass — sharper and faster" checked={prefs.reduceTransparency}
@@ -158,13 +163,20 @@ export function Appearance() {
 
 // ---- Wallpaper ----
 
-export function Wallpaper() {
-  const prefs = usePrefs();
-  const set = prefs.set;
+/**
+ * Wallpaper thumbnails plus your own photo and an upload tile. Clicking one
+ * applies it right away. `strip` = one scrolling row (Settings overview);
+ * otherwise a grid; `only` limits it to photos or gradients.
+ */
+export function WallpaperStrip({ strip = false, only }: { strip?: boolean; only?: 'photos' | 'gradients' }) {
+  const wallpaper = usePrefs((s) => s.wallpaper);
+  const set = usePrefs((s) => s.set);
   const fileRef = useRef<HTMLInputElement>(null);
   const [custom, setCustom] = useState<string | null>(loadCustomWallpaper);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const list = WALLPAPERS.filter((w) => (only === 'photos' ? w.image : only === 'gradients' ? !w.image : true));
+  const mine = only !== 'gradients';
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
@@ -182,31 +194,49 @@ export function Wallpaper() {
   };
 
   return (
+    <>
+      <div className={strip ? 'wp-strip' : 'wallpapers'}>
+        {mine && custom && (
+          <button type="button" className={`wp-thumb ${wallpaper === 'custom' ? 'on' : ''}`} onClick={() => set({ wallpaper: 'custom' })} title="Your photo">
+            <span className="wp-preview" style={{ backgroundImage: `url("${custom}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+            {!strip && <span className="small">Your photo</span>}
+          </button>
+        )}
+        {list.map((w) => (
+          <button key={w.id} type="button" className={`wp-thumb ${wallpaper === w.id ? 'on' : ''}`} onClick={() => set({ wallpaper: w.id })} title={w.name}>
+            <span className={`wp-preview wp-${w.id}`} />
+            {!strip && <span className="small">{w.name}</span>}
+          </button>
+        ))}
+        {mine && (
+          <button type="button" className="wp-thumb" onClick={() => fileRef.current?.click()} disabled={busy} title="Use your own photo">
+            <span className="wp-preview wp-upload">{busy ? <span className="spinner sm" /> : <Icon name="upload" size={20} />}</span>
+            {!strip && <span className="small">{custom ? 'Change photo' : 'Your photo…'}</span>}
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onPick(e.target.files?.[0])} />
+      </div>
+      {error && <p className="error small">{error}</p>}
+    </>
+  );
+}
+
+export function Wallpaper() {
+  const prefs = usePrefs();
+  const set = prefs.set;
+  return (
     <div className="stack settings-page">
-      <Section title="Wallpaper" hint={prefs.uiTheme !== 'classic' && prefs.wallpaper !== 'custom'
-        ? `${UI_THEMES.find((t) => t.id === prefs.uiTheme)?.name} shows its own backdrop. Your own photo still works here; switch to NoCap Classic for these wallpapers.`
+      <Section title="Photos" hint={prefs.uiTheme === 'cyberdeck' && prefs.wallpaper !== 'custom'
+        ? 'Cyber-Deck shows its own backdrop. Your own photo still works; switch to Glass or NoCap classic for these wallpapers.'
         : undefined}>
         <Row>
-          <div className="wallpapers">
-            {WALLPAPERS.map((w) => (
-              <button key={w.id} type="button" className={`wp-thumb ${prefs.wallpaper === w.id ? 'on' : ''}`} onClick={() => set({ wallpaper: w.id })}>
-                <span className={`wp-preview wp-${w.id}`} />
-                <span className="small">{w.name}</span>
-              </button>
-            ))}
-            {custom && (
-              <button type="button" className={`wp-thumb ${prefs.wallpaper === 'custom' ? 'on' : ''}`} onClick={() => set({ wallpaper: 'custom' })}>
-                <span className="wp-preview" style={{ backgroundImage: `url("${custom}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                <span className="small">Your photo</span>
-              </button>
-            )}
-            <button type="button" className="wp-thumb" onClick={() => fileRef.current?.click()} disabled={busy}>
-              <span className="wp-preview wp-upload">{busy ? <span className="spinner sm" /> : <Icon name="upload" size={22} />}</span>
-              <span className="small">{custom ? 'Change photo' : 'Your photo…'}</span>
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onPick(e.target.files?.[0])} />
-          </div>
-          {error && <p className="error small">{error}</p>}
+          <WallpaperStrip only="photos" />
+        </Row>
+      </Section>
+
+      <Section title="Gradients">
+        <Row>
+          <WallpaperStrip only="gradients" />
         </Row>
       </Section>
 
