@@ -45,6 +45,16 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Your photos and videos: timeline, favorites and albums',
     adminOnly: true,
   },
+  backups: {
+    id: 'backups',
+    title: 'Backups',
+    icon: 'rewind',
+    tile: ['#2fc6a0', '#137a63'],
+    size: { w: 1040, h: 700 },
+    description: 'Automatic encrypted backups, and Rewind to restore old versions',
+    single: true,
+    adminOnly: true,
+  },
   monitor: {
     id: 'monitor',
     title: 'Resource Monitor',
