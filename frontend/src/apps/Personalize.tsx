@@ -103,15 +103,18 @@ export function Appearance() {
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
   // Glass icons need transparency: turning it down switches them to Colourful,
   // and turning it back up restores Glass if that switch was ours.
-  const setReduceTransparency = (reduceTransparency: boolean) => {
+  const setTransparency = (transparency: number) => {
+    const reduceTransparency = transparency === 0;
     if (reduceTransparency && prefs.iconStyle === 'glass') {
-      set({ reduceTransparency, iconStyle: 'colorful' });
+      set({ transparency, reduceTransparency, iconStyle: 'colorful' });
       try { localStorage.setItem(SOLID_ICONS_KEY, '1'); } catch { /* private mode */ }
       return;
     }
     let ours = false;
-    try { ours = localStorage.getItem(SOLID_ICONS_KEY) === '1'; localStorage.removeItem(SOLID_ICONS_KEY); } catch { /* private mode */ }
-    set(!reduceTransparency && ours && prefs.iconStyle === 'colorful' ? { reduceTransparency, iconStyle: 'glass' } : { reduceTransparency });
+    if (!reduceTransparency && prefs.reduceTransparency) {
+      try { ours = localStorage.getItem(SOLID_ICONS_KEY) === '1'; localStorage.removeItem(SOLID_ICONS_KEY); } catch { /* private mode */ }
+    }
+    set(ours && prefs.iconStyle === 'colorful' ? { transparency, reduceTransparency, iconStyle: 'glass' } : { transparency, reduceTransparency });
   };
   return (
     <div className="stack settings-page">
@@ -164,8 +167,8 @@ export function Appearance() {
         {prefs.uiTheme === 'cyberdeck' && (
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
-        <Toggle label="Reduce transparency" hint="Solid panels instead of frosted glass — sharper and faster" checked={prefs.reduceTransparency}
-          onChange={setReduceTransparency} />
+        <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is sharper and faster; 0% is fully solid." value={prefs.transparency}
+          min={0} max={100} step={5} format={(v) => (v === 0 ? 'Solid' : `${v}%`)} onChange={setTransparency} />
         <Toggle label="Reduce motion" hint="Turn off animations, scan sweeps and click pulses" checked={prefs.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
         {classic && (
           <Toggle label="Square corners" hint="Sharper windows and panels" checked={prefs.squareCorners} onChange={(squareCorners) => set({ squareCorners })} />

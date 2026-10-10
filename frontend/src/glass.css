@@ -293,3 +293,17 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-solid] button.home-search:hover:not(:disabled) { background: color-mix(in srgb, var(--glass-strong) 88%, var(--text) 12%) !important; }
 :root[data-solid] .nc-card.mac:hover { background: color-mix(in srgb, var(--glass-strong) 90%, var(--text) 10%) !important; }
 :root[data-solid] .nc-peek { background: color-mix(in srgb, var(--glass-strong) 85%, #000) !important; }
+
+/* ---------- Transparency slider ----------
+   Between full glass and solid, each panel's background moves from its own
+   glass opacity (--b) towards fully opaque as --clear goes from 1 to 0. */
+:root { --tint: var(--surface); }
+:root[data-ui='glass'] { --tint: rgb(24, 25, 30); }
+:root[data-tuned] .window { --b: 0.66; }
+:root[data-tuned] :is(.widget, .home-search) { --b: 0.4; }
+:root[data-tuned] :is(.dock, .tray, .nb.mac, .nc-card.mac, .nc-peek, .nc-none) { --b: 0.5; }
+:root[data-tuned] :is(.menubar, .toast, .update-ready, .nc-pill, .nc-round, .nb-x) { --b: 0.7; }
+:root[data-tuned] :is(.spotlight, .context-menu, .popover, .dialog, .nb.windows, .nc.windows) { --b: 0.8; }
+:root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .menubar, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
+  background: color-mix(in srgb, var(--tint) calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%), transparent) !important;
+}
