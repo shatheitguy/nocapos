@@ -326,12 +326,7 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
   };
   return (
     <div className="stack settings-page">
-      {cat === 'general' && (
-        <div className="set-top">
-          <Hero isAdmin={isAdmin} />
-          <Tiles />
-        </div>
-      )}
+      {cat === 'general' && <Hero isAdmin={isAdmin} />}
       {groups.map((g, i) => {
         const rows = g.filter((id) => isAdmin || !SUBS[id].admin);
         if (!rows.length) return null;
@@ -464,38 +459,6 @@ function Meter({ pct }: { pct: number }) {
     <span className={`set-meter ${v > 90 ? 'bad' : v > 75 ? 'warn' : ''}`}>
       <span style={{ width: `${v}%` }} />
     </span>
-  );
-}
-
-function Tiles() {
-  const latest = useSystem((s) => s.latest);
-  const cores = useSystem((s) => s.info?.host.cpu_cores);
-  const disk = storageTotals(latest);
-  const temps = [
-    ...(latest?.temperatures ?? []).map((t) => t.celsius),
-    ...(latest?.accelerators ?? []).map((a) => a.metrics.temp_c ?? 0),
-  ].filter((c) => c > 0);
-  const temp = temps.length ? Math.max(...temps) : null;
-  const tiles: { label: string; icon: IconName; value: string; sub: string; pct: number }[] = [
-    { label: 'Storage', icon: 'disk', value: fmtBytes(disk.used), sub: disk.total ? `of ${fmtBytes(disk.total)}` : '', pct: disk.total ? (disk.used / disk.total) * 100 : 0 },
-    { label: 'Memory', icon: 'memory', value: fmtBytes(latest?.memory.used ?? 0), sub: latest ? `of ${fmtBytes(latest.memory.total)}` : '', pct: latest?.memory.percent ?? 0 },
-    { label: 'CPU', icon: 'cpu', value: `${Math.round(latest?.cpu.percent ?? 0)}%`, sub: cores ? `${cores} cores` : '', pct: latest?.cpu.percent ?? 0 },
-  ];
-  if (temp !== null) tiles.push({ label: 'Temperature', icon: 'thermometer', value: `${Math.round(temp)}°C`, sub: temp > 80 ? 'Hot' : temp > 65 ? 'Warm' : 'Normal', pct: temp });
-  return (
-    <section className="set-tiles">
-      {tiles.map((t) => (
-        <div key={t.label} className="ucard set-tile">
-          <span className="set-tile-label">
-            <Icon name={t.icon} size={14} /> {t.label}
-          </span>
-          <span className="set-tile-value">
-            {latest ? t.value : '–'} <small>{t.sub}</small>
-          </span>
-          <Meter pct={t.pct} />
-        </div>
-      ))}
-    </section>
   );
 }
 
