@@ -77,7 +77,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
 
       <div className="ucard ulist">
         <div className="urow">
-          <span className="urow-icon set-ico" style={{ background: '#0a84ff' }}><Icon name="wifi" size={16} /></span>
+          <span className="urow-icon set-ico" style={{ ['--c' as string]: '#0a84ff' }}><Icon name="wifi" size={16} /></span>
           <button type="button" className="urow-text set-row-link" disabled={!net.wifi.supported} onClick={() => open('wifi')}>
             <span className="urow-title">Wi-Fi</span>
             <span className="urow-desc">
@@ -91,7 +91,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
         </div>
         {wired.map((i) => (
           <button key={i.name} type="button" className="urow" onClick={() => open(`iface:${i.name}`)}>
-            <span className="urow-icon set-ico" style={{ background: connected(i) ? '#30d158' : '#8e8e93' }}><Icon name={ifaceIcon(i)} size={16} /></span>
+            <span className="urow-icon set-ico" style={{ ['--c' as string]: connected(i) ? '#30d158' : '#8e8e93' }}><Icon name={ifaceIcon(i)} size={16} /></span>
             <span className="urow-text">
               <span className="urow-title">{i.kind === 'ethernet' ? `Ethernet · ${i.name}` : i.name}</span>
               <span className="urow-desc">{connected(i) ? `Connected · ${ipOf(i)}` : i.up ? 'No address' : 'Not connected'}</span>
@@ -106,7 +106,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
 
       <div className="ucard ulist">
         <div className="urow">
-          <span className="urow-icon set-ico" style={{ background: '#636366' }}><Icon name="globe" size={16} /></span>
+          <span className="urow-icon set-ico" style={{ ['--c' as string]: '#636366' }}><Icon name="globe" size={16} /></span>
           <span className="urow-text">
             <span className="urow-title">Networking</span>
             <span className="urow-desc">Every network connection on this machine</span>
