@@ -22,6 +22,7 @@ const CATEGORY: Record<Cue, keyof PrefValues> = {
 
 // Each theme has its own voice.
 const VOICES = {
+  glass: { type: 'sine' as OscillatorType, freq: 880, gain: 0.045 },
   classic: { type: 'sine' as OscillatorType, freq: 1040, gain: 0.05 },
   cyberdeck: { type: 'triangle' as OscillatorType, freq: 1320, gain: 0.06 },
 };

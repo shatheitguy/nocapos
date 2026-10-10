@@ -1,7 +1,7 @@
 // Transfers: uploads, copies and moves with progress, conflicts, retry and
 // cancel — shared by every Files window, the Transfers panel and its widget.
 import { create } from 'zustand';
-import { fileApi, upload, type Conflict } from '../api/files';
+import { fileApi, upload, type Conflict, type TransferJob } from '../api/files';
 import { choiceDialog } from './confirm';
 import { toast } from './toasts';
 
@@ -9,7 +9,7 @@ export type TransferStatus = 'running' | 'done' | 'failed' | 'canceled';
 
 export interface Transfer {
   id: string;
-  kind: 'upload' | 'copy' | 'move';
+  kind: 'upload' | 'copy' | 'move' | 'compress' | 'extract';
   title: string;
   /** Where it goes, e.g. "to Photos". */
   detail: string;
@@ -138,20 +138,42 @@ export async function startTransfer(root: string, paths: string[], dest: string,
     cancel: () => void fileApi.cancelJob(job.id),
     retry: () => void startTransfer(root, paths, dest, move, conflict),
   });
-  // Follow the job until it ends.
+  return (await follow(id, job)) !== null;
+}
+
+/** Compress paths into a .zip in dest, or extract one archive into dest, as a background job. */
+export async function startArchiveJob(kind: 'compress' | 'extract', root: string, paths: string[], dest: string, zipName = ''): Promise<string[] | null> {
+  if (!paths.length) return null;
+  const r = kind === 'compress' ? await fileApi.compress(root, paths, dest, zipName) : await fileApi.extract(root, paths[0], dest);
+  if (!r.ok) {
+    toast('error', kind === 'compress' ? 'Could not compress' : 'Could not extract', r.error);
+    return null;
+  }
+  const job = r.data;
+  const title = kind === 'compress' ? zipName || 'Archive.zip' : paths[0].slice(paths[0].lastIndexOf('/') + 1);
+  const id = add({ kind, title, detail: `${kind === 'compress' ? 'in' : 'into'} ${folderName(dest)}`, root, dest });
+  actions.set(id, {
+    cancel: () => void fileApi.cancelJob(job.id),
+    retry: () => void startArchiveJob(kind, root, paths, dest, zipName),
+  });
+  return follow(id, job);
+}
+
+/** Follow a server job until it ends; its result paths, or null if it didn't finish. */
+async function follow(id: string, job: TransferJob): Promise<string[] | null> {
   for (;;) {
     await new Promise((res) => setTimeout(res, 500));
     const j = await fileApi.job(job.id);
     if (!j.ok) {
       finish(id, 'failed', { error: j.error ?? 'Lost track of the transfer' });
-      return false;
+      return null;
     }
     const p = j.data.progress;
     update(id, { done: p.bytes_done, total: p.bytes_total, current: p.current || undefined });
     if (j.data.status !== 'running') {
       const skipped = j.data.result?.skipped.length ?? 0;
       finish(id, j.data.status, { error: j.data.error, note: skipped ? `${skipped} skipped` : undefined, done: p.bytes_total });
-      return j.data.status === 'done';
+      return j.data.status === 'done' ? (j.data.result?.paths ?? []) : null;
     }
   }
 }

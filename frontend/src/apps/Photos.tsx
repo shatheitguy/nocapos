@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as RMouseEvent } from 'react';
-import { browserCanShow, originalUrl, photoKey, photosApi, thumbUrl, type Album, type Photo, type PhotoKey } from '../api/photos';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent as RMouseEvent, type ReactNode } from 'react';
+import { fileApi } from '../api/files';
+import { fromTrash, originalUrl, photoKey, photosApi, thumbUrl, type Album, type Photo, type PhotoKey } from '../api/photos';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon, type IconName } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
@@ -7,44 +8,73 @@ import { toast } from '../state/toasts';
 import { startUpload, useTransfers } from '../state/transfers';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
+import { ticketFor, type Tickets } from './PhotosCommon';
+import { addedOf, deletedOf, Memories, PeriodCards, PhotoGrid, type Grouping } from './PhotosGrid';
+import { PhotoViewer } from './PhotosViewer';
 
-type View = { kind: 'library' } | { kind: 'favorites' } | { kind: 'videos' } | { kind: 'album'; id: number };
+type View =
+  | { kind: 'library' }
+  | { kind: 'favorites' }
+  | { kind: 'videos' }
+  | { kind: 'recent' }
+  | { kind: 'albums' }
+  | { kind: 'album'; id: number }
+  | { kind: 'trash' };
 
-const PAGE = 240;
+type Zoom = 'years' | 'months' | 'days' | 'all';
+
 const MEDIA = /\.(jpe?g|png|gif|webp|bmp|heic|heif|mp4|mov|m4v|webm)$/i;
-const monthFmt = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
-const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const RECENT_DAYS = 30;
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-function fmtBytes(n: number) {
-  if (n < 1024) return `${n} B`;
-  const u = ['KB', 'MB', 'GB'];
-  let v = n / 1024;
-  let i = 0;
-  while (v >= 1024 && i < u.length - 1) {
-    v /= 1024;
-    i++;
+function loadZoom(): Zoom {
+  try {
+    const z = localStorage.getItem('photos.zoom');
+    if (z === 'years' || z === 'months' || z === 'days' || z === 'all') return z;
+  } catch {
+    /* default */
   }
-  return `${v.toFixed(v < 10 ? 1 : 0)} ${u[i]}`;
+  return 'days';
 }
 
-/** Photos: the pictures and videos in the Photos folder of each drive, newest first. */
+const sameView = (a: View, b: View) => a.kind === b.kind && (a.kind !== 'album' || (b.kind === 'album' && a.id === b.id));
+
+/** Photos: the pictures and videos in the Photos folder of each drive. */
 export function Photos(_: { win: WinState }) {
   const [items, setItems] = useState<Photo[] | null>(null);
+  const [trash, setTrash] = useState<Photo[] | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [scanning, setScanning] = useState(false);
   const [uploadTo, setUploadTo] = useState<PhotoKey | null>(null);
-  const [tickets, setTickets] = useState<Record<string, string>>({});
+  const [tickets, setTickets] = useState<Tickets>({ photos: {}, trash: {} });
+  const [roots, setRoots] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [view, setView] = useState<View>({ kind: 'library' });
+  const [zoom, setZoomState] = useState<Zoom>(loadZoom);
+  const [jump, setJump] = useState<{ key: string; seq: number } | undefined>();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [open, setOpen] = useState<number | null>(null);
-  const [limit, setLimit] = useState(PAGE);
+  const [selectMode, setSelectMode] = useState(false);
+  const [viewer, setViewer] = useState<{ keys: string[]; index: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [renaming, setRenaming] = useState<number | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [picker, setPicker] = useState<Album | null>(null);
   const lastClicked = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const sentinel = useRef<HTMLDivElement>(null);
+
+  const setZoom = (z: Zoom) => {
+    setZoomState(z);
+    try {
+      localStorage.setItem('photos.zoom', z);
+    } catch {
+      /* not saved */
+    }
+  };
+
+  const loadTrash = useCallback(async () => {
+    const r = await photosApi.trash();
+    if (r.ok) setTrash(r.data.items.map(fromTrash));
+  }, []);
 
   const load = useCallback(async () => {
     const [l, a] = await Promise.all([photosApi.list(), photosApi.albums()]);
@@ -62,14 +92,16 @@ export function Photos(_: { win: WinState }) {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadTrash();
+    void fileApi.roots().then((r) => r.ok && setRoots(Object.fromEntries(r.data.map((x) => [x.id, x.name]))));
+  }, [load, loadTrash]);
 
   // Links for thumbnails and originals; renewed well before they expire.
   useEffect(() => {
     let timer = 0;
     const get = async () => {
       const r = await photosApi.tickets();
-      if (r.ok) setTickets(r.data.tickets);
+      if (r.ok) setTickets({ photos: r.data.tickets, trash: r.data.trash ?? {} });
       timer = window.setTimeout(get, r.ok ? 45 * 60_000 : 30_000);
     };
     void get();
@@ -96,7 +128,35 @@ export function Photos(_: { win: WinState }) {
     };
   }, [transfersVersion, load]);
 
+  const transfers = useTransfers((s) => s.list);
+  const uploads = transfers.filter((t) => t.kind === 'upload' && t.status === 'running' && uploadTo && t.root === uploadTo.root && t.dest === uploadTo.path);
+  const upDone = uploads.reduce((a, t) => a + t.done, 0);
+  const upTotal = uploads.reduce((a, t) => a + t.total, 0);
+
+  const byKey = useMemo(() => {
+    const m = new Map<string, Photo>();
+    for (const p of items ?? []) m.set(photoKey(p), p);
+    for (const p of trash ?? []) m.set(photoKey(p), p);
+    return m;
+  }, [items, trash]);
+
   const albumById = view.kind === 'album' ? albums.find((a) => a.id === view.id) : undefined;
+
+  // Album cover: the chosen one, else the newest photo in it.
+  const coverOf = useCallback(
+    (a: Album): Photo | undefined => {
+      const chosen = a.cover && byKey.get(photoKey(a.cover));
+      if (chosen) return chosen;
+      let best: Photo | undefined;
+      for (const k of a.items) {
+        const p = byKey.get(photoKey(k));
+        if (p && (!best || p.taken > best.taken)) best = p;
+      }
+      return best;
+    },
+    [byKey],
+  );
+
   const shown = useMemo(() => {
     const all = items ?? [];
     switch (view.kind) {
@@ -104,57 +164,70 @@ export function Photos(_: { win: WinState }) {
         return all.filter((p) => p.favorite);
       case 'videos':
         return all.filter((p) => p.video);
+      case 'recent': {
+        const since = Date.now() - RECENT_DAYS * 86_400_000;
+        return all.filter((p) => new Date(p.mod_time).getTime() >= since).sort((a, b) => (a.mod_time < b.mod_time ? 1 : -1));
+      }
       case 'album': {
         const keys = new Set((albumById?.items ?? []).map(photoKey));
         return all.filter((p) => keys.has(photoKey(p)));
       }
+      case 'trash':
+        return trash ?? [];
+      case 'albums':
+        return [];
       default:
         return all;
     }
-  }, [items, view, albumById]);
+  }, [items, trash, view, albumById]);
 
-  // A new view starts at the top with nothing selected.
+  // A new view starts with nothing selected.
   useEffect(() => {
     setSelected(new Set());
-    setLimit(PAGE);
+    setSelectMode(false);
     lastClicked.current = null;
-  }, [view.kind, view.kind === 'album' ? view.id : 0]);
-
-  // Render more as the end of the grid scrolls into view.
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver((e) => e[0]?.isIntersecting && setLimit((l) => l + PAGE), { rootMargin: '600px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [shown.length, limit]);
-
-  const groups = useMemo(() => {
-    const out: { label: string; start: number; photos: Photo[] }[] = [];
-    shown.slice(0, limit).forEach((p, i) => {
-      const label = monthFmt.format(new Date(p.taken));
-      const last = out[out.length - 1];
-      if (last?.label === label) last.photos.push(p);
-      else out.push({ label, start: i, photos: [p] });
-    });
-    return out;
-  }, [shown, limit]);
+    setJump(undefined);
+    if (view.kind === 'trash') void loadTrash();
+  }, [view.kind, view.kind === 'album' ? view.id : 0, loadTrash]);
 
   const selectedPhotos = shown.filter((p) => selected.has(photoKey(p)));
-  const selecting = selected.size > 0;
+  const selecting = selectMode || selected.size > 0;
 
-  const toggle = (i: number, range: boolean) => {
-    const next = new Set(selected);
-    if (range && lastClicked.current !== null) {
-      const [a, b] = [Math.min(lastClicked.current, i), Math.max(lastClicked.current, i)];
-      for (let j = a; j <= b; j++) next.add(photoKey(shown[j]));
-    } else {
-      const k = photoKey(shown[i]);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-    }
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const onToggle = useCallback((i: number, range: boolean) => {
+    const list = shownRef.current;
+    const from = lastClicked.current;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (range && from !== null) {
+        const [a, b] = [Math.min(from, i), Math.max(from, i)];
+        for (let j = a; j <= b && j < list.length; j++) next.add(photoKey(list[j]));
+      } else {
+        const k = photoKey(list[i]);
+        if (next.has(k)) next.delete(k);
+        else next.add(k);
+      }
+      return next;
+    });
     lastClicked.current = i;
-    setSelected(next);
+  }, []);
+  const onToggleMany = useCallback((from: number, to: number, on: boolean) => {
+    const list = shownRef.current;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (let j = from; j < to; j++) {
+        if (on) next.add(photoKey(list[j]));
+        else next.delete(photoKey(list[j]));
+      }
+      return next;
+    });
+  }, []);
+  const onOpen = useCallback((i: number) => setViewer({ keys: shownRef.current.map(photoKey), index: i }), []);
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    setSelectMode(false);
   };
 
   // ---------- actions ----------
@@ -172,8 +245,8 @@ export function Photos(_: { win: WinState }) {
     const one = list.length === 1;
     const ok = await confirmDialog({
       title: one ? `Delete “${list[0].name}”?` : `Delete ${list.length} items?`,
-      message: 'They move to the Recycle Bin of their drive, where you can restore them from Files.',
-      confirmLabel: 'Move to Recycle Bin',
+      message: 'They move to Recently deleted (the Recycle Bin of their drive), where you can restore them.',
+      confirmLabel: 'Delete',
       danger: true,
     });
     if (!ok) return false;
@@ -184,14 +257,50 @@ export function Photos(_: { win: WinState }) {
     }
     const keys = new Set(list.map(photoKey));
     setItems((v) => v?.filter((p) => !keys.has(photoKey(p))) ?? v);
-    setSelected(new Set());
+    clearSelection();
     void load();
+    void loadTrash();
+    return true;
+  };
+
+  const restore = async (list: Photo[]) => {
+    const ids = list.flatMap((p) => (p.trash ? [p.trash.id] : []));
+    if (!ids.length) return false;
+    const r = await photosApi.restore(ids);
+    if (!r.ok) {
+      toast('error', 'Could not restore', r.error);
+      return false;
+    }
+    toast('success', list.length === 1 ? `Restored “${list[0].name}”` : `Restored ${list.length} items`, 'They are back in your library.');
+    clearSelection();
+    void loadTrash();
+    void load();
+    window.setTimeout(() => void load(), 2500);
+    return true;
+  };
+
+  const purge = async (list: Photo[]) => {
+    const ok = await confirmDialog({
+      title: list.length === 1 ? `Delete “${list[0].name}” forever?` : `Delete ${list.length} items forever?`,
+      message: 'They are removed from the Recycle Bin for good. This can’t be undone.',
+      confirmLabel: 'Delete Forever',
+      danger: true,
+    });
+    if (!ok) return false;
+    const r = await photosApi.purge(list.flatMap((p) => (p.trash ? [p.trash.id] : [])));
+    if (!r.ok) {
+      toast('error', 'Could not delete', r.error);
+      return false;
+    }
+    clearSelection();
+    void loadTrash();
     return true;
   };
 
   const newAlbum = async (list: Photo[] = []) => {
     const r = await photosApi.createAlbum('New Album', list);
     if (!r.ok) return toast('error', 'Could not create the album', r.error);
+    clearSelection();
     await load();
     setView({ kind: 'album', id: r.data.id });
     setRenaming(r.data.id);
@@ -201,25 +310,66 @@ export function Photos(_: { win: WinState }) {
     const r = await photosApi.albumItems(a.id, list, true);
     if (!r.ok) return toast('error', 'Could not add to the album', r.error);
     toast('success', `Added to “${a.name}”`, list.length === 1 ? list[0].name : `${list.length} items`);
-    setSelected(new Set());
+    clearSelection();
     void load();
   };
 
   const removeFromAlbum = async (a: Album, list: Photo[]) => {
     const r = await photosApi.albumItems(a.id, list, false);
     if (!r.ok) return toast('error', 'Could not remove from the album', r.error);
-    setSelected(new Set());
+    clearSelection();
     void load();
+  };
+
+  const setCover = async (a: Album, p: Photo) => {
+    const r = await photosApi.setCover(a.id, p);
+    if (!r.ok) return toast('error', 'Could not change the cover', r.error);
+    toast('success', 'Album cover changed', p.name);
+    clearSelection();
+    void load();
+  };
+
+  const deleteAlbum = async (a: Album) => {
+    const ok = await confirmDialog({
+      title: `Delete the album “${a.name}”?`,
+      message: 'Only the album goes; the photos stay in your library.',
+      confirmLabel: 'Delete Album',
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await photosApi.deleteAlbum(a.id);
+    if (!r.ok) return toast('error', 'Could not delete the album', r.error);
+    setView({ kind: 'albums' });
+    void load();
+  };
+
+  const download = (list: Photo[]) => {
+    const max = 30;
+    if (list.length > max) toast('info', `Downloading the first ${max}`, 'To get more at once, open the Photos folder in Files.');
+    list.slice(0, max).forEach((p, i) => {
+      const t = ticketFor(tickets, p);
+      if (!t) return;
+      window.setTimeout(() => {
+        const a = document.createElement('a');
+        a.href = originalUrl(p, t, true);
+        a.download = p.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }, i * 300);
+    });
   };
 
   const albumMenu = (e: RMouseEvent, list: Photo[]) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // From the selection bar near the bottom, open upwards.
+    const height = (albums.length + 1) * 36 + 14;
     setMenu({
       x: r.left,
-      y: r.bottom + 4,
+      y: r.bottom > window.innerHeight * 0.6 ? Math.max(8, r.top - 8 - height) : r.bottom + 6,
       items: [
         ...albums.map((a): MenuItem => ({ label: a.name, icon: 'albums', onClick: () => void addToAlbum(a, list) })),
-        { label: 'New Album', icon: 'plus', onClick: () => void newAlbum(list) },
+        { label: 'New Album…', icon: 'plus', onClick: () => void newAlbum(list) },
       ],
     });
   };
@@ -238,130 +388,271 @@ export function Photos(_: { win: WinState }) {
     upload([...e.dataTransfer.files]);
   };
 
-  // ---------- render ----------
-  const title =
-    view.kind === 'favorites' ? 'Favorites' : view.kind === 'videos' ? 'Videos' : view.kind === 'album' ? (albumById?.name ?? 'Album') : 'Library';
-
-  const nav = (v: View, icon: IconName, label: string, count?: number) => {
-    const on = v.kind === view.kind && (v.kind !== 'album' || (view.kind === 'album' && v.id === view.id));
-    return (
-      <button type="button" className={on ? 'on' : ''} onClick={() => setView(v)}>
-        <Icon name={icon} size={16} />
-        <span className="ph-nav-label">{label}</span>
-        {count !== undefined && <span className="ph-count">{count}</span>}
-      </button>
-    );
+  const openPeriod = (key: string) => {
+    setZoom(zoom === 'years' ? 'months' : 'days');
+    setJump({ key, seq: Date.now() });
   };
+
+  // ---------- render ----------
+  const rootName = (id: string) => roots[id] ?? id;
+  const favCount = useMemo(() => (items ?? []).filter((p) => p.favorite).length, [items]);
+  const videoCount = useMemo(() => (items ?? []).filter((p) => p.video).length, [items]);
+
+  const nav = (v: View, icon: IconName, label: string, count?: number) => (
+    <button type="button" className={`pg-nav${sameView(v, view) ? ' on' : ''}`} onClick={() => setView(v)}>
+      <Icon name={icon} size={17} />
+      <span className="pg-nav-label">{label}</span>
+      {count ? <span className="pg-count">{count}</span> : null}
+    </button>
+  );
+
+  const title =
+    view.kind === 'favorites'
+      ? 'Favorites'
+      : view.kind === 'videos'
+        ? 'Videos'
+        : view.kind === 'recent'
+          ? 'Recently Added'
+          : view.kind === 'albums'
+            ? 'Albums'
+            : view.kind === 'trash'
+              ? 'Recently Deleted'
+              : 'Library';
+
+  const counts = () => {
+    if (items === null) return '';
+    if (view.kind === 'albums') return plural(albums.length, 'album');
+    const v = shown.filter((p) => p.video).length;
+    const ph = shown.length - v;
+    const parts = [ph || !v ? plural(ph, 'photo') : '', v ? plural(v, 'video') : ''].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  const subtitle =
+    view.kind === 'trash'
+      ? shown.length
+        ? `${counts()} · kept in the Recycle Bin of their drive until you delete them`
+        : 'Kept in the Recycle Bin of their drive until you delete them'
+      : view.kind === 'recent'
+        ? shown.length
+          ? `${counts()} added in the last ${RECENT_DAYS} days`
+          : `Added in the last ${RECENT_DAYS} days`
+        : counts();
+
+  const grouping: Grouping = view.kind === 'album' ? 'none' : view.kind === 'library' && zoom === 'all' ? 'month' : 'day';
+  const tileMin = view.kind === 'library' && zoom === 'all' ? 104 : view.kind === 'library' ? 168 : 150;
+  const dateOf = view.kind === 'recent' ? addedOf : view.kind === 'trash' ? deletedOf : undefined;
+
+  const viewerList = viewer ? viewer.keys.map((k) => byKey.get(k)).filter((p): p is Photo => !!p) : [];
+  const viewerIndex = viewer ? Math.min(viewer.index, viewerList.length - 1) : -1;
+
+  const emptyView = () => {
+    switch (view.kind) {
+      case 'favorites':
+        return <EmptyNote icon="heart" title="No favorites yet" text="Tap the heart on a photo to keep it here." />;
+      case 'videos':
+        return <EmptyNote icon="fileVideo" title="No videos yet" text="Videos you add to Photos show up here." />;
+      case 'recent':
+        return <EmptyNote icon="clock" title="Nothing added lately" text={`Photos and videos added in the last ${RECENT_DAYS} days show up here.`} />;
+      case 'trash':
+        return <EmptyNote icon="trash" title="Nothing recently deleted" text="Photos you delete wait here, so you can change your mind." />;
+      case 'album':
+        return (
+          <EmptyNote icon="albums" title="This album is empty" text="Add photos from your library.">
+            {albumById && (
+              <button type="button" className="primary pill" onClick={() => setPicker(albumById)}>
+                <Icon name="plus" size={16} /> Add Photos
+              </button>
+            )}
+          </EmptyNote>
+        );
+      default:
+        return (
+          <div className="pg-empty">
+            <span className="pg-empty-art" aria-hidden>
+              <span className="a" />
+              <span className="b" />
+              <span className="c">
+                <Icon name="image" size={30} />
+              </span>
+            </span>
+            <h3>Your photos will appear here</h3>
+            <p>
+              Photos shows the pictures and videos in the <strong>Photos</strong> folder of {Object.keys(tickets.photos).length > 1 ? 'each drive' : 'your drive'}
+              {uploadTo ? (
+                <>
+                  {' '}
+                  (<span className="pg-folder">{rootName(uploadTo.root)} › Photos</span>)
+                </>
+              ) : null}
+              , including subfolders. Upload from this device, drop files here, or copy them into that folder.
+            </p>
+            <div className="pg-empty-actions">
+              <button type="button" className="primary pill" disabled={!uploadTo} onClick={() => fileInput.current?.click()}>
+                <Icon name="upload" size={16} /> Upload Photos
+              </button>
+              <button
+                type="button"
+                className="pill"
+                disabled={!uploadTo}
+                onClick={() => uploadTo && openApp('files', { props: { root: uploadTo.root, path: uploadTo.path } })}
+              >
+                <Icon name="folder" size={16} /> Open in Files
+              </button>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  const isTrash = view.kind === 'trash';
+  const allFav = selectedPhotos.length > 0 && selectedPhotos.every((p) => p.favorite);
 
   return (
     <div
-      className={`app-split photos ${dropping ? 'dropping' : ''}`}
+      className={`app-split pg${dropping ? ' dropping' : ''}`}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('Files')) return;
+        if (!e.dataTransfer.types.includes('Files') || isTrash) return;
         e.preventDefault();
         setDropping(true);
       }}
-      onDragLeave={(e) => e.currentTarget === e.target && setDropping(false)}
+      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropping(false)}
       onDrop={onDrop}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && selecting && !viewer) {
+          clearSelection();
+          e.stopPropagation();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !viewer && shown.length && !(e.target instanceof HTMLInputElement)) {
+          e.preventDefault();
+          setSelected(new Set(shown.map(photoKey)));
+        }
+      }}
     >
-      <nav className="sidebar ph-sidebar">
-        <div className="sidebar-group">
+      <nav className="sidebar pg-side">
+        <h1 className="app-title pg-brand">Photos</h1>
+        <div className="pg-navgroup">
           {nav({ kind: 'library' }, 'image', 'Library', items?.length)}
-          {nav({ kind: 'favorites' }, 'heart', 'Favorites', items?.filter((p) => p.favorite).length)}
-          {nav({ kind: 'videos' }, 'fileVideo', 'Videos', items?.filter((p) => p.video).length)}
+          {nav({ kind: 'favorites' }, 'heart', 'Favorites', favCount)}
+          {nav({ kind: 'videos' }, 'fileVideo', 'Videos', videoCount)}
+          {nav({ kind: 'recent' }, 'clock', 'Recently Added')}
         </div>
-        <div className="sidebar-group">
-          <span className="sidebar-heading ph-albums-head">
-            Albums
-            <button type="button" className="icon-btn ph-add" title="New album" aria-label="New album" onClick={() => void newAlbum()}>
-              <Icon name="plus" size={14} />
+        <div className="pg-navgroup">
+          <div className="pg-side-head">
+            <button type="button" className={`pg-side-link${view.kind === 'albums' ? ' on' : ''}`} onClick={() => setView({ kind: 'albums' })}>
+              Albums
             </button>
-          </span>
-          {albums.map((a) => nav({ kind: 'album', id: a.id }, 'albums', a.name, a.items.length))}
-          {!albums.length && <p className="ph-hint">Select photos and choose Add to Album, or press +.</p>}
+            <button type="button" className="icon-btn ghost pg-add" title="New album" aria-label="New album" onClick={() => void newAlbum()}>
+              <Icon name="plus" size={15} />
+            </button>
+          </div>
+          {albums.map((a) => {
+            const c = coverOf(a);
+            const t = c && ticketFor(tickets, c);
+            return (
+              <button key={a.id} type="button" className={`pg-nav pg-nav-album${sameView({ kind: 'album', id: a.id }, view) ? ' on' : ''}`} onClick={() => setView({ kind: 'album', id: a.id })}>
+                <span className="pg-mini">{c && t ? <img src={thumbUrl(c, t)} alt="" loading="lazy" draggable={false} /> : <Icon name="albums" size={13} />}</span>
+                <span className="pg-nav-label">{a.name}</span>
+                <span className="pg-count">{a.items.length || ''}</span>
+              </button>
+            );
+          })}
+          {!albums.length && <p className="pg-hint">Select photos and choose Add to Album, or press +.</p>}
         </div>
+        <div className="pg-navgroup pg-side-end">{nav({ kind: 'trash' }, 'trash', 'Recently Deleted', trash?.length)}</div>
       </nav>
 
-      <div className="ph-main">
-        <header className="ph-toolbar">
-          {view.kind === 'album' && albumById ? (
-            <AlbumTitle
-              key={albumById.id}
-              album={albumById}
-              editing={renaming === albumById.id}
-              onDone={async (name) => {
-                setRenaming(null);
-                if (name && name !== albumById.name) {
-                  const r = await photosApi.renameAlbum(albumById.id, name);
-                  if (!r.ok) toast('error', 'Could not rename the album', r.error);
-                  void load();
-                }
-              }}
-              onEdit={() => setRenaming(albumById.id)}
-            />
-          ) : (
-            <h2 className="ph-title">{title}</h2>
-          )}
-          <span className="ph-sub">
-            {items === null ? '' : `${shown.length} ${shown.length === 1 ? 'item' : 'items'}`}
-            {scanning && ' · updating…'}
-          </span>
-          <div className="ph-actions">
-            {selecting ? (
+      <div className="pg-main">
+        <header className="pg-header">
+          <div className="pg-titles">
+            {view.kind === 'album' && albumById ? (
               <>
-                <span className="ph-selcount">{selected.size} selected</span>
-                <button
-                  type="button"
-                  className="ghost"
-                  title="Favorite"
-                  onClick={() => void setFavorite(selectedPhotos, !selectedPhotos.every((p) => p.favorite))}
-                >
-                  <Icon name="heart" size={16} /> {selectedPhotos.every((p) => p.favorite) ? 'Unfavorite' : 'Favorite'}
+                <button type="button" className="pg-back" onClick={() => setView({ kind: 'albums' })}>
+                  <Icon name="chevronLeft" size={14} /> Albums
                 </button>
-                <button type="button" className="ghost" onClick={(e) => albumMenu(e, selectedPhotos)}>
-                  <Icon name="albums" size={16} /> Add to Album
-                </button>
-                {albumById && (
-                  <button type="button" className="ghost" onClick={() => void removeFromAlbum(albumById, selectedPhotos)}>
-                    Remove from Album
-                  </button>
-                )}
-                <button type="button" className="ghost danger" title="Delete" aria-label="Delete" onClick={() => void remove(selectedPhotos)}>
-                  <Icon name="trash" size={16} />
-                </button>
-                <button type="button" className="ghost" title="Clear selection" aria-label="Clear selection" onClick={() => setSelected(new Set())}>
-                  <Icon name="close" size={16} />
-                </button>
+                <AlbumTitle
+                  key={albumById.id}
+                  album={albumById}
+                  editing={renaming === albumById.id}
+                  onDone={async (name) => {
+                    setRenaming(null);
+                    if (name && name !== albumById.name) {
+                      const r = await photosApi.renameAlbum(albumById.id, name);
+                      if (!r.ok) toast('error', 'Could not rename the album', r.error);
+                      void load();
+                    }
+                  }}
+                  onEdit={() => setRenaming(albumById.id)}
+                />
               </>
             ) : (
-              <>
-                {view.kind === 'album' && albumById && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    title="Delete album"
-                    aria-label="Delete album"
-                    onClick={async () => {
-                      const ok = await confirmDialog({
-                        title: `Delete the album “${albumById.name}”?`,
-                        message: 'Only the album goes; the photos stay in your library.',
-                        confirmLabel: 'Delete Album',
-                        danger: true,
-                      });
-                      if (!ok) return;
-                      const r = await photosApi.deleteAlbum(albumById.id);
-                      if (!r.ok) return toast('error', 'Could not delete the album', r.error);
-                      setView({ kind: 'library' });
-                      void load();
+              <h2 className="app-title">{title}</h2>
+            )}
+            <p className="app-subtitle">
+              {view.kind === 'album' ? counts() : subtitle}
+              {scanning && ' · updating…'}
+            </p>
+          </div>
+          <div className="pg-tools">
+            {uploads.length > 0 && (
+              <span className="pg-uploading" title="Uploading">
+                <span className="spinner" />
+                Uploading {upTotal ? `${Math.round((upDone / upTotal) * 100)}%` : '…'}
+                <span className="pg-upbar">
+                  <span style={{ width: `${upTotal ? (upDone / upTotal) * 100 : 5}%` }} />
+                </span>
+              </span>
+            )}
+            {view.kind === 'library' && !!items?.length && (
+              <div className="segmented pg-zoom" role="tablist" aria-label="Zoom">
+                {(['years', 'months', 'days', 'all'] as Zoom[]).map((z) => (
+                  <button key={z} type="button" role="tab" aria-selected={zoom === z} className={zoom === z ? 'on' : ''}
+                    onClick={() => {
+                      setZoom(z);
+                      setJump(undefined);
                     }}
                   >
-                    <Icon name="trash" size={16} />
+                    {z === 'all' ? 'All Photos' : z[0].toUpperCase() + z.slice(1)}
                   </button>
-                )}
-                <button type="button" className="primary" disabled={!uploadTo} onClick={() => fileInput.current?.click()}>
-                  <Icon name="upload" size={16} /> Upload
+                ))}
+              </div>
+            )}
+            {view.kind === 'album' && albumById && (
+              <>
+                <button type="button" className="pill pg-soft" onClick={() => setPicker(albumById)}>
+                  <Icon name="plus" size={15} /> Add Photos
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn ghost"
+                  aria-label="Album options"
+                  title="Album options"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setMenu({
+                      x: r.left - 120,
+                      y: r.bottom + 6,
+                      items: [
+                        { label: 'Rename', icon: 'pencil', onClick: () => setRenaming(albumById.id) },
+                        ...(albumById.cover ? [{ label: 'Use Newest as Cover', icon: 'image' as IconName, onClick: () => void photosApi.setCover(albumById.id, null).then(() => load()) }] : []),
+                        { label: 'Delete Album', icon: 'trash', danger: true, onClick: () => void deleteAlbum(albumById) },
+                      ],
+                    });
+                  }}
+                >
+                  <Icon name="more" size={17} />
                 </button>
               </>
+            )}
+            {view.kind !== 'albums' && !!shown.length && !(view.kind === 'library' && (zoom === 'years' || zoom === 'months')) && (
+              <button type="button" className={`pill pg-soft${selecting ? ' on' : ''}`} onClick={() => (selecting ? clearSelection() : setSelectMode(true))}>
+                {selecting ? 'Done' : 'Select'}
+              </button>
+            )}
+            {!isTrash && (
+              <button type="button" className="primary pill" disabled={!uploadTo} onClick={() => fileInput.current?.click()}>
+                <Icon name="upload" size={16} /> Upload
+              </button>
             )}
             <input
               ref={fileInput}
@@ -377,66 +668,124 @@ export function Photos(_: { win: WinState }) {
           </div>
         </header>
 
-        <div className="ph-scroll">
-          {error && <p className="error">{error}</p>}
-          {items === null ? (
-            <div className="ph-empty">
-              <span className="spinner" />
-            </div>
-          ) : !shown.length ? (
-            <Empty
-              view={view}
-              uploadTo={uploadTo}
-              onUpload={() => fileInput.current?.click()}
-              onBrowse={() => uploadTo && openApp('files', { props: { root: uploadTo.root, path: uploadTo.path } })}
-            />
-          ) : (
-            <>
-              {groups.map((g) => (
-                <section key={g.label + g.start} className="ph-group">
-                  <h3>{g.label}</h3>
-                  <div className="ph-grid">
-                    {g.photos.map((p, j) => {
-                      const i = g.start + j;
-                      return (
-                        <Tile
-                          key={photoKey(p)}
-                          photo={p}
-                          ticket={tickets[p.root]}
-                          selected={selected.has(photoKey(p))}
-                          selecting={selecting}
-                          onOpen={() => setOpen(i)}
-                          onToggle={(range) => toggle(i, range)}
-                        />
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-              {limit < shown.length && <div ref={sentinel} className="ph-more" />}
-            </>
-          )}
-        </div>
+        {error && <p className="error pg-error">{error}</p>}
+
+        {items === null ? (
+          <div className="pg-empty">
+            <span className="spinner" />
+          </div>
+        ) : view.kind === 'albums' ? (
+          <AlbumsPage albums={albums} coverOf={coverOf} tickets={tickets} onOpen={(a) => setView({ kind: 'album', id: a.id })} onNew={() => void newAlbum()} />
+        ) : view.kind === 'library' && (zoom === 'years' || zoom === 'months') && items.length ? (
+          <PeriodCards key={zoom} items={items} unit={zoom === 'years' ? 'year' : 'month'} tickets={tickets} onPick={openPeriod} jump={jump} />
+        ) : (
+          <PhotoGrid
+            key={view.kind === 'album' ? `album${view.id}` : `${view.kind}-${zoom}`}
+            items={shown}
+            grouping={grouping}
+            dateOf={dateOf}
+            tileMin={tileMin}
+            tickets={tickets}
+            selected={selected}
+            selecting={selecting}
+            onToggle={onToggle}
+            onToggleMany={onToggleMany}
+            onOpen={onOpen}
+            jump={jump}
+            top={
+              view.kind === 'library' ? (
+                <Memories items={items} tickets={tickets} onOpen={(list) => setViewer({ keys: list.map(photoKey), index: 0 })} />
+              ) : undefined
+            }
+            empty={emptyView()}
+          />
+        )}
+
+        {selecting && (
+          <div className="pg-actionbar" role="toolbar" aria-label="Selection">
+            <span className="pg-selcount">{selected.size ? `${selected.size} selected` : 'Select items'}</span>
+            {isTrash ? (
+              <>
+                <button type="button" className="pg-act" disabled={!selected.size} onClick={() => void restore(selectedPhotos)}>
+                  <Icon name="rewind" size={16} /> Restore
+                </button>
+                <button type="button" className="pg-act danger" disabled={!selected.size} onClick={() => void purge(selectedPhotos)}>
+                  <Icon name="trash" size={16} /> Delete Forever
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="pg-act" disabled={!selected.size} onClick={() => void setFavorite(selectedPhotos, !allFav)} title={allFav ? 'Unfavorite' : 'Favorite'}>
+                  <Icon name="heart" size={16} /> <span className="pg-act-label">{allFav ? 'Unfavorite' : 'Favorite'}</span>
+                </button>
+                <button type="button" className="pg-act" disabled={!selected.size} onClick={(e) => albumMenu(e, selectedPhotos)} title="Add to Album">
+                  <Icon name="albums" size={16} /> <span className="pg-act-label">Add to Album</span>
+                </button>
+                {albumById && (
+                  <>
+                    {selected.size === 1 && (
+                      <button type="button" className="pg-act" onClick={() => void setCover(albumById, selectedPhotos[0])} title="Make Cover">
+                        <Icon name="image" size={16} /> <span className="pg-act-label">Make Cover</span>
+                      </button>
+                    )}
+                    <button type="button" className="pg-act" disabled={!selected.size} onClick={() => void removeFromAlbum(albumById, selectedPhotos)} title="Remove from Album">
+                      <Icon name="close" size={16} /> <span className="pg-act-label">Remove</span>
+                    </button>
+                  </>
+                )}
+                <button type="button" className="pg-act" disabled={!selected.size} onClick={() => download(selectedPhotos)} title="Download">
+                  <Icon name="download" size={16} /> <span className="pg-act-label">Download</span>
+                </button>
+                <button type="button" className="pg-act danger" disabled={!selected.size} onClick={() => void remove(selectedPhotos)} title="Delete">
+                  <Icon name="trash" size={16} /> <span className="pg-act-label">Delete</span>
+                </button>
+              </>
+            )}
+            <button type="button" className="pg-act icon" aria-label="Cancel selection" title="Cancel (Esc)" onClick={clearSelection}>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        )}
+
         {dropping && (
-          <div className="ph-drop">
-            <Icon name="upload" size={28} />
-            Drop to add to Photos
+          <div className="pg-drop">
+            <span className="pg-drop-icon">
+              <Icon name="upload" size={30} />
+            </span>
+            <strong>Drop to add to Photos</strong>
+            <span>{uploadTo ? `Saved to ${rootName(uploadTo.root)} › Photos` : ''}</span>
           </div>
         )}
       </div>
 
-      {open !== null && shown[open] && (
+      {viewer && viewerList.length > 0 && viewerIndex >= 0 && (
         <PhotoViewer
-          photos={shown}
-          index={open}
+          photos={viewerList}
+          index={viewerIndex}
           tickets={tickets}
-          onIndex={setOpen}
-          onClose={() => setOpen(null)}
+          rootName={rootName}
+          onIndex={(i) => setViewer((v) => (v ? { ...v, index: i } : v))}
+          onClose={() => setViewer(null)}
           onFavorite={(p) => void setFavorite([p], !p.favorite)}
           onAlbum={(e, p) => albumMenu(e, [p])}
           onDelete={async (p) => {
-            const at = open;
-            if (await remove([p])) setOpen(shown.length > 1 ? Math.min(at, shown.length - 2) : null);
+            const done = p.trash ? await purge([p]) : await remove([p]);
+            if (done && viewerList.length <= 1) setViewer(null);
+          }}
+          onRestore={async (p) => {
+            if ((await restore([p])) && viewerList.length <= 1) setViewer(null);
+          }}
+        />
+      )}
+      {picker && (
+        <AlbumPicker
+          album={picker}
+          items={items ?? []}
+          tickets={tickets}
+          onClose={() => setPicker(null)}
+          onAdd={async (list) => {
+            setPicker(null);
+            await addToAlbum(picker, list);
           }}
         />
       )}
@@ -449,14 +798,14 @@ function AlbumTitle({ album, editing, onEdit, onDone }: { album: Album; editing:
   const [name, setName] = useState(album.name);
   if (!editing) {
     return (
-      <h2 className="ph-title editable" title="Click to rename" onClick={onEdit}>
+      <h2 className="app-title pg-editable" title="Click to rename" onClick={onEdit}>
         {album.name}
       </h2>
     );
   }
   return (
     <input
-      className="ph-title-input"
+      className="pg-title-input"
       value={name}
       autoFocus
       maxLength={80}
@@ -475,224 +824,134 @@ function AlbumTitle({ album, editing, onEdit, onDone }: { album: Album; editing:
   );
 }
 
-function Empty({ view, uploadTo, onUpload, onBrowse }: { view: View; uploadTo: PhotoKey | null; onUpload: () => void; onBrowse: () => void }) {
-  if (view.kind === 'favorites') return <EmptyNote icon="heart" title="No favorites yet" text="Tap the heart on a photo to keep it here." />;
-  if (view.kind === 'videos') return <EmptyNote icon="fileVideo" title="No videos yet" text="Videos you add to Photos show up here." />;
-  if (view.kind === 'album') return <EmptyNote icon="albums" title="This album is empty" text="Select photos in your library and choose Add to Album." />;
+function AlbumsPage({
+  albums,
+  coverOf,
+  tickets,
+  onOpen,
+  onNew,
+}: {
+  albums: Album[];
+  coverOf: (a: Album) => Photo | undefined;
+  tickets: Tickets;
+  onOpen: (a: Album) => void;
+  onNew: () => void;
+}) {
   return (
-    <div className="ph-empty">
-      <span className="ph-empty-icon">
-        <Icon name="image" size={34} />
-      </span>
-      <h3>No photos yet</h3>
-      <p>Upload from this device or drop pictures here. Anything you copy into the Photos folder of a drive shows up too.</p>
-      <div className="ph-empty-actions">
-        <button type="button" className="primary" disabled={!uploadTo} onClick={onUpload}>
-          <Icon name="upload" size={16} /> Upload Photos
-        </button>
-        <button type="button" disabled={!uploadTo} onClick={onBrowse}>
-          <Icon name="folder" size={16} /> Open Photos Folder
+    <div className="pg-scroll">
+      <div className="pg-albums">
+        {albums.map((a) => {
+          const c = coverOf(a);
+          const t = c && ticketFor(tickets, c);
+          return (
+            <button key={a.id} type="button" className="pg-album" onClick={() => onOpen(a)}>
+              <span className="pg-album-cover">
+                {c && t ? <img src={thumbUrl(c, t)} alt="" loading="lazy" decoding="async" draggable={false} /> : <Icon name="albums" size={34} />}
+              </span>
+              <strong>{a.name}</strong>
+              <span>{plural(a.items.length, 'item')}</span>
+            </button>
+          );
+        })}
+        <button type="button" className="pg-album new" onClick={onNew}>
+          <span className="pg-album-cover">
+            <Icon name="plus" size={30} />
+          </span>
+          <strong>New Album</strong>
+          <span>Group photos you love</span>
         </button>
       </div>
     </div>
   );
 }
 
-function EmptyNote({ icon, title, text }: { icon: IconName; title: string; text: string }) {
+/** Choose photos from the library to add to an album. */
+function AlbumPicker({
+  album,
+  items,
+  tickets,
+  onClose,
+  onAdd,
+}: {
+  album: Album;
+  items: Photo[];
+  tickets: Tickets;
+  onClose: () => void;
+  onAdd: (list: Photo[]) => void;
+}) {
+  const list = useMemo(() => {
+    const inside = new Set(album.items.map(photoKey));
+    return items.filter((p) => !inside.has(photoKey(p)));
+  }, [album, items]);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const last = useRef<number | null>(null);
+  const listRef = useRef(list);
+  listRef.current = list;
+  const toggle = useCallback((i: number, range: boolean) => {
+    const l = listRef.current;
+    const from = last.current;
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (range && from !== null) {
+        for (let j = Math.min(from, i); j <= Math.max(from, i); j++) next.add(photoKey(l[j]));
+      } else if (next.has(photoKey(l[i]))) next.delete(photoKey(l[i]));
+      else next.add(photoKey(l[i]));
+      return next;
+    });
+    last.current = i;
+  }, []);
+  const many = useCallback((from: number, to: number, on: boolean) => {
+    const l = listRef.current;
+    setSel((prev) => {
+      const next = new Set(prev);
+      for (let j = from; j < to; j++) {
+        if (on) next.add(photoKey(l[j]));
+        else next.delete(photoKey(l[j]));
+      }
+      return next;
+    });
+  }, []);
   return (
-    <div className="ph-empty">
-      <span className="ph-empty-icon">
-        <Icon name={icon} size={30} />
+    <div className="pg-picker" role="dialog" aria-label={`Add to ${album.name}`} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+      <div className="pg-picker-sheet">
+        <header className="pg-picker-head">
+          <div>
+            <h2>Add to “{album.name}”</h2>
+            <p className="app-subtitle">{sel.size ? `${sel.size} selected` : 'Click photos to choose them; Shift-click picks a range.'}</p>
+          </div>
+          <button type="button" className="pill pg-soft" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="primary pill" disabled={!sel.size} onClick={() => onAdd(list.filter((p) => sel.has(photoKey(p))))}>
+            Add {sel.size || ''}
+          </button>
+        </header>
+        <PhotoGrid
+          items={list}
+          grouping="month"
+          tileMin={104}
+          tickets={tickets}
+          selected={sel}
+          selecting
+          onToggle={toggle}
+          onToggleMany={many}
+          onOpen={(i) => toggle(i, false)}
+          empty={<EmptyNote icon="image" title="Nothing more to add" text="Everything in your library is already in this album." />}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EmptyNote({ icon, title, text, children }: { icon: IconName; title: string; text: string; children?: ReactNode }) {
+  return (
+    <div className="pg-empty">
+      <span className="pg-empty-icon">
+        <Icon name={icon} size={28} />
       </span>
       <h3>{title}</h3>
       <p>{text}</p>
-    </div>
-  );
-}
-
-function Tile({
-  photo,
-  ticket,
-  selected,
-  selecting,
-  onOpen,
-  onToggle,
-}: {
-  photo: Photo;
-  ticket?: string;
-  selected: boolean;
-  selecting: boolean;
-  onOpen: () => void;
-  onToggle: (range: boolean) => void;
-}) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      className={`ph-tile ${selected ? 'sel' : ''} ${selecting ? 'selecting' : ''}`}
-      title={photo.name}
-      onClick={(e) => (selecting || e.shiftKey || e.ctrlKey || e.metaKey ? onToggle(e.shiftKey) : onOpen())}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') onOpen();
-        if (e.key === ' ') {
-          e.preventDefault();
-          onToggle(false);
-        }
-      }}
-    >
-      {ticket && !failed ? (
-        <img src={thumbUrl(photo, ticket)} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailed(true)} />
-      ) : (
-        <span className="ph-ph">
-          <Icon name={photo.video ? 'fileVideo' : 'image'} size={26} />
-        </span>
-      )}
-      {photo.video && (
-        <span className="ph-badge">
-          <Icon name="play" size={11} />
-        </span>
-      )}
-      {photo.favorite && (
-        <span className="ph-fav">
-          <Icon name="heart" size={14} />
-        </span>
-      )}
-      <button
-        type="button"
-        className="ph-check"
-        aria-label={selected ? 'Deselect' : 'Select'}
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggle(e.shiftKey);
-        }}
-      >
-        {selected && <Icon name="check" size={12} />}
-      </button>
-    </div>
-  );
-}
-
-function PhotoViewer({
-  photos,
-  index,
-  tickets,
-  onIndex,
-  onClose,
-  onFavorite,
-  onAlbum,
-  onDelete,
-}: {
-  photos: Photo[];
-  index: number;
-  tickets: Record<string, string>;
-  onIndex: (i: number) => void;
-  onClose: () => void;
-  onFavorite: (p: Photo) => void;
-  onAlbum: (e: RMouseEvent, p: Photo) => void;
-  onDelete: (p: Photo) => void;
-}) {
-  const p = photos[index];
-  const ticket = tickets[p.root];
-  const [loaded, setLoaded] = useState(false);
-  const [info, setInfo] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const go = useCallback((d: number) => onIndex(Math.max(0, Math.min(photos.length - 1, index + d))), [index, photos.length, onIndex]);
-
-  useEffect(() => setLoaded(false), [p]);
-  useEffect(() => box.current?.focus(), []);
-
-  return (
-    <div
-      ref={box}
-      className="ph-viewer"
-      tabIndex={-1}
-      role="dialog"
-      aria-label={p.name}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-        else if (e.key === 'ArrowLeft') go(-1);
-        else if (e.key === 'ArrowRight') go(1);
-        else if (e.key === 'Delete') onDelete(p);
-        else return;
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
-      <header className="ph-vbar">
-        <button type="button" className="ghost" aria-label="Back" title="Back (Esc)" onClick={onClose}>
-          <Icon name="chevronLeft" size={18} />
-        </button>
-        <div className="ph-vtitle">
-          <strong>{p.name}</strong>
-          <span>{dateFmt.format(new Date(p.taken))}</span>
-        </div>
-        <button type="button" className={`ghost ${p.favorite ? 'faved' : ''}`} aria-label="Favorite" title="Favorite" onClick={() => onFavorite(p)}>
-          <Icon name="heart" size={18} />
-        </button>
-        <button type="button" className="ghost" aria-label="Add to album" title="Add to Album" onClick={(e) => onAlbum(e, p)}>
-          <Icon name="albums" size={18} />
-        </button>
-        <button type="button" className={`ghost ${info ? 'on' : ''}`} aria-label="Info" title="Info" onClick={() => setInfo((v) => !v)}>
-          <Icon name="info" size={18} />
-        </button>
-        {ticket && (
-          <a className="ghost btn-like" href={originalUrl(p, ticket, true)} aria-label="Download" title="Download">
-            <Icon name="download" size={18} />
-          </a>
-        )}
-        <button type="button" className="ghost" aria-label="Delete" title="Delete" onClick={() => onDelete(p)}>
-          <Icon name="trash" size={18} />
-        </button>
-      </header>
-
-      <div className="ph-stage" onClick={(e) => e.target === e.currentTarget && onClose()}>
-        {!ticket ? (
-          <span className="spinner" />
-        ) : p.video ? (
-          <video key={photoKey(p)} src={originalUrl(p, ticket)} controls autoPlay playsInline />
-        ) : (
-          <>
-            {!loaded && <img className="ph-preview" src={thumbUrl(p, ticket)} alt="" draggable={false} />}
-            <img
-              key={photoKey(p)}
-              className={`ph-full ${loaded ? 'ready' : ''}`}
-              src={browserCanShow(p) ? originalUrl(p, ticket) : thumbUrl(p, ticket, 'l')}
-              alt={p.name}
-              draggable={false}
-              onLoad={() => setLoaded(true)}
-            />
-          </>
-        )}
-        {index > 0 && (
-          <button type="button" className="ph-nav prev" aria-label="Previous" onClick={() => go(-1)}>
-            <Icon name="chevronLeft" size={22} />
-          </button>
-        )}
-        {index < photos.length - 1 && (
-          <button type="button" className="ph-nav next" aria-label="Next" onClick={() => go(1)}>
-            <Icon name="chevronRight" size={22} />
-          </button>
-        )}
-        {info && (
-          <dl className="ph-info">
-            <dt>Taken</dt>
-            <dd>{dateFmt.format(new Date(p.taken))}</dd>
-            {p.width ? (
-              <>
-                <dt>Size</dt>
-                <dd>
-                  {p.width} × {p.height}
-                </dd>
-              </>
-            ) : null}
-            <dt>File</dt>
-            <dd>{fmtBytes(p.size)}</dd>
-            <dt>Where</dt>
-            <dd className="ph-path">{p.path}</dd>
-          </dl>
-        )}
-      </div>
+      {children && <div className="pg-empty-actions">{children}</div>}
     </div>
   );
 }

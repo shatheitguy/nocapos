@@ -14,7 +14,7 @@ const maxJobs = 50
 
 type Job struct {
 	ID       string          `json:"id"`
-	Kind     string          `json:"kind"` // copy | move
+	Kind     string          `json:"kind"` // copy | move | compress | extract
 	Root     string          `json:"root"`
 	Sources  []string        `json:"sources"`
 	Dest     string          `json:"dest"`
@@ -53,11 +53,20 @@ func NewJobs(svc *Service) *Jobs { return &Jobs{svc: svc, jobs: map[string]*job{
 
 // Start launches a copy or move. onDone runs when it finishes (any outcome).
 func (js *Jobs) Start(userID, root string, rels []string, dest string, move bool, conflict Conflict, display func(string) string, onDone func(Job)) Job {
-	ctx, cancel := context.WithCancel(context.Background())
 	kind := "copy"
 	if move {
 		kind = "move"
 	}
+	return js.Run(userID, kind, root, rels, dest, conflict, display, func(ctx context.Context, onProgress func(Progress)) (TransferResult, error) {
+		return js.svc.TransferWith(ctx, root, rels, dest, TransferOptions{Move: move, Conflict: conflict, OnProgress: onProgress})
+	}, onDone)
+}
+
+// Run launches any long file job (copy, move, compress, extract) with
+// progress and cancellation. work returns the paths it produced.
+func (js *Jobs) Run(userID, kind, root string, rels []string, dest string, conflict Conflict, display func(string) string,
+	work func(ctx context.Context, onProgress func(Progress)) (TransferResult, error), onDone func(Job)) Job {
+	ctx, cancel := context.WithCancel(context.Background())
 	srcs := make([]string, len(rels))
 	for i, r := range rels {
 		srcs[i] = display(r)
@@ -80,14 +89,17 @@ func (js *Jobs) Start(userID, root string, rels []string, dest string, move bool
 
 	go func() {
 		defer cancel()
-		res, err := js.svc.TransferWith(ctx, root, rels, dest, TransferOptions{
-			Move: move, Conflict: conflict,
-			OnProgress: func(p Progress) {
-				x.mu.Lock()
-				x.j.Progress = p
-				x.mu.Unlock()
-			},
+		res, err := work(ctx, func(p Progress) {
+			x.mu.Lock()
+			x.j.Progress = p
+			x.mu.Unlock()
 		})
+		if res.Paths == nil {
+			res.Paths = []string{}
+		}
+		if res.Skipped == nil {
+			res.Skipped = []string{}
+		}
 		for i := range res.Paths {
 			res.Paths[i] = display(res.Paths[i])
 		}

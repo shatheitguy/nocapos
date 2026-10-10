@@ -206,7 +206,7 @@ export function QuickSettings({
           title="Light mode"
           on={light}
           disabled={!classic}
-          sub={!classic ? 'Cyber-Deck is always dark' : light ? 'On' : 'Off'}
+          sub={!classic ? `${prefs.uiTheme === 'glass' ? 'Glass' : 'Cyber-Deck'} is always dark` : light ? 'On' : 'Off'}
           onClick={() => prefs.set({ theme: light ? 'dark' : 'light' })}
         />
         <Tile

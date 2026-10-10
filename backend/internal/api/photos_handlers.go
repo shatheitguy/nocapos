@@ -42,15 +42,17 @@ func (s *Server) photosList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) photosTickets(w http.ResponseWriter, r *http.Request) {
 	uid := userFrom(r.Context()).ID
-	out := map[string]string{}
+	out, trash := map[string]string{}, map[string]string{}
 	var exp time.Time
 	for _, root := range s.Files.Roots() {
 		if root.ID == "system" {
 			continue
 		}
 		out[root.ID], exp = s.fileTickets.issueTTL(uid, root.ID, photos.Folder, photoTicketTTL)
+		// Recently deleted photos are shown from the recycle bin.
+		trash[root.ID], _ = s.fileTickets.issueTTL(uid, root.ID, files.RecycleDir, photoTicketTTL)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tickets": out, "expires_at": exp.UTC()})
+	writeJSON(w, http.StatusOK, map[string]any{"tickets": out, "trash": trash, "expires_at": exp.UTC()})
 }
 
 func (s *Server) photosThumb(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +162,7 @@ func (s *Server) photosDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	uid := userFrom(r.Context()).ID
 	for root, rels := range byRoot {
-		err := s.Files.Delete(root, rels, false)
+		err := s.Photos.TrashRoot(r.Context(), root, rels)
 		s.audit(r, uid, "photos.delete", root+":"+strings.Join(rels, ", "), err == nil, "to recycle bin")
 		if err != nil {
 			s.fileError(w, r, err)
@@ -298,6 +300,101 @@ func (s *Server) photosAlbumItems(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.albumError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// photosInfo returns the camera details of one photo.
+func (s *Server) photosInfo(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	d, err := s.Photos.Info(q.Get("root"), q.Get("path"))
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+// photosAlbumCover sets an album's cover ({"root", "path"}), or resets it ({}).
+func (s *Server) photosAlbumCover(w http.ResponseWriter, r *http.Request) {
+	id, ok := albumID(w, r)
+	if !ok {
+		return
+	}
+	var req store.PhotoKey
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	var cover *store.PhotoKey
+	if req.Path != "" {
+		keys, err := s.cleanPhotoKeys([]store.PhotoKey{req})
+		if err != nil {
+			s.fileError(w, r, err)
+			return
+		}
+		cover = &keys[0]
+	}
+	if err := s.Store.SetPhotoAlbumCover(r.Context(), userFrom(r.Context()).ID, id, cover); err != nil {
+		s.albumError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) photosTrash(w http.ResponseWriter, r *http.Request) {
+	items, err := s.Photos.Deleted(r.Context())
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+type photoTrashRequest struct {
+	IDs []int64 `json:"ids"`
+}
+
+func (s *Server) photoTrashIDs(w http.ResponseWriter, r *http.Request) ([]int64, bool) {
+	var req photoTrashRequest
+	if !decodeJSON(w, r, &req) {
+		return nil, false
+	}
+	if len(req.IDs) == 0 || len(req.IDs) > 5000 {
+		writeError(w, http.StatusBadRequest, "bad_request", "choose 1-5000 items")
+		return nil, false
+	}
+	return req.IDs, true
+}
+
+// photosRestore puts recently deleted photos back.
+func (s *Server) photosRestore(w http.ResponseWriter, r *http.Request) {
+	ids, ok := s.photoTrashIDs(w, r)
+	if !ok {
+		return
+	}
+	keys, err := s.Photos.Restore(r.Context(), ids)
+	s.audit(r, userFrom(r.Context()).ID, "photos.restore", strconv.Itoa(len(keys))+" item(s)", err == nil, "from recycle bin")
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	if keys == nil {
+		keys = []store.PhotoKey{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": keys})
+}
+
+// photosPurge deletes recently deleted photos for good.
+func (s *Server) photosPurge(w http.ResponseWriter, r *http.Request) {
+	ids, ok := s.photoTrashIDs(w, r)
+	if !ok {
+		return
+	}
+	err := s.Photos.Purge(r.Context(), ids)
+	s.audit(r, userFrom(r.Context()).ID, "photos.purge", strconv.Itoa(len(ids))+" item(s)", err == nil, "deleted for good")
+	if err != nil {
+		s.fileError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

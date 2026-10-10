@@ -271,3 +271,30 @@ func (ix *Index) Remove(root string, rels []string) {
 	}
 	ix.entries = out
 }
+
+// Recent returns up to limit files (not folders, not hidden ones), most
+// recently modified first, for the Recents view.
+func (ix *Index) Recent(limit int) []Hit {
+	if limit <= 0 {
+		return []Hit{}
+	}
+	ix.mu.RLock()
+	var found []*indexEntry
+	for i := range ix.entries {
+		e := &ix.entries[i]
+		if e.dir || strings.HasPrefix(e.name, ".") || strings.Contains(e.rel, "/.") {
+			continue
+		}
+		found = append(found, e)
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].modTime.After(found[j].modTime) })
+	if len(found) > limit {
+		found = found[:limit]
+	}
+	hits := make([]Hit, len(found))
+	for i, e := range found {
+		hits[i] = Hit{Root: e.root, Path: "/" + e.rel, Name: e.name, Size: e.size, ModTime: e.modTime}
+	}
+	ix.mu.RUnlock()
+	return hits
+}
