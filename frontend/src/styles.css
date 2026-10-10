@@ -101,8 +101,8 @@ button {
   border: 0;
   border-radius: var(--radius-sm);
   padding: 8px 14px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--btn-bg, var(--accent));
+  color: var(--btn-ink, var(--accent-ink));
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
