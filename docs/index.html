@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NoCapOS — your server, as a desktop</title>
-<meta name="description" content="NoCapOS turns any Linux server into a personal cloud with a full desktop in your browser: App Store, Files, Terminal, users, network and Docker apps. Free and open source (MIT).">
+<meta name="description" content="NoCapOS turns any Linux server into a personal cloud with a frosted-glass desktop in your browser: App Store, Files, Photos, Backups, ZFS storage, network sharing, Terminal and Docker apps. Free and open source (MIT).">
 <meta name="theme-color" content="#07070a">
 <meta property="og:title" content="NoCapOS">
 <meta property="og:description" content="A web desktop that turns any Linux server into your personal cloud. Free & open source.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://shatheitguy.github.io/nocapos/screenshots/desktop.png">
+<meta property="og:image" content="https://shatheitguy.github.io/nocapos/screenshots/desktop.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230e1117'/%3E%3Cg transform='translate(9 9) scale(.82)'%3E%3Cpath d='M40.5 43A33 33 0 0 1 95 27l-7 6A24 24 0 0 0 51 44Z' fill='%23aab0bb'/%3E%3Cpath d='M6 10l15 15v67L6 80Z' fill='%23aab0bb'/%3E%3Cpath d='M6 10h13l40 56q9 12 29 3l7 5q-29 22-45 2Z' fill='%23aab0bb'/%3E%3Cpath d='M85 38a17 17 0 1 0 0 24l-6-5a9.5 9.5 0 1 1 0-14Z' fill='%23ff2a2a'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,7 +87,7 @@ section{padding:88px 0 0}
 
 .shots{display:grid;grid-template-columns:repeat(2,1fr);gap:22px}
 .shot{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
-.shot img{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top}
+.shot img{width:100%;height:auto;aspect-ratio:16/10;object-fit:cover;object-position:top}
 .shot figcaption{padding:14px 18px;font-size:14px;color:var(--text2)}
 .shot figcaption b{color:var(--text);font-weight:600;margin-right:6px}
 .shot a{display:block}
@@ -142,7 +142,7 @@ footer a{color:var(--text2)}
 <header class="hero wrap">
   <span class="tag">Self-hosted · Open source · Freedom to do more</span>
   <h1>Your Linux server, <b>as a desktop.</b></h1>
-  <p class="lead">NoCapOS installs on top of Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch and turns the machine into a personal cloud: a full windowed desktop in your browser with an App Store, files, a root terminal, users and network — like umbrelOS or OpenMediaVault, with a real desktop.</p>
+  <p class="lead">NoCapOS installs on top of Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch and turns the machine into a personal cloud: a frosted-glass desktop in your browser with an App Store, Files, Photos, Backups, ZFS storage, network sharing and a root terminal — like umbrelOS or OpenMediaVault, with a real desktop.</p>
   <div class="cmd">
     <code id="cmd">curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash</code>
     <button class="copy" type="button" data-copy="cmd">Copy</button>
@@ -152,10 +152,10 @@ footer a{color:var(--text2)}
     <a class="btn ghost" href="https://github.com/shatheitguy/nocapos/releases/latest">Downloads</a>
     <a class="btn ghost" href="https://github.com/shatheitguy/nocapos">Source on GitHub</a>
   </div>
-  <div class="meta"><span>amd64 · arm64 · armv7</span><span>Raspberry Pi 4 / 5</span><span>MIT licensed</span><span>Single 7 MB binary</span></div>
+  <div class="meta"><span>amd64 · arm64 · armv7</span><span>Raspberry Pi 4 / 5</span><span>MIT licensed</span><span>Single ~10 MB binary</span></div>
   <figure class="frame">
     <div class="bar"><i></i><i></i><i></i></div>
-    <img src="screenshots/desktop.png" alt="The NoCapOS desktop with clock, system monitor, network, containers and calendar widgets" width="1440" height="900">
+    <img src="screenshots/desktop.jpg" alt="The NoCapOS home screen: greeting, search and installed apps over the Tide wallpaper" width="1440" height="900">
   </figure>
 </header>
 
@@ -163,18 +163,21 @@ footer a{color:var(--text2)}
   <div class="head">
     <span class="tag">Features</span>
     <h2>Everything your server does, <b>one click away.</b></h2>
-    <p>NoCapOS runs as root on your machine, so it can manage the whole box — and every change is admin-only and written to an audit log.</p>
+    <p>NoCapOS runs as root on your machine, so it can manage the whole box, and every change is admin-only and written to an audit log.</p>
   </div>
   <div class="grid">
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></svg></div><h3>App Store</h3><p>One-click installs of Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden, Syncthing, Gitea, code-server, n8n and more — with updates, release notes and uninstall that keeps your data.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h7l2 2h9v11H3z"/></svg></div><h3>Files</h3><p>Dual-pane file manager with previews, syntax highlighting, permission badges, a recycle bin and background copies with progress, conflict choices and cancel.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM7 9l3 3-3 3M13 15h4"/></svg></div><h3>Root terminal</h3><p>A real shell on the server — or inside any container — right in the browser, with a CRT mode and a clear badge when you're root.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 14a4 4 0 1 0-8 0M12 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 20c0-3 3.6-5 8-5s8 2 8 5"/></svg></div><h3>Your Linux users</h3><p>Sign in with the machine's own accounts, root included. Create users, set roles, reset passwords and turn on two-factor sign-in.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/></svg></div><h3>Network & power</h3><p>Join Wi-Fi, switch between DHCP and static addresses with automatic rollback, restart or shut down — from a macOS-style Control Center.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></div><h3>Universal search</h3><p>Ctrl+Space finds apps, settings, files and actions in one box, with a live file index and keyboard navigation.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div><h3>Live monitoring</h3><p>CPU per core, memory, disks, network and GPUs, plus container stats and logs — as widgets or full apps.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h18v11H3zM8 20h8M12 16v4"/></svg></div><h3>Remote Desktop & more</h3><p>RDP to your PCs, a real Brave browser, one-click scripts, and an AI assistant that runs local models with Ollama.</p></div>
-    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7z"/></svg></div><h3>Secure by default</h3><p>argon2id passwords, rotating sessions, two-factor sign-in, a strict content-security policy, and protected system folders that Files can't delete.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16v12H4zM4 10h16"/></svg></div><h3>Glass desktop</h3><p>A frosted-glass desktop with 10 wallpapers. The accent and the glass app icons follow the wallpaper, and your installed apps sit on the home screen.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></svg></div><h3>App Store</h3><p>One-click Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden, Syncthing, Gitea, code-server, n8n and more, with updates and release notes. Click and hold to remove.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h7l2 2h9v11H3z"/></svg></div><h3>Files</h3><p>Home, Recents, Favorites, shared folders, network devices and external drives, with quick look, zip/tar, Trash and protected system folders.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6"/></svg></div><h3>Photos</h3><p>A timeline by years, months and days, albums, favorites, a viewer with camera details, and Recently Deleted.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 1-8.5 6"/><path d="M3 4v5h5M12 8v4l3 2"/></svg></div><h3>Backups & Rewind</h3><p>Encrypted, scheduled backups to a drive, SFTP or S3/B2, and Rewind to bring back any file from any day.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/></svg></div><h3>Storage & ZFS</h3><p>Disk health (SMART), ZFS pools (mirror, RAIDZ1/2/3), datasets, snapshots and scrubs. Erasing always needs a typed confirmation.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4zM8 21h8M12 17v4"/><path d="M8 11h8"/></svg></div><h3>Network drives & sharing</h3><p>Connect SMB/NFS shares, and share any folder over SMB and WebDAV, right inside Files. Plus Cloud Imports from Google Drive, Dropbox and OneDrive.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12 4 7.5"/></svg></div><h3>Docker, your way</h3><p>Edit any container (ports, folders, macvlan/ipvlan networks, environment, limits), create networks and run Compose stacks.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v14H4zM7 9l3 3-3 3M13 15h4"/></svg></div><h3>Root terminal</h3><p>A real shell on the server, or inside any container, right in the browser.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 14a4 4 0 1 0-8 0M12 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 20c0-3 3.6-5 8-5s8 2 8 5"/></svg></div><h3>Users & network</h3><p>Sign in with the machine's Linux accounts, manage users, join Wi-Fi, set static IPs with automatic rollback, check for updates.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div><h3>Monitor & more</h3><p>Live CPU, memory, disks, network and GPUs, plus Remote Desktop, a Brave browser, one-click scripts and a local AI assistant.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7z"/></svg></div><h3>Secure by default</h3><p>argon2id passwords, two-factor sign-in, rotating sessions, an audit log of every admin action and protected system folders.</p></div>
   </div>
 </section>
 
@@ -185,12 +188,14 @@ footer a{color:var(--text2)}
     <p>Real screenshots of NoCapOS running on a Linux server.</p>
   </div>
   <div class="shots">
-    <figure class="shot"><a href="screenshots/app-store.png"><img src="screenshots/app-store.png" alt="App Store" loading="lazy" width="1440" height="900"></a><figcaption><b>App Store</b>Featured apps, categories, installs and updates.</figcaption></figure>
-    <figure class="shot"><a href="screenshots/login.png"><img src="screenshots/login.png" alt="Lock screen with the cyber cat" loading="lazy" width="1440" height="900"></a><figcaption><b>Lock screen</b>Your photo, and a cyber cat that covers its eyes while you type.</figcaption></figure>
-    <figure class="shot"><a href="screenshots/files-dual.png"><img src="screenshots/files-dual.png" alt="Dual-pane Files with code preview" loading="lazy" width="1440" height="900"></a><figcaption><b>Files</b>Dual pane, permission badges and syntax-highlighted previews.</figcaption></figure>
-    <figure class="shot"><a href="screenshots/search.png"><img src="screenshots/search.png" alt="Universal search" loading="lazy" width="1440" height="900"></a><figcaption><b>Search</b>Apps, settings, files and actions with Ctrl+Space.</figcaption></figure>
-    <figure class="shot"><a href="screenshots/settings.png"><img src="screenshots/settings.png" alt="Settings" loading="lazy" width="1440" height="900"></a><figcaption><b>Settings</b>Themes, wallpaper, dock, users, network and more.</figcaption></figure>
-    <figure class="shot"><a href="screenshots/cyber-deck.png"><img src="screenshots/cyber-deck.png" alt="Cyber-Deck theme" loading="lazy" width="1440" height="900"></a><figcaption><b>Cyber-Deck</b>An optional sci-fi theme with holographic widgets.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/launchpad.jpg"><img src="screenshots/launchpad.jpg" alt="Launchpad" loading="lazy" width="1440" height="900"></a><figcaption><b>Launchpad</b>Glass icons for NoCapOS apps, real icons for installed apps.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/files.jpg"><img src="screenshots/files.jpg" alt="Files" loading="lazy" width="1440" height="900"></a><figcaption><b>Files</b>Favorites, recents, network devices and quick look.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/photos.jpg"><img src="screenshots/photos.jpg" alt="Photos timeline" loading="lazy" width="1440" height="900"></a><figcaption><b>Photos</b>Timeline, On this day, albums and favorites.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/app-store.jpg"><img src="screenshots/app-store.jpg" alt="App Store" loading="lazy" width="1440" height="900"></a><figcaption><b>App Store</b>Featured apps, categories, installs and updates.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/settings.jpg"><img src="screenshots/settings.jpg" alt="Settings" loading="lazy" width="1440" height="900"></a><figcaption><b>Settings</b>Network, General, Personalization, Security and more.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/storage.jpg"><img src="screenshots/storage.jpg" alt="Storage with ZFS pools" loading="lazy" width="1440" height="900"></a><figcaption><b>Storage</b>Disk health and ZFS pools (sample data).</figcaption></figure>
+    <figure class="shot"><a href="screenshots/login.jpg"><img src="screenshots/login.jpg" alt="Lock screen" loading="lazy" width="1440" height="900"></a><figcaption><b>Lock screen</b>Your photo over the wallpaper.</figcaption></figure>
+    <figure class="shot"><a href="screenshots/cyber-deck.jpg"><img src="screenshots/cyber-deck.jpg" alt="Cyber-Deck theme" loading="lazy" width="1440" height="900"></a><figcaption><b>Cyber-Deck</b>An optional sci-fi theme with holographic widgets.</figcaption></figure>
   </div>
 </section>
 

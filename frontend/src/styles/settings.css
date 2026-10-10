@@ -17,7 +17,8 @@
 .set2.compact .set2-cat { padding: 9px 10px; font-size: 15px; }
 .set2-account:hover:not(:disabled), .set2-cat:hover:not(:disabled) { background: var(--surface-2); filter: none; }
 .set2-account:active:not(:disabled), .set2-cat:active:not(:disabled) { transform: none; }
-.set2-account.on, .set2-cat.on { background: var(--accent); color: var(--accent-ink); }
+.set2-account.on, .set2-cat.on { background: var(--surface-3); color: var(--text); }
+:root[data-ui='glass'] .set2-account.on, :root[data-ui='glass'] .set2-cat.on { background: rgba(255, 255, 255, 0.14); }
 .set2-account.on small { color: inherit; opacity: 0.8; }
 .set-ico { display: inline-grid; place-items: center; flex: none; color: #fff; background: var(--c, #8e8e93); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.2); }
 /* Glass app icons (Appearance → App icons): Settings' icons go frosted too, keeping a hint of their colour. */
