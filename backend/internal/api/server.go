@@ -27,6 +27,7 @@ import (
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
+	"alfaos/alfad/internal/vm"
 	"alfaos/alfad/internal/webapps"
 	"alfaos/alfad/internal/ws"
 	"alfaos/alfad/web"
@@ -55,6 +56,7 @@ type Deps struct {
 	Cloud     *cloudimport.Manager
 	Stacks    *stacks.Manager
 	Storage   *storage.Manager
+	VMs       *vm.Manager
 	Version   string
 }
 
@@ -315,6 +317,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Storage: disks, SMART, ZFS pools, datasets and snapshots (admin, audited).
 	s.storageRoutes(mux)
+
+	// Virtual Desk: virtual machines (admin, audited).
+	s.vmRoutes(mux)
 
 	// Notification Center (admin).
 	s.notifyRoutes(mux)
