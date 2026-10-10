@@ -21,11 +21,13 @@ type PhotoMeta struct {
 	Taken  int64
 	Width  int
 	Height int
+	// DurationMS is a video's length; 0 for pictures or when unknown.
+	DurationMS int64
 }
 
 // PhotoMetas returns every cached entry, keyed by root + "\x00" + path.
 func (s *Store) PhotoMetas(ctx context.Context) (map[string]PhotoMeta, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT root, path, size, mtime, taken, width, height FROM photo_meta`)
+	rows, err := s.db.QueryContext(ctx, `SELECT root, path, size, mtime, taken, width, height, duration_ms FROM photo_meta`)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +35,7 @@ func (s *Store) PhotoMetas(ctx context.Context) (map[string]PhotoMeta, error) {
 	out := map[string]PhotoMeta{}
 	for rows.Next() {
 		var m PhotoMeta
-		if err := rows.Scan(&m.Root, &m.Path, &m.Size, &m.MTime, &m.Taken, &m.Width, &m.Height); err != nil {
+		if err := rows.Scan(&m.Root, &m.Path, &m.Size, &m.MTime, &m.Taken, &m.Width, &m.Height, &m.DurationMS); err != nil {
 			return nil, err
 		}
 		out[m.Root+"\x00"+m.Path] = m
@@ -51,13 +53,13 @@ func (s *Store) SavePhotoMetas(ctx context.Context, metas []PhotoMeta) error {
 		return err
 	}
 	defer tx.Rollback()
-	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO photo_meta (root, path, size, mtime, taken, width, height) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO photo_meta (root, path, size, mtime, taken, width, height, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, m := range metas {
-		if _, err := stmt.ExecContext(ctx, m.Root, m.Path, m.Size, m.MTime, m.Taken, m.Width, m.Height); err != nil {
+		if _, err := stmt.ExecContext(ctx, m.Root, m.Path, m.Size, m.MTime, m.Taken, m.Width, m.Height, m.DurationMS); err != nil {
 			return err
 		}
 	}
@@ -119,10 +121,12 @@ type PhotoAlbum struct {
 	Name      string     `json:"name"`
 	CreatedAt time.Time  `json:"created_at"`
 	Items     []PhotoKey `json:"items"`
+	// Cover is the photo chosen to show the album; nil means the newest.
+	Cover *PhotoKey `json:"cover,omitempty"`
 }
 
 func (s *Store) PhotoAlbums(ctx context.Context, userID string) ([]*PhotoAlbum, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at FROM photo_albums WHERE user_id = ? ORDER BY name COLLATE NOCASE`, userID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at, cover_root, cover_path FROM photo_albums WHERE user_id = ? ORDER BY name COLLATE NOCASE`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,11 +135,15 @@ func (s *Store) PhotoAlbums(ctx context.Context, userID string) ([]*PhotoAlbum, 
 	for rows.Next() {
 		a := &PhotoAlbum{Items: []PhotoKey{}}
 		var created int64
-		if err := rows.Scan(&a.ID, &a.Name, &created); err != nil {
+		var cover PhotoKey
+		if err := rows.Scan(&a.ID, &a.Name, &created, &cover.Root, &cover.Path); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		a.CreatedAt = time.Unix(created, 0).UTC()
+		if cover.Path != "" {
+			a.Cover = &cover
+		}
 		albums = append(albums, a)
 		byID[a.ID] = a
 	}
@@ -198,6 +206,19 @@ func (s *Store) DeletePhotoAlbum(ctx context.Context, userID string, id int64) e
 	return err
 }
 
+// SetPhotoAlbumCover picks the album's cover photo; nil goes back to the newest.
+func (s *Store) SetPhotoAlbumCover(ctx context.Context, userID string, id int64, cover *PhotoKey) error {
+	if err := s.ownsAlbum(ctx, userID, id); err != nil {
+		return err
+	}
+	k := PhotoKey{}
+	if cover != nil {
+		k = *cover
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE photo_albums SET cover_root = ?, cover_path = ? WHERE id = ?`, k.Root, k.Path, id)
+	return err
+}
+
 // AddToPhotoAlbum / RemoveFromPhotoAlbum change an album's photos.
 func (s *Store) AddToPhotoAlbum(ctx context.Context, userID string, id int64, keys []PhotoKey) error {
 	if err := s.ownsAlbum(ctx, userID, id); err != nil {
@@ -230,11 +251,67 @@ func (s *Store) ForgetPhotos(ctx context.Context, keys []PhotoKey) error {
 		for _, q := range []string{
 			`DELETE FROM photo_favorites WHERE root = ? AND path = ?`,
 			`DELETE FROM photo_album_items WHERE root = ? AND path = ?`,
+			`UPDATE photo_albums SET cover_root = '', cover_path = '' WHERE cover_root = ? AND cover_path = ?`,
 			`DELETE FROM photo_meta WHERE root = ? AND path = ?`,
 		} {
 			if _, err := s.db.ExecContext(ctx, q, k.Root, k.Path); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// PhotoTrash is a photo deleted from Photos, waiting in its drive's recycle bin.
+type PhotoTrash struct {
+	ID         int64     `json:"id"`
+	Root       string    `json:"root"`
+	TrashPath  string    `json:"path"` // where it is now, under the recycle bin
+	OrigPath   string    `json:"orig_path"`
+	Size       int64     `json:"size"`
+	Taken      time.Time `json:"taken"`
+	Width      int       `json:"width,omitempty"`
+	Height     int       `json:"height,omitempty"`
+	DurationMS int64     `json:"duration_ms,omitempty"`
+	DeletedAt  time.Time `json:"deleted_at"`
+}
+
+func (s *Store) AddPhotoTrash(ctx context.Context, items []PhotoTrash) error {
+	for _, t := range items {
+		if _, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO photo_trash
+			(root, trash_path, orig_path, size, taken, width, height, duration_ms, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			t.Root, t.TrashPath, t.OrigPath, t.Size, t.Taken.Unix(), t.Width, t.Height, t.DurationMS, t.DeletedAt.Unix()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PhotoTrashItems lists recently deleted photos, newest deletion first.
+func (s *Store) PhotoTrashItems(ctx context.Context) ([]PhotoTrash, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, root, trash_path, orig_path, size, taken, width, height, duration_ms, deleted_at
+		FROM photo_trash ORDER BY deleted_at DESC, id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PhotoTrash{}
+	for rows.Next() {
+		var t PhotoTrash
+		var taken, deleted int64
+		if err := rows.Scan(&t.ID, &t.Root, &t.TrashPath, &t.OrigPath, &t.Size, &taken, &t.Width, &t.Height, &t.DurationMS, &deleted); err != nil {
+			return nil, err
+		}
+		t.Taken, t.DeletedAt = time.Unix(taken, 0).UTC(), time.Unix(deleted, 0).UTC()
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) RemovePhotoTrash(ctx context.Context, ids []int64) error {
+	for _, id := range ids {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM photo_trash WHERE id = ?`, id); err != nil {
+			return err
 		}
 	}
 	return nil

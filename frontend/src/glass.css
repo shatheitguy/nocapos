@@ -1,0 +1,239 @@
+/* ==========================================================================
+   NoCapOS Glass theme — frosted sheets over the wallpaper, pill controls,
+   white text; the accent follows the wallpaper (Settings → Appearance).
+   Selected with <html data-ui="glass">.
+   ========================================================================== */
+
+/* ---------- photo wallpapers (every theme can use them) ---------- */
+body[data-wallpaper='tide'] { background: #061722 url('/wallpapers/tide.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='nebula'] { background: #0d0822 url('/wallpapers/nebula.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='blaze'] { background: #1a0710 url('/wallpapers/blaze.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='lights'] { background: #03100f url('/wallpapers/lights.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='glacier'] { background: #081426 url('/wallpapers/glacier.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='rose'] { background: #1c0814 url('/wallpapers/rose.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='meadow'] { background: #04140c url('/wallpapers/meadow.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='dune'] { background: #1a1006 url('/wallpapers/dune.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='midnight'] { background: #05070d url('/wallpapers/midnight.jpg') center / cover no-repeat fixed; }
+body[data-wallpaper='signal'] { background: #121317 url('/wallpapers/signal.jpg') center / cover no-repeat fixed; }
+.wp-tide { background: url('/wallpapers/tide-thumb.jpg') center / cover; }
+.wp-nebula { background: url('/wallpapers/nebula-thumb.jpg') center / cover; }
+.wp-blaze { background: url('/wallpapers/blaze-thumb.jpg') center / cover; }
+.wp-lights { background: url('/wallpapers/lights-thumb.jpg') center / cover; }
+.wp-glacier { background: url('/wallpapers/glacier-thumb.jpg') center / cover; }
+.wp-rose { background: url('/wallpapers/rose-thumb.jpg') center / cover; }
+.wp-meadow { background: url('/wallpapers/meadow-thumb.jpg') center / cover; }
+.wp-dune { background: url('/wallpapers/dune-thumb.jpg') center / cover; }
+.wp-midnight { background: url('/wallpapers/midnight-thumb.jpg') center / cover; }
+.wp-signal { background: url('/wallpapers/signal-thumb.jpg') center / cover; }
+
+/* ---------- tokens ---------- */
+:root[data-ui='glass'] {
+  --bg: #050608;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --surface-3: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: rgba(255, 255, 255, 0.94);
+  --muted: rgba(255, 255, 255, 0.55);
+  --glass: rgba(28, 29, 34, 0.42);
+  --glass-strong: rgba(22, 23, 28, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --titlebar: transparent;
+  --track: rgba(255, 255, 255, 0.1);
+  --accent-ink: #fff;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --sheet: rgba(18, 19, 24, 0.66);
+  --sheet-solid: rgba(26, 27, 33, 0.94);
+  --shadow-win: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  --shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.35);
+  --radius: 22px;
+  --radius-sm: 11px;
+  --widget-radius: 22px;
+  --font: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'SF Pro Text', Roboto, sans-serif;
+  color-scheme: dark;
+}
+:root[data-ui='glass'][data-solid] {
+  --sheet: rgba(22, 23, 28, 0.98);
+  --glass: rgba(26, 27, 32, 0.96);
+  --glass-strong: rgba(24, 25, 30, 0.98);
+}
+:root[data-ui='glass'] body { letter-spacing: -0.006em; -webkit-font-smoothing: antialiased; }
+:root[data-ui='glass'] ::selection { background: color-mix(in srgb, var(--accent) 55%, transparent); color: #fff; }
+:root[data-ui='glass'] * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
+:root[data-ui='glass'] h1, :root[data-ui='glass'] h2, :root[data-ui='glass'] h3 { letter-spacing: -0.02em; }
+
+/* ---------- windows: frosted sheets ---------- */
+:root[data-ui='glass'] .window {
+  background: var(--sheet);
+  backdrop-filter: blur(48px) saturate(1.7);
+  -webkit-backdrop-filter: blur(48px) saturate(1.7);
+  border: 0;
+  box-shadow: var(--shadow-win);
+}
+:root[data-ui='glass'] .window:not(.focused) { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06); }
+:root[data-ui='glass'] .window:not(.focused) .titlebar { opacity: 0.7; }
+:root[data-ui='glass'] .window.tiled { border-radius: 0; }
+:root[data-ui='glass'][data-square] .window { border-radius: 10px; }
+:root[data-ui='glass'] .titlebar { height: 50px; padding: 0 12px 0 20px; border-bottom: 0; }
+:root[data-ui='glass'] .titlebar .title { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
+:root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons { gap: 6px; }
+:root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons button { width: 28px; height: 28px; border-radius: 50%; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); }
+:root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); color: #fff; }
+:root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons button.close:hover:not(:disabled) { background: #ff5f57; color: #fff; }
+
+/* ---------- controls ---------- */
+:root[data-ui='glass'] button { border-radius: 12px; font-weight: 600; }
+/* Text buttons are pills; big clickable cards and tiles keep rounded corners. */
+:root[data-ui='glass'] button.pill,
+:root[data-ui='glass'] button.small,
+:root[data-ui='glass'] button.ghost:not(.icon-btn),
+:root[data-ui='glass'] :is(.dialog-actions, .toolbar, .ce-foot, .ce-head, .dn-head, .st-actions, .st-run, .btn-group, .row-actions) > button,
+:root[data-ui='glass'] .segmented button { border-radius: 999px; }
+:root[data-ui='glass'] button.icon-btn { border-radius: 50%; }
+:root[data-ui='glass'] button.widget { border-radius: var(--widget-radius); }
+:root[data-ui='glass'] button:hover:not(:disabled) { filter: brightness(1.12); }
+:root[data-ui='glass'] button.ghost { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.06); color: var(--text); }
+:root[data-ui='glass'] button.ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); }
+:root[data-ui='glass'] button.small { padding: 5px 12px; }
+:root[data-ui='glass'] button.icon-btn { padding: 0; width: 32px; height: 32px; }
+:root[data-ui='glass'] button.ghost.icon-btn { border-color: transparent; background: transparent; }
+:root[data-ui='glass'] button.ghost.icon-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+:root[data-ui='glass'] button.link { padding: 4px 6px; }
+
+:root[data-ui='glass'] input[type='text'],
+:root[data-ui='glass'] input:not([type]),
+:root[data-ui='glass'] input[type='password'],
+:root[data-ui='glass'] input[type='search'],
+:root[data-ui='glass'] input[type='number'],
+:root[data-ui='glass'] input[type='time'],
+:root[data-ui='glass'] input[type='date'],
+:root[data-ui='glass'] input[type='email'],
+:root[data-ui='glass'] input[type='url'],
+:root[data-ui='glass'] select,
+:root[data-ui='glass'] textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+:root[data-ui='glass'] input:focus, :root[data-ui='glass'] select:focus, :root[data-ui='glass'] textarea:focus {
+  outline: 0;
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+:root[data-ui='glass'] select option { background: #1d1e24; color: #fff; }
+
+:root[data-ui='glass'] .segmented { background: rgba(255, 255, 255, 0.06); border-radius: 999px; padding: 3px; }
+:root[data-ui='glass'] .segmented button { border-radius: 999px; padding: 6px 14px; }
+:root[data-ui='glass'] .segmented button.on { background: rgba(255, 255, 255, 0.16); color: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25); }
+:root[data-ui='glass'] .chip { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.72); }
+:root[data-ui='glass'] .chip-btn { background: rgba(255, 255, 255, 0.07); }
+:root[data-ui='glass'] .search.compact { border-radius: 999px; background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.08); }
+
+/* ---------- app layout ---------- */
+:root[data-ui='glass'] .sidebar { background: transparent; border-right: 0; padding: 4px 10px 12px 14px; }
+:root[data-ui='glass'] .sidebar button { border-radius: 10px; padding: 8px 11px; font-weight: 500; color: rgba(255, 255, 255, 0.82); }
+:root[data-ui='glass'] .sidebar button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+:root[data-ui='glass'] .sidebar button.on { background: rgba(255, 255, 255, 0.1); color: #fff; }
+:root[data-ui='glass'] .panel { background: rgba(255, 255, 255, 0.045); border-color: rgba(255, 255, 255, 0.06); border-radius: 16px; }
+:root[data-ui='glass'] .toolbar { border-bottom-color: transparent; }
+:root[data-ui='glass'] .table th { background: rgba(20, 21, 26, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+:root[data-ui='glass'] .table th, :root[data-ui='glass'] .table td { border-bottom-color: rgba(255, 255, 255, 0.05); }
+:root[data-ui='glass'] .table.hover tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* ---------- floating layers ---------- */
+:root[data-ui='glass'] .dialog-backdrop { background: rgba(0, 0, 0, 0.35); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+:root[data-ui='glass'] .dialog {
+  background: var(--sheet-solid);
+  backdrop-filter: blur(40px) saturate(1.6);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  padding: 22px;
+}
+:root[data-ui='glass'] .context-menu, :root[data-ui='glass'] .popover {
+  background: rgba(30, 31, 37, 0.82);
+  backdrop-filter: blur(40px) saturate(1.7);
+  -webkit-backdrop-filter: blur(40px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+:root[data-ui='glass'] .context-menu { border-radius: 14px; padding: 6px; }
+:root[data-ui='glass'] .context-menu button { border-radius: 8px; }
+:root[data-ui='glass'] .context-menu button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+:root[data-ui='glass'] .popover { border-radius: 24px; }
+
+/* ---------- dock, launcher button, tray ---------- */
+:root[data-ui='glass'] .shelf-launcher,
+:root[data-ui='glass'] .tray,
+:root[data-ui='glass'] .dock {
+  background: rgba(28, 29, 34, 0.45);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+:root[data-ui='glass'] .dock { border-radius: 22px; padding: 8px 10px; gap: 8px; }
+:root[data-ui='glass'] .dock-item { padding: 2px; border-radius: 14px; }
+:root[data-ui='glass'] .dock-item:hover:not(:disabled) { background: transparent; transform: translateY(-3px); }
+:root[data-ui='glass'] .dock-item.active { background: transparent; }
+:root[data-ui='glass'] .dock-item .dot { bottom: -6px; width: 4px; height: 4px; margin-left: -2px; background: rgba(255, 255, 255, 0.5); }
+:root[data-ui='glass'] .dock-item.active .dot { background: #fff; width: 4px; margin-left: -2px; }
+:root[data-ui='glass'] .tray:hover:not(:disabled), :root[data-ui='glass'] .tray.open,
+:root[data-ui='glass'] .shelf-launcher:hover:not(:disabled) { background: rgba(40, 41, 47, 0.6); }
+:root[data-ui='glass'] .app-icon { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+
+/* ---------- widgets ---------- */
+:root[data-ui='glass'] .widget {
+  background: rgba(28, 29, 34, 0.4);
+  backdrop-filter: blur(40px) saturate(1.7);
+  -webkit-backdrop-filter: blur(40px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- home: greeting and search ---------- */
+.home-header {
+  position: absolute;
+  top: calc(var(--res-top, 0px) + 7vh);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
+  max-width: 90vw;
+}
+.home-date { font-size: 14px; font-weight: 500; opacity: 0.75; }
+.home-greet { margin: 0; font-size: clamp(28px, 3.4vw, 44px); font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
+button.home-search {
+  pointer-events: auto;
+  align-self: center;
+  width: auto;
+  border-radius: 999px;
+  margin-top: 14px;
+  padding: 7px 10px 7px 14px;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(28, 29, 34, 0.38);
+  backdrop-filter: blur(30px) saturate(1.7);
+  -webkit-backdrop-filter: blur(30px) saturate(1.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-shadow: none;
+}
+button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); filter: none; }
+.home-search kbd { font: inherit; font-size: 11px; padding: 1px 7px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.65); }
+:root[data-ui='glass'] .clock-greet { display: none; }
+
+/* ---------- universal search ---------- */
+:root[data-ui='glass'] .spotlight { border-radius: 24px; background: rgba(26, 27, 33, 0.78); backdrop-filter: blur(48px) saturate(1.8); -webkit-backdrop-filter: blur(48px) saturate(1.8); border: 1px solid rgba(255, 255, 255, 0.1); }
+:root[data-ui='glass'] .sl-input input,
+:root[data-ui='glass'] .sl-input input:focus { border: 0; background: transparent; box-shadow: none; padding: 0; border-radius: 0; }
+:root[data-ui='glass'] .sl-row { border-radius: 10px; }
+:root[data-ui='glass'] .sl-row.on { background: rgba(255, 255, 255, 0.12); color: #fff; }
+:root[data-ui='glass'] .sl-row.on .sl-row-text span { color: rgba(255, 255, 255, 0.6); }
+:root[data-ui='glass'] .sl-body, :root[data-ui='glass'] .sl-preview { border-color: rgba(255, 255, 255, 0.07); }

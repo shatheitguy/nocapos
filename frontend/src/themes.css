@@ -46,44 +46,44 @@
    Shared FUI layer — applies to every theme except classic
    ========================================================================== */
 
-:root:not([data-ui='classic']) {
+:root[data-ui='cyberdeck'] {
   --radius: 3px;
   --radius-sm: 2px;
   --widget-radius: 4px;
   --shadow-win: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 34px var(--glow), 0 26px 60px rgba(0, 0, 0, 0.6);
   --shadow-soft: 0 0 22px var(--glow), 0 10px 30px rgba(0, 0, 0, 0.5);
 }
-:root:not([data-ui='classic']) body { letter-spacing: 0.01em; }
-:root:not([data-ui='classic']) ::selection { background: var(--accent); color: var(--accent-ink); }
-:root:not([data-ui='classic']) * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent; }
+:root[data-ui='cyberdeck'] body { letter-spacing: 0.01em; }
+:root[data-ui='cyberdeck'] ::selection { background: var(--accent); color: var(--accent-ink); }
+:root[data-ui='cyberdeck'] * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent; }
 
 /* Headings and labels in the display face */
-:root:not([data-ui='classic']) h1,
-:root:not([data-ui='classic']) h2,
-:root:not([data-ui='classic']) .settings-title,
-:root:not([data-ui='classic']) .settings-section-title,
-:root:not([data-ui='classic']) .widget-head,
-:root:not([data-ui='classic']) .sidebar-heading {
+:root[data-ui='cyberdeck'] h1,
+:root[data-ui='cyberdeck'] h2,
+:root[data-ui='cyberdeck'] .settings-title,
+:root[data-ui='cyberdeck'] .settings-section-title,
+:root[data-ui='cyberdeck'] .widget-head,
+:root[data-ui='cyberdeck'] .sidebar-heading {
   font-family: var(--display);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-:root:not([data-ui='classic']) .settings-title { font-size: 18px; }
-:root:not([data-ui='classic']) .settings-section-title { font-size: 11px; color: var(--accent); }
-:root:not([data-ui='classic']) .clock-time,
-:root:not([data-ui='classic']) .datetime-time,
-:root:not([data-ui='classic']) .tray-clock { font-family: var(--display); font-weight: 600; letter-spacing: 0.06em; }
+:root[data-ui='cyberdeck'] .settings-title { font-size: 18px; }
+:root[data-ui='cyberdeck'] .settings-section-title { font-size: 11px; color: var(--accent); }
+:root[data-ui='cyberdeck'] .clock-time,
+:root[data-ui='cyberdeck'] .datetime-time,
+:root[data-ui='cyberdeck'] .tray-clock { font-family: var(--display); font-weight: 600; letter-spacing: 0.06em; }
 
 /* ---------- windows: frosted glass, neon edge, corner brackets ---------- */
 
-:root:not([data-ui='classic']) .window {
+:root[data-ui='cyberdeck'] .window {
   background: color-mix(in srgb, var(--surface) 84%, transparent);
   backdrop-filter: blur(18px) saturate(1.35);
   -webkit-backdrop-filter: blur(18px) saturate(1.35);
   border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
 }
-:root:not([data-ui='classic']) .window:not(.focused) { border-color: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); }
-:root:not([data-ui='classic']) .window::after {
+:root[data-ui='cyberdeck'] .window:not(.focused) { border-color: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5); }
+:root[data-ui='cyberdeck'] .window::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -101,14 +101,14 @@
     linear-gradient(var(--c), var(--c)) bottom right / 2px 16px no-repeat;
   opacity: 0.9;
 }
-:root:not([data-ui='classic']) .window:not(.focused)::after { opacity: 0.25; }
-:root:not([data-ui='classic']) .window.tiled::after { display: none; }
+:root[data-ui='cyberdeck'] .window:not(.focused)::after { opacity: 0.25; }
+:root[data-ui='cyberdeck'] .window.tiled::after { display: none; }
 
-:root:not([data-ui='classic']) .titlebar {
+:root[data-ui='cyberdeck'] .titlebar {
   background: linear-gradient(90deg, var(--titlebar), transparent 70%);
   border-bottom-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
-:root:not([data-ui='classic']) .titlebar .title {
+:root[data-ui='cyberdeck'] .titlebar .title {
   font-family: var(--display);
   font-size: 11.5px;
   font-weight: 600;
@@ -116,7 +116,7 @@
   text-transform: uppercase;
 }
 /* Text-scan sweep across the focused window's title */
-:root:not([data-ui='classic']) .window.focused .titlebar .title {
+:root[data-ui='cyberdeck'] .window.focused .titlebar .title {
   background: linear-gradient(90deg, var(--text) 0 42%, var(--accent) 50%, var(--text) 58% 100%);
   background-size: 320% 100%;
   -webkit-background-clip: text;
@@ -131,45 +131,45 @@
 
 /* ---------- glass chrome: dock, tray, widgets, menus ---------- */
 
-:root:not([data-ui='classic']) .dock,
-:root:not([data-ui='classic']) .tray,
-:root:not([data-ui='classic']) .widget,
-:root:not([data-ui='classic']) .glass,
-:root:not([data-ui='classic']) .popover,
-:root:not([data-ui='classic']) .context-menu,
-:root:not([data-ui='classic']) .launcher-panel {
+:root[data-ui='cyberdeck'] .dock,
+:root[data-ui='cyberdeck'] .tray,
+:root[data-ui='cyberdeck'] .widget,
+:root[data-ui='cyberdeck'] .glass,
+:root[data-ui='cyberdeck'] .popover,
+:root[data-ui='cyberdeck'] .context-menu,
+:root[data-ui='cyberdeck'] .launcher-panel {
   border-radius: 4px;
   border: 1px solid var(--glass-border);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent), 0 0 24px var(--glow), 0 12px 30px rgba(0, 0, 0, 0.45);
 }
-:root:not([data-ui='classic']) .dock-item { border-radius: 3px; }
-:root:not([data-ui='classic']) .dock-item.active { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 -2px 0 var(--accent); }
-:root:not([data-ui='classic']) .dock-item .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-:root:not([data-ui='classic']) .app-icon { border-radius: 6px !important; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 25%, transparent); }
-:root:not([data-ui='classic']) .launchpad-icon,
-:root:not([data-ui='classic']) .trash-icon { border-radius: 6px; }
+:root[data-ui='cyberdeck'] .dock-item { border-radius: 3px; }
+:root[data-ui='cyberdeck'] .dock-item.active { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 -2px 0 var(--accent); }
+:root[data-ui='cyberdeck'] .dock-item .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+:root[data-ui='cyberdeck'] .app-icon { border-radius: 6px !important; box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 25%, transparent); }
+:root[data-ui='cyberdeck'] .launchpad-icon,
+:root[data-ui='cyberdeck'] .trash-icon { border-radius: 6px; }
 
 /* ---------- controls ---------- */
 
-:root:not([data-ui='classic']) button:not(.ghost):not(.link):not(.dock-item):not(.icon-btn):not(.wp-thumb):not(.swatch):not(.desktop-icon):not(.launcher-app):not(.context-item):not(.widget):not(.danger):not(.chip-btn) {
+:root[data-ui='cyberdeck'] button:not(.ghost):not(.link):not(.dock-item):not(.icon-btn):not(.wp-thumb):not(.swatch):not(.desktop-icon):not(.launcher-app):not(.context-item):not(.widget):not(.danger):not(.chip-btn) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
 }
-:root:not([data-ui='classic']) button:hover:not(:disabled) { box-shadow: 0 0 14px var(--glow); }
-:root:not([data-ui='classic']) button.ghost { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-:root:not([data-ui='classic']) .segmented { border: 1px solid var(--border); }
-:root:not([data-ui='classic']) .segmented button.on {
+:root[data-ui='cyberdeck'] button:hover:not(:disabled) { box-shadow: 0 0 14px var(--glow); }
+:root[data-ui='cyberdeck'] button.ghost { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+:root[data-ui='cyberdeck'] .segmented { border: 1px solid var(--border); }
+:root[data-ui='cyberdeck'] .segmented button.on {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 12px var(--glow);
 }
-:root:not([data-ui='classic']) .toggle input[type='checkbox']:checked { box-shadow: 0 0 12px var(--glow); }
-:root:not([data-ui='classic']) .toggle input[type='checkbox']:checked::before { background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent); }
-:root:not([data-ui='classic']) input:focus,
-:root:not([data-ui='classic']) .select:focus { outline: 1px solid var(--accent); box-shadow: 0 0 12px var(--glow); }
-:root:not([data-ui='classic']) .settings-card { background: color-mix(in srgb, var(--surface-2) 80%, transparent); border-color: var(--border); }
-:root:not([data-ui='classic']) .sidebar button.on { box-shadow: inset 2px 0 0 var(--accent); }
+:root[data-ui='cyberdeck'] .toggle input[type='checkbox']:checked { box-shadow: 0 0 12px var(--glow); }
+:root[data-ui='cyberdeck'] .toggle input[type='checkbox']:checked::before { background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent); }
+:root[data-ui='cyberdeck'] input:focus,
+:root[data-ui='cyberdeck'] .select:focus { outline: 1px solid var(--accent); box-shadow: 0 0 12px var(--glow); }
+:root[data-ui='cyberdeck'] .settings-card { background: color-mix(in srgb, var(--surface-2) 80%, transparent); border-color: var(--border); }
+:root[data-ui='cyberdeck'] .sidebar button.on { box-shadow: inset 2px 0 0 var(--accent); }
 
 /* Click micro-interaction: a neon ring expands from the pressed control */
 .fx-pulse { animation: fui-pulse 0.45s ease-out; }
@@ -206,21 +206,21 @@
 :root[data-reduce-motion] .window.focused .titlebar .title { animation: none; color: var(--text); background: none; }
 
 /* Orbitron is wide — keep big clocks inside their widgets */
-:root:not([data-ui='classic']) .clock-widget .clock-time { font-size: 44px; letter-spacing: 0.02em; white-space: nowrap; }
-:root:not([data-ui='classic']) .auth .clock-time,
-:root:not([data-ui='classic']) .saver-time { letter-spacing: 0.02em; }
+:root[data-ui='cyberdeck'] .clock-widget .clock-time { font-size: 44px; letter-spacing: 0.02em; white-space: nowrap; }
+:root[data-ui='cyberdeck'] .auth .clock-time,
+:root[data-ui='cyberdeck'] .saver-time { letter-spacing: 0.02em; }
 
 /* Sidebar labels stay on one line in the wider display faces */
-:root:not([data-ui='classic']) .sidebar button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.05em; }
+:root[data-ui='cyberdeck'] .sidebar button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.05em; }
 
 /* Long host names in widget headers shouldn't collide with the uptime */
-:root:not([data-ui='classic']) .widget-head { letter-spacing: 0.05em; gap: 8px; }
-:root:not([data-ui='classic']) .widget-head > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-ui='cyberdeck'] .widget-head { letter-spacing: 0.05em; gap: 8px; }
+:root[data-ui='cyberdeck'] .widget-head > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Holographic widgets: faint scanlines + glowing numerals on FUI themes */
-:root:not([data-ui='classic']) .holo::after {
+:root[data-ui='cyberdeck'] .holo::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 5%, transparent) 0 1px, transparent 1px 4px);
 }
-:root:not([data-ui='classic']) .holo-ring-num,
-:root:not([data-ui='classic']) .holo-gauge-num { filter: drop-shadow(0 0 4px var(--glow)); }
+:root[data-ui='cyberdeck'] .holo-ring-num,
+:root[data-ui='cyberdeck'] .holo-gauge-num { filter: drop-shadow(0 0 4px var(--glow)); }
