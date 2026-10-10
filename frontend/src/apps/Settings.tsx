@@ -3,13 +3,12 @@ import { UserAvatar } from '../components/UserAvatar';
 import { Logo } from '../components/Logo';
 import { api, getUser } from '../api/client';
 import { hostApi, type PowerInfo } from '../api/hostctl';
-import { accountApi } from '../api/account';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes, fmtUptime } from '../lib/format';
 import { useClock } from '../lib/hooks';
 import { powerHost } from '../lib/hostActions';
 import { fmtTime, useTimePrefs } from '../lib/time';
-import { LANGUAGES, LOCK_TIMEOUTS, UI_THEMES, WALLPAPERS, usePrefs } from '../state/prefs';
+import { LANGUAGES, usePrefs } from '../state/prefs';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -25,7 +24,7 @@ import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings }
 // (Network, General, Personalization, …), each opening grouped sub-pages.
 // Settings only holds settings; apps are opened from the Dock or Launchpad.
 
-type Cat = 'network' | 'general' | 'personal' | 'notify' | 'privacy' | 'users';
+type Cat = 'network' | 'general' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 type Sub =
   | 'about' | 'update' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
   | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
@@ -48,10 +47,16 @@ const CATS: CatInfo[] = [
   { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
     groups: [['about', 'update'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot', 'power']] },
-  { id: 'personal', label: 'Personalization', icon: 'palette', color: '#5e5ce6', groups: [['appearance', 'wallpaper'], ['desktop', 'windows']] },
-  { id: 'notify', label: 'Notifications & Sound', icon: 'bell', color: '#ff3b30', groups: [['notifications', 'sound']] },
-  { id: 'privacy', label: 'Privacy & Security', icon: 'shield', color: '#30a0ff', groups: [['security', 'lock']] },
-  { id: 'users', label: 'Users & Accounts', icon: 'users', color: '#007aff', groups: [['account', 'users']] },
+  { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
+  { id: 'wallpaper', label: 'Wallpaper', icon: 'image', color: '#32ade6', groups: [] },
+  { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
+  { id: 'windows', label: 'Windows', icon: 'maximize', color: '#3a3a3c', groups: [] },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', color: '#ff3b30', groups: [] },
+  { id: 'sound', label: 'Sound', icon: 'sound', color: '#ff2d55', groups: [] },
+  { id: 'lock', label: 'Lock Screen', icon: 'lock', color: '#48484a', groups: [] },
+  { id: 'security', label: 'Privacy & Security', icon: 'shield', color: '#30a0ff', groups: [] },
+  { id: 'users', label: 'Users & Groups', icon: 'users', color: '#007aff', admin: true, groups: [] },
+  { id: 'account', label: 'Your Account', icon: 'user', color: '#007aff', groups: [] },
 ];
 
 const SUBS: Record<string, { label: string; icon: IconName; color: string; admin?: boolean; desc?: string }> = {
@@ -69,7 +74,7 @@ const SUBS: Record<string, { label: string; icon: IconName; color: string; admin
   windows: { label: 'Windows', icon: 'maximize', color: '#3a3a3c', desc: 'Title bar buttons and double-click' },
   notifications: { label: 'Notifications', icon: 'bell', color: '#ff3b30', desc: 'Focus and notification sounds' },
   sound: { label: 'Sound', icon: 'sound', color: '#ff2d55', desc: 'Sound effects and volume' },
-  security: { label: 'Password & Two-Factor', icon: 'key', color: '#30a0ff', desc: 'Change your password and ask for a code when you sign in' },
+  security: { label: 'Privacy & Security', icon: 'shield', color: '#30a0ff', desc: 'Change your password and ask for a code when you sign in' },
   lock: { label: 'Lock Screen', icon: 'lock', color: '#48484a', desc: 'Auto-lock and screen saver' },
   account: { label: 'Your Account', icon: 'user', color: '#007aff', desc: 'Photo, name and sign out' },
   users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add people and choose who is an administrator' },
@@ -103,24 +108,20 @@ const ENTRIES: Entry[] = [
   { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
   { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
   { id: 'power', cat: 'general', sub: 'power', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
-  { id: 'personal', cat: 'personal', label: 'Personalization', icon: 'palette', desc: 'Appearance, wallpaper, Dock and windows' },
-  { id: 'appearance', cat: 'personal', sub: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
+  { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
-  { id: 'wallpaper', cat: 'personal', sub: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },
-  { id: 'desktop', cat: 'personal', sub: 'desktop', label: 'Desktop & Dock', icon: 'launcher', desc: 'Dock, widgets and desktop icons', keywords: 'dock taskbar widgets icons grid desktop',
+  { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },
+  { id: 'desktop', cat: 'desktop', label: 'Desktop & Dock', icon: 'launcher', desc: 'Dock, widgets and desktop icons', keywords: 'dock taskbar widgets icons grid desktop',
     options: ['Position on screen', 'Icon size', 'Magnify on hover', 'Automatically hide the Dock', 'Show recent apps', 'Show widgets on the desktop', 'Snap icons to grid'] },
-  { id: 'windows', cat: 'personal', sub: 'windows', label: 'Windows', icon: 'maximize', desc: 'Title bar buttons and double-click', keywords: 'title bar macos menu bar', options: ['Window buttons', 'Double-click a title bar to'] },
-  { id: 'notify', cat: 'notify', label: 'Notifications & Sound', icon: 'bell', desc: 'Focus, alerts and sound effects' },
-  { id: 'notifications', cat: 'notify', sub: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Focus and notification sounds', keywords: 'do not disturb dnd silence alerts', options: ['Focus', 'Play a sound for notifications'] },
-  { id: 'sound', cat: 'notify', sub: 'sound', label: 'Sound', icon: 'sound', desc: 'Sound effects and volume', keywords: 'volume mute clicks effects',
+  { id: 'windows', cat: 'windows', label: 'Windows', icon: 'maximize', desc: 'Title bar buttons and double-click', keywords: 'title bar macos menu bar', options: ['Window buttons', 'Double-click a title bar to'] },
+  { id: 'notifications', cat: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Focus and notification sounds', keywords: 'do not disturb dnd silence alerts', options: ['Focus', 'Play a sound for notifications'] },
+  { id: 'sound', cat: 'sound', label: 'Sound', icon: 'sound', desc: 'Sound effects and volume', keywords: 'volume mute clicks effects',
     options: ['Play sound effects', 'Volume', 'Clicking buttons and icons', 'Opening and closing windows', 'Locking and unlocking'] },
-  { id: 'privacy', cat: 'privacy', label: 'Privacy & Security', icon: 'shield', desc: 'Password, two-factor and lock screen' },
-  { id: 'security', cat: 'privacy', sub: 'security', label: 'Password & Two-Factor', icon: 'key', desc: 'Change your password and ask for a code when you sign in', keywords: '2fa totp otp authenticator security password',
+  { id: 'security', cat: 'security', label: 'Password & Two-Factor', icon: 'key', desc: 'Change your password and ask for a code when you sign in', keywords: '2fa totp otp authenticator security password',
     options: ['Two-factor authentication', 'Change password'] },
-  { id: 'lock', cat: 'privacy', sub: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
-  { id: 'users-accounts', cat: 'users', label: 'Users & Accounts', icon: 'users', desc: 'Your account and other people' },
-  { id: 'account', cat: 'users', sub: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out', options: ['Profile photo', 'Close other windows', 'Sign out'] },
-  { id: 'users', cat: 'users', sub: 'users', admin: true, label: 'Users', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role'] },
+  { id: 'lock', cat: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
+  { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out', options: ['Profile photo', 'Close other windows', 'Sign out'] },
+  { id: 'users', cat: 'users', admin: true, label: 'Users & Groups', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role'] },
 ];
 
 /** Every Settings page, for universal search. */
@@ -129,7 +130,7 @@ export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconNam
 }));
 
 /** Older links ("dock", "focus", …) still land in the right place. */
-const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', apps: 'general' };
+const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general' };
 function resolve(id: string | undefined): { cat: Cat; sub: Sub | null } | null {
   if (!id) return null;
   const e = ENTRIES.find((x) => x.id === (ALIASES[id] ?? id));
@@ -144,8 +145,13 @@ function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; s
   );
 }
 
-/** Sidebar sections. */
-const SIDEBAR: Cat[][] = [['network'], ['general', 'personal', 'notify'], ['privacy', 'users']];
+/** Sidebar sections, with a heading each (the first has none). */
+const SIDEBAR: { title?: string; cats: Cat[] }[] = [
+  { cats: ['network', 'general'] },
+  { title: 'Personalization', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
+  { title: 'Notifications & Sound', cats: ['notifications', 'sound'] },
+  { title: 'Security & Users', cats: ['lock', 'security', 'users'] },
+];
 
 export function Settings({ win }: { win: WinState }) {
   const user = getUser();
@@ -205,7 +211,7 @@ export function Settings({ win }: { win: WinState }) {
               onKeyDown={(e) => e.key === 'Escape' && setQuery('')} />
           </label>
           {user && (
-            <button type="button" className={`set2-account ${cat === 'users' && sub === 'account' && !query ? 'on' : ''}`} onClick={() => go('users', 'account')}>
+            <button type="button" className={`set2-account ${cat === 'account' && !query ? 'on' : ''}`} onClick={() => go('account')}>
               <UserAvatar name={user.username} />
               <span>
                 <b>{user.username}</b>
@@ -214,11 +220,12 @@ export function Settings({ win }: { win: WinState }) {
             </button>
           )}
           {SIDEBAR.map((g, i) => {
-            const list = cats.filter((c) => g.includes(c.id));
+            const list = cats.filter((c) => g.cats.includes(c.id));
             return list.length ? (
-              <nav key={i} className="set2-group">
+              <nav key={i} className="set2-group" aria-label={g.title}>
+                {g.title && <h4 className="set2-heading">{g.title}</h4>}
                 {list.map((c) => (
-                  <button key={c.id} type="button" className={`set2-cat ${cat === c.id && !(c.id === 'users' && sub === 'account') && !query ? 'on' : ''}`} onClick={() => go(c.id)}>
+                  <button key={c.id} type="button" className={`set2-cat ${cat === c.id && !query ? 'on' : ''}`} onClick={() => go(c.id)}>
                     <IconTile icon={c.icon} color={c.color} size={24} />
                     <span>{c.label}</span>
                   </button>
@@ -292,6 +299,7 @@ function CatBody({ cat, sub, isAdmin, start2fa, go, open }: {
     if (sub?.startsWith('iface:')) return <InterfacePage name={sub.slice(6)} />;
     return <NetworkHome open={(s) => open(s as Sub)} />;
   }
+  if (cat !== 'general') return <SubBody sub={cat} isAdmin={isAdmin} start2fa={start2fa} go={go} />;
   if (sub) return <SubBody sub={sub} isAdmin={isAdmin} start2fa={start2fa} go={go} />;
   return <CatHome cat={cat} isAdmin={isAdmin} open={open} />;
 }
@@ -303,11 +311,6 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
   const info = useSystem((s) => s.info);
   const now = useClock(30000);
   const tp = useTimePrefs();
-  const user = getUser();
-  const [totp, setTotp] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (cat === 'privacy') void accountApi.totpStatus().then((r) => r.ok && setTotp(r.data.enabled));
-  }, [cat]);
   const disk = storageTotals(latest);
   const groups = CATS.find((c) => c.id === cat)?.groups ?? [];
   const value = (id: Sub): ReactNode => {
@@ -317,13 +320,6 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
       case 'storage': return disk.total ? `${fmtBytes(Math.max(0, disk.total - disk.used))} free` : undefined;
       case 'datetime': return fmtTime(now, tp, false);
       case 'language': return LANGUAGES.find((l) => l.id === prefs.language)?.name;
-      case 'appearance': return UI_THEMES.find((t) => t.id === prefs.uiTheme)?.name;
-      case 'wallpaper': return prefs.wallpaper === 'custom' ? 'Your photo' : WALLPAPERS.find((w) => w.id === prefs.wallpaper)?.name;
-      case 'notifications': return prefs.focusMode ? 'Focus on' : undefined;
-      case 'sound': return prefs.uiSounds ? `${prefs.soundVolume}%` : 'Off';
-      case 'security': return totp === null ? undefined : totp ? 'Two-factor on' : 'Two-factor off';
-      case 'lock': return LOCK_TIMEOUTS.find((t) => t.value === prefs.lockTimeout)?.label;
-      case 'account': return user?.username;
       default: return undefined;
     }
   };
@@ -404,9 +400,9 @@ function SubBody({ sub, isAdmin, start2fa, go }: { sub: Sub; isAdmin: boolean; s
     case 'lock':
       return <LockScreen />;
     case 'account':
-      return <YourAccount onSecurity={() => go('privacy', 'security')} />;
+      return <YourAccount onSecurity={() => go('security')} />;
     case 'users':
-      return <UsersSettings isAdmin={isAdmin} onSecurity={() => go('privacy', 'security')} withAccount={false} />;
+      return <UsersSettings isAdmin={isAdmin} onSecurity={() => go('security')} withAccount={false} />;
     default:
       return null;
   }
