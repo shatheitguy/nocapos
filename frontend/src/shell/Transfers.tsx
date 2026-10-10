@@ -8,7 +8,7 @@ import { cancelTransfer, clearFinished, removeTransfer, retryTransfer, useTransf
 // Transfers: a menu-bar / tray button (only while there are transfers) with a
 // panel listing uploads, copies and moves, plus a desktop widget.
 
-const VERB = { upload: 'Upload', copy: 'Copy', move: 'Move' } as const;
+const VERB = { upload: 'Upload', copy: 'Copy', move: 'Move', compress: 'Compress', extract: 'Extract' } as const;
 
 function pct(t: Transfer) {
   if (t.status === 'done') return 100;

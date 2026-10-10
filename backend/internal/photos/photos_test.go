@@ -243,3 +243,253 @@ func TestLibrary(t *testing.T) {
 		t.Error("a path outside the location must be refused")
 	}
 }
+
+// tiffEntry is one EXIF tag for cameraJPEG: ascii (string), rational ([2]uint32) or short (uint16).
+type tiffEntry struct {
+	tag uint16
+	val any
+}
+
+// cameraJPEG makes a small JPEG whose EXIF carries the given IFD0 and Exif IFD tags.
+func cameraJPEG(t *testing.T, ifd0, exif []tiffEntry) []byte {
+	t.Helper()
+	var plain bytes.Buffer
+	if err := jpeg.Encode(&plain, image.NewRGBA(image.Rect(0, 0, 4, 4)), nil); err != nil {
+		t.Fatal(err)
+	}
+	le := binary.LittleEndian
+	n0, n1 := len(ifd0)+1, len(exif)
+	ifd0Off := uint32(8)
+	exifOff := ifd0Off + 2 + uint32(n0)*12 + 4
+	dataOff := exifOff + 2 + uint32(n1)*12 + 4
+	var head, data []byte
+	put := func(e tiffEntry) {
+		var typ uint16
+		var count uint32
+		var value []byte
+		switch v := e.val.(type) {
+		case string:
+			typ, count = 2, uint32(len(v)+1)
+			value = append([]byte(v), 0)
+		case [2]uint32:
+			typ, count = 5, 1
+			value = le.AppendUint32(le.AppendUint32(nil, v[0]), v[1])
+		case uint16:
+			typ, count = 3, 1
+			value = le.AppendUint16(nil, v)
+		case uint32:
+			typ, count = 4, 1
+			value = le.AppendUint32(nil, v)
+		}
+		head = le.AppendUint16(head, e.tag)
+		head = le.AppendUint16(head, typ)
+		head = le.AppendUint32(head, count)
+		if len(value) <= 4 {
+			head = append(head, append(value, make([]byte, 4-len(value))...)...)
+		} else {
+			head = le.AppendUint32(head, dataOff+uint32(len(data)))
+			data = append(data, value...)
+		}
+	}
+	head = append(head, 'I', 'I')
+	head = le.AppendUint16(head, 42)
+	head = le.AppendUint32(head, ifd0Off)
+	head = le.AppendUint16(head, uint16(n0))
+	for _, e := range ifd0 {
+		put(e)
+	}
+	put(tiffEntry{0x8769, exifOff})
+	head = le.AppendUint32(head, 0)
+	head = le.AppendUint16(head, uint16(n1))
+	for _, e := range exif {
+		put(e)
+	}
+	head = le.AppendUint32(head, 0)
+	app1 := append([]byte("Exif\x00\x00"), append(head, data...)...)
+	var out bytes.Buffer
+	out.Write(plain.Bytes()[:2])
+	out.Write([]byte{0xFF, 0xE1})
+	_ = binary.Write(&out, binary.BigEndian, uint16(len(app1)+2))
+	out.Write(app1)
+	out.Write(plain.Bytes()[2:])
+	return out.Bytes()
+}
+
+func TestReadCamera(t *testing.T) {
+	data := cameraJPEG(t,
+		[]tiffEntry{{0x010F, "Fujifilm"}, {0x0110, "X-T5"}},
+		[]tiffEntry{{0x9003, "2023:08:01 10:00:00"}, {0x829A, [2]uint32{1, 250}}, {0x829D, [2]uint32{28, 10}}, {0x8827, uint16(400)},
+			{0x920A, [2]uint32{230, 10}}, {0xA405, uint16(35)}, {0xA434, "XF23mmF1.4 R"}})
+	info, err := readJPEGExif(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Camera{Make: "Fujifilm", Model: "X-T5", Lens: "XF23mmF1.4 R", Exposure: 0.004, FNumber: 2.8, ISO: 400, Focal: 23, Focal35: 35}
+	if info.camera != want {
+		t.Errorf("camera = %+v, want %+v", info.camera, want)
+	}
+	if info.taken.IsZero() {
+		t.Error("date taken should still be read")
+	}
+}
+
+func TestReadMP4Length(t *testing.T) {
+	data := mp4With(time.Date(2023, 1, 2, 3, 4, 5, 0, time.UTC))
+	// mvhd body starts after ftyp (16) + moov header (8) + mvhd header (8); timescale at +12, duration at +16.
+	body := 16 + 8 + 8
+	binary.BigEndian.PutUint32(data[body+12:], 600)
+	binary.BigEndian.PutUint32(data[body+16:], 600*75+300)
+	_, d, err := readMP4Header(bytes.NewReader(data))
+	if err != nil || d != 75500*time.Millisecond {
+		t.Fatalf("length %v, %v; want 1m15.5s", d, err)
+	}
+}
+
+func TestBinName(t *testing.T) {
+	for in, want := range map[string]struct {
+		name string
+		n    int
+	}{
+		"20261010-120000_a.jpg":     {"a.jpg", 0},
+		"20261010-120000_a (3).jpg": {"a.jpg", 3},
+		"20261010-120000_b (x).jpg": {"b (x).jpg", 0},
+		"plain.png":                 {"plain.png", 0},
+	} {
+		if name, n := binName(in); name != want.name || n != want.n {
+			t.Errorf("binName(%q) = %q, %d; want %q, %d", in, name, n, want.name, want.n)
+		}
+	}
+}
+
+func TestTrashAndRestore(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	drive := filepath.Join(dir, "drive")
+	for _, rel := range []string{"Photos/2021/a.jpg", "Photos/2022/a.jpg", "Photos/b.jpg"} {
+		p := filepath.Join(drive, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, exifJPEG(t, 4, 4, 1, "2022:01:01 00:00:00", ""), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fsvc, err := files.New([]files.Root{{ID: "drive", Name: "Drive", Path: drive}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	defer close(done)
+	ix := files.NewIndex(fsvc, done)
+	st, err := store.Open(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	lib := New(fsvc, ix, st, dir, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if err := lib.TrashRoot(ctx, "drive", []string{"Photos/2021/a.jpg", "Photos/2022/a.jpg", "Photos/b.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	items, err := lib.Deleted(ctx)
+	if err != nil || len(items) != 3 {
+		t.Fatalf("deleted: %d items, %v; want 3", len(items), err)
+	}
+	byOrig := map[string]store.PhotoTrash{}
+	for _, it := range items {
+		byOrig[it.OrigPath] = it
+		if _, err := os.Stat(filepath.Join(drive, filepath.FromSlash(it.TrashPath))); err != nil {
+			t.Errorf("%s: not in the bin at %s", it.OrigPath, it.TrashPath)
+		}
+	}
+	if byOrig["/Photos/2021/a.jpg"].TrashPath == byOrig["/Photos/2022/a.jpg"].TrashPath {
+		t.Fatal("two photos with the same name must map to different bin entries")
+	}
+
+	// The 2022 folder is gone by now: restoring makes it again, under the original name.
+	if err := os.RemoveAll(filepath.Join(drive, "Photos", "2022")); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := lib.Restore(ctx, []int64{byOrig["/Photos/2022/a.jpg"].ID, byOrig["/Photos/b.jpg"].ID})
+	if err != nil || len(keys) != 2 {
+		t.Fatalf("restore: %v, %v", keys, err)
+	}
+	for _, rel := range []string{"Photos/2022/a.jpg", "Photos/b.jpg"} {
+		if _, err := os.Stat(filepath.Join(drive, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("%s not restored: %v", rel, err)
+		}
+	}
+
+	// Deleting for good removes it from the bin and the list.
+	a := byOrig["/Photos/2021/a.jpg"]
+	if err := lib.Purge(ctx, []int64{a.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(drive, filepath.FromSlash(a.TrashPath))); !os.IsNotExist(err) {
+		t.Errorf("purged file still there: %v", err)
+	}
+	if items, _ := lib.Deleted(ctx); len(items) != 0 {
+		t.Errorf("after restore and purge: %d items left", len(items))
+	}
+
+	// Something already gone from the bin is forgotten.
+	if err := lib.TrashRoot(ctx, "drive", []string{"Photos/b.jpg"}); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = lib.Deleted(ctx)
+	if len(items) != 1 {
+		t.Fatalf("got %d, want 1", len(items))
+	}
+	_ = os.Remove(filepath.Join(drive, filepath.FromSlash(items[0].TrashPath)))
+	if items, _ := lib.Deleted(ctx); len(items) != 0 {
+		t.Errorf("emptied bin: %d items still listed", len(items))
+	}
+	// Bin paths from the store are never trusted outside the bin.
+	if err := st.AddPhotoTrash(ctx, []store.PhotoTrash{{Root: "drive", TrashPath: "/Photos/2022/a.jpg", OrigPath: "/Photos/x.jpg", DeletedAt: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	all, _ := st.PhotoTrashItems(ctx)
+	if err := lib.Purge(ctx, []int64{all[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(drive, "Photos", "2022", "a.jpg")); err != nil {
+		t.Error("purge must only delete inside the recycle bin")
+	}
+}
+
+func TestAlbumCover(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Now()
+	for _, id := range []string{"u1", "u2"} {
+		if err := st.CreateUser(ctx, &store.User{ID: id, Username: id, Role: "admin", CreatedAt: now, UpdatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, err := st.CreatePhotoAlbum(ctx, "u1", "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := store.PhotoKey{Root: "drive", Path: "/Photos/a.jpg"}
+	if err := st.SetPhotoAlbumCover(ctx, "u2", id, &k); err != store.ErrNotFound {
+		t.Errorf("another user's album: %v, want ErrNotFound", err)
+	}
+	if err := st.SetPhotoAlbumCover(ctx, "u1", id, &k); err != nil {
+		t.Fatal(err)
+	}
+	albums, _ := st.PhotoAlbums(ctx, "u1")
+	if len(albums) != 1 || albums[0].Cover == nil || *albums[0].Cover != k {
+		t.Fatalf("cover not saved: %+v", albums[0])
+	}
+	// Deleting the photo resets the cover.
+	if err := st.ForgetPhotos(ctx, []store.PhotoKey{k}); err != nil {
+		t.Fatal(err)
+	}
+	if albums, _ = st.PhotoAlbums(ctx, "u1"); albums[0].Cover != nil {
+		t.Errorf("cover should reset, got %+v", albums[0].Cover)
+	}
+}

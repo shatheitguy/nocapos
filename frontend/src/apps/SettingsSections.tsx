@@ -207,7 +207,17 @@ function currencyFor(locale: string): string {
 
 // ---------------- Security ----------------
 
-export function Security() {
+export function Security({ autoStart = false }: { autoStart?: boolean }) {
+  return (
+    <div className="stack settings-page">
+      <TwoFactor autoStart={autoStart} />
+      <ChangePassword />
+    </div>
+  );
+}
+
+/** Two-factor authentication: a switch, plus the QR enrollment when turning it on. */
+export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [enroll, setEnroll] = useState<{ secret: string; uri: string; qr: string } | null>(null);
   const [code, setCode] = useState('');
@@ -216,10 +226,8 @@ export function Security() {
   const load = async () => {
     const r = await accountApi.totpStatus();
     if (r.ok) setEnabled(r.data.enabled);
+    return r.ok ? r.data.enabled : null;
   };
-  useEffect(() => {
-    void load();
-  }, []);
 
   const start = async () => {
     const r = await accountApi.totpSetup();
@@ -232,6 +240,14 @@ export function Security() {
     setCode('');
     setEnrollErr('');
   };
+
+  useEffect(() => {
+    void load().then((on) => {
+      if (autoStart && on === false) void start();
+    });
+    // Only on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const confirm = async () => {
     const r = await accountApi.totpEnable(code.trim());
@@ -257,20 +273,13 @@ export function Security() {
   };
 
   return (
-    <div className="stack">
-      <ChangePassword />
-
-      <div className="panel">
-        <div className="row-head">
-          <b>Two-factor authentication</b>
-          {enabled !== null && <span className={`chip ${enabled ? 'good' : ''}`}>{enabled ? 'On' : 'Off'}</span>}
-        </div>
-        <p className="muted small">
-          Protect your account with an authenticator app (Google Authenticator, Authy, 1Password…). It's also how you reset
-          your password from the lock screen if you forget it.
-        </p>
-
-        {enroll ? (
+    <Section title="Two-factor authentication"
+      hint="Protect your account with an authenticator app (Google Authenticator, Authy, 1Password…). It's also how you reset your password from the lock screen if you forget it.">
+      <Toggle label="Ask for a code when signing in" hint={enabled === null ? 'Checking…' : enabled ? 'On' : enroll ? 'Finish setting up below' : 'Off'}
+        checked={!!enabled || !!enroll} disabled={enabled === null}
+        onChange={(on) => (on ? void start() : enroll ? setEnroll(null) : void disable())} />
+      {enroll && (
+        <div className="settings-row full">
           <div className="totp-enroll">
             <img src={enroll.qr} alt="Scan this QR code" className="totp-qr" />
             <p className="small">Scan the QR code, or enter this key manually:</p>
@@ -294,21 +303,13 @@ export function Security() {
               </button>
             </div>
           </div>
-        ) : enabled ? (
-          <button type="button" className="danger" onClick={() => void disable()}>
-            Turn off 2FA
-          </button>
-        ) : (
-          <button type="button" onClick={() => void start()}>
-            <Icon name="lock" size={15} /> Set up 2FA
-          </button>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </Section>
   );
 }
 
-function ChangePassword() {
+export function ChangePassword() {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -333,25 +334,34 @@ function ChangePassword() {
   };
 
   return (
-    <div className="panel">
-      <b>Change password</b>
-      <label>
-        Current password
-        <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
-      </label>
-      <label>
-        New password
-        <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
-      </label>
-      <label>
-        Confirm new password
-        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
-      </label>
-      {error && <p className="error">{error}</p>}
-      <button type="button" disabled={busy || !current || !next} onClick={() => void submit()}>
-        Update password
-      </button>
-    </div>
+    <Section title="Change password" hint="At least 10 characters.">
+      <div className="settings-row full">
+        <form
+          className="set-password"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <label>
+            Current password
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" />
+          </label>
+          <label>
+            New password
+            <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+          </label>
+          <label>
+            Confirm new password
+            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+          </label>
+          {error && <p className="error">{error}</p>}
+          <button type="submit" className="pill" disabled={busy || !current || !next}>
+            Update password
+          </button>
+        </form>
+      </div>
+    </Section>
   );
 }
 
@@ -367,34 +377,24 @@ export function Backup() {
     else toast('success', 'Backup downloaded');
   };
   return (
-    <div className="stack">
-      <div className="panel">
-        <b>Automatic backups</b>
-        <p className="muted small">
-          Back up your drives and NoCapOS itself on a schedule, encrypted, to a USB disk, another server or the cloud, and bring
-          back any file from any day with Rewind.
-        </p>
-        <button type="button" onClick={() => openApp('backups')}>
-          <Icon name="rewind" size={15} /> Open Backups
-        </button>
-      </div>
-      <div className="panel">
-        <b>Back up NoCapOS</b>
-        <p className="muted small">
-          Download a single file containing your accounts, settings, AI providers and conversations, and saved memory. Keep
-          it somewhere safe.
-        </p>
-        <button type="button" disabled={busy} onClick={() => void run()}>
-          <Icon name="download" size={15} /> {busy ? 'Preparing…' : 'Download backup'}
-        </button>
-      </div>
-      <div className="panel">
-        <b>Restore</b>
-        <p className="muted small">
-          To restore, stop NoCapOS, replace the <code className="md-inline">nocap.db</code> file in the data folder with your
-          backup, and start it again. A one-click restore is coming soon.
-        </p>
-      </div>
+    <div className="stack settings-page">
+      <Section title="Automatic backups">
+        <Row label="Backups" hint="Back up your drives and NoCapOS on a schedule, encrypted, to a USB disk, another server or the cloud, and bring back any file from any day with Rewind.">
+          <button type="button" className="ghost small" onClick={() => openApp('backups')}>
+            <Icon name="rewind" size={13} /> Open Backups
+          </button>
+        </Row>
+      </Section>
+      <Section title="NoCapOS itself">
+        <Row label="Download a backup" hint="One file with your accounts, settings, AI providers, conversations and saved memory. Keep it somewhere safe.">
+          <button type="button" className="ghost small" disabled={busy} onClick={() => void run()}>
+            <Icon name="download" size={13} /> {busy ? 'Preparing…' : 'Download'}
+          </button>
+        </Row>
+        <Row label="Restore" hint="Stop NoCapOS, replace nocap.db in the data folder with your backup, and start it again. A one-click restore is coming soon.">
+          <span />
+        </Row>
+      </Section>
     </div>
   );
 }
