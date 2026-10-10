@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Runs as root on purpose: NoCapOS manages this server like OMV or umbrelOS
+# Runs as root on purpose: NoCapOS manages this whole server
 # (Linux users, network, power, storage, a root terminal, Docker apps). Every
 # such action is admin-only inside NoCapOS and recorded in its audit log.
 EnvironmentFile=/etc/nocapos/nocapos.env
