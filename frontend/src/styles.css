@@ -320,13 +320,19 @@ button.widget:active { transform: none; }
   place-items: center;
   color: #fff;
   flex: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 -2px 4px rgba(0, 0, 0, 0.12);
 }
-.app-icon svg { stroke-width: 2.1; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.28)); }
-.app-icon .app-art { stroke-width: initial; filter: drop-shadow(0 1.5px 2px rgba(0, 0, 0, 0.3)); }
-.app-icon.logo { background: linear-gradient(180deg, #ffffff 0%, #eef0f5 100%); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(0, 0, 0, 0.06); }
-.app-icon.logo img { display: block; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.app-icon svg { stroke-width: 2.1; }
+/* NoCapOS apps: illustrated, full-colour tiles. */
+.app-icon.art, .app-icon:not(.logo) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.24); }
+.app-icon.art { overflow: hidden; }
+.app-icon.art svg { display: block; width: 100%; height: 100%; }
+/* Installed apps: their own icon, as it is. */
+.app-icon.logo { background: none; }
+.app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+:root[data-theme='dark'] .app-icon.logo.mono img { filter: invert(1) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .app-icon.logo.mono img { filter: invert(1) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+}
 
 /* ============ windows ============ */
 /* Own stacking context so ever-growing window z-indexes stay below the shelf. */
@@ -1097,7 +1103,7 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
 .desktop-icon.selected { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.35); }
 .desktop-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .desktop-icon.dragging { opacity: 0.35; }
-.desktop-icon .app-icon { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); }
+.desktop-icon .app-icon:not(.logo) { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); }
 .desktop-icon-label {
   max-width: 100%; font-size: 12px; font-weight: 500; line-height: 1.25; text-align: center;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75); overflow: hidden; display: -webkit-box;
@@ -1130,7 +1136,7 @@ body.app-dragging iframe, body.app-dragging canvas { pointer-events: none !impor
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
 .folder-icon .app-icon { box-shadow: none; }
-.folder-icon.tiny .app-icon svg { display: none; }
+.folder-icon.tiny .app-icon:not(.art) svg { display: none; }
 /* The app or folder an app is being dropped onto. */
 .launcher-app.drop-into, .desktop-icon.drop-into { background: rgba(255, 255, 255, 0.22); }
 .launcher-app.drop-into .app-icon, .launcher-app.drop-into .folder-icon,
