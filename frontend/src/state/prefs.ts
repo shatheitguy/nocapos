@@ -322,7 +322,8 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-no-indicators', !p.dockIndicators);
 
   root.toggleAttribute('data-solid', p.reduceTransparency);
-  root.dataset.icons = p.iconStyle;
+  // Reduce transparency: glass icons fall back to the normal full-colour tiles.
+  root.dataset.icons = p.reduceTransparency && p.iconStyle === 'glass' ? 'colorful' : p.iconStyle;
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
   root.dataset.titleButtons = p.titleButtons;
