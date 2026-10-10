@@ -9,8 +9,7 @@ import { useClock } from '../lib/hooks';
 import { powerHost } from '../lib/hostActions';
 import { fmtTime, useTimePrefs } from '../lib/time';
 import { LANGUAGES, usePrefs } from '../state/prefs';
-import { notifyApi, notifyLook, type NotifySettings } from '../state/notifications';
-import { BannerPreview } from '../shell/Notifications';
+import { notifyApi, type NotifySettings } from '../state/notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -513,11 +512,9 @@ const NOTIFY_TOPICS: { key: keyof NotifySettings; label: string; hint: string }[
 function Notifications({ isAdmin }: { isAdmin: boolean }) {
   const prefs = usePrefs();
   const [topics, setTopics] = useState<NotifySettings | null>(null);
-  const [sending, setSending] = useState(false);
   useEffect(() => {
     if (isAdmin) void notifyApi.settings().then((r) => r.ok && setTopics(r.data));
   }, [isAdmin]);
-  const look = notifyLook();
   const setTopic = (key: keyof NotifySettings, on: boolean) => {
     if (!topics) return;
     const next = { ...topics, [key]: on };
@@ -530,32 +527,8 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
       }
     });
   };
-  const sendTest = () => {
-    setSending(true);
-    void notifyApi.test().then((r) => {
-      setSending(false);
-      if (!r.ok) toast('error', 'Could not send a test notification', r.error);
-    });
-  };
   return (
     <div className="stack settings-page">
-      {isAdmin && (
-        <Group
-          title="Banners"
-          hint={`New notifications pop up as banners, then wait in the Notification Center (the bell). They look like ${look === 'mac' ? 'macOS' : 'Windows'} notifications on this device — Macs, iPhones and iPads get the macOS look, everything else the Windows look.`}
-        >
-          <Row stacked>
-            <div className="nset-preview">
-              <BannerPreview look={look} />
-            </div>
-          </Row>
-          <Row label="Try it" hint={prefs.focusMode ? 'Focus is on, so the banner stays hidden; it still goes to the Notification Center.' : 'Shows a dated test notification on every device signed in as an admin'}>
-            <button type="button" className="pill small" disabled={sending} onClick={sendTest}>
-              <Icon name="bell" size={13} /> Send a test notification
-            </button>
-          </Row>
-        </Group>
-      )}
       {isAdmin && (
         <Group title="Notify me about" hint="Applies to every admin. Turned-off topics aren't kept in the Notification Center either.">
           {NOTIFY_TOPICS.map((t) => (
