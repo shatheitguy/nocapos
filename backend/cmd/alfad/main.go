@@ -37,6 +37,7 @@ import (
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/stacks"
+	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/tlsutil"
@@ -215,6 +216,17 @@ func serve() error {
 	cloud := cloudimport.NewManager(st, box, fsvc, cfg.DataDir, log)
 	go cloud.RunScheduler(ctx)
 
+	// Disks and RAID. ALFA_STORAGE_DEMO=1 swaps in an in-memory machine for
+	// trying the Storage app anywhere; it never touches a real disk.
+	var storageBackend storage.Backend = storage.NewHost()
+	storageDemo := os.Getenv("ALFA_STORAGE_DEMO") == "1"
+	if storageDemo {
+		storageBackend = storage.NewDemo(cfg.DataDir)
+		log.Warn("storage: demo mode, showing made-up disks and pools")
+	}
+	storageMgr := storage.NewManager(storage.Options{Backend: storageBackend, Store: st, Files: fsvc, DataDir: cfg.DataDir, Log: log, Demo: storageDemo})
+	go storageMgr.Run(ctx)
+
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
@@ -224,6 +236,7 @@ func serve() error {
 		Backup:    backups,
 		NetDrives: netDrives,
 		Cloud:     cloud,
+		Storage:   storageMgr,
 		Stacks:    stacks.NewManager(cfg.DataDir, cfg.DockerHost, log),
 		FileJobs:  files.NewJobs(fsvc),
 	})

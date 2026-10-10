@@ -23,6 +23,7 @@ import (
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/stacks"
+	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/webapps"
@@ -52,6 +53,7 @@ type Deps struct {
 	NetDrives *netdrive.Manager
 	Cloud     *cloudimport.Manager
 	Stacks    *stacks.Manager
+	Storage   *storage.Manager
 	Version   string
 }
 
@@ -78,6 +80,9 @@ func New(ctx context.Context, d Deps) *Server {
 		braveKey:     randomKey(32),
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
+	if d.Storage != nil {
+		d.Storage.InUse = s.storageInUse
+	}
 	return s
 }
 
@@ -112,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/metrics", s.authed(s.systemMetrics))
 	mux.Handle("GET /api/v1/system/backup", s.admin(s.systemBackup))
 	mux.Handle("GET /api/v1/system/logs", s.admin(s.systemLogs))
+	mux.Handle("GET /api/v1/system/update", s.admin(s.systemUpdate))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))
@@ -297,6 +303,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/ai/memory/{id}", s.authed(s.aiUpdateMemory))
 	mux.Handle("DELETE /api/v1/ai/memory/{id}", s.authed(s.aiDeleteMemory))
 	mux.Handle("PUT /api/v1/ai/memory-enabled", s.authed(s.aiSetMemoryEnabled))
+
+	// Storage: disks, SMART, ZFS pools, datasets and snapshots (admin, audited).
+	s.storageRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.

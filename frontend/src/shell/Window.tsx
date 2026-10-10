@@ -4,7 +4,7 @@ import { APP_COMPONENTS } from '../apps/components';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { AppIcon } from '../components/AppTile';
-import { usePrefs } from '../state/prefs';
+import { usePrefs, workArea } from '../state/prefs';
 import { effectiveRect, useWM, type Rect, type WinState } from '../state/windows';
 
 const MIN_W = 360;
@@ -23,8 +23,9 @@ export function Window({ win, compact }: { win: WinState; compact: boolean }) {
   const dragRef = useRef<{ px: number; py: number; x: number; y: number; restored: boolean } | null>(null);
   const meta = APPS[win.appId];
   const Body = APP_COMPONENTS[win.appId];
-  const r = effectiveRect(win);
-  const tiled = win.maximized || win.snap !== null;
+  // Phones: every window fills the screen, whatever size it had on a desktop.
+  const r = compact ? { x: 0, y: 0, ...workArea() } : effectiveRect(win);
+  const tiled = compact || win.maximized || win.snap !== null;
 
   // ---- move ----
   const onTitleDown = (e: RPointerEvent<HTMLDivElement>) => {

@@ -1,0 +1,72 @@
+{
+   "blockdevices": [
+      {"name":"loop0", "kname":"loop0", "path":"/dev/loop0", "size":67108864, "type":"loop", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"squashfs", "label":null, "uuid":null, "partuuid":null, "mountpoints":["/snap/core20/2318"]},
+      {"name":"sda", "kname":"sda", "path":"/dev/sda", "size":500107862016, "type":"disk", "model":"CT500MX500SSD1", "serial":"2023E6A1B2C3", "tran":"sata", "rota":false, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sda1", "kname":"sda1", "path":"/dev/sda1", "size":1127219200, "type":"part", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"vfat", "label":null, "uuid":"8C1A-2F3B", "partuuid":"0b6a0a8e-01", "mountpoints":["/boot/efi"]},
+            {"name":"sda2", "kname":"sda2", "path":"/dev/sda2", "size":2147483648, "type":"part", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"ext4", "label":null, "uuid":"1e2d3c4b-5a69-4788-9a1b-2c3d4e5f6a7b", "partuuid":"0b6a0a8e-02", "mountpoints":["/boot"]},
+            {"name":"sda3", "kname":"sda3", "path":"/dev/sda3", "size":496831479808, "type":"part", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"LVM2_member", "label":null, "uuid":"Xy12Ab-cdEF-34gh-IJ56-kl78-MN90-opQRst", "partuuid":"0b6a0a8e-03", "mountpoints":[null],
+               "children": [
+                  {"name":"ubuntu--vg-ubuntu--lv", "kname":"dm-0", "path":"/dev/mapper/ubuntu--vg-ubuntu--lv", "size":496827285504, "type":"lvm", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"ext4", "label":null, "uuid":"9d8c7b6a-5f4e-4d3c-2b1a-0f9e8d7c6b5a", "partuuid":null, "mountpoints":["/"]}
+               ]
+            }
+         ]
+      },
+      {"name":"sdb", "kname":"sdb", "path":"/dev/sdb", "size":4000787030016, "type":"disk", "model":"ST4000VN008-2DR166", "serial":"ZDH1AAAA", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdb1", "kname":"sdb1", "path":"/dev/sdb1", "size":4000776716288, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"zfs_member", "label":"tank", "uuid":"11624379120431855519", "partuuid":"b1c2d3e4-0000-4a4b-8c8d-000000000001", "mountpoints":[null]},
+            {"name":"sdb9", "kname":"sdb9", "path":"/dev/sdb9", "size":8388608, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":"b1c2d3e4-0000-4a4b-8c8d-000000000009", "mountpoints":[null]}
+         ]
+      },
+      {"name":"sdc", "kname":"sdc", "path":"/dev/sdc", "size":4000787030016, "type":"disk", "model":"ST4000VN008-2DR166", "serial":"ZDH1BBBB", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdc1", "kname":"sdc1", "path":"/dev/sdc1", "size":4000776716288, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":"6f1d5b0e-9a2c-4c1e-b3d4-7e8f9a0b1c2d", "mountpoints":[null]}
+         ]
+      },
+      {"name":"sdd", "kname":"sdd", "path":"/dev/sdd", "size":2000398934016, "type":"disk", "model":"WDC WD20EFRX-68E", "serial":"WD-WCC4M0000001", "tran":"sata", "rota":true, "rm":false, "fstype":"linux_raid_member", "label":"nas:0", "uuid":"a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6", "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"md0", "kname":"md0", "path":"/dev/md0", "size":2000263643136, "type":"raid1", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"ext4", "label":null, "uuid":"55aa55aa-1111-2222-3333-444455556666", "partuuid":null, "mountpoints":["/mnt/raid"]}
+         ]
+      },
+      {"name":"sde", "kname":"sde", "path":"/dev/sde", "size":2000398934016, "type":"disk", "model":"WDC WD20EFRX-68E", "serial":"WD-WCC4M0000002", "tran":"sata", "rota":true, "rm":false, "fstype":"linux_raid_member", "label":"nas:0", "uuid":"a1b2c3d4-e5f6-a7b8-c9d0-e1f2a3b4c5d6", "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"md0", "kname":"md0", "path":"/dev/md0", "size":2000263643136, "type":"raid1", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"ext4", "label":null, "uuid":"55aa55aa-1111-2222-3333-444455556666", "partuuid":null, "mountpoints":["/mnt/raid"]}
+         ]
+      },
+      {"name":"sdf", "kname":"sdf", "path":"/dev/sdf", "size":1000204886016, "type":"disk", "model":"ST1000DM010-2EP102", "serial":"Z9A1B2C3", "tran":"sata", "rota":true, "rm":false, "fstype":"LVM2_member", "label":null, "uuid":"pv0000-aaaa-bbbb-cccc-dddd-eeee-ffffff", "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"data-archive", "kname":"dm-1", "path":"/dev/mapper/data-archive", "size":1000200000000, "type":"lvm", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"xfs", "label":null, "uuid":"7a6b5c4d-3e2f-1a0b-9c8d-7e6f5a4b3c2d", "partuuid":null, "mountpoints":["/archive"]}
+         ]
+      },
+      {"name":"sdg", "kname":"sdg", "path":"/dev/sdg", "size":4000787030016, "type":"disk", "model":"WDC WD40EFRX-68N32N0", "serial":"WD-WCC7K1234567", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null]},
+      {"name":"sdh", "kname":"sdh", "path":"/dev/sdh", "size":3000592982016, "type":"disk", "model":"TOSHIBA DT01ACA300", "serial":"X3G1ABCDE", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdh1", "kname":"sdh1", "path":"/dev/sdh1", "size":3000590884864, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"ntfs", "label":"Old Backup", "uuid":"01D2A3B4C5D6E7F8", "partuuid":"c0ffee00-0000-4000-8000-000000000001", "mountpoints":[null]}
+         ]
+      },
+      {"name":"sdi", "kname":"sdi", "path":"/dev/sdi", "size":1000204886016, "type":"disk", "model":"PSSD T7", "serial":"S6WBNS0R901234K", "tran":"usb", "rota":false, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdi1", "kname":"sdi1", "path":"/dev/sdi1", "size":1000202273280, "type":"part", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"exfat", "label":"T7", "uuid":"64A1-0B2C", "partuuid":"7d6c5b4a-01", "mountpoints":["/media/usb"]}
+         ]
+      },
+      {"name":"sdj", "kname":"sdj", "path":"/dev/sdj", "size":2000398934016, "type":"disk", "model":"ST2000DM008-2FR102", "serial":"ZFL0AAAA", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdj1", "kname":"sdj1", "path":"/dev/sdj1", "size":2000397868544, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"ext4", "label":"media", "uuid":"2b3c4d5e-6f70-4182-93a4-b5c6d7e8f901", "partuuid":"d1d2d3d4-0000-4000-8000-00000000000a", "mountpoints":["/srv/nocapos/disks/media"]}
+         ]
+      },
+      {"name":"sdk", "kname":"sdk", "path":"/dev/sdk", "size":536870912, "type":"disk", "model":"Flash Disk", "serial":"0000000000000A", "tran":"usb", "rota":false, "rm":true, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null]},
+      {"name":"sdl", "kname":"sdl", "path":"/dev/sdl", "size":8001563222016, "type":"disk", "model":"ST8000VN004-2M2101", "serial":"WSD3A1B2", "tran":"sata", "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"sdl1", "kname":"sdl1", "path":"/dev/sdl1", "size":8001552695296, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":"zfs_member", "label":"archive", "uuid":"4410227397452116412", "partuuid":"aa00aa00-1111-4000-8000-000000000001", "mountpoints":[null]},
+            {"name":"sdl9", "kname":"sdl9", "path":"/dev/sdl9", "size":8388608, "type":"part", "model":null, "serial":null, "tran":null, "rota":true, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":"aa00aa00-1111-4000-8000-000000000009", "mountpoints":[null]}
+         ]
+      },
+      {"name":"sr0", "kname":"sr0", "path":"/dev/sr0", "size":1073741312, "type":"rom", "model":"DVD+-RW GH24NSD1", "serial":"K1ME5HC1234", "tran":"sata", "rota":true, "rm":true, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null]},
+      {"name":"nvme0n1", "kname":"nvme0n1", "path":"/dev/nvme0n1", "size":1000204886016, "type":"disk", "model":"Samsung SSD 980 PRO 1TB", "serial":"S5GXNX0T512345A", "tran":"nvme", "rota":false, "rm":false, "fstype":null, "label":null, "uuid":null, "partuuid":null, "mountpoints":[null],
+         "children": [
+            {"name":"nvme0n1p1", "kname":"nvme0n1p1", "path":"/dev/nvme0n1p1", "size":1000202788864, "type":"part", "model":null, "serial":null, "tran":"nvme", "rota":false, "rm":false, "fstype":"ext4", "label":"appdata", "uuid":"0f1e2d3c-4b5a-4968-8776-655443322110", "partuuid":"e0e0e0e0-0000-4000-8000-000000000001", "mountpoints":["/var/lib/nocapos"]}
+         ]
+      },
+      {"name":"zram0", "kname":"zram0", "path":"/dev/zram0", "size":4294967296, "type":"disk", "model":null, "serial":null, "tran":null, "rota":false, "rm":false, "fstype":"swap", "label":null, "uuid":null, "partuuid":null, "mountpoints":["[SWAP]"]}
+   ]
+}

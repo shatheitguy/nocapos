@@ -1,0 +1,19 @@
+{
+  "json_format_version": [1, 0],
+  "smartctl": {"version": [7, 2], "svn_revision": "5155", "exit_status": 8},
+  "device": {"name": "/dev/sdc", "info_name": "/dev/sdc [SAT]", "type": "sat", "protocol": "ATA"},
+  "model_name": "WDC WD30EFRX-68EUZN0",
+  "serial_number": "WD-WMC4N0000003",
+  "smart_support": {"available": true, "enabled": true},
+  "smart_status": {"passed": false},
+  "ata_smart_data": {"self_test": {"status": {"value": 121, "string": "completed: read failure", "passed": false}}},
+  "ata_smart_attributes": {
+    "revision": 16,
+    "table": [
+      {"id": 5, "name": "Reallocated_Sector_Ct", "value": 120, "worst": 120, "thresh": 140, "when_failed": "now", "raw": {"value": 1843, "string": "1843"}},
+      {"id": 197, "name": "Current_Pending_Sector", "value": 200, "worst": 199, "thresh": 0, "when_failed": "", "raw": {"value": 24, "string": "24"}}
+    ]
+  },
+  "power_on_time": {"hours": 51022},
+  "temperature": {"current": 44}
+}

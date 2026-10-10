@@ -5,7 +5,7 @@ import { hostApi, type NetworkState } from '../api/hostctl';
 import type { User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { Icon, type IconName } from '../components/Icon';
-import { powerHost, setNetwork } from '../lib/hostActions';
+import { setNetwork } from '../lib/hostActions';
 import { playCue } from '../lib/uiSound';
 import { useDismiss } from '../lib/hooks';
 import { IPv4Summary, WifiList } from '../apps/NetworkParts';
@@ -245,26 +245,13 @@ export function QuickSettings({
       </div>
 
       {showActions && (
-      <div className={`cc-actions ${isAdmin ? 'admin' : ''}`}>
-        <button type="button" className="ghost" onClick={() => openSettings()}>
-          <Icon name="settings" size={16} /> Settings
-        </button>
+      <div className="cc-actions">
         <button type="button" className="ghost" onClick={onLock}>
           <Icon name="lock" size={16} /> Lock
         </button>
         <button type="button" className="ghost" onClick={() => void logout()}>
           <Icon name="logout" size={16} /> Sign out
         </button>
-        {isAdmin && (
-          <>
-            <button type="button" className="ghost" onClick={() => void powerHost('reboot')}>
-              <Icon name="restart" size={16} /> Restart
-            </button>
-            <button type="button" className="ghost danger" onClick={() => void powerHost('shutdown')}>
-              <Icon name="power" size={16} /> Shut down
-            </button>
-          </>
-        )}
       </div>
       )}
     </div>

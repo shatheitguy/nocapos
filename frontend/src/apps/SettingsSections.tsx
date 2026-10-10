@@ -13,7 +13,6 @@ import {
   usePrefs,
 } from '../state/prefs';
 import { toast } from '../state/toasts';
-import { openApp } from './meta';
 import { Choice, Row, Section, Slider, Toggle } from './Personalize';
 
 // ---------------- Date & Time ----------------
@@ -378,13 +377,6 @@ export function Backup() {
   };
   return (
     <div className="stack settings-page">
-      <Section title="Automatic backups">
-        <Row label="Backups" hint="Back up your drives and NoCapOS on a schedule, encrypted, to a USB disk, another server or the cloud, and bring back any file from any day with Rewind.">
-          <button type="button" className="ghost small" onClick={() => openApp('backups')}>
-            <Icon name="rewind" size={13} /> Open Backups
-          </button>
-        </Row>
-      </Section>
       <Section title="NoCapOS itself">
         <Row label="Download a backup" hint="One file with your accounts, settings, AI providers, conversations and saved memory. Keep it somewhere safe.">
           <button type="button" className="ghost small" disabled={busy} onClick={() => void run()}>
