@@ -1,6 +1,6 @@
 /* ==========================================================================
    Shared page kit (all themes): large app titles, cards, settings-style rows
-   and section labels, in the spirit of umbrelOS. Colours come from tokens.
+   and section labels. Colours come from tokens.
    ========================================================================== */
 .app-title { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
 .app-subtitle { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
