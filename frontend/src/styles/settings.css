@@ -169,3 +169,4 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 :root[data-ui='cyberdeck'] .set-hero, :root[data-ui='cyberdeck'] .set-tile, :root[data-ui='cyberdeck'] .set2-page .ucard, :root[data-ui='cyberdeck'] .set2-cat, :root[data-ui='cyberdeck'] .set-ico { border-radius: var(--radius); }
 :root[data-ui='cyberdeck'] .set-hero-title { font-family: var(--display); font-size: 26px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
 :root[data-ui='cyberdeck'] .set2 button.urow .urow-desc, :root[data-ui='cyberdeck'] .set2 button.urow .set-row-value { text-transform: none; letter-spacing: 0.01em; }
+.set2-heading { margin: 0 0 4px; padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
