@@ -15,6 +15,7 @@ import { useWM } from '../state/windows';
 import { ClockPanel } from './ClockPanel';
 import { useSpotlight } from '../state/spotlight';
 import { QuickSettings } from './QuickSettings';
+import { NotifyBell } from './Notifications';
 
 /**
  * macOS-style menu bar (Settings → Windows → buttons on the Left). The clock,
@@ -71,6 +72,7 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
           </button>
         )}
         <TransfersButton className="mb-icon" />
+        {isAdmin && <NotifyBell className="mb-icon" size={15} />}
         <button type="button" className="mb-icon" title="Search (Ctrl+Space)" aria-label="Search" onClick={() => useSpotlight.getState().toggle()}>
           <Icon name="search" size={15} />
         </button>

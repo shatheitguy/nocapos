@@ -175,6 +175,14 @@ func (m *Manager) Jobs() map[string]Job {
 	return out
 }
 
+// Busy reports whether an install, update or uninstall of the app is running.
+func (m *Manager) Busy(id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.active[id]
+	return ok
+}
+
 // ---------- jobs ----------
 
 // Job is the progress of an install, update or uninstall.

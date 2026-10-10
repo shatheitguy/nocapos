@@ -240,6 +240,7 @@ func serve() error {
 		Stacks:    stacks.NewManager(cfg.DataDir, cfg.DockerHost, log),
 		FileJobs:  files.NewJobs(fsvc),
 	})
+	srv.RunNotifications(ctx)
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),

@@ -60,6 +60,14 @@ export const ICON_STYLES: { id: IconStyle; label: string }[] = [
   { id: 'colorful', label: 'Colourful' },
 ];
 
+/** How system notifications look: like macOS banners or Windows toasts. 'auto' follows this device. */
+export type NotifyStyle = 'auto' | 'mac' | 'windows';
+export const NOTIFY_STYLES: { id: NotifyStyle; label: string }[] = [
+  { id: 'auto', label: 'Automatic' },
+  { id: 'mac', label: 'macOS' },
+  { id: 'windows', label: 'Windows' },
+];
+
 /** Whole-OS visual themes: frosted Glass (default), the original look, and the Cyber-Deck FUI theme. */
 export type UiTheme = 'glass' | 'classic' | 'cyberdeck';
 export const UI_THEMES: { id: UiTheme; name: string; blurb: string; accent: string; swatch: [string, string, string] }[] = [
@@ -78,6 +86,7 @@ export interface PrefValues {
   soundAlerts: boolean; // notifications
   soundLock: boolean; // lock, unlock, sign-in
   focusMode: boolean; // do not disturb: hide notifications and their sounds
+  notifyStyle: NotifyStyle; // banner look: macOS, Windows, or by device
   brightness: number; // 30–100 %, a software dimmer over NoCapOS
   fxGrid: boolean; // data-grid backdrop on FUI themes
   wallpaper: WallpaperId;
@@ -127,6 +136,7 @@ export const DEFAULT_PREFS: PrefValues = {
   soundAlerts: true,
   soundLock: true,
   focusMode: false,
+  notifyStyle: 'auto',
   brightness: 100,
   fxGrid: true,
   wallpaper: 'tide',
@@ -170,7 +180,7 @@ export const DEFAULT_PREFS: PrefValues = {
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
   'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
-  'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
+  'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick', 'notifyStyle',
 ];
 
 interface Prefs extends PrefValues {
@@ -195,6 +205,7 @@ function load(): Partial<PrefValues> {
       if (out.wallpaper === 'nocap') delete out.wallpaper;
     }
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
+    if (out.notifyStyle && !NOTIFY_STYLES.some((x) => x.id === out.notifyStyle)) delete out.notifyStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
     // One-time move to the NoCap brand look for people still on the old defaults.

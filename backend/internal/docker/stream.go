@@ -298,6 +298,7 @@ type Event struct {
 	Name     string    `json:"name,omitempty"`
 	Image    string    `json:"image,omitempty"`
 	ExitCode string    `json:"exit_code,omitempty"`
+	App      string    `json:"app,omitempty"` // App Store app id (nocapos.app label)
 	Time     time.Time `json:"time"`
 }
 
@@ -342,6 +343,7 @@ func (c *Client) Events(ctx context.Context, fn func(Event) error) error {
 			Name:     a["name"],
 			Image:    a["image"],
 			ExitCode: a["exitCode"],
+			App:      a["nocapos.app"],
 			Time:     time.Unix(0, raw.TimeNano).UTC(),
 		}
 		if err := fn(ev); err != nil {

@@ -1,5 +1,4 @@
 import { api } from './client';
-import { toast } from '../state/toasts';
 
 // Storage manager: disks, SMART health, ZFS pools, datasets and snapshots.
 
@@ -202,17 +201,6 @@ export async function waitForJob(id: string, onTick?: (j: Job) => void): Promise
     onTick?.(r.data);
     if (r.data.state !== 'running') return r.data;
     await new Promise((res) => window.setTimeout(res, 1200));
-  }
-}
-
-// Health alerts from the storage.alerts topic, toasted once per session.
-const seenAlerts = new Set<string>();
-export function showStorageAlerts(data: unknown) {
-  if (!Array.isArray(data)) return;
-  for (const a of data as Alert[]) {
-    if (seenAlerts.has(a.key)) continue;
-    seenAlerts.add(a.key);
-    toast(a.level === 'error' ? 'error' : 'info', a.title, a.body);
   }
 }
 

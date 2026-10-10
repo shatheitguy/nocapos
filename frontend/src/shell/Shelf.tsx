@@ -17,6 +17,7 @@ import { useWM } from '../state/windows';
 import type { User } from '../api/types';
 import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
+import { NotifyBell } from './Notifications';
 
 type Menu = { x: number; y: number; appId?: string };
 
@@ -217,6 +218,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
       {showTray && (
         <div className="tray">
           <TransfersButton className="tray-btn" />
+          {isAdmin && <NotifyBell className="tray-btn" />}
           <button
             ref={trayRef}
             type="button"

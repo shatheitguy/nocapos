@@ -42,8 +42,16 @@ func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r.Context())
 	// Install/update/uninstall finish after this request: audit with a detached copy.
 	ar := r.Clone(context.WithoutCancel(r.Context()))
+	// NoCapOS stops and recreates the app's containers now: no crash notifications.
+	s.crashes.Expect("app:" + id)
 	audit := func(err error) {
 		s.audit(ar, u.ID, "app."+action, id, err == nil, errText(err))
+	}
+	// done runs when an install, update or uninstall job ends.
+	done := func(err error) {
+		audit(err)
+		s.crashes.Expect("app:" + id)
+		s.notifyAppJob(id, action, err)
 	}
 	ctx := r.Context()
 	if err := s.Docker.Ping(ctx); err != nil {
@@ -56,9 +64,9 @@ func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 	)
 	switch action {
 	case "install":
-		jobID, err = s.AppStore.Install(ctx, id, audit)
+		jobID, err = s.AppStore.Install(ctx, id, done)
 	case "update":
-		jobID, err = s.AppStore.Update(ctx, id, audit)
+		jobID, err = s.AppStore.Update(ctx, id, done)
 	case "uninstall":
 		var req struct {
 			DeleteData bool `json:"delete_data"`
@@ -66,7 +74,7 @@ func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 		if r.ContentLength > 0 && !decodeJSON(w, r, &req) {
 			return
 		}
-		jobID, err = s.AppStore.Uninstall(ctx, id, req.DeleteData, audit)
+		jobID, err = s.AppStore.Uninstall(ctx, id, req.DeleteData, done)
 	case "start", "stop", "restart":
 		err = s.AppStore.Control(ctx, id, action)
 		audit(err)

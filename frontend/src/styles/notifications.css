@@ -1,0 +1,232 @@
+/* ============ System notifications: banners, Notification Center, bell ============
+   Two looks: macOS (banners top right under the menu bar, Notification Center
+   sliding in from the right) and Windows 11 (toasts bottom right above the
+   taskbar, the center above the tray). Colours come from theme tokens, so
+   Glass, Classic light/dark and Cyber-Deck all fit. */
+
+.nb, .nc { --nb-ink: var(--text); --nb-sub: color-mix(in srgb, var(--text) 78%, transparent); }
+.nb.mac, .nc.mac, .nc-card.mac {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', var(--font, system-ui), sans-serif;
+  letter-spacing: -0.005em;
+}
+.nb.windows, .nc.windows, .nc-card.windows {
+  font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', var(--font, system-ui), sans-serif;
+}
+.nb button, .nc button { font-family: inherit; }
+
+/* ---------- stacks ---------- */
+.nb-stack { position: fixed; z-index: 100004; display: flex; gap: 8px; pointer-events: none; }
+.nb-stack > * { pointer-events: auto; }
+.nb-stack.mac { top: calc(var(--res-top, 0px) + 8px); right: calc(var(--res-right, 0px) + 10px); width: 360px; flex-direction: column; }
+/* Windows: newest at the bottom, older ones move up. */
+.nb-stack.windows { bottom: calc(var(--res-bottom, 76px) + 12px); right: calc(var(--res-right, 0px) + 12px); width: 364px; flex-direction: column; justify-content: flex-end; }
+
+/* ---------- shared banner bits ---------- */
+.nb { position: relative; color: var(--nb-ink); cursor: default; user-select: none; box-sizing: border-box; }
+.nb-title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nb-body { color: var(--nb-sub); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
+.nb-time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.nb-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.nb-top .nb-title { flex: 1; white-space: nowrap; }
+.nb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nb .app-icon, .nc-card .app-icon { flex: none; }
+
+/* ---------- macOS banner ---------- */
+.nb.mac {
+  display: flex; align-items: center; gap: 11px; padding: 11px 14px 11px 11px; min-height: 64px;
+  border-radius: 18px; font-size: 13px; line-height: 1.32;
+  background: color-mix(in srgb, var(--glass-strong) 82%, transparent);
+  backdrop-filter: blur(36px) saturate(1.8); -webkit-backdrop-filter: blur(36px) saturate(1.8);
+  border: 0.5px solid var(--glass-border);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.26), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+  animation: nb-mac-in 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.nb.mac .nb-time { font-size: 12px; }
+.nb.mac.leaving { animation: nb-mac-out 0.28s cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes nb-mac-in { from { transform: translateX(calc(100% + 24px)); } to { transform: none; } }
+@keyframes nb-mac-out { to { transform: translateX(calc(100% + 24px)); opacity: 0.4; } }
+
+/* The round ✕ that appears on the top-left corner when you hover (macOS). */
+.nb-x {
+  position: absolute; top: -7px; left: -7px; width: 20px; height: 20px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; z-index: 1;
+  background: color-mix(in srgb, var(--glass-strong) 96%, var(--text) 4%); color: var(--text);
+  border: 0.5px solid var(--glass-border); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  opacity: 0; transform: scale(0.85); transition: opacity 0.12s, transform 0.12s;
+}
+.nb.mac:hover .nb-x, .nc-card:hover .nb-x, .nc-card:focus-within .nb-x, .nb-x:focus-visible { opacity: 1; transform: none; }
+.nb-x:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--glass-strong) 80%, var(--text) 20%); }
+
+/* ---------- Windows 11 toast ---------- */
+.nb.windows {
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 16px;
+  border-radius: 8px; font-size: 14px; line-height: 1.43;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(30px) saturate(1.25); -webkit-backdrop-filter: blur(30px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.36), 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: nb-win-in 0.36s cubic-bezier(0, 0, 0, 1);
+  cursor: pointer;
+}
+.nb.windows.leaving { animation: nb-win-out 0.26s cubic-bezier(0.55, 0, 1, 0.45) forwards; }
+@keyframes nb-win-in { from { transform: translateY(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes nb-win-out { to { transform: translateX(calc(100% + 24px)); opacity: 0; } }
+.nb-head { position: relative; display: flex; align-items: center; gap: 8px; height: 22px; font-size: 12px; color: var(--nb-sub); }
+.nb-head .app-icon { border-radius: 4px !important; }
+.nb-app { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nb-tool {
+  width: 28px; height: 24px; padding: 0; border-radius: 4px; background: transparent; color: var(--nb-sub);
+  display: inline-grid; place-items: center; flex: none;
+}
+.nb-tool:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text); }
+.nb.windows .nb-tool { opacity: 0; transition: opacity 0.1s; }
+.nb.windows:hover .nb-tool, .nb.windows .nb-tool:focus-visible, .nb.windows.still .nb-tool { opacity: 1; }
+.nb-main { display: flex; flex-direction: column; gap: 2px; padding-left: 24px; }
+.nb.windows .nb-title { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nb-actions { display: flex; gap: 8px; }
+.nb-btn {
+  flex: 1; height: 32px; padding: 0 12px; border-radius: 4px; font-size: 14px; font-weight: 400;
+  background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.nb-btn:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 13%, transparent); }
+.nb-menu {
+  position: absolute; top: 26px; right: 0; z-index: 2; min-width: 240px; padding: 4px;
+  border-radius: 8px; background: var(--glass-strong); border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column;
+  animation: pop 0.12s ease-out;
+}
+.nb-menu button {
+  justify-content: flex-start; background: transparent; color: var(--text); font-weight: 400; font-size: 13px;
+  padding: 7px 10px; border-radius: 4px;
+}
+.nb-menu button:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 9%, transparent); }
+
+/* Errors and warnings get a slim coloured edge so they stand out. */
+.nb.windows.lvl-error, .nc-card.windows.lvl-error { box-shadow: inset 3px 0 0 var(--bad), 0 8px 32px rgba(0, 0, 0, 0.36); }
+.nb.windows.lvl-warning, .nc-card.windows.lvl-warning { box-shadow: inset 3px 0 0 var(--warn), 0 8px 32px rgba(0, 0, 0, 0.36); }
+.nc-card.windows.lvl-error, .nc-card.windows.lvl-warning { box-shadow: none; border-left: 3px solid var(--bad); }
+.nc-card.windows.lvl-warning { border-left-color: var(--warn); }
+
+/* A still copy for the Settings preview. */
+.nb.still { animation: none; cursor: default; pointer-events: none; width: 100%; max-width: 364px; }
+.nset-preview { display: flex; justify-content: center; padding: 18px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 4%, transparent); }
+.nset-preview .nb.mac { max-width: 360px; }
+
+/* ---------- Notification Center ---------- */
+.nc { position: fixed; z-index: 100003; display: flex; flex-direction: column; color: var(--text); box-sizing: border-box; }
+.nc-head { display: flex; align-items: center; gap: 6px; flex: none; }
+.nc-head h2 { margin: 0; flex: 1; font-size: inherit; }
+.nc-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.nc-group { display: flex; flex-direction: column; }
+.nc-empty { margin: auto; padding: 40px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.nc-empty svg { opacity: 0.6; }
+.nc-clear {
+  background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); font-weight: 500;
+  font-size: 12px; padding: 4px 11px; border-radius: 999px;
+}
+.nc-clear:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 16%, transparent); }
+.nc-card { position: relative; display: flex; align-items: center; cursor: pointer; color: var(--text); outline: none; }
+.nc-card:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+
+/* macOS: a frosted column from the top right, full height under the menu bar. */
+.nc.mac {
+  top: calc(var(--res-top, 0px) + 8px); right: calc(var(--res-right, 0px) + 8px); bottom: 8px; width: 372px;
+  padding: 14px 12px 12px; gap: 12px; border-radius: 22px; font-size: 13px;
+  background: color-mix(in srgb, var(--glass) 55%, transparent);
+  backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  border: 0.5px solid var(--glass-border);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.22);
+  animation: nc-mac-in 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.nc.mac.leaving { animation: nc-mac-out 0.22s cubic-bezier(0.4, 0, 1, 1) forwards; }
+@keyframes nc-mac-in { from { transform: translateX(calc(100% + 20px)); } }
+@keyframes nc-mac-out { to { transform: translateX(calc(100% + 20px)); } }
+.nc.mac .nc-head { padding: 0 4px 0 6px; }
+.nc.mac .nc-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.nc.mac .nc-scroll { gap: 14px; padding: 8px 6px 4px; margin: -8px -6px 0; }
+.nc.mac .nc-group { gap: 8px; }
+.nc-group-title { font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 6px; text-transform: none; }
+.nc-card.mac {
+  gap: 11px; padding: 11px 14px 11px 11px; min-height: 60px; border-radius: 18px; line-height: 1.32;
+  background: color-mix(in srgb, var(--glass-strong) 78%, transparent);
+  border: 0.5px solid var(--glass-border); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
+  transition: background 0.12s;
+}
+.nc-card.mac:hover { background: color-mix(in srgb, var(--glass-strong) 92%, var(--text) 4%); }
+.nc-card.mac .nb-time { font-size: 12px; }
+
+/* Windows 11: a panel above the tray, cards grouped by app. */
+.nc.windows {
+  right: calc(var(--res-right, 0px) + 12px); bottom: calc(var(--res-bottom, 76px) + 12px); width: 380px;
+  max-height: calc(100vh - var(--res-bottom, 76px) - var(--res-top, 0px) - 24px); min-height: 180px;
+  padding: 0; border-radius: 8px; font-size: 14px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(30px) saturate(1.25); -webkit-backdrop-filter: blur(30px) saturate(1.25);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: nc-win-in 0.3s cubic-bezier(0, 0, 0, 1);
+}
+.nc.windows.leaving { animation: nc-win-out 0.2s cubic-bezier(0.55, 0, 1, 0.45) forwards; }
+@keyframes nc-win-in { from { transform: translateY(40px); opacity: 0; } }
+@keyframes nc-win-out { to { transform: translateY(40px); opacity: 0; } }
+.nc.windows .nc-head { padding: 12px 12px 8px 18px; }
+.nc.windows .nc-head h2 { font-size: 14px; font-weight: 600; flex: none; }
+.nc.windows .nc-clear { border-radius: 4px; font-size: 12px; font-weight: 400; padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
+.nc-focus.on { color: var(--accent); background: var(--accent-soft); }
+.nc.windows .nc-scroll { padding: 0 12px 12px; gap: 12px; }
+.nc.windows .nc-group { gap: 4px; }
+.nc-app { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 0 0 6px; font-size: 12px; color: var(--nb-sub); }
+.nc-app .app-icon { border-radius: 4px !important; }
+.nc-card.windows {
+  padding: 12px 14px; border-radius: 6px; line-height: 1.43;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
+}
+.nc-card.windows:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.nc-card.windows .nb-top { align-items: flex-start; }
+.nc-card.windows .nb-top .nb-title { white-space: normal; }
+.nc-card.windows .nb-time { font-size: 12px; padding-right: 24px; }
+.nc-card.windows .nb-x {
+  top: 8px; left: auto; right: 8px; width: 24px; height: 24px; border-radius: 4px;
+  background: transparent; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: var(--nb-sub);
+}
+.nc-card.windows .nb-x:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 10%, transparent); }
+
+/* ---------- bell + badge ---------- */
+.nb-bell { position: relative; }
+.nb-badge {
+  position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; line-height: 16px;
+  text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-strong) 100%, transparent);
+}
+.mb-icon.nb-bell .nb-badge { top: -1px; right: -1px; min-width: 14px; height: 14px; line-height: 14px; font-size: 9px; border-radius: 7px; }
+
+/* ---------- themes ---------- */
+:root[data-ui='glass'] .nb.mac, :root[data-ui='glass'] .nc-card.mac {
+  background: rgba(38, 39, 46, 0.55); border-color: rgba(255, 255, 255, 0.14);
+}
+:root[data-ui='glass'] .nb.windows, :root[data-ui='glass'] .nc.windows { background: rgba(32, 33, 38, 0.78); border-color: rgba(255, 255, 255, 0.1); }
+:root[data-ui='glass'] .nc.mac { background: rgba(20, 21, 26, 0.28); border-color: rgba(255, 255, 255, 0.1); }
+:root[data-ui='glass'] .nc-card.mac:hover { background: rgba(52, 53, 61, 0.62); }
+:root[data-ui='cyberdeck'] .nb, :root[data-ui='cyberdeck'] .nc, :root[data-ui='cyberdeck'] .nc-card.mac {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+:root[data-ui='cyberdeck'] .nb.mac, :root[data-ui='cyberdeck'] .nc.mac, :root[data-ui='cyberdeck'] .nc-card.mac { border-radius: 6px; }
+:root[data-solid] .nb, :root[data-solid] .nc, :root[data-solid] .nc-card.mac { background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root[data-reduce-motion] .nb, :root[data-reduce-motion] .nc { animation-duration: 0.01s !important; }
+
+/* ---------- phones: banners full width at the top ---------- */
+@media (max-width: 640px) {
+  .nb-stack.mac, .nb-stack.windows { top: 8px; bottom: auto; left: 8px; right: 8px; width: auto; flex-direction: column; justify-content: flex-start; }
+  .nb-stack.windows .nb { animation-name: nb-phone-in; }
+  @keyframes nb-phone-in { from { transform: translateY(-120%); } }
+  .nc.mac, .nc.windows { top: 8px; left: 8px; right: 8px; width: auto; bottom: calc(var(--res-bottom, 76px) + 8px); max-height: none; }
+}
