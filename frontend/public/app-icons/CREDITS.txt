@@ -1,0 +1,4 @@
+App logos for the App Store catalog, from the dashboard-icons collection
+(https://github.com/homarr-labs/dashboard-icons, Apache License 2.0).
+Each logo is a trademark of its project; used here only to identify the app.
+memos.png is resized to 128x128.

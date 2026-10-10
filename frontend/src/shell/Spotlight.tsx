@@ -196,14 +196,10 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         title: a.name,
         subtitle: running ? 'Installed · open in a new tab' : a.installed ? 'Installed' : `App Store · ${a.tagline}`,
         icon: (
-          <span className="sl-store" style={{ background: `linear-gradient(145deg, ${a.tile[0]}, ${a.tile[1]})` }}>
-            <Icon name={a.icon} size={13} />
-          </span>
+          <AppIcon app={a} size={24} />
         ),
         big: (
-          <span className="sl-store big" style={{ background: `linear-gradient(145deg, ${a.tile[0]}, ${a.tile[1]})` }}>
-            <Icon name={a.icon} size={32} />
-          </span>
+          <AppIcon app={a} size={64} />
         ),
         details: [
           ['Category', a.category],

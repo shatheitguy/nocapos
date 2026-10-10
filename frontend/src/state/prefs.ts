@@ -77,6 +77,7 @@ export interface PrefValues {
   wallpaperDim: number; // 0–60 %
   accent: string;
   reduceTransparency: boolean;
+  iconTint: boolean; // NoCapOS app icons take the theme's accent (which follows the wallpaper)
   reduceMotion: boolean;
   squareCorners: boolean;
   clock24: boolean;
@@ -125,6 +126,7 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
+  iconTint: true,
   reduceMotion: false,
   squareCorners: false,
   clock24: false,
@@ -159,7 +161,7 @@ export const DEFAULT_PREFS: PrefValues = {
 
 /** The look-and-feel subset that "Reset personalization" restores. */
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
-  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'reduceTransparency', 'reduceMotion', 'squareCorners',
+  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconTint', 'reduceTransparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
   'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
 ];
@@ -311,6 +313,7 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-no-indicators', !p.dockIndicators);
 
   root.toggleAttribute('data-solid', p.reduceTransparency);
+  root.toggleAttribute('data-icon-tint', p.iconTint);
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
   root.dataset.titleButtons = p.titleButtons;
