@@ -12,6 +12,7 @@ import './styles/appstore.css';
 import './styles/settings.css';
 import './styles/photos.css';
 import './styles/storage.css';
+import './styles/notifications.css';
 import './themes.css';
 import './glass.css';
 

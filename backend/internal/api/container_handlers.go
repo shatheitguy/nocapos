@@ -61,6 +61,7 @@ func (s *Server) containerAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.crashes.Expect(d.ID, d.Name) // stopped on purpose: not a crash
 	switch action {
 	case "start":
 		err = s.Docker.StartContainer(r.Context(), d.ID)

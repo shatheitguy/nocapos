@@ -119,6 +119,23 @@ type Manager struct {
 	resticErr error
 	jobs      map[string]*Job
 	repoLocks map[int64]*sync.Mutex
+	onResult  func(Result)
+}
+
+// Result is how a backup plan run ended (for notifications).
+type Result struct {
+	PlanID  int64
+	Plan    string
+	Started time.Time
+	Status  string // ok | failed | canceled
+	Error   string
+}
+
+// OnResult sets a function called after every backup plan run.
+func (m *Manager) OnResult(fn func(Result)) {
+	m.mu.Lock()
+	m.onResult = fn
+	m.mu.Unlock()
 }
 
 func NewManager(st *store.Store, box Sealer, fsvc *files.Service, dataDir string, log *slog.Logger) *Manager {
@@ -641,6 +658,12 @@ func (m *Manager) backup(ctx context.Context, j *Job, p *store.BackupPlan) (resu
 			m.log.Warn("backup: save result", "plan", p.ID, "err", e)
 		}
 		m.log.Info("backup finished", "plan", p.Name, "status", status, "snapshot", sum.SnapshotID, "added", sum.DataAdded, "err", msg)
+		m.mu.Lock()
+		hook := m.onResult
+		m.mu.Unlock()
+		if hook != nil {
+			hook(Result{PlanID: p.ID, Plan: p.Name, Started: started, Status: status, Error: msg})
+		}
 	}()
 
 	r, err := m.tool()

@@ -9,6 +9,7 @@ import { useClock } from '../lib/hooks';
 import { powerHost } from '../lib/hostActions';
 import { fmtTime, useTimePrefs } from '../lib/time';
 import { LANGUAGES, usePrefs } from '../state/prefs';
+import { notifyApi, type NotifySettings } from '../state/notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -72,7 +73,7 @@ const SUBS: Record<string, { label: string; icon: IconName; color: string; admin
   wallpaper: { label: 'Wallpaper', icon: 'image', color: '#32ade6', desc: 'Photos, gradients or your own picture' },
   desktop: { label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', desc: 'Dock, widgets and desktop icons' },
   windows: { label: 'Windows', icon: 'maximize', color: '#3a3a3c', desc: 'Title bar buttons and double-click' },
-  notifications: { label: 'Notifications', icon: 'bell', color: '#ff3b30', desc: 'Focus and notification sounds' },
+  notifications: { label: 'Notifications', icon: 'bell', color: '#ff3b30', desc: 'Banner style, what to be told about, Focus and sounds' },
   sound: { label: 'Sound', icon: 'sound', color: '#ff2d55', desc: 'Sound effects and volume' },
   security: { label: 'Privacy & Security', icon: 'shield', color: '#30a0ff', desc: 'Change your password and ask for a code when you sign in' },
   lock: { label: 'Lock Screen', icon: 'lock', color: '#48484a', desc: 'Auto-lock and screen saver' },
@@ -114,7 +115,7 @@ const ENTRIES: Entry[] = [
   { id: 'desktop', cat: 'desktop', label: 'Desktop & Dock', icon: 'launcher', desc: 'Dock, widgets and desktop icons', keywords: 'dock taskbar widgets icons grid desktop',
     options: ['Position on screen', 'Icon size', 'Magnify on hover', 'Automatically hide the Dock', 'Show recent apps', 'Show widgets on the desktop', 'Snap icons to grid'] },
   { id: 'windows', cat: 'windows', label: 'Windows', icon: 'maximize', desc: 'Title bar buttons and double-click', keywords: 'title bar macos menu bar', options: ['Window buttons', 'Double-click a title bar to'] },
-  { id: 'notifications', cat: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Focus and notification sounds', keywords: 'do not disturb dnd silence alerts', options: ['Focus', 'Play a sound for notifications'] },
+  { id: 'notifications', cat: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Banner style, what to be told about, Focus and sounds', keywords: 'do not disturb dnd silence alerts banners toasts macos windows notification center updates', options: ['Banner style', 'Send a test notification', 'Notify me about', 'Focus', 'Play a sound for notifications'] },
   { id: 'sound', cat: 'sound', label: 'Sound', icon: 'sound', desc: 'Sound effects and volume', keywords: 'volume mute clicks effects',
     options: ['Play sound effects', 'Volume', 'Clicking buttons and icons', 'Opening and closing windows', 'Locking and unlocking'] },
   { id: 'security', cat: 'security', label: 'Password & Two-Factor', icon: 'key', desc: 'Change your password and ask for a code when you sign in', keywords: '2fa totp otp authenticator security password',
@@ -392,7 +393,7 @@ function SubBody({ sub, isAdmin, start2fa, go }: { sub: Sub; isAdmin: boolean; s
     case 'windows':
       return <WindowSettings />;
     case 'notifications':
-      return <Notifications />;
+      return <Notifications isAdmin={isAdmin} />;
     case 'sound':
       return <SoundSettings />;
     case 'security':
@@ -500,10 +501,41 @@ function Tiles() {
 
 // ---------------- Notifications ----------------
 
-function Notifications() {
+const NOTIFY_TOPICS: { key: keyof NotifySettings; label: string; hint: string }[] = [
+  { key: 'update', label: 'NoCapOS updates', hint: 'When a new version of NoCapOS is out' },
+  { key: 'app_updates', label: 'App updates', hint: 'When an App Store app you installed has a new version' },
+  { key: 'app_errors', label: 'App problems', hint: 'An app stops unexpectedly, or an install or update fails' },
+  { key: 'storage', label: 'Disk and pool health', hint: 'A disk is failing or a RAID pool is degraded' },
+  { key: 'backups', label: 'Backups', hint: 'A backup plan fails to run' },
+];
+
+function Notifications({ isAdmin }: { isAdmin: boolean }) {
   const prefs = usePrefs();
+  const [topics, setTopics] = useState<NotifySettings | null>(null);
+  useEffect(() => {
+    if (isAdmin) void notifyApi.settings().then((r) => r.ok && setTopics(r.data));
+  }, [isAdmin]);
+  const setTopic = (key: keyof NotifySettings, on: boolean) => {
+    if (!topics) return;
+    const next = { ...topics, [key]: on };
+    setTopics(next);
+    void notifyApi.saveSettings(next).then((r) => {
+      if (r.ok) setTopics(r.data);
+      else {
+        setTopics(topics);
+        toast('error', 'Could not save', r.error);
+      }
+    });
+  };
   return (
     <div className="stack settings-page">
+      {isAdmin && (
+        <Group title="Notify me about" hint="Applies to every admin. Turned-off topics aren't kept in the Notification Center either.">
+          {NOTIFY_TOPICS.map((t) => (
+            <Toggle key={t.key} label={t.label} hint={t.hint} checked={topics?.[t.key] ?? true} disabled={!topics} onChange={(on) => setTopic(t.key, on)} />
+          ))}
+        </Group>
+      )}
       <FocusSettings />
       <Group title="Alerts">
         <Toggle label="Play a sound for notifications" hint={prefs.uiSounds ? 'Uses the volume in Sound' : 'Turn on sound effects in Sound first'}
