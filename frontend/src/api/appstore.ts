@@ -34,6 +34,8 @@ export interface StoreApp {
   /** Image URLs for the app page gallery (none = generated banners). */
   screenshots?: string[];
   icon: IconName;
+  /** The app's own logo, bundled with the UI (falls back to icon + tile). */
+  logo?: string;
   tile: [string, string];
   featured?: boolean;
   version: string;

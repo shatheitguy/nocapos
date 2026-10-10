@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from 'react-dom';
 import { appURL, openStoreApp, storeApi, type StoreApp } from '../api/appstore';
 import { Icon, type IconName } from '../components/Icon';
+import { AppIcon } from '../components/AppTile';
 import { choiceDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -370,7 +371,7 @@ function Gallery({ apps, onOpen }: { apps: StoreApp[]; onOpen: (id: string) => v
             </span>
             <span className="as-banner-art" aria-hidden="true">
               <span className="as-banner-orb">
-                <Icon name={a.icon} size={72} />
+                <Glyph app={a} size={72} />
               </span>
             </span>
           </button>
@@ -398,11 +399,12 @@ function Gallery({ apps, onOpen }: { apps: StoreApp[]; onOpen: (id: string) => v
 /* ---------------- shared pieces ---------------- */
 
 function AppTileIcon({ app, size = 44 }: { app: StoreApp; size?: number }) {
-  return (
-    <span className="as-icon" style={{ width: size, height: size, background: tileBg(app) }}>
-      <Icon name={app.icon} size={Math.round(size * 0.5)} />
-    </span>
-  );
+  return <AppIcon app={app} size={size} />;
+}
+
+/** The app's logo (or its symbol) for big artwork like banners. */
+function Glyph({ app, size }: { app: StoreApp; size: number }) {
+  return app.logo ? <img className="as-logo" src={app.logo} alt="" width={size} height={size} draggable={false} /> : <Icon name={app.icon} size={size} />;
 }
 
 function stateLabel(a: StoreApp): { text: string; tone: string } | null {
@@ -957,7 +959,7 @@ function Shots({ app }: { app: StoreApp }) {
     <div className="as-shots" aria-hidden="true">
       <div className="as-shot gen one" style={{ background: tileBg(app, 125) }}>
         <span className="as-banner-orb">
-          <Icon name={app.icon} size={64} />
+          <Glyph app={app} size={64} />
         </span>
         <b>{app.name}</b>
         <span>{app.tagline}</span>
