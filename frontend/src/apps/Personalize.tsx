@@ -134,11 +134,6 @@ export function Appearance() {
         </Row>
       </Section>
 
-      <Section title="Wallpaper" hint="Click one to use it. Settings → Wallpaper has every option, including dimming.">
-        <Row>
-          <WallpaperStrip strip />
-        </Row>
-      </Section>
 
       <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad and on the desktop. Installed apps keep their own icons.">
         <Row label="Style">
