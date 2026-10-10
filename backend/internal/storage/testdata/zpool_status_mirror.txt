@@ -1,0 +1,14 @@
+  pool: tank
+ state: ONLINE
+  scan: scrub in progress since Sun Oct  4 00:24:01 2026
+	1.23T / 3.45T scanned at 512M/s, 800G / 3.45T issued at 400M/s
+	0B repaired, 22.61% done, 01:52:10 to go
+config:
+
+	NAME                                                  STATE     READ WRITE CKSUM
+	tank                                                  ONLINE       0     0     0
+	  mirror-0                                            ONLINE       0     0     0
+	    /dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1AAAA-part1  ONLINE       0     0     0
+	    /dev/disk/by-partuuid/6f1d5b0e-9a2c-4c1e-b3d4-7e8f9a0b1c2d  ONLINE       0     0     0
+
+errors: No known data errors

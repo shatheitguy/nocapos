@@ -98,6 +98,13 @@ const paths: Record<string, string> = {
   share: 'M12 15V3.5M8 7.5l4-4 4 4M5 12v7.5h14V12',
   archiveBox: 'M3.5 4h17v4h-17zM5 8v12h14V8M10 12h4',
   moreDots: 'M4.8 12a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M10.8 12a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M16.8 12a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
+  hdd: 'M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM12 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 10l3.5 7M7.5 18h.01',
+  ssd: 'M5 3h14v18H5zM8.5 7h7M8.5 10.5h7M8.5 14h4M16 17.5h.01',
+  nvme: 'M2.5 8.5h19v7h-19zM6 8.5v7M9 11h3v2H9zM14 11h3v2h-3zM21.5 11h-1.5v2h1.5',
+  usb: 'M7 9h10v12H7zM9 3h6v6H9zM11 5.5h.01M13 5.5h.01M10 16h4',
+  layers: 'M12 3 3 7.5l9 4.5 9-4.5zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5',
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  database: 'M12 4c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 7v10c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
 };
 
 export type IconName = keyof typeof paths;
