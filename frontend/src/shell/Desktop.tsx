@@ -20,6 +20,7 @@ import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
 import { watchNotifications } from '../state/notifications';
 import { NotificationLayer } from './Notifications';
+import { UpdateReady } from './UpdateReady';
 import { Launcher } from './Launcher';
 import { Spotlight } from './Spotlight';
 import { useSpotlight } from '../state/spotlight';
@@ -183,6 +184,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       <ConfirmHost />
       <PowerOverlay />
       {isAdmin && <NotificationLayer />}
+      <UpdateReady />
       <Toasts />
     </div>
   );

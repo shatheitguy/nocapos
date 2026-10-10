@@ -288,3 +288,15 @@
   @keyframes nb-phone-in { from { transform: translateY(-120%); } }
   .nc.mac, .nc.windows { top: 8px; left: 8px; right: 8px; width: auto; bottom: calc(var(--res-bottom, 76px) + 8px); max-height: none; }
 }
+
+/* ---------- "NoCapOS was updated" pill ---------- */
+.update-ready {
+  position: fixed; z-index: 100005; top: calc(var(--res-top, 0px) + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 999px;
+  font-size: 13px; color: var(--text); background: var(--glass-strong); border: 0.5px solid var(--glass-border);
+  backdrop-filter: blur(30px) saturate(1.6); -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3); animation: update-in 0.4s cubic-bezier(0.2, 1, 0.3, 1);
+}
+@keyframes update-in { from { transform: translate(-50%, -24px); opacity: 0; } }
+.update-ready button { height: 26px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.update-ready .update-ready-x { width: 26px; padding: 0; background: transparent; color: var(--muted); display: grid; place-items: center; }
