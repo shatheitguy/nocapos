@@ -26,7 +26,9 @@ type App struct {
 	Screenshots []string `json:"screenshots,omitempty"`
 	Icon        string   `json:"icon"`
 	// Logo is the app's own logo bundled with the UI (/app-icons/...); Icon is the fallback.
-	Logo        string       `json:"logo,omitempty"`
+	Logo string `json:"logo,omitempty"`
+	// LogoMono marks a single-colour black logo, shown white on dark backgrounds.
+	LogoMono    bool         `json:"logo_mono,omitempty"`
 	Tile        [2]string    `json:"tile"`
 	Featured    bool         `json:"featured,omitempty"`
 	Version     string       `json:"version"`

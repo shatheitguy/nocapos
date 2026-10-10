@@ -1,117 +1,231 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
-// Artwork for NoCapOS's own app icons: solid, layered shapes (white at
-// different strengths) drawn on a 24×24 grid, so each icon has depth.
+// NoCapOS's own app icons: full-colour illustrated tiles with depth (lit from
+// the top, soft shadows), drawn on a 64×64 grid. `g` turns a local gradient
+// name into one unique to this icon, so many icons can share a page.
 
-const W = '#fff';
+type Draw = (g: (name: string) => string) => ReactNode;
 
-const ART: Record<string, ReactNode> = {
-  assistant: (
+const lin = (id: string, from: string, to: string, x2 = 0, y2 = 1) => (
+  <linearGradient id={id} x1="0" y1="0" x2={x2} y2={y2}>
+    <stop offset="0" stopColor={from} />
+    <stop offset="1" stopColor={to} />
+  </linearGradient>
+);
+
+const ICONS: Record<string, Draw> = {
+  files: (g) => (
     <>
-      <path d="M10 3.2c.5 3.9 2.3 5.8 6.3 6.3-4 .5-5.8 2.4-6.3 6.3-.5-3.9-2.4-5.8-6.3-6.3 3.9-.5 5.8-2.4 6.3-6.3Z" fill={W} />
-      <path d="M17.5 13.5c.3 2 1.2 2.9 3.2 3.2-2 .3-2.9 1.2-3.2 3.2-.3-2-1.2-2.9-3.2-3.2 2-.3 2.9-1.2 3.2-3.2Z" fill={W} opacity=".7" />
-      <circle cx="18" cy="5.5" r="1.4" fill={W} opacity=".55" />
+      <defs>
+        {lin(g('bg'), '#ff7ab6', '#a855f7')}
+        {lin(g('back'), '#ffd6ec', '#f9a8d4')}
+        {lin(g('front'), '#ffffff', '#f3e8ff')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M13 21a4 4 0 0 1 4-4h9.5c1.2 0 2.3.5 3 1.4L32 21h15a4 4 0 0 1 4 4v3H13Z" fill={`url(#${g('back')})`} />
+      <rect x="13" y="25" width="38" height="24" rx="4.5" fill="#000" opacity=".16" transform="translate(0 2)" />
+      <rect x="13" y="25" width="38" height="24" rx="4.5" fill={`url(#${g('front')})`} />
+      <rect x="18" y="31" width="12" height="3" rx="1.5" fill="#d8b4fe" />
     </>
   ),
-  files: (
+  photos: (g) => (
     <>
-      <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.8c.7 0 1.3.3 1.8.8L12.5 6.3H18.5A2.5 2.5 0 0 1 21 8.8V10H3Z" fill={W} opacity=".6" />
-      <rect x="3" y="8.6" width="18" height="11.4" rx="2.4" fill={W} />
-      <rect x="6" y="11.4" width="5.5" height="1.4" rx=".7" fill="#000" opacity=".12" />
+      <defs>
+        {lin(g('sky'), '#bae6fd', '#38bdf8')}
+        {lin(g('m1'), '#6ee7b7', '#10b981')}
+        {lin(g('m2'), '#34d399', '#047857')}
+        <clipPath id={g('clip')}>
+          <rect width="64" height="64" rx="15" />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${g('clip')})`}>
+        <rect width="64" height="64" fill={`url(#${g('sky')})`} />
+        <circle cx="45" cy="19" r="11" fill="#fef3c7" opacity=".35" />
+        <circle cx="45" cy="19" r="7" fill="#fde68a" />
+        <path d="M-2 50 20 26l14 15 8-8 24 21v14H-2Z" fill={`url(#${g('m1')})`} />
+        <path d="M-2 56 24 36l20 16 22-6v22H-2Z" fill={`url(#${g('m2')})`} />
+        <path d="M0 58c12-4 26-4 40-1s20 2 24 0v8H0Z" fill="#0ea5e9" opacity=".55" />
+      </g>
     </>
   ),
-  photos: (
+  appcenter: (g) => (
     <>
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((a, i) => (
-        <ellipse key={a} cx="12" cy="7.2" rx="2.6" ry="4.6" fill={W} opacity={i % 2 ? 0.55 : 0.85} transform={`rotate(${a} 12 12)`} />
+      <defs>
+        {lin(g('bg'), '#60a5fa', '#2563eb')}
+        {lin(g('bag'), '#ffffff', '#dbeafe')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M24 24v-3a8 8 0 0 1 16 0v3" stroke="#e0f2fe" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+      <path d="M16 24h32l-2.4 23.5A4 4 0 0 1 41.6 51H22.4a4 4 0 0 1-4-3.5Z" fill="#000" opacity=".18" transform="translate(0 2)" />
+      <path d="M16 24h32l-2.4 23.5A4 4 0 0 1 41.6 51H22.4a4 4 0 0 1-4-3.5Z" fill={`url(#${g('bag')})`} />
+      <path d="M26 33v4a6 6 0 0 0 12 0v-4" stroke="#3b82f6" strokeWidth="3.4" strokeLinecap="round" fill="none" />
+    </>
+  ),
+  settings: (g) => (
+    <>
+      <defs>
+        {lin(g('bg'), '#f1f5f9', '#94a3b8')}
+        {lin(g('gear'), '#64748b', '#1e293b')}
+        {lin(g('hub'), '#f8fafc', '#cbd5e1')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <g transform="translate(32 33)">
+        <g fill="#000" opacity=".15" transform="translate(0 2)">
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+            <rect key={a} x="-4" y="-21" width="8" height="10" rx="2" transform={`rotate(${a})`} />
+          ))}
+          <circle r="15" />
+        </g>
+        <g fill={`url(#${g('gear')})`}>
+          {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+            <rect key={a} x="-4" y="-21" width="8" height="10" rx="2" transform={`rotate(${a})`} />
+          ))}
+          <circle r="15" />
+        </g>
+        <circle r="7" fill={`url(#${g('hub')})`} />
+        <circle r="3" fill="#475569" />
+      </g>
+    </>
+  ),
+  monitor: (g) => (
+    <>
+      <defs>
+        {lin(g('bg'), '#1f2937', '#030712')}
+        {lin(g('area'), '#4ade80', '#4ade8000')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      {[22, 32, 42].map((y) => (
+        <line key={y} x1="12" x2="52" y1={y} y2={y} stroke="#fff" strokeOpacity=".08" />
       ))}
-      <circle cx="12" cy="12" r="2.2" fill={W} />
+      <path d="M12 40 20 36l7 4 8-14 7 8 10-10v28H12Z" fill={`url(#${g('area')})`} opacity=".45" />
+      <path d="M12 40 20 36l7 4 8-14 7 8 10-10" stroke="#4ade80" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="52" cy="24" r="3.4" fill="#bbf7d0" />
     </>
   ),
-  backups: (
+  terminal: (g) => (
     <>
-      <circle cx="12" cy="12" r="8.5" fill={W} opacity=".3" />
-      <path d="M12 3.5a8.5 8.5 0 1 1-8.1 11.1" stroke={W} strokeWidth="2.4" strokeLinecap="round" fill="none" />
-      <path d="M3 9.2 4 14.8l5-2.6Z" fill={W} />
-      <path d="M12 7.5V12l3.2 2" stroke={W} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <defs>{lin(g('bg'), '#374151', '#0b0f17')}</defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <circle cx="16" cy="15" r="2.6" fill="#f87171" />
+      <circle cx="24" cy="15" r="2.6" fill="#fbbf24" />
+      <circle cx="32" cy="15" r="2.6" fill="#4ade80" />
+      <path d="m16 30 8 6-8 6" stroke="#4ade80" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <rect x="28" y="40" width="16" height="4" rx="2" fill="#e5e7eb" />
     </>
   ),
-  storage: (
+  assistant: (g) => (
     <>
-      <rect x="3.5" y="4" width="17" height="6.8" rx="2" fill={W} opacity=".6" />
-      <rect x="3.5" y="13.2" width="17" height="6.8" rx="2" fill={W} />
-      <circle cx="17" cy="7.4" r="1.1" fill="#000" opacity=".22" />
-      <circle cx="17" cy="16.6" r="1.1" fill="#34d399" />
-      <rect x="6.3" y="15.9" width="6" height="1.4" rx=".7" fill="#000" opacity=".15" />
+      <defs>
+        {lin(g('bg'), '#a78bfa', '#4f46e5')}
+        {lin(g('star'), '#ffffff', '#e0e7ff')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M28 12c1.3 10.2 6 15 16 16.3-10 1.3-14.7 6-16 16.3-1.3-10.2-6-15-16-16.3 10-1.3 14.7-6 16-16.3Z" fill={`url(#${g('star')})`} />
+      <path d="M46 36c.7 5 3 7.4 8 8-5 .7-7.3 3-8 8-.7-5-3-7.3-8-8 5-.6 7.3-3 8-8Z" fill="#fbcfe8" />
+      <circle cx="47" cy="17" r="3" fill="#c7d2fe" />
     </>
   ),
-  monitor: (
+  backups: (g) => (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="3" fill={W} opacity=".28" />
-      <path d="M5.5 13.2h3l2-4.6 3 8.4 2.2-5.4 1.2 1.6h1.6" stroke={W} strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <defs>
+        {lin(g('bg'), '#34d399', '#0f766e')}
+        {lin(g('face'), '#ffffff', '#d1fae5')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M32 11a21 21 0 1 1-20.2 26.6" stroke="#a7f3d0" strokeWidth="4" strokeLinecap="round" fill="none" />
+      <path d="M8.5 31.5 11 41.6l9-5.8Z" fill="#a7f3d0" />
+      <circle cx="32" cy="33" r="14" fill="#000" opacity=".15" />
+      <circle cx="32" cy="32" r="14" fill={`url(#${g('face')})`} />
+      <path d="M32 24v8.5l6 3.5" stroke="#0f766e" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </>
   ),
-  containers: (
+  storage: (g) => (
     <>
-      <path d="M12 3 20 7.4 12 11.8 4 7.4Z" fill={W} />
-      <path d="M4 7.4v9.2L12 21v-9.2Z" fill={W} opacity=".72" />
-      <path d="M20 7.4v9.2L12 21v-9.2Z" fill={W} opacity=".45" />
+      <defs>
+        {lin(g('bg'), '#93c5fd', '#2563eb')}
+        {lin(g('box'), '#ffffff', '#e2e8f0')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      {[14, 36].map((y) => (
+        <g key={y}>
+          <rect x="12" y={y + 2} width="40" height="15" rx="4" fill="#000" opacity=".16" />
+          <rect x="12" y={y} width="40" height="15" rx="4" fill={`url(#${g('box')})`} />
+          <rect x="17" y={y + 6} width="16" height="3" rx="1.5" fill="#cbd5e1" />
+          <circle cx="45" cy={y + 7.5} r="2.6" fill={y === 36 ? '#22c55e' : '#60a5fa'} />
+        </g>
+      ))}
     </>
   ),
-  appcenter: (
+  containers: (g) => (
     <>
-      <path d="M8.5 8V6.8a3.5 3.5 0 0 1 7 0V8" stroke={W} strokeWidth="2" strokeLinecap="round" fill="none" opacity=".8" />
-      <path d="M5.2 8h13.6l-1 10.4a2.2 2.2 0 0 1-2.2 2H8.4a2.2 2.2 0 0 1-2.2-2Z" fill={W} />
-      <path d="M12 11.2l.9 1.9 2.1.3-1.5 1.5.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.5 2.1-.3Z" fill="#000" opacity=".18" />
+      <defs>
+        {lin(g('bg'), '#5eead4', '#0e7490')}
+        {lin(g('top'), '#ffffff', '#ccfbf1')}
+        {lin(g('left'), '#99f6e4', '#5eead4')}
+        {lin(g('right'), '#2dd4bf', '#0d9488')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M32 12 50 22v20L32 52 14 42V22Z" fill="#000" opacity=".15" transform="translate(0 2)" />
+      <path d="M32 12 50 22 32 32 14 22Z" fill={`url(#${g('top')})`} />
+      <path d="M14 22 32 32v20L14 42Z" fill={`url(#${g('left')})`} />
+      <path d="M50 22 32 32v20l18-10Z" fill={`url(#${g('right')})`} />
     </>
   ),
-  browser: (
+  browser: (g) => (
     <>
-      <path d="M12 2.8 19.6 5.4 19 13c-.4 3.6-3.2 6.4-7 8.2-3.8-1.8-6.6-4.6-7-8.2L4.4 5.4Z" fill={W} />
-      <path d="M12 6.2 16.6 7.8 16.2 12.6c-.3 2.2-2 4-4.2 5.2Z" fill="#000" opacity=".14" />
+      <defs>
+        {lin(g('bg'), '#fb923c', '#dc2626')}
+        {lin(g('shield'), '#ffffff', '#ffedd5')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M32 10 50 16l-1.4 18c-.9 9-7.4 15.5-16.6 19.5C22.8 49.5 16.3 43 15.4 34L14 16Z" fill="#000" opacity=".15" transform="translate(0 2)" />
+      <path d="M32 10 50 16l-1.4 18c-.9 9-7.4 15.5-16.6 19.5C22.8 49.5 16.3 43 15.4 34L14 16Z" fill={`url(#${g('shield')})`} />
+      <path d="M32 19 41 22.2 40.2 32c-.5 4.7-3.6 8.3-8.2 10.6Z" fill="#fb923c" />
+      <path d="M32 19 23 22.2 23.8 32c.5 4.7 3.6 8.3 8.2 10.6Z" fill="#fdba74" />
     </>
   ),
-  remotedesktop: (
+  remotedesktop: (g) => (
     <>
-      <rect x="2.8" y="4" width="18.4" height="12.4" rx="2.2" fill={W} />
-      <rect x="4.8" y="6" width="14.4" height="8.4" rx="1" fill="#000" opacity=".16" />
-      <path d="M9 20h6M12 16.4V20" stroke={W} strokeWidth="2.2" strokeLinecap="round" opacity=".75" />
-      <path d="m10.5 8.6 3.4 1.6-3.4 1.6Z" fill={W} />
+      <defs>
+        {lin(g('bg'), '#818cf8', '#3730a3')}
+        {lin(g('screen'), '#38bdf8', '#1d4ed8')}
+        {lin(g('frame'), '#ffffff', '#e2e8f0')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <rect x="10" y="14" width="44" height="30" rx="4" fill="#000" opacity=".16" transform="translate(0 2)" />
+      <rect x="10" y="14" width="44" height="30" rx="4" fill={`url(#${g('frame')})`} />
+      <rect x="13.5" y="17.5" width="37" height="23" rx="2" fill={`url(#${g('screen')})`} />
+      <path d="M28 44h8l2 6H26Z" fill="#cbd5e1" />
+      <rect x="22" y="50" width="20" height="3.4" rx="1.7" fill="#e2e8f0" />
+      <path d="m29 23 10 6-4.4 1.2 2.6 5-2.2 1.1-2.6-5L29 34Z" fill="#fff" />
     </>
   ),
-  settings: (
+  scripts: (g) => (
     <>
-      <path
-        d="M10.3 2.8h3.4l.5 2.4c.6.2 1.2.5 1.7.9l2.3-.8 1.7 2.9-1.8 1.6c.1.6.1 1.3 0 1.9l1.8 1.6-1.7 2.9-2.3-.8c-.5.4-1.1.7-1.7.9l-.5 2.4h-3.4l-.5-2.4c-.6-.2-1.2-.5-1.7-.9l-2.3.8-1.7-2.9 1.8-1.6a6 6 0 0 1 0-1.9L4.1 8.2l1.7-2.9 2.3.8c.5-.4 1.1-.7 1.7-.9Z"
-        fill={W}
-        transform="translate(12 12.4) scale(1.14) translate(-12 -11.2)"
-      />
-      <circle cx="12" cy="12.4" r="3.2" fill="#000" opacity=".22" />
-    </>
-  ),
-  terminal: (
-    <>
-      <rect x="2.8" y="4" width="18.4" height="16" rx="3" fill={W} opacity=".14" />
-      <path d="m6.5 9 3.6 3-3.6 3" stroke={W} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path d="M12.5 16h5" stroke={W} strokeWidth="2.3" strokeLinecap="round" opacity=".7" />
-    </>
-  ),
-  scripts: (
-    <>
-      <path d="M6.5 2.8h7.3l4.7 4.7v11.7a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V4.8a2 2 0 0 1 2-2Z" fill={W} />
-      <path d="M13.8 2.8v3.7a1 1 0 0 0 1 1h3.7Z" fill="#000" opacity=".16" />
-      <path d="m9.6 11.6-2 2 2 2M14.4 11.6l2 2-2 2" stroke="#000" strokeOpacity=".32" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <defs>
+        {lin(g('bg'), '#86efac', '#15803d')}
+        {lin(g('page'), '#ffffff', '#f0fdf4')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <path d="M18 10h20l10 10v30a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4Z" fill="#000" opacity=".15" transform="translate(0 2)" />
+      <path d="M18 10h20l10 10v30a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4Z" fill={`url(#${g('page')})`} />
+      <path d="M38 10v7a3 3 0 0 0 3 3h7Z" fill="#bbf7d0" />
+      <path d="m26 30-5 5 5 5M36 30l5 5-5 5" stroke="#16a34a" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </>
   ),
 };
 
-/** Artwork for a NoCapOS app, or null when it has none. */
-export function appArt(id: string | undefined, size: number): ReactNode {
-  const art = id ? ART[id] : undefined;
-  if (!art) return null;
+/** A NoCapOS app's illustrated icon, or null when it has none. */
+export function AppArt({ id, size }: { id?: string; size: number }) {
+  const uid = useId().replace(/:/g, '');
+  const draw = id ? ICONS[id] : undefined;
+  if (!draw) return null;
   return (
-    <svg className="app-art" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      {art}
+    <svg className="app-art3d" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      {draw((name) => `${uid}-${name}`)}
+      <rect width="64" height="32" rx="15" fill="#fff" opacity=".08" />
     </svg>
   );
 }
+
+export const hasArt = (id?: string) => !!id && id in ICONS;
