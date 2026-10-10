@@ -12,14 +12,15 @@ import (
 
 // installGuacd installs the native RDP engine where the distro packages it
 // (Fedora: guacd + libguac-client-rdp; Ubuntu releases that still ship it).
+// The VNC client plugin comes too, for Virtual Desk's virtual machine screens.
 const installGuacd = `set -e
 as_root() { if [ "$(id -u)" = 0 ]; then "$@"; elif command -v sudo >/dev/null && sudo -n true 2>/dev/null; then sudo -n "$@"; else exit 3; fi; }
 command -v guacd >/dev/null && exit 0
-if command -v dnf >/dev/null; then as_root dnf install -y -q guacd libguac-client-rdp
+if command -v dnf >/dev/null; then as_root dnf install -y -q guacd libguac-client-rdp libguac-client-vnc || as_root dnf install -y -q guacd libguac-client-rdp
 elif command -v apt-get >/dev/null; then
   export DEBIAN_FRONTEND=noninteractive
   apt-cache show guacd >/dev/null 2>&1 || exit 4
-  as_root apt-get install -y -q guacd libguac-client-rdp0 || as_root apt-get install -y -q guacd
+  as_root apt-get install -y -q guacd libguac-client-rdp0 libguac-client-vnc0 || as_root apt-get install -y -q guacd libguac-client-rdp0 || as_root apt-get install -y -q guacd
 else exit 4; fi
 command -v guacd >/dev/null`
 
