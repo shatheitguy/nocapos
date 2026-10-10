@@ -12,6 +12,7 @@ import { Photos } from './Photos';
 import { RemoteDesktop } from './RemoteDesktop';
 import { Scripts } from './Scripts';
 import { Settings } from './Settings';
+import { Storage } from './Storage';
 import { Terminal } from './Terminal';
 import { Viewer } from './Viewer';
 
@@ -27,6 +28,7 @@ export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = 
   containers: Containers,
   appcenter: AppCenter,
   settings: Settings,
+  storage: Storage,
   scripts: Scripts,
   viewer: Viewer,
   logs: Logs,

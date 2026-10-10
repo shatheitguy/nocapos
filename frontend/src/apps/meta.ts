@@ -55,6 +55,16 @@ export const APPS: Record<string, AppMeta> = {
     single: true,
     adminOnly: true,
   },
+  storage: {
+    id: 'storage',
+    title: 'Storage',
+    icon: 'hdd',
+    tile: ['#5b8cff', '#2c46b8'],
+    size: { w: 1080, h: 720 },
+    description: 'Disks, health, RAID pools and snapshots',
+    single: true,
+    adminOnly: true,
+  },
   monitor: {
     id: 'monitor',
     title: 'Resource Monitor',
