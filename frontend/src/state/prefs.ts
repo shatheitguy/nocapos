@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { saveLater } from '../lib/saveLater';
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
@@ -84,7 +85,8 @@ export interface PrefValues {
   wallpaper: WallpaperId;
   wallpaperDim: number; // 0–60 %
   accent: string;
-  reduceTransparency: boolean;
+  reduceTransparency: boolean; // kept in step with transparency === 0
+  transparency: number; // panels: 0 = solid … 100 = full glass
   iconStyle: IconStyle; // how NoCapOS's own app icons look
   reduceMotion: boolean;
   squareCorners: boolean;
@@ -134,6 +136,7 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
+  transparency: 100,
   iconStyle: 'glass',
   reduceMotion: false,
   squareCorners: false,
@@ -169,7 +172,7 @@ export const DEFAULT_PREFS: PrefValues = {
 
 /** The look-and-feel subset that "Reset personalization" restores. */
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
-  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'reduceMotion', 'squareCorners',
+  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'transparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
   'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
 ];
@@ -195,6 +198,8 @@ function load(): Partial<PrefValues> {
       if (out.uiTheme === 'classic') delete out.uiTheme;
       if (out.wallpaper === 'nocap') delete out.wallpaper;
     }
+    // The old on/off switch becomes the far end of the Transparency slider.
+    if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
@@ -214,13 +219,16 @@ export const usePrefs = create<Prefs>((set, get) => ({
   ...load(),
   set: (p) => {
     set(p);
-    const s = get();
-    const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ ...values, brand1: true, glass1: true }));
-    } catch {
-      /* ignore */
-    }
+    // Sliders call this on every move; the write is batched (flushed on unload).
+    saveLater(
+      KEY,
+      () => {
+        const s = get();
+        const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
+        return JSON.stringify({ ...values, brand1: true, glass1: true });
+      },
+      300,
+    );
   },
 }));
 
@@ -228,12 +236,17 @@ export const usePrefs = create<Prefs>((set, get) => ({
 
 const WALL_KEY = 'alfa.wallpaper.custom';
 
+// The image is large; read it once and keep it, rather than on every pref change.
+let customWall: string | null | undefined;
+
 export function loadCustomWallpaper(): string | null {
+  if (customWall !== undefined) return customWall;
   try {
-    return localStorage.getItem(WALL_KEY);
+    customWall = localStorage.getItem(WALL_KEY);
   } catch {
-    return null;
+    customWall = null;
   }
+  return customWall;
 }
 
 /** Downscale an image file to at most 2560px and store it as a JPEG data URL. */
@@ -249,6 +262,7 @@ export async function saveCustomWallpaper(file: File): Promise<string> {
     const url = canvas.toDataURL('image/jpeg', q);
     try {
       localStorage.setItem(WALL_KEY, url);
+      customWall = url;
       return url;
     } catch {
       /* too big for storage — try a smaller encoding */
@@ -294,6 +308,8 @@ export function workArea(p: PrefValues = usePrefs.getState()) {
 
 const MAGNIFY: Record<Magnify, number> = { off: 1, small: 1.12, large: 1.38 };
 
+let appliedBg = '';
+
 /** Applies every look-and-feel pref to <html>/<body>. */
 export function applyPrefs(p: PrefValues) {
   const root = document.documentElement;
@@ -321,7 +337,12 @@ export function applyPrefs(p: PrefValues) {
   root.style.setProperty('--dock-mag', String(MAGNIFY[p.dockMagnify]));
   root.toggleAttribute('data-no-indicators', !p.dockIndicators);
 
-  root.toggleAttribute('data-solid', p.reduceTransparency);
+  // Transparency: 0 is fully solid, 100 the full glass look, anything in
+  // between makes the panels proportionally more opaque (see glass.css).
+  const clear = Math.min(100, Math.max(0, p.transparency));
+  root.toggleAttribute('data-solid', clear === 0);
+  root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
+  root.style.setProperty('--clear', String(clear / 100));
   root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
@@ -332,7 +353,12 @@ export function applyPrefs(p: PrefValues) {
   const body = document.body;
   body.dataset.wallpaper = p.wallpaper;
   const custom = p.wallpaper === 'custom' ? loadCustomWallpaper() : null;
-  body.style.backgroundImage = custom ? `url("${custom}")` : '';
+  const bg = custom ? `url("${custom}")` : '';
+  // Re-assigning a multi-MB data URL on every slider tick is expensive.
+  if (bg !== appliedBg) {
+    body.style.backgroundImage = bg;
+    appliedBg = bg;
+  }
   root.style.setProperty('--wall-dim', String(p.wallpaperDim / 100));
   // Brightness: a dark veil over everything (browsers can't drive the backlight).
   const b = Math.min(100, Math.max(30, p.brightness));

@@ -15,6 +15,7 @@ import {
   type StorageStatus,
   type Vdev,
 } from '../api/storage';
+import { usePoll } from '../lib/hooks';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -99,11 +100,7 @@ export function Storage(_props: { win: WinState }) {
 
   // Refresh: quickly while a scrub/resilver runs, slowly otherwise.
   const scanning = pools.some((p) => p.scan.state === 'scanning');
-  useEffect(() => {
-    if (!status?.supported) return;
-    const t = window.setInterval(() => void load(), scanning ? 4000 : 20000);
-    return () => window.clearInterval(t);
-  }, [load, scanning, status?.supported]);
+  usePoll(load, scanning ? 4000 : 20000, !!status?.supported);
 
   const install = async (tool: 'zfs' | 'smart') => {
     setInstalling(tool);

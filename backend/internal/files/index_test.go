@@ -49,3 +49,46 @@ func TestIndexUnderAndRemove(t *testing.T) {
 	var nilIndex *Index
 	nilIndex.Remove("d", []string{"x"}) // must not panic
 }
+
+func TestIndexUpsertAndRename(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "Docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := New([]Root{{ID: "d", Name: "D", Path: dir}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	defer close(done)
+	ix := NewIndex(svc, done)
+	for i := 0; i < 100; i++ {
+		if n, building, _ := ix.Stats(); n > 0 && !building {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Docs", "plan.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ix.Upsert("d", "Docs/plan.txt")
+	hits := ix.Search("plan", 10)
+	if len(hits) != 1 || hits[0].Path != "/Docs/plan.txt" || hits[0].Size != 5 {
+		t.Fatalf("after upsert: %+v", hits)
+	}
+	ix.Upsert("d", "Docs/plan.txt") // again: no duplicate
+	if hits := ix.Search("plan", 10); len(hits) != 1 {
+		t.Fatalf("upsert twice: %+v", hits)
+	}
+	ix.Rename("d", "Docs", "Papers")
+	hits = ix.Search("plan", 10)
+	if len(hits) != 1 || hits[0].Path != "/Papers/plan.txt" {
+		t.Fatalf("after renaming the folder: %+v", hits)
+	}
+	if hits := ix.Search("papers", 10); len(hits) != 1 || hits[0].Name != "Papers" {
+		t.Fatalf("renamed folder: %+v", hits)
+	}
+	var nilIndex *Index
+	nilIndex.Upsert("d", "x")
+	nilIndex.Rename("d", "x", "y")
+}

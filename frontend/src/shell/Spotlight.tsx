@@ -3,7 +3,7 @@ import { openStoreApp, storeApi, type StoreApp } from '../api/appstore';
 import { api, logout } from '../api/client';
 import { fileKind } from '../api/files';
 import { openApp, visibleApps } from '../apps/meta';
-import { SETTINGS_PAGES } from '../apps/Settings';
+import { SETTINGS_PAGES } from '../apps/settingsPages';
 import { AppIcon } from '../components/AppTile';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes } from '../lib/format';

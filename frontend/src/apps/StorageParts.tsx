@@ -15,6 +15,7 @@ import {
   type SmartReport,
   type Vdev,
 } from '../api/storage';
+import { usePoll } from '../lib/hooks';
 import { toast } from '../state/toasts';
 
 // Pieces of the Storage app: sizes, badges, the sheet (modal) frame, and the
@@ -606,27 +607,22 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
   const [smartErr, setSmartErr] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const load = () =>
-    void storageApi.smart(disk.name).then((r) => {
+    storageApi.smart(disk.name).then((r) => {
       if (r.ok) setSmart(r.data);
       else setSmartErr(r.error ?? 'No SMART data');
     });
   useEffect(() => {
-    if (smartInstalled) load();
+    if (smartInstalled) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disk.name, smartInstalled]);
-  useEffect(() => {
-    if (!smart?.summary.test_running) return;
-    const t = window.setInterval(load, 5000);
-    return () => window.clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [smart?.summary.test_running]);
+  usePoll(load, 5000, !!smart?.summary.test_running);
   const runTest = async (type: 'short' | 'long') => {
     setTesting(true);
     const r = await storageApi.smartTest(disk.name, type);
     setTesting(false);
     if (!r.ok) return toast('error', 'Couldn’t start the test', r.error);
     toast('info', type === 'short' ? 'Short test started' : 'Long test started', type === 'short' ? 'It takes about 2 minutes.' : 'It can take several hours; the disk stays usable.');
-    window.setTimeout(load, 1500);
+    window.setTimeout(() => void load(), 1500);
   };
   const s = smart?.summary ?? disk.smart;
   const h = smartHealth(s);

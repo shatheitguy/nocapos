@@ -46,6 +46,7 @@ type Manager struct {
 	rclone    *Rclone
 	rcloneErr error
 	jobs      map[string]*Job
+	base      context.Context // alfad's lifetime, set by RunScheduler
 }
 
 func NewManager(st *store.Store, box Sealer, fsvc *files.Service, dataDir string, log *slog.Logger) *Manager {
@@ -597,7 +598,12 @@ func (m *Manager) Run(ctx context.Context, id int64) (*Job, error) {
 			delete(m.jobs, jid)
 		}
 	}
-	jctx, cancel := context.WithCancel(context.Background())
+	// Jobs run under alfad's lifetime, so rclone is stopped on shutdown.
+	base := m.base
+	if base == nil {
+		base = context.Background()
+	}
+	jctx, cancel := context.WithCancel(base)
 	j := &Job{ID: randHex(8), ImportID: id, Started: time.Now().UTC(), cancel: cancel}
 	m.jobs[j.ID] = j
 	m.mu.Unlock()
@@ -639,6 +645,9 @@ func (m *Manager) Run(ctx context.Context, id int64) (*Job, error) {
 
 // RunScheduler starts due imports until ctx ends.
 func (m *Manager) RunScheduler(ctx context.Context) {
+	m.mu.Lock()
+	m.base = ctx
+	m.mu.Unlock()
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	for {

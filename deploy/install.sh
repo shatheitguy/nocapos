@@ -120,7 +120,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
     fi
   done
   systemctl daemon-reload 2>/dev/null || true
-  rm -f "$BIN" /usr/local/bin/alfad
+  rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad
   if [ -f "$PREFIX/docker-compose.yml" ] && has docker; then
     info "Stopping the Docker stack"
     (cd "$PREFIX" && if [ "$PURGE" -eq 1 ]; then docker compose down -v; else docker compose down; fi) || warn "docker compose down failed"
@@ -270,6 +270,58 @@ migrate_alfaos() {
   systemctl daemon-reload
 }
 
+# Updates keep the previous binary and a copy of the database, so an update
+# that doesn't start can be put back the way it was.
+PREV_BIN="$BIN.prev"
+DB_BACKUP="$DATA/pre-update"
+
+backup_for_rollback() {
+  [ -f "$BIN" ] || return 1
+  cp -p "$BIN" "$PREV_BIN" || return 1
+  rm -rf "$DB_BACKUP"
+  if [ -f "$DATA/alfa.db" ]; then
+    mkdir -p "$DB_BACKUP"
+    chmod 700 "$DB_BACKUP"
+    local f
+    for f in alfa.db alfa.db-wal alfa.db-shm; do
+      if [ -f "$DATA/$f" ]; then cp -p "$DATA/$f" "$DB_BACKUP/$f"; fi
+    done
+  fi
+  return 0
+}
+
+wait_native() { # sets READY and TOKEN
+  local logs
+  READY=0 TOKEN=""
+  for _ in $(seq 1 30); do
+    logs="$(journalctl -u nocapos --no-pager -o cat -n 400 2>/dev/null || true)"
+    if since_last_start <<<"$logs" | grep '"alfad ready"' >/dev/null; then READY=1; TOKEN="$(setup_token <<<"$logs")"; break; fi
+    systemctl is-failed --quiet nocapos && break
+    sleep 1
+  done
+}
+
+rollback_native() {
+  local prev
+  prev="$("$PREV_BIN" version 2>/dev/null || echo "the previous version")"
+  warn "$NAME $VERSION did not start; putting back $prev"
+  systemctl stop nocapos 2>/dev/null || true
+  install -m 0755 "$PREV_BIN" "$BIN"
+  if [ -f "$DB_BACKUP/alfa.db" ]; then
+    rm -f "$DATA/alfa.db-wal" "$DATA/alfa.db-shm"
+    local f
+    for f in alfa.db alfa.db-wal alfa.db-shm; do
+      if [ -f "$DB_BACKUP/$f" ]; then cp -p "$DB_BACKUP/$f" "$DATA/$f"; fi
+    done
+  fi
+  systemctl restart nocapos
+  wait_native
+  if [ "$READY" -eq 1 ]; then
+    die "the update to $VERSION failed and was rolled back: $prev is running again with its database as it was. Details: journalctl -u nocapos -e"
+  fi
+  die "the update to $VERSION failed and $prev didn't start either. Check: journalctl -u nocapos -e (database copy: $DB_BACKUP)"
+}
+
 install_native_mode() {
   migrate_alfaos
   local fresh=1
@@ -281,6 +333,11 @@ install_native_mode() {
 
   info "Installing $BIN"
   systemctl stop nocapos 2>/dev/null || true
+  local can_rollback=0
+  if backup_for_rollback; then
+    can_rollback=1
+    info "Kept the previous version and a copy of the database for rollback"
+  fi
   install -m 0755 "$BUNDLE_DIR/alfad" "$BIN"
 
   mkdir -p "$ETC" "$DATA"
@@ -307,17 +364,14 @@ EOF
   systemctl restart nocapos
 
   info "Waiting for $NAME"
-  local token="" ready=0 logs
-  for _ in $(seq 1 30); do
-    logs="$(journalctl -u nocapos --no-pager -o cat -n 400 2>/dev/null || true)"
-    if since_last_start <<<"$logs" | grep '"alfad ready"' >/dev/null; then ready=1; token="$(setup_token <<<"$logs")"; break; fi
-    systemctl is-failed --quiet nocapos && break
-    sleep 1
-  done
-  [ "$ready" -eq 1 ] || die "$NAME did not start; check: journalctl -u nocapos -e"
+  wait_native
+  if [ "$READY" -ne 1 ]; then
+    [ "$can_rollback" -eq 1 ] && rollback_native
+    die "$NAME did not start; check: journalctl -u nocapos -e"
+  fi
   local url="https://HOST/"
   [ "$PORT" = 443 ] || url="https://HOST:$PORT/"
-  finish "$url" "$token"
+  finish "$url" "$TOKEN"
   echo "   $NAME runs as root and can manage this server: Linux users (sign in with them), network, power,"
   echo "   storage and a root terminal — all admin-only and recorded in the audit log."
   echo "   Turn on two-factor sign-in under Settings → Security."

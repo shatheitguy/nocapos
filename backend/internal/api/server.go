@@ -27,6 +27,7 @@ import (
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
+	"alfaos/alfad/internal/vm"
 	"alfaos/alfad/internal/webapps"
 	"alfaos/alfad/internal/ws"
 	"alfaos/alfad/web"
@@ -55,6 +56,7 @@ type Deps struct {
 	Cloud     *cloudimport.Manager
 	Stacks    *stacks.Manager
 	Storage   *storage.Manager
+	VMs       *vm.Manager
 	Version   string
 }
 
@@ -210,10 +212,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/files/jobs/{id}", s.admin(s.filesJob))
 	mux.Handle("POST /api/v1/files/jobs/{id}/cancel", s.admin(s.filesJobCancel))
 	mux.Handle("GET /api/v1/files/text", s.admin(s.filesReadText))
-	mux.Handle("PUT /api/v1/files/text", s.admin(s.touchIndex(s.filesWriteText)))
-	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.touchIndex(s.filesMkdir)))
-	mux.Handle("POST /api/v1/files/rename", s.admin(s.touchIndex(s.filesRename)))
-	mux.Handle("POST /api/v1/files/delete", s.admin(s.touchIndex(s.filesDelete)))
+	// Save, mkdir, rename and delete update the search index in place.
+	mux.Handle("PUT /api/v1/files/text", s.admin(s.filesWriteText))
+	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.filesMkdir))
+	mux.Handle("POST /api/v1/files/rename", s.admin(s.filesRename))
+	mux.Handle("POST /api/v1/files/delete", s.admin(s.filesDelete))
 	mux.Handle("POST /api/v1/files/transfer", s.admin(s.touchIndex(s.filesTransfer)))
 	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
@@ -314,6 +317,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Storage: disks, SMART, ZFS pools, datasets and snapshots (admin, audited).
 	s.storageRoutes(mux)
+
+	// Virtual Desk: virtual machines (admin, audited).
+	s.vmRoutes(mux)
 
 	// Notification Center (admin).
 	s.notifyRoutes(mux)
