@@ -5,9 +5,9 @@
 [![CI](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml/badge.svg)](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a desktop in your
-browser — like umbrelOS or OpenMediaVault on top of Raspberry Pi OS, but with a full windowed desktop.
-It installs on top of your existing Linux, manages the machine as root, and runs apps in Docker:
+**Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a full windowed
+desktop in your browser. It installs on top of your existing Linux (Debian, Ubuntu, Raspberry Pi OS,
+Fedora, Arch), manages the machine as root, and runs apps in Docker:
 files, photos, backups, RAID storage, network sharing and one-click apps, all in a frosted-glass desktop.
 
 🌐 **Website:** https://shatheitguy.github.io/nocapos/
