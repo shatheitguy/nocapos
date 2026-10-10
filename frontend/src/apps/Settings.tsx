@@ -14,7 +14,7 @@ import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import type { Snapshot } from '../api/types';
 import { openApp } from './meta';
-import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WallpaperStrip, WindowSettings } from './Personalize';
+import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
 import { FocusSettings, PowerSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
@@ -438,7 +438,6 @@ function Hero({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
       </div>
-      <WallpaperStrip strip />
     </section>
   );
 }
