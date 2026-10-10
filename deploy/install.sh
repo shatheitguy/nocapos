@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # NoCapOS installer for Linux servers: Debian, Ubuntu, Raspberry Pi OS,
-# Fedora, Arch, ... (amd64, arm64, armv7). Like umbrelOS or OMV, NoCapOS runs
-# on top of your existing Linux and manages it: users, network, storage,
+# Fedora, Arch, ... (amd64, arm64, armv7). NoCapOS runs on top of your
+# existing Linux and manages it: users, network, storage,
 # power, a root terminal and one-click Docker apps.
 #
 #   curl -fsSL <release-url>/install.sh | sudo bash      download + install

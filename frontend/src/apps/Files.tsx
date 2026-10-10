@@ -112,7 +112,7 @@ interface Item {
 const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:');
 
 /**
- * Files: umbrelOS-style sidebar (Home, Recents, Favorites, shared folders,
+ * Files: a sidebar (Home, Recents, Favorites, shared folders,
  * network devices, external storage, Trash) with one or two panes and an
  * optional preview panel.
  */

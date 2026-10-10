@@ -129,7 +129,7 @@ export function FilePreview({ root, path, entry, unix, onClose }: { root: string
   );
 }
 
-// ---------- icons and labels (umbrelOS-style grid) ----------
+// ---------- icons and labels (grid view) ----------
 
 const KIND_NOUN: Record<FileKind, string> = {
   folder: 'Folder',
