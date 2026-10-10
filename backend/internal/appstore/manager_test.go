@@ -221,6 +221,13 @@ func TestCatalogLoads(t *testing.T) {
 	}
 }
 
+func TestCatalogRejectsPlainHTTPLinks(t *testing.T) {
+	doc := `{"apps":[{"id":"x","name":"X","source":"http://example.com","services":[{"name":"app","image":"x"}]}]}`
+	if _, err := parseCatalog([]byte(doc)); err == nil {
+		t.Fatal("http source link accepted")
+	}
+}
+
 func TestSplitImage(t *testing.T) {
 	cases := map[string][2]string{
 		"louislam/uptime-kuma:1":             {"louislam/uptime-kuma", "1"},

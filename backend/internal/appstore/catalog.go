@@ -14,13 +14,16 @@ import (
 var catalogJSON []byte
 
 type App struct {
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	Tagline     string       `json:"tagline"`
-	Description string       `json:"description"`
-	Category    string       `json:"category"`
-	Developer   string       `json:"developer"`
-	Website     string       `json:"website"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Tagline     string `json:"tagline"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	Developer   string `json:"developer"`
+	Website     string `json:"website"`
+	Source      string `json:"source,omitempty"` // source code repository
+	// Screenshots are image URLs shown on the app page; none = generated banners.
+	Screenshots []string     `json:"screenshots,omitempty"`
 	Icon        string       `json:"icon"`
 	Tile        [2]string    `json:"tile"`
 	Featured    bool         `json:"featured,omitempty"`
@@ -108,6 +111,11 @@ func parseCatalog(b []byte) ([]App, error) {
 				if !idRe.MatchString(v.Name) || !strings.HasPrefix(v.Path, "/") {
 					return nil, fmt.Errorf("catalog: %s/%s: bad volume %q", a.ID, s.Name, v.Name)
 				}
+			}
+		}
+		for _, u := range append([]string{a.Website, a.Source}, a.Screenshots...) {
+			if u != "" && !strings.HasPrefix(u, "https://") {
+				return nil, fmt.Errorf("catalog: %s: links must use https: %q", a.ID, u)
 			}
 		}
 		if a.Web != nil && !names[a.Web.Service] {

@@ -4,6 +4,8 @@ import { Icon } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
 import { toast } from '../state/toasts';
 import { useWM, type WinState } from '../state/windows';
+import { CodeView } from '../lib/highlight';
+import { openApp } from './meta';
 
 export function Viewer({ win }: { win: WinState }) {
   const root = win.props?.root ?? '';
@@ -197,6 +199,134 @@ function TextEditor({ win, root, path, onDownload }: { win: WinState; root: stri
           }
         }}
       />
+    </div>
+  );
+}
+
+const LIGHTBOX_TEXT_MAX = 512 * 1024;
+
+/**
+ * Quick look inside Files: a dark glass sheet over the window showing one
+ * file, with previous / next through the folder and actions in a top bar.
+ */
+export function FileLightbox({ items, index, onIndex, onClose }: { items: { root: string; path: string; name: string; size: number }[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
+  const item = items[index];
+  const root = item?.root ?? '';
+  const kind = item ? fileKind(item.name) : 'file';
+  const [url, setUrl] = useState<string | null>(null);
+  const [text, setText] = useState<{ content: string; error?: string } | null>(null);
+  const prev = index > 0 ? () => onIndex(index - 1) : undefined;
+  const next = index < items.length - 1 ? () => onIndex(index + 1) : undefined;
+
+  useEffect(() => {
+    setUrl(null);
+    setText(null);
+    if (!item) return;
+    let live = true;
+    if (kind === 'text' || kind === 'code') {
+      if (item.size > LIGHTBOX_TEXT_MAX) setText({ content: '', error: `Too large to preview (${fmtBytes(item.size)}). Open it in a window instead.` });
+      else void fileApi.readText(root, item.path).then((r) => live && setText(r.ok ? { content: r.data.content } : { content: '', error: r.error ?? 'Could not read the file' }));
+    } else {
+      void fileTicket(root, item.path).then((t) => live && t && setUrl(rawUrl(root, item.path, t)));
+    }
+    return () => {
+      live = false;
+    };
+  }, [root, item, kind]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.key === ' ') onClose();
+      else if (e.key === 'ArrowLeft') prev?.();
+      else if (e.key === 'ArrowRight') next?.();
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  });
+
+  if (!item) return null;
+  const openWindow = () => {
+    onClose();
+    openApp('viewer', { title: item.name, props: { root, path: item.path }, key: `viewer:${root}:${item.path}` });
+  };
+  const download = () => void downloadFile(root, item.path).then((ok) => !ok && toast('error', `Could not download ${item.name}`));
+
+  return (
+    <div className="flb" role="dialog" aria-label={item.name} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <header className="flb-bar">
+        <button type="button" className="icon-btn flb-btn" aria-label="Close" onClick={onClose}>
+          <Icon name="close" size={16} />
+        </button>
+        <div className="flb-title">
+          <b className="ellipsis">{item.name}</b>
+          <span>
+            {items.length > 1 ? `${index + 1} of ${items.length} · ` : ''}
+            {fmtBytes(item.size)}
+          </span>
+        </div>
+        <button type="button" className="pill flb-btn" onClick={openWindow}>
+          <Icon name={kind === 'text' || kind === 'code' ? 'edit' : 'external'} size={14} /> {kind === 'text' || kind === 'code' ? 'Edit' : 'Open'}
+        </button>
+        <button type="button" className="icon-btn flb-btn" aria-label="Download" title="Download" onClick={download}>
+          <Icon name="download" size={16} />
+        </button>
+      </header>
+      <div className="flb-stage" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+        {kind === 'image' && url && <img key={url} src={url} alt={item.name} draggable={false} />}
+        {kind === 'video' && url && <video key={url} src={url} controls autoPlay />}
+        {kind === 'audio' && url && (
+          <div className="flb-card">
+            <Icon name="fileAudio" size={56} />
+            <b>{item.name}</b>
+            <audio key={url} src={url} controls autoPlay />
+          </div>
+        )}
+        {(kind === 'text' || kind === 'code') &&
+          (text === null ? (
+            <span className="spinner" />
+          ) : text.error ? (
+            <div className="flb-card">
+              <Icon name="fileText" size={48} />
+              <p>{text.error}</p>
+            </div>
+          ) : (
+            <div className="flb-text">
+              <CodeView text={text.content} name={item.name} />
+            </div>
+          ))}
+        {kind === 'pdf' && url && (
+          <div className="flb-card">
+            <Icon name="filePdf" size={56} />
+            <b>{item.name}</b>
+            <a className="btn pill" href={url} target="_blank" rel="noopener noreferrer">
+              <Icon name="external" size={15} /> Open PDF
+            </a>
+          </div>
+        )}
+        {(kind === 'archive' || kind === 'file' || kind === 'folder') && (
+          <div className="flb-card">
+            <Icon name="file" size={56} />
+            <b>{item.name}</b>
+            <p>No preview for this kind of file.</p>
+            <button type="button" className="pill" onClick={download}>
+              <Icon name="download" size={15} /> Download
+            </button>
+          </div>
+        )}
+      </div>
+      {prev && (
+        <button type="button" className="icon-btn flb-nav left" aria-label="Previous" onClick={prev}>
+          <Icon name="chevronLeft" size={22} />
+        </button>
+      )}
+      {next && (
+        <button type="button" className="icon-btn flb-nav right" aria-label="Next" onClick={next}>
+          <Icon name="chevronRight" size={22} />
+        </button>
+      )}
     </div>
   );
 }
