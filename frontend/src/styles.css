@@ -326,13 +326,42 @@ button.widget:active { transform: none; }
 .app-icon.art, .app-icon:not(.logo) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.24); }
 .app-icon.art { overflow: hidden; }
 .app-icon.art svg { display: block; width: 100%; height: 100%; }
-/* "Match app icons to the wallpaper": tiles and details in the theme's accent. */
-:root[data-icon-tint] {
+/* Icon styles (Settings → Appearance → App icons). "tinted": tiles in the
+   theme's accent; "glass": frosted see-through tiles with white artwork. */
+:root[data-icons='tinted'] {
   --icon-a: color-mix(in srgb, var(--accent) 72%, #fff);
   --icon-b: color-mix(in srgb, var(--accent) 78%, #000);
   --icon-ink: color-mix(in srgb, var(--accent) 72%, #000);
   --icon-hi: #fff;
 }
+:root[data-icons='glass'] {
+  --icon-a: transparent;
+  --icon-b: transparent;
+  --icon-ink: color-mix(in srgb, var(--accent) 65%, #000);
+  --icon-hi: #fff;
+  --icon-soft-a: rgba(255, 255, 255, 0.8);
+  --icon-soft-b: rgba(255, 255, 255, 0.55);
+  --icon-gear-a: #ffffff;
+  --icon-gear-b: #e2e8f0;
+  --icon-hub-a: color-mix(in srgb, var(--accent) 70%, #000);
+  --icon-hub-b: color-mix(in srgb, var(--accent) 55%, #000);
+}
+:root[data-icons='tinted'] {
+  --icon-soft-a: rgba(255, 255, 255, 0.75);
+  --icon-soft-b: rgba(255, 255, 255, 0.5);
+}
+:root[data-icons='glass'] .app-icon.art,
+:root[data-icons='glass'] .app-icon:not(.logo):not(.art),
+:root[data-icons='glass'] .launchpad-icon,
+:root[data-icons='glass'] .trash-icon {
+  background:
+    radial-gradient(120% 80% at 30% 0%, rgba(255, 255, 255, 0.42), transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.18)), color-mix(in srgb, var(--accent) 14%, rgba(255, 255, 255, 0.04)));
+  backdrop-filter: blur(16px) saturate(1.8);
+  -webkit-backdrop-filter: blur(16px) saturate(1.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.22), inset 0 -8px 16px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+:root[data-icons='glass'] .app-icon.art svg { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.22)); }
 /* Installed apps: their own icon, as it is. */
 .app-icon.logo { background: none; }
 .app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }

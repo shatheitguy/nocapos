@@ -52,6 +52,13 @@ export type IconSize = 'small' | 'medium' | 'large';
 export type TitleButtons = 'right' | 'left';
 export type TitleDoubleClick = 'maximize' | 'minimize' | 'none';
 export type WeekStart = 'sun' | 'mon';
+/** NoCapOS app icons: frosted glass, tinted with the wallpaper's colour, or each app's own colours. */
+export type IconStyle = 'glass' | 'tinted' | 'colorful';
+export const ICON_STYLES: { id: IconStyle; label: string }[] = [
+  { id: 'glass', label: 'Glass' },
+  { id: 'tinted', label: 'Wallpaper colour' },
+  { id: 'colorful', label: 'Colourful' },
+];
 
 /** Whole-OS visual themes: frosted Glass (default), the original look, and the Cyber-Deck FUI theme. */
 export type UiTheme = 'glass' | 'classic' | 'cyberdeck';
@@ -77,7 +84,7 @@ export interface PrefValues {
   wallpaperDim: number; // 0–60 %
   accent: string;
   reduceTransparency: boolean;
-  iconTint: boolean; // NoCapOS app icons take the theme's accent (which follows the wallpaper)
+  iconStyle: IconStyle; // how NoCapOS's own app icons look
   reduceMotion: boolean;
   squareCorners: boolean;
   clock24: boolean;
@@ -126,7 +133,7 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
-  iconTint: true,
+  iconStyle: 'glass',
   reduceMotion: false,
   squareCorners: false,
   clock24: false,
@@ -161,7 +168,7 @@ export const DEFAULT_PREFS: PrefValues = {
 
 /** The look-and-feel subset that "Reset personalization" restores. */
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
-  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconTint', 'reduceTransparency', 'reduceMotion', 'squareCorners',
+  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
   'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
 ];
@@ -187,6 +194,7 @@ function load(): Partial<PrefValues> {
       if (out.uiTheme === 'classic') delete out.uiTheme;
       if (out.wallpaper === 'nocap') delete out.wallpaper;
     }
+    if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
     // One-time move to the NoCap brand look for people still on the old defaults.
@@ -313,7 +321,7 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-no-indicators', !p.dockIndicators);
 
   root.toggleAttribute('data-solid', p.reduceTransparency);
-  root.toggleAttribute('data-icon-tint', p.iconTint);
+  root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
   root.dataset.titleButtons = p.titleButtons;
