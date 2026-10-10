@@ -51,6 +51,7 @@ func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
 //	docker.events            admin      engine events
 //	container.stats/<id>     admin      per-container resource usage (~1/s)
 //	container.logs/<id>      admin      last 200 lines, then follow (batched)
+//	storage.alerts           admin      disk and pool health alerts, on change
 func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, error) {
 	name, arg, _ := strings.Cut(topic, "/")
 	if name == "system.metrics" && arg == "" {
@@ -74,6 +75,11 @@ func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, err
 		return ws.Subscription{Shared: true, Source: func(ctx context.Context, emit func(any)) error {
 			return s.Docker.Stats(ctx, arg, func(st docker.Stats) error { emit(st); return nil })
 		}}, nil
+	case "storage.alerts":
+		if arg != "" || s.Storage == nil {
+			return ws.Subscription{}, errUnknownTopic
+		}
+		return ws.Subscription{Shared: true, Source: s.storageAlertsSource}, nil
 	case "container.logs":
 		if !validContainerRef(arg) {
 			return ws.Subscription{}, errUnknownTopic

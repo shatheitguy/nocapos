@@ -1,0 +1,10 @@
+{
+   "blockdevices": [
+      {"name": "sda", "kname": "sda", "path": "/dev/sda", "size": "240057409536", "type": "disk", "model": "KINGSTON SA400S37240G", "serial": "50026B7782A1B2C3", "tran": "sata", "rota": "0", "rm": "0", "fstype": null, "label": null, "uuid": null, "partuuid": null, "mountpoint": null,
+         "children": [
+            {"name": "sda1", "kname": "sda1", "path": "/dev/sda1", "size": "240055312384", "type": "part", "model": null, "serial": null, "tran": null, "rota": "0", "rm": "0", "fstype": "ext4", "label": null, "uuid": "c4a1d2e3-f4b5-4c6d-8e7f-9a0b1c2d3e4f", "partuuid": "1a2b3c4d-01", "mountpoint": "/"}
+         ]
+      },
+      {"name": "sdb", "kname": "sdb", "path": "/dev/sdb", "size": "4000787030016", "type": "disk", "model": "WDC WD40EFRX-68N32N0", "serial": "WD-WCC7K7654321", "tran": "sata", "rota": "1", "rm": "0", "fstype": null, "label": null, "uuid": null, "partuuid": null, "mountpoint": null}
+   ]
+}

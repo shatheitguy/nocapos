@@ -1,0 +1,223 @@
+{
+  "output_version": {
+    "command": "zpool status",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "tank": {
+      "name": "tank",
+      "state": "ONLINE",
+      "pool_guid": 11624379120431855519,
+      "txg": 2843211,
+      "spa_version": 5000,
+      "zpl_version": 5,
+      "scan_stats": {
+        "function": "SCRUB",
+        "state": "SCANNING",
+        "start_time": 1791419041,
+        "end_time": 0,
+        "to_examine": 3793315578266,
+        "examined": 1352399302164,
+        "skipped": 0,
+        "processed": 0,
+        "errors": 0,
+        "bytes_per_scan": 0,
+        "pass_start": 1791419041,
+        "scrub_pause": "-",
+        "scrub_spent_paused": 0,
+        "issued_bytes_per_scan": 858993459200,
+        "issued": 858993459200
+      },
+      "vdevs": {
+        "tank": {
+          "name": "tank",
+          "vdev_type": "root",
+          "guid": 11624379120431855519,
+          "class": "normal",
+          "state": "ONLINE",
+          "alloc_space": 1342177280000,
+          "total_space": 3985729650688,
+          "def_space": 3985729650688,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "vdevs": {
+            "mirror-0": {
+              "name": "mirror-0",
+              "vdev_type": "mirror",
+              "guid": 1593887126362871234,
+              "class": "normal",
+              "state": "ONLINE",
+              "alloc_space": 1342177280000,
+              "total_space": 3985729650688,
+              "def_space": 3985729650688,
+              "rep_dev_size": 3985729650688,
+              "read_errors": 0,
+              "write_errors": 0,
+              "checksum_errors": 0,
+              "vdevs": {
+                "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1AAAA-part1": {
+                  "name": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1AAAA-part1",
+                  "vdev_type": "disk",
+                  "guid": 7712093487611212002,
+                  "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1AAAA-part1",
+                  "devid": "ata-ST4000VN008-2DR166_ZDH1AAAA-part1",
+                  "phys_path": "pci-0000:00:17.0-ata-2.0",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 3985729650688,
+                  "phys_space": 4000776716288,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "/dev/disk/by-partuuid/6f1d5b0e-9a2c-4c1e-b3d4-7e8f9a0b1c2d": {
+                  "name": "/dev/disk/by-partuuid/6f1d5b0e-9a2c-4c1e-b3d4-7e8f9a0b1c2d",
+                  "vdev_type": "disk",
+                  "guid": 3301995722901174451,
+                  "path": "/dev/disk/by-partuuid/6f1d5b0e-9a2c-4c1e-b3d4-7e8f9a0b1c2d",
+                  "phys_path": "pci-0000:00:17.0-ata-3.0",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 3985729650688,
+                  "phys_space": 4000776716288,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "error_count": 0
+    },
+    "vault": {
+      "name": "vault",
+      "state": "DEGRADED",
+      "pool_guid": 8821700023481192201,
+      "txg": 991223,
+      "spa_version": 5000,
+      "zpl_version": 5,
+      "status": "One or more devices could not be used because the label is missing or invalid.  Sufficient replicas exist for the pool to continue functioning in a degraded state.",
+      "action": "Replace the device using 'zpool replace'.",
+      "msgid": "ZFS-8000-4J",
+      "moreinfo": "https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-4J",
+      "scan_stats": {
+        "function": "SCRUB",
+        "state": "FINISHED",
+        "start_time": 1789270101,
+        "end_time": 1789288805,
+        "to_examine": 9895604649984,
+        "examined": 9895604649984,
+        "skipped": 0,
+        "processed": 0,
+        "errors": 0,
+        "bytes_per_scan": 0,
+        "pass_start": 1789270101,
+        "scrub_pause": "-",
+        "scrub_spent_paused": 0,
+        "issued_bytes_per_scan": 9895604649984,
+        "issued": 9895604649984
+      },
+      "vdevs": {
+        "vault": {
+          "name": "vault",
+          "vdev_type": "root",
+          "guid": 8821700023481192201,
+          "class": "normal",
+          "state": "DEGRADED",
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "vdevs": {
+            "raidz2-0": {
+              "name": "raidz2-0",
+              "vdev_type": "raidz",
+              "guid": 6001234098765432101,
+              "class": "normal",
+              "state": "DEGRADED",
+              "read_errors": 0,
+              "write_errors": 0,
+              "checksum_errors": 0,
+              "vdevs": {
+                "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1CCCC-part1": {
+                  "name": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1CCCC-part1",
+                  "vdev_type": "disk",
+                  "guid": 1000000000000000001,
+                  "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1CCCC-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0
+                },
+                "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1DDDD-part1": {
+                  "name": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1DDDD-part1",
+                  "vdev_type": "disk",
+                  "guid": 1000000000000000002,
+                  "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1DDDD-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 2
+                },
+                "7965954862312465432": {
+                  "name": "7965954862312465432",
+                  "vdev_type": "disk",
+                  "guid": 7965954862312465432,
+                  "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1EEEE-part1",
+                  "class": "normal",
+                  "state": "FAULTED",
+                  "aux": "corrupted data",
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0
+                },
+                "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1FFFF-part1": {
+                  "name": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1FFFF-part1",
+                  "vdev_type": "disk",
+                  "guid": 1000000000000000004,
+                  "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1FFFF-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "read_errors": 3,
+                  "write_errors": 0,
+                  "checksum_errors": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "logs": {
+        "/dev/nvme0n1p4": {
+          "name": "/dev/nvme0n1p4",
+          "vdev_type": "disk",
+          "guid": 2000000000000000001,
+          "path": "/dev/nvme0n1p4",
+          "class": "log",
+          "state": "ONLINE",
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0
+        }
+      },
+      "spares": {
+        "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1JJJJ-part1": {
+          "name": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1JJJJ-part1",
+          "vdev_type": "disk",
+          "guid": 3000000000000000001,
+          "path": "/dev/disk/by-id/ata-ST4000VN008-2DR166_ZDH1JJJJ-part1",
+          "class": "spare",
+          "state": "AVAIL"
+        }
+      },
+      "error_count": 0
+    }
+  }
+}

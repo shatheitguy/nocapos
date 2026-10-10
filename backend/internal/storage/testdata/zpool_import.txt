@@ -1,0 +1,22 @@
+   pool: archive
+     id: 4410227397452116412
+  state: ONLINE
+ action: The pool can be imported using its name or numeric identifier.
+ config:
+
+	archive                                  ONLINE
+	  ata-ST8000VN004-2M2101_WSD3A1B2-part1  ONLINE
+
+   pool: oldmirror
+     id: 9033611200485511234
+  state: DEGRADED
+status: One or more devices are missing from the system.
+ action: The pool can be imported despite missing or damaged devices.  The
+	fault tolerance of the pool may be compromised if imported.
+   see: https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-2Q
+ config:
+
+	oldmirror                                  DEGRADED
+	  mirror-0                                 DEGRADED
+	    ata-WDC_WD20EFRX-68E_WD-WCC4M0000009   ONLINE
+	    16044981326701118213                   UNAVAIL
