@@ -65,7 +65,7 @@ export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, 
     hold.current = null;
     if (held || jiggle) return;
     if (app.installed && appURL(app)) openStoreApp(app);
-    else openApp('store', { props: { app: app.id } });
+    else openApp('appcenter', { props: { app: app.id } });
     onOpened?.();
   };
 

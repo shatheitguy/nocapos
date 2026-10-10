@@ -23,8 +23,10 @@ type App struct {
 	Website     string `json:"website"`
 	Source      string `json:"source,omitempty"` // source code repository
 	// Screenshots are image URLs shown on the app page; none = generated banners.
-	Screenshots []string     `json:"screenshots,omitempty"`
-	Icon        string       `json:"icon"`
+	Screenshots []string `json:"screenshots,omitempty"`
+	Icon        string   `json:"icon"`
+	// Logo is the app's own logo bundled with the UI (/app-icons/...); Icon is the fallback.
+	Logo        string       `json:"logo,omitempty"`
 	Tile        [2]string    `json:"tile"`
 	Featured    bool         `json:"featured,omitempty"`
 	Version     string       `json:"version"`
@@ -79,6 +81,7 @@ type Release struct {
 
 var (
 	idRe     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,40}$`)
+	logoRe   = regexp.MustCompile(`^/app-icons/[a-z0-9-]+\.(svg|png)$`)
 	secretRe = regexp.MustCompile(`\{\{secret:([a-z0-9_]{1,32})\}\}`)
 )
 
@@ -112,6 +115,9 @@ func parseCatalog(b []byte) ([]App, error) {
 					return nil, fmt.Errorf("catalog: %s/%s: bad volume %q", a.ID, s.Name, v.Name)
 				}
 			}
+		}
+		if a.Logo != "" && !logoRe.MatchString(a.Logo) {
+			return nil, fmt.Errorf("catalog: %s: logo must be /app-icons/<name>.svg or .png: %q", a.ID, a.Logo)
 		}
 		for _, u := range append([]string{a.Website, a.Source}, a.Screenshots...) {
 			if u != "" && !strings.HasPrefix(u, "https://") {
