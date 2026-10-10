@@ -23,6 +23,13 @@ const tile = (id: string, from: string, to: string) => (
 );
 /** Detail colours that follow the theme too: ink (on white parts) and hi (bright lines). */
 const ink = (c: string) => `var(--icon-ink, ${c})`;
+/** A gradient whose two colours can be swapped by an icon style through CSS variables. */
+const vgrad = (id: string, va: string, from: string, vb: string, to: string) => (
+  <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" style={{ stopColor: `var(${va}, ${from})` }} />
+    <stop offset="1" style={{ stopColor: `var(${vb}, ${to})` }} />
+  </linearGradient>
+);
 const hi = (c: string) => `var(--icon-hi, ${c})`;
 
 const ICONS: Record<string, Draw> = {
@@ -30,7 +37,7 @@ const ICONS: Record<string, Draw> = {
     <>
       <defs>
         {tile(g('bg'), '#ff7ab6', '#a855f7')}
-        {lin(g('back'), '#ffd6ec', '#f9a8d4')}
+        {vgrad(g('back'), '--icon-soft-a', '#ffd6ec', '--icon-soft-b', '#f9a8d4')}
         {lin(g('front'), '#ffffff', '#f3e8ff')}
       </defs>
       <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
@@ -77,8 +84,8 @@ const ICONS: Record<string, Draw> = {
     <>
       <defs>
         {tile(g('bg'), '#f1f5f9', '#94a3b8')}
-        {lin(g('gear'), '#64748b', '#1e293b')}
-        {lin(g('hub'), '#f8fafc', '#cbd5e1')}
+        {vgrad(g('gear'), '--icon-gear-a', '#64748b', '--icon-gear-b', '#1e293b')}
+        {vgrad(g('hub'), '--icon-hub-a', '#f8fafc', '--icon-hub-b', '#cbd5e1')}
       </defs>
       <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
       <g transform="translate(32 33)">
