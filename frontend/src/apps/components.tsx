@@ -1,35 +1,34 @@
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import type { WinState } from '../state/windows';
-import { AppCenter } from './AppCenter';
-import { Assistant } from './assistant/Assistant';
-import { Backups } from './Backups';
-import { Browser } from './Browser';
-import { Containers } from './Containers';
-import { Files } from './Files';
-import { Logs } from './Logs';
-import { Monitor } from './Monitor';
-import { Photos } from './Photos';
-import { RemoteDesktop } from './RemoteDesktop';
-import { Scripts } from './Scripts';
-import { Settings } from './Settings';
-import { Storage } from './Storage';
-import { Terminal } from './Terminal';
-import { Viewer } from './Viewer';
 
-export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = {
-  assistant: Assistant,
-  browser: Browser,
-  backups: Backups,
-  remotedesktop: RemoteDesktop,
-  files: Files,
-  terminal: Terminal,
-  monitor: Monitor,
-  photos: Photos,
-  containers: Containers,
-  appcenter: AppCenter,
-  settings: Settings,
-  storage: Storage,
-  scripts: Scripts,
-  viewer: Viewer,
-  logs: Logs,
+type AppBody = ComponentType<{ win: WinState }>;
+
+// Each app is its own chunk, fetched the first time its window opens, so the
+// desktop doesn't download the terminal, photo library, etc. up front.
+const app = (load: () => Promise<AppBody>) =>
+  lazy(async () => {
+    try {
+      return { default: await load() };
+    } catch {
+      // Usually a chunk from before an update that the server no longer has.
+      throw new Error('This app could not be loaded. NoCapOS may have been updated: reload the page.');
+    }
+  });
+
+export const APP_COMPONENTS: Record<string, AppBody> = {
+  assistant: app(() => import('./assistant/Assistant').then((m) => m.Assistant)),
+  browser: app(() => import('./Browser').then((m) => m.Browser)),
+  backups: app(() => import('./Backups').then((m) => m.Backups)),
+  remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
+  files: app(() => import('./Files').then((m) => m.Files)),
+  terminal: app(() => import('./Terminal').then((m) => m.Terminal)),
+  monitor: app(() => import('./Monitor').then((m) => m.Monitor)),
+  photos: app(() => import('./Photos').then((m) => m.Photos)),
+  containers: app(() => import('./Containers').then((m) => m.Containers)),
+  appcenter: app(() => import('./AppCenter').then((m) => m.AppCenter)),
+  settings: app(() => import('./Settings').then((m) => m.Settings)),
+  storage: app(() => import('./Storage').then((m) => m.Storage)),
+  scripts: app(() => import('./Scripts').then((m) => m.Scripts)),
+  viewer: app(() => import('./Viewer').then((m) => m.Viewer)),
+  logs: app(() => import('./Logs').then((m) => m.Logs)),
 };

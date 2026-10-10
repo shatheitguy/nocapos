@@ -13,6 +13,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -77,15 +79,57 @@ type Library struct {
 
 	thumbSlots chan struct{}
 	ffmpeg     string // "" when not installed
+
+	// Thumbnails being made right now, by output path: a second request for
+	// the same one waits for the first instead of decoding the photo again.
+	tmu      sync.Mutex
+	inflight map[string]*thumbCall
+}
+
+type thumbCall struct {
+	done chan struct{}
+	err  error
 }
 
 func New(fsvc *files.Service, ix *files.Index, st *store.Store, dataDir string, log *slog.Logger) *Library {
-	n := runtime.NumCPU()
-	if n < 2 {
-		n = 2
-	}
 	ff, _ := exec.LookPath("ffmpeg")
-	return &Library{files: fsvc, index: ix, store: st, cache: filepath.Join(dataDir, "photos-cache"), log: log, thumbSlots: make(chan struct{}, n), ffmpeg: ff}
+	return &Library{files: fsvc, index: ix, store: st, cache: filepath.Join(dataDir, "photos-cache"), log: log,
+		thumbSlots: make(chan struct{}, thumbWorkers()), ffmpeg: ff, inflight: map[string]*thumbCall{}}
+}
+
+// thumbWorkers caps how many photos are decoded at once. A big photo decodes
+// to hundreds of MB, so small-memory machines make one or two at a time.
+func thumbWorkers() int {
+	n := min(runtime.NumCPU(), 4)
+	switch mem := totalMemory(); {
+	case mem > 0 && mem < 2<<30:
+		n = 1
+	case mem > 0 && mem < 4<<30:
+		n = min(n, 2)
+	}
+	return max(n, 1)
+}
+
+// totalMemory returns the machine's RAM in bytes, or 0 when unknown (non-Linux).
+func totalMemory() uint64 {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if rest, ok := strings.CutPrefix(line, "MemTotal:"); ok {
+			f := strings.Fields(rest)
+			if len(f) == 0 {
+				return 0
+			}
+			kb, err := strconv.ParseUint(f[0], 10, 64)
+			if err != nil {
+				return 0
+			}
+			return kb << 10
+		}
+	}
+	return 0
 }
 
 // EnsureFolder creates the Photos folder on the first storage location that
@@ -173,6 +217,51 @@ func (l *Library) scan(todo, all []files.Hit) {
 	if err := l.store.PrunePhotoMetas(ctx, keep); err != nil {
 		l.log.Warn("photos: prune metadata", "err", err)
 	}
+	l.sweepCache(all)
+}
+
+// staleAfter is how old an unused cache file must be before the sweep removes
+// it, so thumbnails made for photos added since the scan started are safe.
+const staleAfter = time.Hour
+
+// sweepCache deletes cached thumbnails that no longer belong to a photo in the
+// library (deleted, edited or moved), and temp files left by a crash.
+func (l *Library) sweepCache(all []files.Hit) {
+	if _, _, capped := l.index.Stats(); capped {
+		return // the index doesn't list every photo; don't guess
+	}
+	live := make(map[string]bool, len(all))
+	for _, h := range all {
+		live[thumbName(h.Root, strings.TrimPrefix(h.Path, "/"), h.Size, h.ModTime)] = true
+	}
+	cutoff := time.Now().Add(-staleAfter)
+	removed := 0
+	_ = filepath.WalkDir(l.cache, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if strings.HasSuffix(name, ".jpg") && live[name] {
+			return nil
+		}
+		if info, err := d.Info(); err != nil || info.ModTime().After(cutoff) {
+			return nil
+		}
+		if os.Remove(p) == nil {
+			removed++
+		}
+		return nil
+	})
+	if removed > 0 {
+		l.log.Info("photos: removed unused thumbnails", "count", removed)
+	}
+}
+
+// thumbName is the cache file name for one version of a photo; an edited file
+// gets a new name.
+func thumbName(root, rel string, size int64, mod time.Time) string {
+	sum := sha1.Sum([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00%d", root, rel, size, mod.UnixNano())))
+	return hex.EncodeToString(sum[:]) + ".jpg"
 }
 
 // readMeta fills in the date taken and the picture size, where it can.
@@ -240,35 +329,73 @@ func (l *Library) Thumb(ctx context.Context, root, rel, size string) (string, er
 	if info.IsDir() {
 		return "", ErrNoThumb
 	}
-	sum := sha1.Sum([]byte(fmt.Sprintf("%s\x00%s\x00%d\x00%d", root, rel, info.Size(), info.ModTime().UnixNano())))
-	out := filepath.Join(l.cache, size, hex.EncodeToString(sum[:2]), hex.EncodeToString(sum[:])+".jpg")
+	name := thumbName(root, rel, info.Size(), info.ModTime())
+	out := filepath.Join(l.cache, size, name[:4], name)
 	if _, err := os.Stat(out); err == nil {
 		return out, nil
 	}
 
+	// Already being made (the grid asks for the same one twice): wait for it.
+	l.tmu.Lock()
+	if c, ok := l.inflight[out]; ok {
+		l.tmu.Unlock()
+		select {
+		case <-c.done:
+			if c.err != nil {
+				return "", c.err
+			}
+			return out, nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	c := &thumbCall{done: make(chan struct{})}
+	l.inflight[out] = c
+	l.tmu.Unlock()
+	defer func() {
+		l.tmu.Lock()
+		delete(l.inflight, out)
+		l.tmu.Unlock()
+		close(c.done)
+	}()
+
+	c.err = l.makeThumbFile(ctx, f, root, rel, ext, px, out)
+	if c.err != nil {
+		return "", c.err
+	}
+	return out, nil
+}
+
+// makeThumbFile writes the thumbnail to a uniquely named temp file beside out,
+// then renames it into place, so readers never see a half-written JPEG.
+func (l *Library) makeThumbFile(ctx context.Context, f *os.File, root, rel, ext string, px int, out string) error {
 	select {
 	case l.thumbSlots <- struct{}{}:
 		defer func() { <-l.thumbSlots }()
 	case <-ctx.Done():
-		return "", ctx.Err()
+		return ctx.Err()
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o750); err != nil {
-		return "", err
+		return err
 	}
-	tmp := out + ".tmp"
+	tf, err := os.CreateTemp(filepath.Dir(out), filepath.Base(out)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := tf.Name()
+	tf.Close()
+	defer os.Remove(tmp) // gone already after a successful rename
 	if videoExt[ext] || needsFFmpeg[ext] {
 		if l.ffmpeg == "" {
-			return "", ErrNoThumb
+			return ErrNoThumb
 		}
 		if err := l.ffmpegThumb(ctx, f, root, rel, tmp, px, videoExt[ext]); err != nil {
-			os.Remove(tmp)
-			return "", ErrNoThumb
+			return ErrNoThumb
 		}
 	} else if err := makeThumb(f, ext, px, tmp); err != nil {
-		os.Remove(tmp)
-		return "", err
+		return err
 	}
-	return out, os.Rename(tmp, out)
+	return os.Rename(tmp, out)
 }
 
 // makeThumb decodes a picture, stands it upright and writes a JPEG no larger than px.

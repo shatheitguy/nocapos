@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -120,7 +121,12 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
+// slowRequest is how long a request may take before it is logged at Info.
+const slowRequest = time.Second
+
 // requestLogger logs the path only: the query string may carry a WebSocket ticket.
+// Successful reads (the desktop polls a lot) go to Debug; writes, errors and
+// slow requests stay at Info.
 func (s *Server) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -129,9 +135,14 @@ func (s *Server) requestLogger(next http.Handler) http.Handler {
 		if r.URL.Path == "/healthz" {
 			return
 		}
-		s.Log.Info("http",
+		dur := time.Since(start)
+		level := slog.LevelInfo
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && rec.status < 400 && dur <= slowRequest {
+			level = slog.LevelDebug
+		}
+		s.Log.Log(r.Context(), level, "http",
 			"method", r.Method, "path", r.URL.Path, "status", rec.status,
-			"dur_ms", time.Since(start).Milliseconds(), "ip", clientIP(r, s.Config.TrustedProxies))
+			"dur_ms", dur.Milliseconds(), "ip", clientIP(r, s.Config.TrustedProxies))
 	})
 }
 

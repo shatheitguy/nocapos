@@ -15,6 +15,10 @@ let accessToken: string | null = null;
 let currentUser: User | null = null;
 let refreshTimer: number | undefined;
 let refreshing: Promise<boolean> | null = null;
+let expiresAt = 0;
+// Consecutive failed refreshes that weren't the server rejecting the session
+// (network blip, server restarting). The session is kept and retried.
+let refreshFailures = 0;
 const listeners = new Set<Listener>();
 
 export function onSessionChange(fn: Listener): () => void {
@@ -29,8 +33,10 @@ function emit() {
 function setSession(s: Session) {
   accessToken = s.access_token;
   currentUser = s.user;
+  refreshFailures = 0;
+  expiresAt = new Date(s.expires_at).getTime();
   window.clearTimeout(refreshTimer);
-  const ms = new Date(s.expires_at).getTime() - Date.now() - 60_000;
+  const ms = expiresAt - Date.now() - 60_000;
   refreshTimer = window.setTimeout(() => void refresh(), Math.max(ms, 5_000));
   emit();
 }
@@ -38,9 +44,29 @@ function setSession(s: Session) {
 function clearSession() {
   accessToken = null;
   currentUser = null;
+  refreshFailures = 0;
+  expiresAt = 0;
   window.clearTimeout(refreshTimer);
   emit();
 }
+
+// Retry a failed refresh with backoff: 2s, 4s, 8s … up to a minute.
+function retryRefresh() {
+  window.clearTimeout(refreshTimer);
+  const ms = Math.min(60_000, 2000 * 2 ** Math.min(refreshFailures - 1, 5));
+  refreshTimer = window.setTimeout(() => void refresh(), ms);
+}
+
+// Coming back online or to the tab: catch up on a failed or overdue refresh
+// right away (timers are throttled in background tabs).
+function refreshIfDue() {
+  if (!currentUser) return;
+  if (refreshFailures > 0 || expiresAt - Date.now() < 60_000) void refresh();
+}
+window.addEventListener('online', refreshIfDue);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshIfDue();
+});
 
 interface RequestOptions {
   method?: string;
@@ -89,7 +115,14 @@ export function refresh(): Promise<boolean> {
         setSession(r.data);
         return true;
       }
-      clearSession();
+      // Only the server saying the session is gone signs the user out. A
+      // network error or 5xx keeps the session and tries again shortly.
+      if (r.status === 401 || r.status === 403 || !currentUser) {
+        clearSession();
+        return false;
+      }
+      refreshFailures++;
+      retryRefresh();
       return false;
     })
     .finally(() => {

@@ -6,7 +6,7 @@ import { scriptsApi, type Script } from '../api/scripts';
 import type { Container, DockerEvent } from '../api/types';
 import { openApp } from '../apps/meta';
 import { Icon } from '../components/Icon';
-import { useTopic } from '../lib/hooks';
+import { usePoll, useTopic } from '../lib/hooks';
 import { runStatus, useScriptRun } from '../lib/scriptRun';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
@@ -30,12 +30,9 @@ export function ContainerGridWidget() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 15_000);
-    return () => {
-      window.clearInterval(t);
-      window.clearTimeout(reload.current);
-    };
+    return () => window.clearTimeout(reload.current);
   }, [load]);
+  usePoll(load, 15_000);
 
   useTopic<DockerEvent>('docker.events', (ev) => {
     if (ev.type !== 'container') return;

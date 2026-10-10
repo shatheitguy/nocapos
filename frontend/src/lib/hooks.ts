@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
 import { subscribe } from '../api/socket';
 
 /** Subscribes to a WebSocket topic for the component's lifetime (null = off). */
@@ -59,4 +59,64 @@ export function useDismiss(open: boolean, onClose: () => void, ...refs: RefObjec
     };
     // refs are stable objects, so only `open` matters
   }, [open]);
+}
+
+// ---- pausing background work ----
+
+/** False inside a minimized window. Provided by each app window. */
+export const WindowShownContext = createContext(true);
+
+function onVisibility(cb: () => void) {
+  document.addEventListener('visibilitychange', cb);
+  return () => document.removeEventListener('visibilitychange', cb);
+}
+
+/** True while the browser tab is visible. */
+export function useDocumentVisible() {
+  return useSyncExternalStore(onVisibility, () => !document.hidden);
+}
+
+/** True while the tab is visible and the hosting window (if any) isn't minimized. */
+export function usePageActive() {
+  const shown = useContext(WindowShownContext);
+  return useDocumentVisible() && shown;
+}
+
+/**
+ * Calls `fn` every `ms` while the page is active (see usePageActive). A tick
+ * is skipped while the previous call is still running, and after a pause the
+ * next call happens right away so the data catches up. The first load is the
+ * caller's job.
+ */
+export function usePoll(fn: () => unknown, ms: number, enabled = true) {
+  const fnRef = useRef(fn);
+  useEffect(() => {
+    fnRef.current = fn;
+  });
+  const busy = useRef(false);
+  const paused = useRef(false);
+  const active = usePageActive() && enabled;
+  useEffect(() => {
+    if (!active) {
+      paused.current = true;
+      return;
+    }
+    const tick = async () => {
+      if (busy.current) return;
+      busy.current = true;
+      try {
+        await fnRef.current();
+      } catch {
+        /* the next tick tries again */
+      } finally {
+        busy.current = false;
+      }
+    };
+    if (paused.current) {
+      paused.current = false;
+      void tick();
+    }
+    const t = window.setInterval(() => void tick(), ms);
+    return () => window.clearInterval(t);
+  }, [active, ms]);
 }

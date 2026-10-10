@@ -3,6 +3,7 @@ import { stacksApi, type ComposeInfo, type StackAction, type StackDetail, type S
 import type { Container } from '../api/types';
 import { Icon } from '../components/Icon';
 import { fmtAgo } from '../lib/format';
+import { usePoll } from '../lib/hooks';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { Choice } from './Personalize';
@@ -58,11 +59,7 @@ export function Stacks() {
   }, [load]);
   // Follow running tasks.
   const busy = data?.stacks.some((s) => s.op?.running);
-  useEffect(() => {
-    if (!busy) return;
-    const t = window.setInterval(() => void load(), 1500);
-    return () => window.clearInterval(t);
-  }, [busy, load]);
+  usePoll(load, 1500, !!busy);
 
   const run = async (st: StackSummary, action: StackAction) => {
     const r = await stacksApi.run(st.name, action);
@@ -252,22 +249,20 @@ function StackEditor({ name, compose, onClose }: { name: string | null; compose?
     if (name) void load(name, true);
   }, [name, load]);
   const running = !!detail?.op?.running;
-  useEffect(() => {
-    if (!running || !saved) return;
-    const t = window.setInterval(() => void load(saved, false), 1200);
-    return () => window.clearInterval(t);
-  }, [running, saved, load]);
+  usePoll(() => saved && load(saved, false), 1200, running && !!saved);
+  const getLogs = useCallback(async (n: string, live: () => boolean = () => true) => {
+    const r = await stacksApi.logs(n);
+    if (live()) setLogs(r.ok ? r.data.logs || 'No log lines yet.' : (r.error ?? 'Could not read the logs'));
+  }, []);
   useEffect(() => {
     if (view !== 'logs' || !saved) return;
     let live = true;
-    const get = () => void stacksApi.logs(saved).then((r) => live && setLogs(r.ok ? r.data.logs || 'No log lines yet.' : (r.error ?? 'Could not read the logs')));
-    get();
-    const t = window.setInterval(get, 4000);
+    void getLogs(saved, () => live);
     return () => {
       live = false;
-      window.clearInterval(t);
     };
-  }, [view, saved]);
+  }, [view, saved, getLogs]);
+  usePoll(() => saved && getLogs(saved), 4000, view === 'logs' && !!saved);
 
   const save = async (deploy: boolean) => {
     setBusy(true);

@@ -1,6 +1,8 @@
-import { useRef, type PointerEvent as RPointerEvent } from 'react';
+import { memo, useRef, type PointerEvent as RPointerEvent } from 'react';
 import { TransfersWidget } from './Transfers';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Icon } from '../components/Icon';
+import { flushSaves } from '../lib/saveLater';
 import { WIDGETS, useWidgets, widgetDef, type WidgetInstance, type WidgetType } from '../state/widgets';
 import { AcceleratorWidget, ClockWidget, NetworkWidget, SystemWidget } from './Widgets';
 import { AnalogClock, CalendarWidget, ContainersWidget, NotesWidget, StorageWidget, UptimeWidget } from './WidgetExtras';
@@ -20,7 +22,7 @@ export function WidgetLayer({ username, compact }: { username: string; compact: 
       <div className="widget-stack">
         {widgets.map((w) => (
           <div key={w.type} className="widget-static">
-            <WidgetBody type={w.type} username={username} />
+            <SafeWidget type={w.type} username={username} />
           </div>
         ))}
       </div>
@@ -54,6 +56,7 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
     wm.move(w.type, drag.current.x + (e.clientX - drag.current.px), drag.current.y + (e.clientY - drag.current.py));
   };
   const onMoveUp = () => {
+    if (drag.current) flushSaves();
     drag.current = null;
   };
 
@@ -65,6 +68,7 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
     const start = { px: e.clientX, py: e.clientY, w: w.w, h: w.h };
     const move = (ev: PointerEvent) => wm.resize(w.type, start.w + (ev.clientX - start.px), start.h + (ev.clientY - start.py));
     const up = () => {
+      flushSaves();
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
@@ -94,12 +98,24 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
         </>
       )}
       <div className="widget-content">
-        <WidgetBody type={w.type} username={username} />
+        <SafeWidget type={w.type} username={username} />
       </div>
       {editing && <div className="widget-resize" onPointerDown={onResizeDown} />}
     </div>
   );
 }
+
+/**
+ * A widget's content: memoized so moving or resizing its frame doesn't
+ * re-render it, and isolated so a broken widget only hides itself.
+ */
+const SafeWidget = memo(function SafeWidget({ type, username }: { type: WidgetType; username: string }) {
+  return (
+    <ErrorBoundary title={`${widgetDef(type).name} widget`} fallback="hidden">
+      <WidgetBody type={type} username={username} />
+    </ErrorBoundary>
+  );
+});
 
 function WidgetBody({ type, username }: { type: WidgetType; username: string }) {
   switch (type) {

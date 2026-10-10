@@ -120,6 +120,7 @@ type Manager struct {
 	jobs      map[string]*Job
 	repoLocks map[int64]*sync.Mutex
 	onResult  func(Result)
+	base      context.Context // alfad's lifetime, set by RunScheduler
 }
 
 // Result is how a backup plan run ended (for notifications).
@@ -592,7 +593,7 @@ func (m *Manager) update(j *Job, f func(*Job)) {
 
 // startJob registers a job and runs work in the background.
 func (m *Manager) startJob(kind string, planID int64, work func(ctx context.Context, j *Job) (string, error)) *Job {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.lifetime())
 	j := &Job{ID: newJobID(), Kind: kind, PlanID: planID, Phase: "Starting", Started: time.Now().UTC(), cancel: cancel}
 	m.mu.Lock()
 	for id, old := range m.jobs { // forget jobs finished long ago
@@ -811,7 +812,21 @@ func copyDir(src, dst string) error {
 }
 
 // RunScheduler starts due plans until ctx ends.
+// lifetime is the context jobs run under: alfad's own once the scheduler is
+// running, so restic is stopped on shutdown instead of left behind.
+func (m *Manager) lifetime() context.Context {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.base != nil {
+		return m.base
+	}
+	return context.Background()
+}
+
 func (m *Manager) RunScheduler(ctx context.Context) {
+	m.mu.Lock()
+	m.base = ctx
+	m.mu.Unlock()
 	tick := time.NewTicker(30 * time.Second)
 	defer tick.Stop()
 	for {
