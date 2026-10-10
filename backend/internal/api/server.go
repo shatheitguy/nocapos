@@ -22,6 +22,7 @@ import (
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
+	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/webapps"
@@ -50,6 +51,7 @@ type Deps struct {
 	Backup    *backup.Manager
 	NetDrives *netdrive.Manager
 	Cloud     *cloudimport.Manager
+	Stacks    *stacks.Manager
 	Version   string
 }
 
@@ -131,6 +133,23 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/containers", s.admin(s.listContainers))
 	mux.Handle("GET /api/v1/containers/{id}", s.admin(s.inspectContainer))
 	mux.Handle("POST /api/v1/containers/{id}/{action}", s.admin(s.containerAction))
+	mux.Handle("POST /api/v1/containers", s.admin(s.containerCreate))
+	mux.Handle("GET /api/v1/containers/{id}/spec", s.admin(s.containerSpec))
+	mux.Handle("PUT /api/v1/containers/{id}/spec", s.admin(s.containerEdit))
+	mux.Handle("DELETE /api/v1/containers/{id}", s.admin(s.containerRemove))
+	mux.Handle("GET /api/v1/docker/networks", s.admin(s.dockerNetworks))
+	mux.Handle("POST /api/v1/docker/networks", s.admin(s.dockerNetworkCreate))
+	mux.Handle("DELETE /api/v1/docker/networks/{name}", s.admin(s.dockerNetworkDelete))
+	mux.Handle("GET /api/v1/docker/volumes", s.admin(s.dockerVolumes))
+	mux.Handle("GET /api/v1/docker/hostpath", s.admin(s.dockerHostPath))
+	mux.Handle("POST /api/v1/docker/compose/install", s.admin(s.installCompose))
+	mux.Handle("GET /api/v1/stacks", s.admin(s.listStacks))
+	mux.Handle("POST /api/v1/stacks", s.admin(s.createStack))
+	mux.Handle("GET /api/v1/stacks/{name}", s.admin(s.getStack))
+	mux.Handle("PUT /api/v1/stacks/{name}", s.admin(s.updateStack))
+	mux.Handle("DELETE /api/v1/stacks/{name}", s.admin(s.deleteStack))
+	mux.Handle("GET /api/v1/stacks/{name}/logs", s.admin(s.stackLogs))
+	mux.Handle("POST /api/v1/stacks/{name}/{action}", s.admin(s.stackAction))
 	mux.Handle("GET /api/v1/images", s.admin(s.listImages))
 
 	// App Store: one-click installs (admin, audited).
