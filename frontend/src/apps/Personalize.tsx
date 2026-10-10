@@ -3,6 +3,7 @@ import { AccentPicker } from '../components/AccentPicker';
 import { Icon } from '../components/Icon';
 import {
   DEFAULT_PREFS,
+  ICON_STYLES,
   PERSONALIZATION_KEYS,
   UI_THEMES,
   WALLPAPERS,
@@ -139,14 +140,18 @@ export function Appearance() {
         </Row>
       </Section>
 
+      <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad and on the desktop. Installed apps keep their own icons.">
+        <Row label="Style">
+          <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
+        </Row>
+      </Section>
+
       <Section title="Display">
         <Slider label="Brightness" hint="Dims NoCapOS on this screen — also in the Control Center" value={prefs.brightness}
           min={30} max={100} step={1} format={(v) => `${v}%`} onChange={(brightness) => set({ brightness })} />
       </Section>
 
       <Section title="Effects">
-        <Toggle label="Match app icons to the wallpaper" hint="NoCapOS app icons take the accent colour; installed apps keep their own icons"
-          checked={prefs.iconTint} onChange={(iconTint) => set({ iconTint })} />
         {prefs.uiTheme === 'cyberdeck' && (
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}

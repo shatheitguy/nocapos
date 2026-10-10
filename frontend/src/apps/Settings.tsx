@@ -139,7 +139,7 @@ function resolve(id: string | undefined): { cat: Cat; sub: Sub | null } | null {
 
 function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; size?: number }) {
   return (
-    <span className="set-ico" style={{ background: color, width: size, height: size, borderRadius: size * 0.26 }}>
+    <span className="set-ico" style={{ ['--c' as string]: color, width: size, height: size, borderRadius: size * 0.26 }}>
       <Icon name={icon} size={Math.round(size * 0.58)} />
     </span>
   );
