@@ -320,10 +320,26 @@ button.widget:active { transform: none; }
   place-items: center;
   color: #fff;
   flex: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.32), inset 0 -2px 4px rgba(0, 0, 0, 0.12);
 }
-.app-icon svg { stroke-width: 2.1; filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.28)); }
+.app-icon svg { stroke-width: 2.1; }
+/* NoCapOS apps: illustrated, full-colour tiles. */
+.app-icon.art, .app-icon:not(.logo) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.24); }
+.app-icon.art { overflow: hidden; }
+.app-icon.art svg { display: block; width: 100%; height: 100%; }
+/* "Match app icons to the wallpaper": tiles and details in the theme's accent. */
+:root[data-icon-tint] {
+  --icon-a: color-mix(in srgb, var(--accent) 72%, #fff);
+  --icon-b: color-mix(in srgb, var(--accent) 78%, #000);
+  --icon-ink: color-mix(in srgb, var(--accent) 72%, #000);
+  --icon-hi: #fff;
+}
+/* Installed apps: their own icon, as it is. */
+.app-icon.logo { background: none; }
+.app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+:root[data-theme='dark'] .app-icon.logo.mono img { filter: invert(1) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .app-icon.logo.mono img { filter: invert(1) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
+}
 
 /* ============ windows ============ */
 /* Own stacking context so ever-growing window z-indexes stay below the shelf. */
@@ -859,8 +875,8 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 .dock-item:hover:not(:disabled) .app-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-sep { width: 1px; height: 40px; background: color-mix(in srgb, var(--text) 18%, transparent); margin: 0 5px; align-self: center; }
 .launchpad-icon, .trash-icon { display: grid; place-items: center; width: var(--dock-icon, 44px); height: var(--dock-icon, 44px); border-radius: 13px; box-shadow: 0 6px 16px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.25); }
-.launchpad-icon { background: linear-gradient(145deg, #ff3b3b, #a5101a); color: #fff; }
-.trash-icon { background: linear-gradient(145deg, #8e9bb5, #556179); color: #fff; }
+.launchpad-icon { background: linear-gradient(180deg, var(--icon-a, #ff3b3b), var(--icon-b, #a5101a)); color: #fff; }
+.trash-icon { background: linear-gradient(180deg, var(--icon-a, #8e9bb5), var(--icon-b, #556179)); color: #fff; }
 .dock-item.launchpad:hover .launchpad-icon, .dock-item.trash:hover .trash-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-item.draggable { cursor: grab; touch-action: none; }
 .dock-item img, .dock-item svg, .dock-item .app-icon { -webkit-user-drag: none; user-select: none; }
@@ -1094,7 +1110,7 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
 .desktop-icon.selected { background: rgba(255, 255, 255, 0.18); border-color: rgba(255, 255, 255, 0.35); }
 .desktop-icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .desktop-icon.dragging { opacity: 0.35; }
-.desktop-icon .app-icon { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); }
+.desktop-icon .app-icon:not(.logo) { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35); }
 .desktop-icon-label {
   max-width: 100%; font-size: 12px; font-weight: 500; line-height: 1.25; text-align: center;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75); overflow: hidden; display: -webkit-box;
@@ -1127,7 +1143,7 @@ body.app-dragging iframe, body.app-dragging canvas { pointer-events: none !impor
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
 }
 .folder-icon .app-icon { box-shadow: none; }
-.folder-icon.tiny .app-icon svg { display: none; }
+.folder-icon.tiny .app-icon:not(.art) svg { display: none; }
 /* The app or folder an app is being dropped onto. */
 .launcher-app.drop-into, .desktop-icon.drop-into { background: rgba(255, 255, 255, 0.22); }
 .launcher-app.drop-into .app-icon, .launcher-app.drop-into .folder-icon,
