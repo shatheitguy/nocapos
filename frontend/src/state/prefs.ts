@@ -2,14 +2,25 @@ import { create } from 'zustand';
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
+/** Photo-style wallpapers (in /wallpapers) bring their own accent for the Glass theme. */
 export const WALLPAPERS = [
-  { id: 'nocap', name: 'NoCap' },
-  { id: 'aurora', name: 'Aurora' },
-  { id: 'dusk', name: 'Dusk' },
-  { id: 'ocean', name: 'Ocean' },
-  { id: 'forest', name: 'Forest' },
-  { id: 'ember', name: 'Ember' },
-  { id: 'graphite', name: 'Graphite' },
+  { id: 'tide', name: 'Tide', image: true, accent: '#2dd4bf' },
+  { id: 'nebula', name: 'Nebula', image: true, accent: '#a78bfa' },
+  { id: 'blaze', name: 'Blaze', image: true, accent: '#fb923c' },
+  { id: 'lights', name: 'Lights', image: true, accent: '#34d399' },
+  { id: 'glacier', name: 'Glacier', image: true, accent: '#60a5fa' },
+  { id: 'rose', name: 'Rose', image: true, accent: '#f472b6' },
+  { id: 'meadow', name: 'Meadow', image: true, accent: '#84cc16' },
+  { id: 'dune', name: 'Dune', image: true, accent: '#f59e0b' },
+  { id: 'midnight', name: 'Midnight', image: true, accent: '#818cf8' },
+  { id: 'signal', name: 'Signal', image: true, accent: '#ef4444' },
+  { id: 'nocap', name: 'NoCap', image: false, accent: '#e8232b' },
+  { id: 'aurora', name: 'Aurora', image: false, accent: '#8b7bff' },
+  { id: 'dusk', name: 'Dusk', image: false, accent: '#ff6a88' },
+  { id: 'ocean', name: 'Ocean', image: false, accent: '#3b9cff' },
+  { id: 'forest', name: 'Forest', image: false, accent: '#2fbf87' },
+  { id: 'ember', name: 'Ember', image: false, accent: '#f0772b' },
+  { id: 'graphite', name: 'Graphite', image: false, accent: '#8a94a8' },
 ] as const;
 export type WallpaperId = (typeof WALLPAPERS)[number]['id'] | 'custom';
 
@@ -42,9 +53,10 @@ export type TitleButtons = 'right' | 'left';
 export type TitleDoubleClick = 'maximize' | 'minimize' | 'none';
 export type WeekStart = 'sun' | 'mon';
 
-/** Whole-OS visual themes: the original look, and the Cyber-Deck FUI theme. */
-export type UiTheme = 'classic' | 'cyberdeck';
+/** Whole-OS visual themes: frosted Glass (default), the original look, and the Cyber-Deck FUI theme. */
+export type UiTheme = 'glass' | 'classic' | 'cyberdeck';
 export const UI_THEMES: { id: UiTheme; name: string; blurb: string; accent: string; swatch: [string, string, string] }[] = [
+  { id: 'glass', name: 'Glass', blurb: 'Frosted glass over your wallpaper · the accent follows the wallpaper unless you pick one', accent: '#2dd4bf', swatch: ['#2dd4bf', '#ffffff', '#0b1a24'] },
   { id: 'classic', name: 'NoCap', blurb: 'Steel and signal red, like the logo · follows light or dark mode', accent: '#e8232b', swatch: ['#e8232b', '#9ca1ab', '#16181d'] },
   { id: 'cyberdeck', name: 'Cyber-Deck', blurb: 'Frosted glass, sharp edges, cyan / purple / amber neon', accent: '#00f3ff', swatch: ['#00f3ff', '#d300ff', '#ffaa00'] },
 ];
@@ -99,7 +111,7 @@ export interface PrefValues {
 
 export const DEFAULT_PREFS: PrefValues = {
   theme: 'dark',
-  uiTheme: 'classic',
+  uiTheme: 'glass',
   uiSounds: false,
   soundVolume: 50,
   soundClicks: true,
@@ -109,7 +121,7 @@ export const DEFAULT_PREFS: PrefValues = {
   focusMode: false,
   brightness: 100,
   fxGrid: true,
-  wallpaper: 'nocap',
+  wallpaper: 'tide',
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
@@ -166,6 +178,13 @@ function load(): Partial<PrefValues> {
     for (const k of Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]) {
       if (k in raw && typeof raw[k] === typeof DEFAULT_PREFS[k]) (out as Record<string, unknown>)[k] = raw[k];
     }
+    // Wallpapers that no longer exist fall back to the default.
+    if (out.wallpaper && out.wallpaper !== 'custom' && !WALLPAPERS.some((w) => w.id === out.wallpaper)) delete out.wallpaper;
+    // One-time move to the Glass look (people can switch back in Appearance).
+    if (!raw.glass1) {
+      if (out.uiTheme === 'classic') delete out.uiTheme;
+      if (out.wallpaper === 'nocap') delete out.wallpaper;
+    }
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
     // One-time move to the NoCap brand look for people still on the old defaults.
@@ -187,7 +206,7 @@ export const usePrefs = create<Prefs>((set, get) => ({
     const s = get();
     const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
     try {
-      localStorage.setItem(KEY, JSON.stringify({ ...values, brand1: true }));
+      localStorage.setItem(KEY, JSON.stringify({ ...values, brand1: true, glass1: true }));
     } catch {
       /* ignore */
     }
@@ -269,12 +288,13 @@ export function applyPrefs(p: PrefValues) {
   const root = document.documentElement;
   const ui = UI_THEMES.find((t) => t.id === p.uiTheme) ?? UI_THEMES[0];
   root.dataset.ui = ui.id;
-  // FUI themes are dark by design and bring their own neon accent (unless you pick one).
+  // Glass and FUI themes are dark by design; Glass takes its accent from the wallpaper.
   if (ui.id !== 'classic') root.dataset.theme = 'dark';
   else if (p.theme === 'auto') delete root.dataset.theme;
   else root.dataset.theme = p.theme;
-  root.style.setProperty('--accent', p.accent || ui.accent);
-  root.toggleAttribute('data-grid', ui.id !== 'classic' && p.fxGrid);
+  const wall = WALLPAPERS.find((w) => w.id === p.wallpaper);
+  root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wall ? wall.accent : ui.accent));
+  root.toggleAttribute('data-grid', ui.id === 'cyberdeck' && p.fxGrid);
 
   const d = effectiveDock(p);
   const r = reserved(p);
