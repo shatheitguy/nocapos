@@ -31,6 +31,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
@@ -207,6 +208,8 @@ func serve() error {
 
 	backups := backup.NewManager(st, box, fsvc, cfg.DataDir, log)
 	go backups.RunScheduler(ctx)
+	netDrives := netdrive.NewManager(st, box, fsvc, cfg.DataDir, log)
+	go netDrives.Run(ctx) // reconnect saved network drives
 
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
@@ -215,6 +218,7 @@ func serve() error {
 		FileIndex: fileIndex,
 		Photos:    photoLib,
 		Backup:    backups,
+		NetDrives: netDrives,
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	httpSrv := &http.Server{

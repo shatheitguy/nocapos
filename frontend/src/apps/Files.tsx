@@ -23,6 +23,9 @@ import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { FilePreview, PermBadges } from './FilesParts';
+import { NetworkSidebar, ShareFolderDialog } from './FilesNetwork';
+import { useNetwork } from './NetworkDrives';
+import { netApi, type NetShare } from '../api/netdrive';
 import { startTransfer, startUpload, useTransfers } from '../state/transfers';
 
 // Clipboard shared by all Files windows.
@@ -112,6 +115,19 @@ export function Files({ win }: { win: WinState }) {
     setRoots(r.data);
   }, []);
   useEffect(() => void loadRoots(), [loadRoots]);
+  // Network drives and shared folders (the sidebar's Network section).
+  const net = useNetwork();
+  const netChanged = useCallback(async () => {
+    await Promise.all([net.load(), loadRoots()]);
+  }, [net.load, loadRoots]);
+  const [shareReq, setShareReq] = useState<{ root: string; path: string; name: string } | null>(null);
+  const shares = net.sharing?.shares ?? [];
+  const unshare = async (sh: NetShare) => {
+    const r = await netApi.removeShare(sh.id);
+    if (!r.ok) return toast('error', 'Could not stop sharing', r.error);
+    toast('success', `Stopped sharing “${sh.name}”`);
+    void net.load();
+  };
 
   const toggleDual = () => {
     saveFlag('alfa.files.dual', !dual);
@@ -168,6 +184,9 @@ export function Files({ win }: { win: WinState }) {
         onToggleDual={toggleDual}
         onTogglePreview={togglePreview}
         onSwitchPane={() => dual && setActive(side === 0 ? 1 : 0)}
+        shares={shares}
+        onShare={(root, path, name) => setShareReq({ root, path, name })}
+        onUnshare={(sh) => void unshare(sh)}
       />
     );
   };
@@ -176,7 +195,7 @@ export function Files({ win }: { win: WinState }) {
     <div className={`files ${dual ? 'dual' : ''} ${preview ? 'with-preview' : ''}`}>
       <nav className="sidebar files-sidebar">
         <div className="muted small upper side-label">Locations</div>
-        {(roots ?? []).map((r) => {
+        {(roots ?? []).filter((r) => !r.id.startsWith('net:')).map((r) => {
           const used = r.total ? ((r.total - r.free) / r.total) * 100 : 0;
           const on = r.id === cur?.root && !inRecycle(cur?.path ?? '/');
           return (
@@ -193,6 +212,7 @@ export function Files({ win }: { win: WinState }) {
             </button>
           );
         })}
+        <NetworkSidebar drives={net.drives} sharing={net.sharing} currentRoot={cur?.root} onGo={(r) => go(r, '/')} onChanged={netChanged} />
         <div className="side-spacer" />
         <button type="button" className={inRecycle(cur?.path ?? '/') ? 'on' : ''} onClick={() => cur && go(cur.root, RECYCLE)} disabled={!cur}>
           <Icon name="trash" size={16} /> Recycle Bin
@@ -212,6 +232,9 @@ export function Files({ win }: { win: WinState }) {
           unix={cur.unix}
           onClose={togglePreview}
         />
+      )}
+      {shareReq && (
+        <ShareFolderDialog {...shareReq} onClose={() => setShareReq(null)} onShared={() => void net.load()} />
       )}
     </div>
   );
@@ -236,6 +259,10 @@ interface PaneProps {
   onToggleDual: () => void;
   onTogglePreview: () => void;
   onSwitchPane: () => void;
+  /** Folders shared on the network, and sharing / unsharing one. */
+  shares: NetShare[];
+  onShare: (root: string, path: string, name: string) => void;
+  onUnshare: (share: NetShare) => void;
 }
 
 function FilePane({
@@ -256,6 +283,9 @@ function FilePane({
   onToggleDual,
   onTogglePreview,
   onSwitchPane,
+  shares,
+  onShare,
+  onUnshare,
 }: PaneProps) {
   const [root, setRoot] = useState<string>(initialRoot);
   const [path, setPath] = useState<string>(initialPath);
@@ -650,6 +680,18 @@ function FilePane({
 
   // ---------- menus ----------
 
+  // Share a folder on the network, or stop sharing it (not the whole-disk System view).
+  const shareItems = (folder: string, name: string): MenuEntry[] => {
+    if (root === 'system' || root.startsWith('net:')) return [];
+    const existing = shares.find((sh) => sh.root === root && sh.path === folder);
+    return [
+      'sep',
+      existing
+        ? { label: `Stop Sharing “${existing.name}”`, icon: 'network', onClick: () => onUnshare(existing) }
+        : { label: 'Share on Network…', icon: 'network', onClick: () => onShare(root, folder, name) },
+    ];
+  };
+
   const menuItems = (target: string | null): MenuEntry[] => {
     const names = target ? [...selected] : [];
     const single = names.length === 1 ? entries.find((e) => e.name === names[0]) : undefined;
@@ -667,6 +709,7 @@ function FilePane({
             'sep',
             { label: 'Select all', shortcut: 'Ctrl+A', onClick: () => setSelected(new Set(shown.map((x) => x.name))) },
             { label: 'Refresh', icon: 'restart', onClick: () => void reload() },
+            ...shareItems(path, path === '/' ? (roots?.find((r) => r.id === root)?.name ?? 'Shared') : path.split('/').pop()!),
           ];
     }
     const items: MenuEntry[] = [];
@@ -677,6 +720,7 @@ function FilePane({
     items.push({ label: 'Cut', icon: 'scissors', shortcut: 'Ctrl+X', onClick: () => copyOrCut(true) });
     if (!recycle) items.push({ label: 'Copy', icon: 'copy', shortcut: 'Ctrl+C', onClick: () => copyOrCut(false) });
     if (single && !recycle) items.push({ label: 'Rename', icon: 'edit', shortcut: 'F2', onClick: () => rename(single.name) });
+    if (single?.dir && !recycle) items.push(...shareItems(joinPath(path, single.name), single.name));
     if (other && !recycle) {
       items.push('sep');
       items.push({ label: 'Copy to other pane', icon: 'copy', shortcut: 'F5', onClick: () => void toOther(false) });
