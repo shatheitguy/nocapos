@@ -7,11 +7,12 @@
 
 **Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a desktop in your
 browser — like umbrelOS or OpenMediaVault on top of Raspberry Pi OS, but with a full windowed desktop.
-It installs on top of your existing Linux, manages the machine as root, and runs apps in Docker.
+It installs on top of your existing Linux, manages the machine as root, and runs apps in Docker:
+files, photos, backups, RAID storage, network sharing and one-click apps, all in a frosted-glass desktop.
 
 🌐 **Website:** https://shatheitguy.github.io/nocapos/
 
-![The NoCapOS desktop](docs/screenshots/desktop.png)
+![The NoCapOS home screen](docs/screenshots/desktop.jpg)
 
 ## Install
 
@@ -38,28 +39,38 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 
 ## What you get
 
-- **Desktop in the browser** — windows, dock or taskbar, Launchpad, desktop icons and widgets,
-  macOS-style login and lock screen with profile photos, light/dark, the NoCap theme and Cyber-Deck.
-- **Your server, managed** — sign in with the machine's Linux accounts (root included), manage users
-  and roles, Wi-Fi and network (DHCP/static with automatic rollback), restart and shut down.
-- **App Store** — one-click installs of self-hosted apps (Jellyfin, Nextcloud, Open WebUI + Ollama,
-  Vaultwarden, Syncthing, Gitea, code-server, n8n, …) with updates and release notes.
-- **Files** — dual-pane file manager with previews, syntax highlighting, permission badges, recycle bin,
-  uploads, and a *System* view of the whole server where core OS folders are protected.
-- **Terminal** — root shell on the host or a shell in any container, in the browser.
-- **Containers, Monitor, Logs** — live stats, CPU/GPU/memory/network, container logs.
-- **Remote Desktop** (RDP), **Brave** browser, **Scripts** (one-click scripts with output),
-  **AI Assistant** (local Ollama or cloud providers).
-- **Security** — argon2id passwords, two-factor sign-in, rotating sessions, audit log of every admin
-  action, strict Content-Security-Policy.
+- **A desktop in the browser** — a frosted *Glass* look with 10 wallpapers (the accent and the glass app
+  icons follow the wallpaper), a home screen with your installed apps, dock, Launchpad, windows, widgets
+  and a lock screen. Classic and *Cyber-Deck* themes too.
+- **App Store** — one-click self-hosted apps (Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden,
+  Syncthing, Gitea, code-server, n8n, …) with their own icons, updates ("Update all") and release notes.
+  Click and hold an installed app to wiggle and remove it.
+- **Files** — Home, Recents, Favorites, shared folders, network devices and external drives; quick look,
+  compress and extract (zip, tar), Trash, and a *System* view where core OS folders are protected.
+- **Photos** — a timeline by years, months and days, albums, favorites, a viewer with camera details and
+  Recently Deleted.
+- **Backups & Rewind** — encrypted, scheduled backups (restic) to a drive, SFTP or S3/B2, and bring back
+  any file from any day.
+- **Storage** — disk health (SMART), ZFS pools (mirror, RAIDZ1/2/3), datasets, snapshots and scrubs, or
+  use a single disk as storage. Erasing always needs a typed confirmation.
+- **Network drives & sharing** — connect SMB/NFS shares and share folders over SMB and WebDAV, inside Files.
+- **Cloud Imports** — bring files in from Google Drive, Dropbox, OneDrive and more (rclone).
+- **Docker** — edit any container (ports, folders, macvlan/ipvlan networks with fixed IPs, environment,
+  limits), create networks and run Compose stacks.
+- **Your server, managed** — sign in with the machine's Linux accounts, users and roles, Wi-Fi and network
+  (DHCP/static with automatic rollback), software update check, restart and shut down.
+- **Terminal, Monitor, Remote Desktop, Brave, Scripts and an AI Assistant** (local Ollama or cloud).
+- **Security** — argon2id passwords, two-factor sign-in, rotating sessions, an audit log of every admin
+  action and a strict Content-Security-Policy.
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![App Store](docs/screenshots/app-store.png) **App Store** — one-click apps, updates and release notes | ![Lock screen](docs/screenshots/login.png) **Lock screen** — your photo and a cyber cat that covers its eyes while you type |
-| ![Files](docs/screenshots/files-dual.png) **Files** — dual pane, permissions and code previews | ![Search](docs/screenshots/search.png) **Search** — apps, settings, files and actions (Ctrl+Space) |
-| ![Settings](docs/screenshots/settings.png) **Settings** — themes, wallpaper, dock, users, network | ![Cyber-Deck](docs/screenshots/cyber-deck.png) **Cyber-Deck** — optional sci-fi theme with holographic widgets |
+| ![Launchpad](docs/screenshots/launchpad.jpg) **Launchpad** — glass icons for NoCapOS apps, real icons for installed apps | ![Files](docs/screenshots/files.jpg) **Files** — favorites, recents, network devices and quick look |
+| ![Photos](docs/screenshots/photos.jpg) **Photos** — timeline, On this day, albums and favorites | ![App Store](docs/screenshots/app-store.jpg) **App Store** — featured apps, categories and updates |
+| ![Settings](docs/screenshots/settings.jpg) **Settings** — Network, General, Personalization, Security and more | ![Storage](docs/screenshots/storage.jpg) **Storage** — disk health and ZFS pools (sample data) |
+| ![Lock screen](docs/screenshots/login.jpg) **Lock screen** — your photo over the wallpaper | ![Cyber-Deck](docs/screenshots/cyber-deck.jpg) **Cyber-Deck** — an optional sci-fi theme |
 
 ## Updating
 
@@ -73,7 +84,7 @@ Requirements: Go 1.25+, Node 20+.
 
 ```powershell
 .\build.ps1                                   # UI + backend\bin\alfad.exe for this machine
-.\package.ps1 -Version 0.2.0                  # Linux bundles in dist\ (amd64, arm64, armv7) + SHA256SUMS
+.\package.ps1 -Version 0.3.0                  # Linux bundles in dist\ (amd64, arm64, armv7) + SHA256SUMS
 ```
 
 ```bash
@@ -92,7 +103,13 @@ backend/            alfad — Go daemon, single static binary with the UI embedd
   internal/api        REST + WebSocket API
   internal/appstore   App Store catalog and installer
   internal/accounts   NoCapOS or Linux accounts
-  internal/files      storage locations, recycle bin, protection of system folders
+  internal/files      storage locations, recycle bin, archives, protection of system folders
+  internal/photos     photo library, albums, Recently Deleted
+  internal/backup     restic backups and Rewind
+  internal/storage    disks, SMART and ZFS pools
+  internal/netdrive   SMB/NFS mounts and SMB/WebDAV sharing
+  internal/cloudimport rclone cloud imports
+  internal/stacks     Docker Compose stacks
   internal/hostctl    network, Wi-Fi, power
   internal/docker     minimal Docker Engine API client
   internal/store      SQLite with migrations
