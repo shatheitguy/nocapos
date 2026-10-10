@@ -145,6 +145,8 @@ export function Appearance() {
       </Section>
 
       <Section title="Effects">
+        <Toggle label="Match app icons to the wallpaper" hint="NoCapOS app icons take the accent colour; installed apps keep their own icons"
+          checked={prefs.iconTint} onChange={(iconTint) => set({ iconTint })} />
         {prefs.uiTheme === 'cyberdeck' && (
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
