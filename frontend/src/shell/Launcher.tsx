@@ -8,7 +8,7 @@ import { dropHint, pressApp, useAppDrag } from '../state/appDrag';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { folderKey, ungroup, useFolders } from '../state/folders';
 import { FolderView } from './FolderView';
-import { StoreAppGrid } from './StoreAppGrid';
+import { StoreTile, useWiggleEscape } from './StoreAppGrid';
 import { shownOnHome, useStoreApps } from '../state/storeApps';
 import { appMenuItems } from './Shelf';
 
@@ -20,6 +20,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const folders = useFolders((s) => s.folders);
   const [jiggle, setJiggle] = useState(false);
+  useWiggleEscape(jiggle, setJiggle);
   const input = useRef<HTMLInputElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
@@ -93,7 +94,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
       <div
         className="launcher-panel"
         ref={panel}
-        onPointerDownCapture={(e) => jiggle && !(e.target as Element).closest('.store-grid, .launcher-done') && setJiggle(false)}
+        onPointerDownCapture={(e) => jiggle && !(e.target as Element).closest('.store-tile, .dialog, .dialog-backdrop') && setJiggle(false)}
       >
         <label className="search">
           <Icon name="search" size={18} />
@@ -106,20 +107,6 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
             onKeyDown={(e) => e.key === 'Enter' && apps[0] && launch(apps[0].id, e.shiftKey)}
           />
         </label>
-        {isAdmin && storeApps.length > 0 && (
-          <section className="launcher-section">
-            <div className="launcher-section-head">
-              <h3 className="section-label">Installed apps</h3>
-              {jiggle ? (
-                <button type="button" className="pill small launcher-done" onClick={() => setJiggle(false)}>Done</button>
-              ) : (
-                <span className="muted small">Click and hold to remove</span>
-              )}
-            </div>
-            <StoreAppGrid apps={storeApps} jiggle={jiggle} setJiggle={setJiggle} size={56} onOpened={onClose} className="in-launcher" />
-          </section>
-        )}
-        {isAdmin && storeApps.length > 0 && !needle && <h3 className="section-label launcher-builtin">NoCapOS apps</h3>}
         <div className="launcher-grid" data-drop="launchpad">
           {shownFolders.map((f) => (
             <button
@@ -161,9 +148,13 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
               <span>{a.title}</span>
             </button>
           ))}
+          {isAdmin &&
+            storeApps.map((a, i) => (
+              <StoreTile key={`store-${a.id}`} app={a} index={i} jiggle={jiggle} setJiggle={setJiggle} size={56} onOpened={onClose} buttonClass="launcher-app" />
+            ))}
           {!apps.length && !shownFolders.length && !storeApps.length && <p className="muted">No apps match “{q}”.</p>}
         </div>
-        <p className="launcher-tip muted small">Tip: drop an app onto another to make a folder, or drag it to the Dock or Desktop.</p>
+        <p className="launcher-tip muted small">{jiggle ? 'Tap ✕ to uninstall an app · Esc or click anywhere to finish' : 'Tip: drop an app onto another to make a folder, or drag it to the Dock or Desktop · click and hold an installed app to remove it'}</p>
       </div>
       {openFolder && (
         <FolderView folderId={openFolder} isAdmin={isAdmin} scope="launchpad" onClose={() => setOpenFolder(null)} onOpened={onClose} />
