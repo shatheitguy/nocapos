@@ -60,6 +60,7 @@ export const ICON_STYLES: { id: IconStyle; label: string }[] = [
   { id: 'colorful', label: 'Colourful' },
 ];
 
+
 /** Whole-OS visual themes: frosted Glass (default), the original look, and the Cyber-Deck FUI theme. */
 export type UiTheme = 'glass' | 'classic' | 'cyberdeck';
 export const UI_THEMES: { id: UiTheme; name: string; blurb: string; accent: string; swatch: [string, string, string] }[] = [
