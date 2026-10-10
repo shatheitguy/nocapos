@@ -10,7 +10,7 @@ import { FileGlyph } from './FilesParts';
 import type { useNetwork } from './NetworkDrives';
 import type { Special } from './Files';
 
-// The Files sidebar, laid out like umbrelOS: Home, Recents and the other
+// The Files sidebar: Home, Recents and the other
 // locations, then Favorites, Shared folders, Network devices, External
 // storage, and Trash at the bottom.
 
