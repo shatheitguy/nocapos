@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { UserAvatar } from '../components/UserAvatar';
-import { logout } from '../api/client';
 import { hostApi, type NetworkState } from '../api/hostctl';
 import type { User } from '../api/types';
 import { openApp } from '../apps/meta';
@@ -71,15 +70,10 @@ export function QuickSettings({
   user,
   anchor,
   onClose,
-  onLock,
-  showActions = true,
 }: {
   user: User;
   anchor: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
-  onLock: () => void;
-  /** Windows style shows session & power buttons here; macOS style keeps them in the N menu. */
-  showActions?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(true, onClose, ref, anchor);
@@ -244,16 +238,6 @@ export function QuickSettings({
         />
       </div>
 
-      {showActions && (
-      <div className="cc-actions">
-        <button type="button" className="ghost" onClick={onLock}>
-          <Icon name="lock" size={16} /> Lock
-        </button>
-        <button type="button" className="ghost" onClick={() => void logout()}>
-          <Icon name="logout" size={16} /> Sign out
-        </button>
-      </div>
-      )}
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function AppIcon({ app, size = 44 }: { app: IconApp; size?: number }) {
         width: size,
         height: size,
         borderRadius: radius,
-        background: `linear-gradient(160deg, var(--icon-a, ${app.tile[0]}), var(--icon-b, ${app.tile[1]}))`,
+        color: app.tile[0],
       }}
     >
       <Icon name={app.icon} size={Math.round(size * 0.52)} />
