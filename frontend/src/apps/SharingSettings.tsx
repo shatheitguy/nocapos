@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { Row, Section, Toggle } from './Personalize';
 
-// Settings → File Sharing: shared folders and who may use them, how they're
+// Files → File Sharing: shared folders and who may use them, how they're
 // offered on the network (SMB and WebDAV), and people's private homes.
 
 /** Say what went wrong, or that it worked; returns whether it worked. */
