@@ -342,6 +342,10 @@ button.widget:active { transform: none; }
 :root[data-icons='shapes'] .app-icon:not(.logo):not(.art) svg { color: #fff; }
 :root[data-icons='shapes'] .launchpad-icon { background: #b91c1c; color: #fff; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24); }
 :root[data-icons='shapes'] .trash-icon { background: #475569; color: #fff; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24); }
+/* The Launchpad button wears drawn artwork, which brings its own tile. */
+:root .launchpad-icon.art, :root[data-icons] .launchpad-icon.art { background: none; box-shadow: none; overflow: hidden; }
+.launchpad-icon.art svg { display: block; width: 100%; height: 100%; }
+:root[data-icons='objects'] .launchpad-icon.art { overflow: visible; }
 .app-icon.logo { background: none; }
 .app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
 :root[data-theme='dark'] .app-icon.logo.mono img { filter: invert(1) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }

@@ -4,6 +4,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { AppArt } from '../components/AppArt';
 import { Icon } from '../components/Icon';
 import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
 import { useClock, useViewport } from '../lib/hooks';
@@ -174,8 +175,8 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
         }}
       >
         <button type="button" className="dock-item launchpad" title="Launchpad" aria-label="Launchpad" onClick={onLauncher}>
-          <span className="launchpad-icon">
-            <Icon name="launcher" size={22} />
+          <span className="launchpad-icon art">
+            <AppArt id="launchpad" size={44} />
           </span>
         </button>
 
