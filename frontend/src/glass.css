@@ -307,3 +307,15 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .menubar, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
   background: color-mix(in srgb, var(--tint) calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%), transparent) !important;
 }
+
+/* Search fields are a pill with an icon and a bare input: the input inside
+   must not draw its own glass box. */
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input,
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
