@@ -16,6 +16,8 @@ export interface AppMeta {
   adminOnly?: boolean;
   /** Not listed in the launcher (opened by other apps). */
   hidden?: boolean;
+  /** The maker's own icon, shown as it is (like installed apps). */
+  logo?: string;
 }
 
 export const APPS: Record<string, AppMeta> = {
@@ -93,6 +95,7 @@ export const APPS: Record<string, AppMeta> = {
     id: 'browser',
     title: 'Brave',
     icon: 'brave',
+    logo: '/app-icons/brave.svg',
     tile: ['#fb542b', '#a52e12'],
     size: { w: 1200, h: 780 },
     description: 'Real Brave browser, installed on this system',
