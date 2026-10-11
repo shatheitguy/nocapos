@@ -452,7 +452,10 @@ function FilePane({
       return;
     }
     setListError(null);
-    const list = r.data.entries.map((e) => ({ key: e.name, root, path: joinPath(path, e.name), entry: e }));
+    // People's home folders on the main drive stay out of view.
+    const list = r.data.entries
+      .filter((e) => !(path === '/' && e.dir && e.name === 'homes' && root !== 'system'))
+      .map((e) => ({ key: e.name, root, path: joinPath(path, e.name), entry: e }));
     setItems(list);
     setUnixPerms(r.data.unix_perms !== false);
     if (pendingSel.current && list.some((i) => i.key === pendingSel.current)) {
