@@ -59,3 +59,4 @@ jobs:
             dist/nocapos-linux-armv7.tar.gz
             dist/SHA256SUMS
             dist/install.sh
+            dist/uninstall.sh
