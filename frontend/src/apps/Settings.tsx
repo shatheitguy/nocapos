@@ -16,7 +16,7 @@ import type { WinState } from '../state/windows';
 import type { Snapshot } from '../api/types';
 import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
-import { FocusSettings, PowerSettings } from './SystemPages';
+import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
 import { SharingSettings } from './SharingSettings';
@@ -149,7 +149,7 @@ export function Settings({ win }: { win: WinState }) {
               {query.trim() ? (
                 <Results query={query} isAdmin={isAdmin} go={go} />
               ) : cat ? (
-                <CatBody cat={cat} sub={sub} isAdmin={isAdmin} start2fa={start2fa} go={go} open={setSub} />
+                <CatBody cat={cat} sub={sub} isAdmin={isAdmin} start2fa={start2fa} open={setSub} />
               ) : null}
             </div>
           </div>
@@ -185,12 +185,11 @@ function Results({ query, isAdmin, go }: { query: string; isAdmin: boolean; go: 
   );
 }
 
-function CatBody({ cat, sub, isAdmin, start2fa, go, open }: {
+function CatBody({ cat, sub, isAdmin, start2fa, open }: {
   cat: Cat;
   sub: Sub | null;
   isAdmin: boolean;
   start2fa: boolean;
-  go: (c: Cat, s?: Sub | null, o?: { start2fa?: boolean }) => void;
   open: (s: Sub) => void;
 }) {
   if (cat === 'network') {
@@ -198,8 +197,8 @@ function CatBody({ cat, sub, isAdmin, start2fa, go, open }: {
     if (sub?.startsWith('iface:')) return <InterfacePage name={sub.slice(6)} />;
     return <NetworkHome open={(s) => open(s as Sub)} />;
   }
-  if (cat !== 'general') return <SubBody sub={cat} isAdmin={isAdmin} start2fa={start2fa} go={go} />;
-  if (sub) return <SubBody sub={sub} isAdmin={isAdmin} start2fa={start2fa} go={go} />;
+  if (cat !== 'general') return <SubBody sub={cat} isAdmin={isAdmin} start2fa={start2fa} />;
+  if (sub) return <SubBody sub={sub} isAdmin={isAdmin} start2fa={start2fa} />;
   return <CatHome cat={cat} isAdmin={isAdmin} open={open} />;
 }
 
@@ -254,7 +253,7 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
   );
 }
 
-function SubBody({ sub, isAdmin, start2fa, go }: { sub: Sub; isAdmin: boolean; start2fa: boolean; go: (c: Cat, s?: Sub | null) => void }) {
+function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start2fa: boolean }) {
   switch (sub) {
     case 'about':
       return <About isAdmin={isAdmin} />;
@@ -270,8 +269,6 @@ function SubBody({ sub, isAdmin, start2fa, go }: { sub: Sub; isAdmin: boolean; s
       return <Backup />;
     case 'troubleshoot':
       return <Troubleshoot />;
-    case 'power':
-      return <PowerSettings isAdmin={isAdmin} />;
     case 'appearance':
       return <Appearance />;
     case 'wallpaper':
@@ -294,9 +291,9 @@ function SubBody({ sub, isAdmin, start2fa, go }: { sub: Sub; isAdmin: boolean; s
     case 'lock':
       return <LockScreen />;
     case 'account':
-      return <YourAccount onSecurity={() => go('security')} />;
+      return <YourAccount />;
     case 'users':
-      return <UsersSettings isAdmin={isAdmin} onSecurity={() => go('security')} withAccount={false} />;
+      return <UsersSettings isAdmin={isAdmin} withAccount={false} />;
     case 'sharing':
       return isAdmin ? <SharingSettings /> : null;
     default:
