@@ -117,7 +117,7 @@ function FolderRow({ folder: f, data, onChanged }: { folder: SharedFolder; data:
         <Icon name="network" size={18} />
         <span className="settings-row-text">
           <span className="settings-row-label">{f.name}</span>
-          <span className="settings-row-hint">{f.description || where}</span>
+          {f.description && <span className="settings-row-hint">{f.description}</span>}
           <span className="user-badges">
             <span className="badge">{where}</span>
             <span className="badge">{granted === 0 ? 'Administrators only' : `${granted} ${granted === 1 ? 'person' : 'people'}`}</span>
