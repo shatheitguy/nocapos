@@ -2405,3 +2405,4 @@ button.ce-add-line { align-self: flex-start; }
   .dn-kinds { grid-template-columns: 1fr; }
 }
 .st-tabs .segmented button { white-space: nowrap; }
+.context-menu .context-sep { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
