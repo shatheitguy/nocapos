@@ -71,7 +71,10 @@ export function FilesSidebar({
   const at = (root: string, path: string) => !special && current?.root === root && current.path === path;
   const inside = (root: string) => !special && current?.root === root && !inRecycle(current.path);
   const locals = roots.filter((r) => !r.id.startsWith('net:'));
-  const others = locals.filter((r) => r.id !== home);
+  // Other people's homes stay out of the sidebar (admins can still reach them by path).
+  // An administrator's Home is the main drive, so their personal home folder isn't listed twice.
+  const admin = getUser()?.role === 'admin';
+  const others = locals.filter((r) => r.id !== home && r.kind !== 'homes' && !(admin && (r.kind === 'home' || r.id === 'home')));
   const cur = roots.find((r) => r.id === current?.root) ?? roots.find((r) => r.id === home);
 
   // A sidebar folder that accepts items dragged from a pane.

@@ -50,7 +50,7 @@ export function PersonSpacesPanel({ person, onChanged }: { person: Person; onCha
       </div>
 
       <h4>Shared folders</h4>
-      {data.folders.length === 0 && <span className="muted small">No shared folders yet (Settings → File Sharing).</span>}
+      {data.folders.length === 0 && <span className="muted small">No shared folders yet (Files → File Sharing).</span>}
       {data.folders.map((f) => (
         <div key={f.id} className="ps-line">
           <span>
