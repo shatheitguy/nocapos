@@ -201,7 +201,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
       {menuBar && (
         <ErrorBoundary title="Menu bar" fallback="hidden">
-          <MenuBar user={user} onLock={onLock} onLauncher={toggleLauncher} />
+          <MenuBar user={user} onLock={onLock} />
         </ErrorBoundary>
       )}
       <ErrorBoundary title="Dock" fallback="hidden">

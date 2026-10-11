@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
+import { accountMenuItems } from './accountMenu';
 import { TransfersButton } from './Transfers';
-import { logout } from '../api/client';
 import type { User } from '../api/types';
-import { APPS, openApp } from '../apps/meta';
+import { APPS } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
-import { powerHost } from '../lib/hostActions';
 import { useClock } from '../lib/hooks';
 import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
 import { usePrefs } from '../state/prefs';
@@ -21,7 +20,7 @@ import { NotifyBell } from './Notifications';
  * macOS-style menu bar (Settings → Windows → buttons on the Left). The clock,
  * status icons and Control Center live here instead of the dock's tray.
  */
-export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () => void; onLauncher: () => void }) {
+export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
   const tp = useTimePrefs();
   const now = useClock(tp.clockSeconds ? 1000 : 15_000);
   const focusMode = usePrefs((s) => s.focusMode);
@@ -38,19 +37,7 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
   const clockRef = useRef<HTMLButtonElement>(null);
   const isAdmin = user.role === 'admin';
 
-  const brandItems = (): MenuItem[] => [
-    { label: 'About', icon: 'info', onClick: () => openApp('settings', { props: { section: 'about' } }) },
-    { label: 'Settings…', icon: 'settings', onClick: () => openApp('settings') },
-    { label: 'Launchpad', icon: 'launcher', onClick: onLauncher },
-    { label: 'Lock Screen', icon: 'lock', onClick: onLock },
-    ...(isAdmin
-      ? [
-          { label: 'Restart…', icon: 'restart' as const, onClick: () => void powerHost('reboot') },
-          { label: 'Shut Down…', icon: 'power' as const, danger: true, onClick: () => void powerHost('shutdown') },
-        ]
-      : []),
-    { label: `Sign Out ${user.username}`, icon: 'logout', onClick: () => void logout() },
-  ];
+  const brandItems = (): MenuItem[] => accountMenuItems(user, onLock);
 
   return (
     <header className="menubar" aria-label="Menu bar">
@@ -101,7 +88,7 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
 
       {brandMenu && <ContextMenu x={brandMenu.x} y={brandMenu.y} items={brandItems()} onClose={() => setBrandMenu(null)} />}
       {clockOpen && <ClockPanel anchor={clockRef} onClose={() => setClockOpen(false)} />}
-      {ccOpen && <QuickSettings user={user} anchor={ccRef} onClose={() => setCcOpen(false)} onLock={onLock} showActions={false} />}
+      {ccOpen && <QuickSettings user={user} anchor={ccRef} onClose={() => setCcOpen(false)} />}
     </header>
   );
 }
