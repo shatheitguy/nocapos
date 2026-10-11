@@ -1,4 +1,5 @@
-// Package rdp connects NoCapOS's Remote Desktop app to real RDP servers.
+// Package rdp connects NoCapOS's Remote Desktop app to real RDP servers, and
+// Virtual Desk to its virtual machines' VNC screens.
 //
 // The RDP protocol itself is spoken by guacd (Apache Guacamole's proxy daemon).
 // alfad performs the Guacamole handshake with guacd and then relays Guacamole
@@ -92,8 +93,9 @@ func (rd *Reader) Read() (Instruction, error) {
 	}
 }
 
-// Params are the RDP connection settings for one session.
+// Params are the connection settings for one session.
 type Params struct {
+	Protocol   string // rdp (default) | vnc
 	Hostname   string
 	Port       int
 	Username   string
@@ -106,7 +108,25 @@ type Params struct {
 	DPI        int
 }
 
+func (p Params) protocol() string {
+	if p.Protocol == "vnc" {
+		return "vnc"
+	}
+	return "rdp"
+}
+
 func (p Params) values() map[string]string {
+	if p.protocol() == "vnc" {
+		// A virtual machine's own screen: loopback only, no password (it is
+		// reachable only through this authenticated tunnel).
+		return map[string]string{
+			"hostname":    p.Hostname,
+			"port":        strconv.Itoa(p.Port),
+			"password":    p.Password,
+			"color-depth": "24",
+			"cursor":      "remote",
+		}
+	}
 	port := p.Port
 	if port == 0 {
 		port = 3389
@@ -139,10 +159,10 @@ func (p Params) values() map[string]string {
 // ErrServer is a failure reported by guacd during the handshake.
 var ErrServer = errors.New("remote desktop error")
 
-// Handshake selects the RDP protocol on a fresh guacd connection and connects
+// Handshake selects the protocol (RDP or VNC) on a fresh guacd connection and connects
 // it to the target, returning guacd's connection id once it reports "ready".
 func Handshake(w io.Writer, rd *Reader, p Params) (string, error) {
-	if _, err := io.WriteString(w, Encode("select", "rdp")); err != nil {
+	if _, err := io.WriteString(w, Encode("select", p.protocol())); err != nil {
 		return "", err
 	}
 	args, err := rd.Read()

@@ -15,6 +15,8 @@ import { Settings } from './Settings';
 import { Storage } from './Storage';
 import { Terminal } from './Terminal';
 import { Viewer } from './Viewer';
+import { VirtualDesk } from './VirtualDesk';
+import { VmScreen } from './VirtualDeskScreen';
 
 export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = {
   assistant: Assistant,
@@ -29,6 +31,8 @@ export const APP_COMPONENTS: Record<string, ComponentType<{ win: WinState }>> = 
   appcenter: AppCenter,
   settings: Settings,
   storage: Storage,
+  virtualdesk: VirtualDesk,
+  vmscreen: VmScreen,
   scripts: Scripts,
   viewer: Viewer,
   logs: Logs,
