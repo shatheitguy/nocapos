@@ -16,7 +16,7 @@ import type { WinState } from '../state/windows';
 import type { Snapshot } from '../api/types';
 import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
-import { FocusSettings, PowerSettings } from './SystemPages';
+import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
 import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings } from './SettingsSections';
@@ -268,8 +268,6 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <Backup />;
     case 'troubleshoot':
       return <Troubleshoot />;
-    case 'power':
-      return <PowerSettings isAdmin={isAdmin} />;
     case 'appearance':
       return <Appearance />;
     case 'wallpaper':
