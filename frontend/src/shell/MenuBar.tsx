@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { TransfersButton } from './Transfers';
-import { LogoMark } from '../components/Logo';
 import { logout } from '../api/client';
 import type { User } from '../api/types';
 import { APPS, openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
+import { UserAvatar } from '../components/UserAvatar';
 import { powerHost } from '../lib/hostActions';
 import { useClock } from '../lib/hooks';
 import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
@@ -57,13 +57,14 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
       <button
         type="button"
         className={`mb-brand ${brandMenu ? 'open' : ''}`}
-        aria-label="NoCapOS menu"
+        aria-label={`${user.username} menu`}
+        title={user.username}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
           setBrandMenu({ x: r.left, y: r.bottom + 4 });
         }}
       >
-        <LogoMark size={15} />
+        <UserAvatar name={user.username} />
       </button>
       <b className="mb-app">{frontTitle}</b>
 
