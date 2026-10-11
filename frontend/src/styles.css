@@ -1599,7 +1599,11 @@ button.danger-solid { background: var(--bad); color: #fff; }
 
 /* Settings → File Sharing, and a person's folders and apps in Users */
 .share-row { gap: 10px; }
-.share-head { display: flex; align-items: flex-start; gap: 10px; width: 100%; }
+.share-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; width: 100%; }
+.share-head > svg { flex: none; margin-top: 3px; }
+.share-head > .settings-row-text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.share-head > .user-actions { flex: none; display: flex; align-items: center; margin-left: auto; }
+.user-badges .badge { white-space: nowrap; }
 .share-head > svg { flex: none; margin-top: 3px; color: var(--accent); }
 .share-head .settings-row-text { flex: 1; min-width: 0; }
 .share-form { width: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
