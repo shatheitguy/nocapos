@@ -30,6 +30,7 @@ import { FileGlyph, FilePreview, InfoDialog, PermBadges, kindLabel } from './Fil
 import { ShareFolderDialog } from './FilesNetwork';
 import { FilesSidebar, DRAG_TYPE, readDrag, type DragFiles } from './FilesSidebar';
 import { useNetwork } from './NetworkDrives';
+import { getUser } from '../api/client';
 import { netApi, type NetShare } from '../api/netdrive';
 import { FileLightbox } from './Viewer';
 import { startArchiveJob, startTransfer, startUpload, useTransfers } from '../state/transfers';
@@ -109,7 +110,10 @@ interface Item {
   entry: FileEntry;
 }
 
-const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:');
+const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:') && r.kind !== 'share' && r.kind !== 'homes';
+
+/** Administrators manage the whole server; everyone else gets their home and shared folders. */
+const isAdminUser = () => getUser()?.role === 'admin';
 
 /**
  * Files: a sidebar (Home, Recents, Favorites, shared folders,
@@ -143,11 +147,11 @@ export function Files({ win }: { win: WinState }) {
   useEffect(() => void loadRoots(), [loadRoots]);
   useEffect(() => {
     void fileApi.favorites().then((r) => r.ok && setFavs(r.data.favorites));
-    void fileApi.external().then((r) => r.ok && setExternal(r.data));
+    if (isAdminUser()) void fileApi.external().then((r) => r.ok && setExternal(r.data));
   }, []);
 
   // Network drives and shared folders.
-  const net = useNetwork();
+  const net = useNetwork(isAdminUser());
   const netChanged = useCallback(async () => {
     await Promise.all([net.load(), loadRoots()]);
   }, [net.load, loadRoots]);
@@ -233,7 +237,7 @@ export function Files({ win }: { win: WinState }) {
   }
 
   const cur = states[active];
-  const home = roots?.find(isLocal) ?? roots?.[0];
+  const home = roots?.find((r) => r.kind === 'home') ?? roots?.find(isLocal) ?? roots?.[0];
   const firstRoot = home?.id ?? '';
   const rootLabel = (id: string) => (id === home?.id ? 'Home' : (roots?.find((r) => r.id === id)?.name ?? 'Files'));
   const pane = (side: 0 | 1) => {
@@ -952,7 +956,8 @@ function FilePane({
   // ---------- menus ----------
 
   const shareItem = (folder: string, name: string): MenuEntry | null => {
-    if (root === 'system' || root.startsWith('net:') || special) return null;
+    // Sharing is for administrators, from the fixed storage locations.
+    if (!isAdminUser() || root === 'system' || root.startsWith('net:') || rootInfo?.kind || special) return null;
     const existing = shares.find((sh) => sh.root === root && sh.path === folder);
     return existing
       ? { label: `Stop Sharing “${existing.name}”`, icon: 'network', onClick: () => onUnshare(existing) }

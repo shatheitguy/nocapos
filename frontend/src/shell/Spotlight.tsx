@@ -75,13 +75,14 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
 
   useEffect(() => {
     input.current?.focus();
-    if (isAdmin) void storeApi.list().then((r) => r.ok && setStore(r.data.apps));
-  }, [isAdmin]);
+    // Everyone: the server only lists the installed apps each person may use.
+    void storeApi.list().then((r) => r.ok && setStore(r.data.apps));
+  }, []);
 
   // File names come from the server's index (debounced).
   useEffect(() => {
     const needle = q.trim();
-    if (!isAdmin || needle.length < 2) {
+    if (needle.length < 2) {
       setFiles([]);
       return;
     }
@@ -97,7 +98,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
       live = false;
       window.clearTimeout(t);
     };
-  }, [q, isAdmin]);
+  }, [q]);
 
   const results = useMemo(() => {
     const needle = q.trim();
@@ -164,7 +165,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         run: () => usePrefs.getState().set({ focusMode: !prefs.focusMode }),
       },
       { id: 'newterm', title: 'New Terminal Window', words: 'terminal shell console bash root', icon: 'terminal', admin: true, run: () => openApp('terminal', { newWindow: true }) },
-      { id: 'newfiles', title: 'New Files Window', words: 'files finder explorer folder', icon: 'folder', admin: true, run: () => openApp('files', { newWindow: true }) },
+      { id: 'newfiles', title: 'New Files Window', words: 'files finder explorer folder', icon: 'folder', run: () => openApp('files', { newWindow: true }) },
       { id: 'restart', title: 'Restart…', words: 'restart reboot', icon: 'restart', admin: true, run: () => void powerHost('reboot') },
       { id: 'shutdown', title: 'Shut Down…', words: 'shut down shutdown power off', icon: 'power', admin: true, run: () => void powerHost('shutdown') },
     ];
@@ -206,7 +207,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
           ['Status', a.installed ? a.installed.status : 'Not installed'],
         ],
         score: s - 4,
-        run: go(() => (running ? openStoreApp(a) : openApp('appcenter', { key: 'appcenter', props: { app: a.id } }))),
+        run: go(() => (running ? openStoreApp(a) : isAdmin ? openApp('appcenter', { key: 'appcenter', props: { app: a.id } }) : undefined)),
       });
     }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { saveLater } from '../lib/saveLater';
+import { api } from '../api/client';
+import { flushSaves, saveLater } from '../lib/saveLater';
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
@@ -183,10 +184,109 @@ interface Prefs extends PrefValues {
 
 const KEY = 'alfa.prefs';
 
-// Browser storage is a per-viewer convenience; it may be unavailable.
-function load(): Partial<PrefValues> {
+// ---- whose preferences ----
+//
+// Each person's look, dock, widgets and so on are kept under keys ending in
+// their user id, so people sharing a browser never see each other's desktop.
+// The plain keys are this device's look before anyone signs in. The first
+// administrator to sign in after an update inherits what the device had.
+
+let userId: string | null = null;
+const OWNER_KEY = 'alfa.prefs.owner';
+
+/** A browser-storage key for the signed-in person (the plain key before sign-in). */
+export const userKey = (key: string) => (userId ? `${key}.${userId}` : key);
+
+function readStore(key: string): string | null {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Record<string, unknown>;
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage may be unavailable or full */
+  }
+}
+
+/** Keys that used to be shared by everyone on this browser. */
+const LEGACY_KEYS = [KEY, 'alfa.wallpaper.custom', 'alfa.recents', 'alfa.notes'];
+
+function claimLegacy(id: string) {
+  if (readStore(OWNER_KEY)) return;
+  for (const k of LEGACY_KEYS) {
+    const v = readStore(k);
+    if (v != null && readStore(`${k}.${id}`) == null) writeStore(`${k}.${id}`, v);
+  }
+  writeStore(OWNER_KEY, id);
+}
+
+let serverTimer = 0;
+
+/** Send the person's prefs to the server, so they follow them to other browsers. */
+function syncLater() {
+  if (!userId) return;
+  window.clearTimeout(serverTimer);
+  serverTimer = window.setTimeout(() => {
+    if (!userId) return;
+    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } });
+  }, 1500);
+}
+
+/**
+ * Switch to a person's preferences after they sign in: this browser's copy
+ * first, then the server's (which wins, as it may come from another browser).
+ */
+export function restorePrefs(id: string, isAdmin: boolean) {
+  if (userId === id) return;
+  flushSaves();
+  if (isAdmin) claimLegacy(id);
+  userId = id;
+  customWall = undefined;
+  usePrefs.setState({ ...DEFAULT_PREFS, ...load(userKey(KEY)) });
+  void api<{ prefs: Record<string, unknown> | null }>('/api/v1/me/prefs').then((r) => {
+    if (!r.ok || userId !== id) return;
+    if (r.data.prefs) {
+      usePrefs.setState({ ...DEFAULT_PREFS, ...sanitize(r.data.prefs) });
+      writeStore(userKey(KEY), JSON.stringify(snapshot()));
+    } else {
+      syncLater(); // first time: keep what this browser had
+    }
+  });
+}
+
+/** Back to this device's own look (someone signed out). */
+export function resetPrefs() {
+  if (!userId) return;
+  flushSaves();
+  window.clearTimeout(serverTimer);
+  userId = null;
+  customWall = undefined;
+  usePrefs.setState({ ...DEFAULT_PREFS, ...load(KEY) });
+}
+
+function snapshot() {
+  const s = usePrefs.getState();
+  const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
+  return { ...values, brand1: true, glass1: true, look2: true };
+}
+
+// Browser storage is a per-viewer convenience; it may be unavailable.
+function load(key: string): Partial<PrefValues> {
+  try {
+    return sanitize(JSON.parse(readStore(key) ?? '{}') as Record<string, unknown>);
+  } catch {
+    return {};
+  }
+}
+
+/** Keep only known prefs of the right type, with old values moved on. */
+function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
+  try {
     const out: Partial<PrefValues> = {};
     for (const k of Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]) {
       if (k in raw && typeof raw[k] === typeof DEFAULT_PREFS[k]) (out as Record<string, unknown>)[k] = raw[k];
@@ -220,21 +320,14 @@ function load(): Partial<PrefValues> {
   }
 }
 
-export const usePrefs = create<Prefs>((set, get) => ({
+export const usePrefs = create<Prefs>((set) => ({
   ...DEFAULT_PREFS,
-  ...load(),
+  ...load(KEY),
   set: (p) => {
     set(p);
     // Sliders call this on every move; the write is batched (flushed on unload).
-    saveLater(
-      KEY,
-      () => {
-        const s = get();
-        const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-        return JSON.stringify({ ...values, brand1: true, glass1: true, look2: true });
-      },
-      300,
-    );
+    saveLater(userKey(KEY), () => JSON.stringify(snapshot()), 300);
+    syncLater();
   },
 }));
 
@@ -248,7 +341,7 @@ let customWall: string | null | undefined;
 export function loadCustomWallpaper(): string | null {
   if (customWall !== undefined) return customWall;
   try {
-    customWall = localStorage.getItem(WALL_KEY);
+    customWall = localStorage.getItem(userKey(WALL_KEY));
   } catch {
     customWall = null;
   }
@@ -267,7 +360,7 @@ export async function saveCustomWallpaper(file: File): Promise<string> {
   for (const q of [0.86, 0.75, 0.6]) {
     const url = canvas.toDataURL('image/jpeg', q);
     try {
-      localStorage.setItem(WALL_KEY, url);
+      localStorage.setItem(userKey(WALL_KEY), url);
       customWall = url;
       return url;
     } catch {

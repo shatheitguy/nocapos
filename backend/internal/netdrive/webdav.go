@@ -14,12 +14,14 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	"alfaos/alfad/internal/store"
+	"alfaos/alfad/internal/spaces"
 )
 
-// WebDAV serves the shared folders at /dav/<Share>/… for the "nocapos"
-// account. Mount it from Windows ("Map network drive"), macOS Finder ("Connect
-// to Server"), Linux file managers (davs://) or phone file apps.
+// WebDAV serves shared folders at /dav/<Folder>/… and each person's home at
+// /dav/<their user name>/, for people signing in with their NoCapOS user
+// name and password (or the old shared account while it's still in use).
+// Mount it from Windows ("Map network drive"), macOS Finder ("Connect to
+// Server"), Linux file managers (davs://) or phone file apps.
 
 // davAuth slows down password guessing: after 5 failures an address waits.
 type davAuth struct {
@@ -78,7 +80,7 @@ func (m *Manager) DAVHandler(clientIP func(*http.Request) string) http.Handler {
 	locks := webdav.NewMemLS()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		if !m.flag(ctx, keyWebDAV) {
+		if !m.flag(ctx, keyWebDAV) || m.spaces == nil {
 			http.NotFound(w, r)
 			return
 		}
@@ -88,116 +90,198 @@ func (m *Manager) DAVHandler(clientIP func(*http.Request) string) http.Handler {
 			http.Error(w, "too many wrong passwords; try again in a minute", http.StatusTooManyRequests)
 			return
 		}
-		user, pw, ok := r.BasicAuth()
-		if !ok || !m.CheckPassword(ctx, user, pw) {
-			if ok {
+		user, pw, hasAuth := r.BasicAuth()
+		var entries []davEntry
+		ok := false
+		if hasAuth {
+			entries, ok = m.davEntries(ctx, user, pw)
+		}
+		if !ok {
+			if hasAuth {
 				m.dav.failed(ip)
 			}
 			w.Header().Set("WWW-Authenticate", `Basic realm="NoCapOS", charset="UTF-8"`)
-			http.Error(w, "sign in with the NoCapOS sharing account", http.StatusUnauthorized)
+			http.Error(w, "sign in with your NoCapOS user name and password", http.StatusUnauthorized)
 			return
 		}
 		m.dav.ok(ip)
-		shares, err := m.st.NetShares(ctx)
-		if err != nil {
-			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		h := &webdav.Handler{Prefix: DAVPrefix, FileSystem: &davFS{m: m, shares: shares}, LockSystem: locks}
+		h := &webdav.Handler{Prefix: DAVPrefix, FileSystem: &davFS{m: m, entries: entries}, LockSystem: locks}
 		h.ServeHTTP(w, r)
 	})
 }
 
-// davFS is a virtual folder of the shares, each mapped to its folder on disk.
+// davEntries signs someone in and lists the folders they can reach.
+func (m *Manager) davEntries(ctx context.Context, user, pw string) ([]davEntry, bool) {
+	if pw == "" {
+		return nil, false
+	}
+	people, err := m.spaces.People(ctx)
+	if err != nil {
+		return nil, false
+	}
+	if strings.EqualFold(user, ShareUser) {
+		if !m.CheckPassword(ctx, user, pw) {
+			return nil, false
+		}
+		var out []davEntry
+		for _, f := range m.spaces.NetFolders(people) {
+			out = append(out, davEntry{name: f.Name, root: spaces.ShareRootID(f.ID), path: f.FullPath, write: !f.ReadOnly, recycle: f.Recycle, listed: f.Network})
+		}
+		return out, true
+	}
+	if m.checkUser == nil {
+		return nil, false
+	}
+	name, admin, ok := m.checkUser(ctx, user, pw)
+	if !ok {
+		return nil, false
+	}
+	var out []davEntry
+	for _, f := range m.spaces.NetFolders(people) {
+		p := spaces.FolderPerm(spaces.Viewer{Name: name, Admin: admin}, &f.SharedFolder, nil)
+		for who, perm := range f.Perms {
+			if strings.EqualFold(who, name) {
+				p = perm
+			}
+		}
+		if p == spaces.None {
+			continue
+		}
+		out = append(out, davEntry{name: f.Name, root: spaces.ShareRootID(f.ID), path: f.FullPath, write: p == spaces.ReadWrite, recycle: f.Recycle, listed: f.Network})
+	}
+	if home, err := m.spaces.EnsureHome(name); err == nil {
+		// Shared folders win a name clash, as with Samba's [homes].
+		out = append(out, davEntry{name: name, root: spaces.HomeRootID(name), path: home, write: true, recycle: true, listed: true})
+	}
+	return out, true
+}
+
+// davEntry is one top-level folder in someone's WebDAV view.
+type davEntry struct {
+	name    string
+	root    string // storage location id (for protection checks and the recycle bin)
+	path    string // real folder on disk
+	write   bool
+	recycle bool
+	listed  bool // shown at the top level (hidden folders open by name)
+}
+
+// davFS is a virtual folder of the person's folders. Each folder is opened
+// through os.Root, so "..", absolute paths and symlinks can't lead out of it.
 type davFS struct {
-	m      *Manager
-	shares []*store.NetShare
+	m       *Manager
+	entries []davEntry
 }
 
 type davTarget struct {
-	share *store.NetShare
-	dir   webdav.Dir
-	rest  string // path inside the share, "/…"
+	e   *davEntry
+	rel string // inside the folder, "." for the folder itself
 }
 
-// resolve maps "/Share/a/b" to the share and "/a/b"; a nil share means the top level.
+// resolve maps "/Folder/a/b" to the folder and "a/b"; a nil entry means the top level.
 func (d *davFS) resolve(name string) (*davTarget, error) {
 	name = path.Clean("/" + name)
 	if name == "/" {
-		return &davTarget{rest: "/"}, nil
+		return &davTarget{rel: "."}, nil
 	}
 	first, rest, _ := strings.Cut(strings.TrimPrefix(name, "/"), "/")
-	for _, sh := range d.shares {
-		if strings.EqualFold(sh.Name, first) {
-			p := d.m.sharePath(sh)
-			if p == "" {
-				return nil, os.ErrNotExist
+	for i := range d.entries {
+		if strings.EqualFold(d.entries[i].name, first) {
+			rel := rest
+			if rel == "" {
+				rel = "."
 			}
-			return &davTarget{share: sh, dir: webdav.Dir(p), rest: "/" + rest}, nil
+			return &davTarget{e: &d.entries[i], rel: rel}, nil
 		}
 	}
 	return nil, os.ErrNotExist
 }
 
-// rel is the path inside the storage location, for NoCapOS's protection checks.
-func (t *davTarget) rel() string {
-	return strings.TrimPrefix(path.Join(t.share.Path, t.rest), "/")
-}
-
 func (t *davTarget) writable() error {
-	if t.share == nil || t.share.ReadOnly {
+	if t.e == nil || !t.e.write {
 		return os.ErrPermission
 	}
 	return nil
 }
 
-func (d *davFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+func (t *davTarget) open() (*os.Root, error) { return os.OpenRoot(t.e.path) }
+
+func (d *davFS) Mkdir(_ context.Context, name string, perm os.FileMode) error {
 	t, err := d.resolve(name)
 	if err != nil {
 		return err
 	}
-	if err := t.writable(); err != nil {
+	if err := t.writable(); err != nil || t.rel == "." {
+		return os.ErrPermission
+	}
+	rt, err := t.open()
+	if err != nil {
 		return err
 	}
-	return t.dir.Mkdir(ctx, t.rest, perm)
+	defer rt.Close()
+	if err := rt.Mkdir(t.rel, perm); err != nil {
+		return err
+	}
+	d.m.spaces.Own(t.e.root, t.rel) // in a Linux home: the person's own
+	return nil
 }
 
 const writeFlags = os.O_WRONLY | os.O_RDWR | os.O_CREATE | os.O_TRUNC | os.O_APPEND
 
-func (d *davFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+func (d *davFS) OpenFile(_ context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	t, err := d.resolve(name)
 	if err != nil {
 		return nil, err
 	}
-	if t.share == nil {
+	if t.e == nil {
 		if flag&writeFlags != 0 {
 			return nil, os.ErrPermission
 		}
 		return d.top(), nil
 	}
 	if flag&writeFlags != 0 {
-		if err := t.writable(); err != nil {
-			return nil, err
+		if err := t.writable(); err != nil || t.rel == "." {
+			return nil, os.ErrPermission
 		}
 	}
-	return t.dir.OpenFile(ctx, t.rest, flag, perm)
+	rt, err := t.open()
+	if err != nil {
+		return nil, err
+	}
+	defer rt.Close() // the opened file stays valid
+	f, err := rt.OpenFile(t.rel, flag, perm)
+	if err != nil {
+		return nil, err // not a typed nil inside the interface
+	}
+	if flag&os.O_CREATE != 0 {
+		d.m.spaces.Own(t.e.root, t.rel)
+	}
+	return f, nil
 }
 
-func (d *davFS) RemoveAll(ctx context.Context, name string) error {
+func (d *davFS) RemoveAll(_ context.Context, name string) error {
 	t, err := d.resolve(name)
 	if err != nil {
 		return err
 	}
-	if err := t.writable(); err != nil || t.rest == "/" {
+	if err := t.writable(); err != nil || t.rel == "." {
 		return os.ErrPermission
 	}
-	if err := d.m.files.CheckChange(t.share.Root, t.rel()); err != nil {
+	if err := d.m.files.CheckChange(t.e.root, t.rel); err != nil {
 		return os.ErrPermission
 	}
-	return t.dir.RemoveAll(ctx, t.rest)
+	if t.e.recycle {
+		return d.m.files.Delete(t.e.root, []string{t.rel}, false)
+	}
+	rt, err := t.open()
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	return rt.RemoveAll(t.rel)
 }
 
-func (d *davFS) Rename(ctx context.Context, oldName, newName string) error {
+func (d *davFS) Rename(_ context.Context, oldName, newName string) error {
 	from, err := d.resolve(oldName)
 	if err != nil {
 		return err
@@ -206,40 +290,49 @@ func (d *davFS) Rename(ctx context.Context, oldName, newName string) error {
 	if err != nil {
 		return err
 	}
-	if from.writable() != nil || to.writable() != nil || from.share.ID != to.share.ID || from.rest == "/" || to.rest == "/" {
+	if from.writable() != nil || to.writable() != nil || from.e != to.e || from.rel == "." || to.rel == "." {
 		return os.ErrPermission
 	}
-	if err := d.m.files.CheckChange(from.share.Root, from.rel()); err != nil {
+	if err := d.m.files.CheckChange(from.e.root, from.rel); err != nil {
 		return os.ErrPermission
 	}
-	return from.dir.Rename(ctx, from.rest, to.rest)
+	rt, err := from.open()
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	return rt.Rename(from.rel, to.rel)
 }
 
-func (d *davFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+func (d *davFS) Stat(_ context.Context, name string) (os.FileInfo, error) {
 	t, err := d.resolve(name)
 	if err != nil {
 		return nil, err
 	}
-	if t.share == nil {
+	if t.e == nil {
 		return dirInfo{name: "/"}, nil
 	}
-	fi, err := t.dir.Stat(ctx, t.rest)
-	if err == nil && t.rest == "/" {
-		return named{fi, t.share.Name}, nil
+	rt, err := t.open()
+	if err != nil {
+		return nil, err
+	}
+	defer rt.Close()
+	fi, err := rt.Stat(t.rel)
+	if err == nil && t.rel == "." {
+		return named{fi, t.e.name}, nil
 	}
 	return fi, err
 }
 
-// top is the read-only folder listing the shares.
+// top is the read-only folder listing the person's folders.
 func (d *davFS) top() webdav.File {
 	var infos []fs.FileInfo
-	for _, sh := range d.shares {
-		p := d.m.sharePath(sh)
-		if p == "" {
+	for _, e := range d.entries {
+		if !e.listed {
 			continue
 		}
-		if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-			infos = append(infos, named{fi, sh.Name})
+		if fi, err := os.Stat(e.path); err == nil && fi.IsDir() {
+			infos = append(infos, named{fi, e.name})
 		}
 	}
 	return &topDir{infos: infos}

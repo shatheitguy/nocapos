@@ -39,14 +39,14 @@ export function HomeHeader({ username, isAdmin }: { username: string; isAdmin: b
         <Icon name="search" size={14} /> Search
         <kbd>{mac ? '⌃' : 'Ctrl'} Space</kbd>
       </button>
-      {isAdmin && apps.length > 0 && (
+      {apps.length > 0 && (
         <div className="home-apps">
           {jiggle && (
             <button type="button" className="pill home-done" onClick={() => setJiggle(false)}>
               Done
             </button>
           )}
-          <StoreAppGrid apps={apps} jiggle={jiggle} setJiggle={setJiggle} />
+          <StoreAppGrid apps={apps} jiggle={jiggle} setJiggle={isAdmin ? setJiggle : () => {}} />
         </div>
       )}
     </div>

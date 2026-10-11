@@ -9,6 +9,7 @@ import type { WinState } from '../state/windows';
 import { ContainerEditor } from './ContainerEditor';
 import { openApp } from './meta';
 import { Empty } from './Monitor';
+import { WhoCanUse } from './AppAccess';
 
 // App Store: discover, install, open, update and remove self-hosted apps.
 // Each app runs as Docker containers with its own data volumes.
@@ -824,6 +825,8 @@ function AppPage({
               </div>
             )}
           </section>
+
+          {i && <WhoCanUse app={app} onChanged={onChanged} />}
 
           {app.services.length > 1 && (
             <section>

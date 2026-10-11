@@ -6,7 +6,8 @@ import type { User } from './api/types';
 import { AuthScreen, type AuthMode } from './shell/AuthScreen';
 import { Desktop } from './shell/Desktop';
 import { installUiFeedback, playCue } from './lib/uiSound';
-import { applyPrefs, usePrefs } from './state/prefs';
+import { applyPrefs, resetPrefs, restorePrefs, usePrefs } from './state/prefs';
+import { useRecents } from './state/recents';
 
 type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string } | { kind: 'desktop'; user: User };
 
@@ -65,6 +66,21 @@ export function App() {
   useEffect(() => {
     if (deskUser) void loadAvatar(deskUser);
   }, [deskUser]);
+
+  // Each person's own look and recent apps. Locking keeps them on screen;
+  // signing out goes back to this device's look.
+  const deskId = phase.kind === 'desktop' ? phase.user.id : null;
+  const deskAdmin = phase.kind === 'desktop' && phase.user.role === 'admin';
+  const signedOut = phase.kind === 'auth' && phase.mode !== 'locked';
+  useEffect(() => {
+    if (deskId) {
+      restorePrefs(deskId, deskAdmin);
+      useRecents.getState().restore();
+    } else if (signedOut) {
+      resetPrefs();
+      useRecents.getState().restore();
+    }
+  }, [deskId, deskAdmin, signedOut]);
 
   // Lock = end the server session but keep the username and window layout,
   // so unlocking requires the password and restores the desktop as it was.
