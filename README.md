@@ -35,6 +35,15 @@ a one-time setup token. Open the address, enter the token and create your admini
 | `--uninstall [--purge]` | remove NoCapOS; your files are never deleted |
 
 Settings live in `/etc/nocapos/nocapos.env`; manage the service with `systemctl status|restart nocapos`.
+
+**Uninstall** (your files are never deleted):
+
+```
+curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/uninstall.sh | sudo bash
+```
+
+Add `-s -- --purge` to also delete accounts, settings and keys, and `--remove-apps` to remove App Store
+apps with their data. It also removes NoCapOS's Samba shares and network-drive mounts.
 Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash nocapos-*/install.sh`.
 
 ## What you get
