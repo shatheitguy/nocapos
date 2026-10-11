@@ -39,9 +39,13 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 
 ## What you get
 
-- **A desktop in the browser** — a frosted *Glass* look with 10 wallpapers (the accent and the glass app
-  icons follow the wallpaper), a home screen with your installed apps, dock, Launchpad, windows, widgets
-  and a lock screen. Classic and *Cyber-Deck* themes too.
+- **A desktop in the browser** — a frosted *Glass* look with 10 wallpapers and a Transparency slider, glossy
+  app icons (Objects, Glass tiles or Shapes), a menu bar that sits on the wallpaper with your profile photo
+  and account menu, a home screen with your installed apps, dock, Launchpad, windows, widgets and a lock
+  screen. Classic and *Cyber-Deck* themes too.
+- **Everyone gets their own space** — each person has a private Home (their own Linux home on a Linux
+  install), sees only the shared folders and apps you allow, and keeps their own look. People can be
+  *Desktop* users or *File sharing only*.
 - **App Store** — one-click self-hosted apps (Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden,
   Syncthing, Gitea, code-server, n8n, …) with their own icons, updates ("Update all") and release notes.
   Click and hold an installed app to wiggle and remove it.
@@ -53,7 +57,9 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
   any file from any day.
 - **Storage** — disk health (SMART), ZFS pools (mirror, RAIDZ1/2/3), datasets, snapshots and scrubs, or
   use a single disk as storage. Erasing always needs a typed confirmation.
-- **Network drives & sharing** — connect SMB/NFS shares and share folders over SMB and WebDAV, inside Files.
+- **Shared folders & network drives** — create shared folders in Files and give each person Read/Write, Read
+  only or No access; they connect over SMB or WebDAV with their own user name and password. Connect SMB/NFS
+  shares from other devices too.
 - **People and their spaces** — everyone gets a private home (their own Linux home on a native install),
   shared folders with Read & write / Read only / No access per person, and a choice of which apps each
   person sees. People can be desktop users or file-sharing-only (SMB/WebDAV with their own password).
@@ -75,11 +81,12 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 
 | | |
 |---|---|
-| ![Launchpad](docs/screenshots/launchpad.jpg) **Launchpad** — glass icons for NoCapOS apps, real icons for installed apps | ![Files](docs/screenshots/files.jpg) **Files** — favorites, recents, network devices and quick look |
+| ![Launchpad](docs/screenshots/launchpad.jpg) **Launchpad** — glossy icons for NoCapOS apps, real icons for installed apps | ![Files](docs/screenshots/files.jpg) **Files** — favorites, recents, network devices and quick look |
 | ![Photos](docs/screenshots/photos.jpg) **Photos** — timeline, On this day, albums and favorites | ![App Store](docs/screenshots/app-store.jpg) **App Store** — featured apps, categories and updates |
 | ![Settings](docs/screenshots/settings.jpg) **Settings** — Network, General, Personalization, Security and more | ![Storage](docs/screenshots/storage.jpg) **Storage** — disk health and ZFS pools (sample data) |
 | ![Virtual Desk](docs/screenshots/virtual-desk.jpg) **Virtual Desk** — virtual machines with live usage (sample data) | ![New VM](docs/screenshots/virtual-desk-new.jpg) **New VM** — pick the system, ISO, resources and network |
-| ![Lock screen](docs/screenshots/login.jpg) **Lock screen** — your photo over the wallpaper | ![Cyber-Deck](docs/screenshots/cyber-deck.jpg) **Cyber-Deck** — an optional sci-fi theme |
+| ![File Sharing](docs/screenshots/file-sharing.jpg) **File Sharing** — shared folders and who may use them, in Files | ![Lock screen](docs/screenshots/login.jpg) **Lock screen** — your photo over the wallpaper |
+| ![Cyber-Deck](docs/screenshots/cyber-deck.jpg) **Cyber-Deck** — an optional sci-fi theme | |
 
 ## Updating
 
