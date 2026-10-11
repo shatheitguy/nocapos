@@ -7,7 +7,7 @@
 #   curl -fsSL <release-url>/install.sh | sudo bash      download + install
 #   sudo bash install.sh                  native install (recommended): runs as root, full control of this server
 #   sudo bash install.sh --docker         run NoCapOS itself in Docker (no host control: users, network, power stay off)
-#   sudo bash install.sh --uninstall      remove NoCapOS (your files are never deleted)
+#   sudo bash install.sh --uninstall      remove NoCapOS (your files are never deleted; same as uninstall.sh)
 #
 # Options:
 #   --storage DIR       NoCap Drive folder for your files (default /srv/nocapos)
@@ -111,6 +111,13 @@ if [ "$UNINSTALL" -eq 0 ] && [ ! -f "$BUNDLE_DIR/alfad" ]; then
 fi
 
 # ---------------------------------------------------------------- uninstall
+# The bundle's uninstall.sh does the full clean-up (also Samba and mounts).
+if [ "$UNINSTALL" -eq 1 ] && [ -f "$BUNDLE_DIR/uninstall.sh" ]; then
+  un=()
+  [ "$PURGE" -eq 1 ] && un+=(--purge)
+  [ "$ASSUME_YES" -eq 1 ] && un+=(--yes)
+  exec bash "$BUNDLE_DIR/uninstall.sh" "${un[@]}"
+fi
 if [ "$UNINSTALL" -eq 1 ]; then
   for unit in nocapos alfad; do
     if [ -f "/etc/systemd/system/$unit.service" ]; then

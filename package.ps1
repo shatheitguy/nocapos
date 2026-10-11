@@ -25,7 +25,7 @@ foreach ($t in $Targets) {
     New-Item -ItemType Directory -Force "$stage\rootfs\data" | Out-Null
 
     Copy-Item "$root\backend\bin\alfad-$os-$label" "$stage\alfad"
-    foreach ($f in "install.sh", "nocapos.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
+    foreach ($f in "install.sh", "uninstall.sh", "nocapos.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
         Copy-Item "$root\deploy\$f" "$stage\$f"
     }
     Set-Content -NoNewline -Encoding ascii "$stage\VERSION" $Version
@@ -61,3 +61,4 @@ Remove:   sudo bash install.sh --uninstall   (your files are never deleted)
 [IO.File]::WriteAllText((Join-Path $dist "SHA256SUMS"), (($sums -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
 # The installer itself, for: curl -fsSL <release-url>/install.sh | sudo bash
 Copy-Item "$root\deploy\install.sh" (Join-Path $dist "install.sh")
+Copy-Item "$root\deploy\uninstall.sh" (Join-Path $dist "uninstall.sh")
