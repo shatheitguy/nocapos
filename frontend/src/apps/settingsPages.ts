@@ -24,7 +24,7 @@ export interface CatInfo {
 export const CATS: CatInfo[] = [
   { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
-    groups: [['about', 'update'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot', 'power']] },
+    groups: [['about', 'update'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
   { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'wallpaper', label: 'Wallpaper', icon: 'image', color: '#32ade6', groups: [] },
   { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
@@ -85,7 +85,7 @@ export const ENTRIES: Entry[] = [
   { id: 'language', cat: 'general', sub: 'language', label: 'Language & Region', icon: 'globe', desc: 'Language and region formats', keywords: 'locale currency number format', options: ['NoCapOS language', 'Region formats'] },
   { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
   { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
-  { id: 'power', cat: 'general', sub: 'power', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
+  { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
   { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
   { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },
