@@ -18,7 +18,7 @@ import { useWM } from '../state/windows';
 import type { User } from '../api/types';
 import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
-import { accountMenuItems } from './accountMenu';
+import { AccountPanel } from './AccountPanel';
 import { NotifyBell } from './Notifications';
 
 type Menu = { x: number; y: number; appId?: string };
@@ -111,7 +111,8 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   useViewport(); // phones force a bottom dock, so follow the viewport
   const { position, autoHide } = effectiveDock(prefs);
   const [qsOpen, setQsOpen] = useState(false);
-  const [acctMenu, setAcctMenu] = useState<{ x: number; y: number } | null>(null);
+  const [acctMenu, setAcctMenu] = useState(false);
+  const acctRef = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [revealed, setRevealed] = useState(false);
   const hideTimer = useRef(0);
@@ -225,7 +226,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
             ref={trayRef}
             type="button"
             className={`tray-btn tray-status ${qsOpen ? 'open' : ''}`}
-            onClick={() => setQsOpen((v) => !v)}
+            onClick={() => { setAcctMenu(false); setQsOpen((v) => !v); }}
             aria-label="Control Center"
             title={`Control Center — Wi-Fi, network, sound${online ? '' : ' (reconnecting…)'}`}
           >
@@ -237,20 +238,22 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
             <TrayClock />
           </button>
           <button
+            ref={acctRef}
             type="button"
             className={`tray-btn tray-avatar ${acctMenu ? 'open' : ''}`}
             aria-label={`${user.username} menu`}
+            aria-expanded={acctMenu}
             title={user.username}
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setAcctMenu(acctMenu ? null : { x: r.right - 220, y: r.top - 8 });
+            onClick={() => {
+              setQsOpen(false);
+              setAcctMenu((v) => !v);
             }}
           >
             <UserAvatar name={user.username} />
           </button>
         </div>
       )}
-      {showTray && acctMenu && <ContextMenu x={acctMenu.x} y={acctMenu.y} above items={accountMenuItems(user, onLock)} onClose={() => setAcctMenu(null)} />}
+      {showTray && acctMenu && <AccountPanel user={user} anchor={acctRef} onClose={() => setAcctMenu(false)} onLock={onLock} />}
       {showTray && clockOpen && <ClockPanel anchor={clockRef} onClose={() => setClockOpen(false)} />}
       {showTray && qsOpen && <QuickSettings user={user} anchor={trayRef} onClose={() => setQsOpen(false)} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}

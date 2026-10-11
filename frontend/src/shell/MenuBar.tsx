@@ -1,9 +1,8 @@
 import { useRef, useState } from 'react';
-import { accountMenuItems } from './accountMenu';
+import { AccountPanel } from './AccountPanel';
 import { TransfersButton } from './Transfers';
 import type { User } from '../api/types';
 import { APPS } from '../apps/meta';
-import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { Icon } from '../components/Icon';
 import { UserAvatar } from '../components/UserAvatar';
 import { useClock } from '../lib/hooks';
@@ -30,26 +29,25 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
     const w = s.windows.find((x) => x.id === s.focused && !x.minimized);
     return w ? (APPS[w.appId]?.title ?? w.title) : 'Desktop';
   });
-  const [brandMenu, setBrandMenu] = useState<{ x: number; y: number } | null>(null);
+  const [brandMenu, setBrandMenu] = useState(false);
+  const brandRef = useRef<HTMLButtonElement>(null);
   const [ccOpen, setCcOpen] = useState(false);
   const ccRef = useRef<HTMLButtonElement>(null);
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLButtonElement>(null);
   const isAdmin = user.role === 'admin';
 
-  const brandItems = (): MenuItem[] => accountMenuItems(user, onLock);
 
   return (
     <header className="menubar" aria-label="Menu bar">
       <button
+        ref={brandRef}
         type="button"
         className={`mb-brand ${brandMenu ? 'open' : ''}`}
         aria-label={`${user.username} menu`}
+        aria-expanded={brandMenu}
         title={user.username}
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          setBrandMenu({ x: r.left, y: r.bottom + 4 });
-        }}
+        onClick={() => setBrandMenu((v) => !v)}
       >
         <UserAvatar name={user.username} />
       </button>
@@ -86,7 +84,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
         </button>
       </div>
 
-      {brandMenu && <ContextMenu x={brandMenu.x} y={brandMenu.y} items={brandItems()} onClose={() => setBrandMenu(null)} />}
+      {brandMenu && <AccountPanel user={user} anchor={brandRef} onClose={() => setBrandMenu(false)} onLock={onLock} side="left" />}
       {clockOpen && <ClockPanel anchor={clockRef} onClose={() => setClockOpen(false)} />}
       {ccOpen && <QuickSettings user={user} anchor={ccRef} onClose={() => setCcOpen(false)} />}
     </header>
