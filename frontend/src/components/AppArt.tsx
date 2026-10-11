@@ -48,6 +48,32 @@ const gear = (cx: number, cy: number, r: number, fill: string) => (
 );
 
 const ICONS: Record<string, Draw> = {
+  launchpad: (g) => (
+    <>
+      <defs>
+        {(
+          [
+            ['a', '#ff8a8a', '#ef4444'],
+            ['b', '#ffd36b', '#f59e0b'],
+            ['c', '#86efac', '#16a34a'],
+            ['d', '#7dd3fc', '#0284c7'],
+            ['e', '#c4b5fd', '#7c3aed'],
+            ['f', '#f9a8d4', '#db2777'],
+          ] as const
+        ).map(([k, a, b]) => lin(g(k), a, b, 0, 1))}
+      </defs>
+      {['a', 'b', 'c', 'd', 'e', 'f', 'c', 'd', 'a'].map((k, i) => {
+        const x = 13 + (i % 3) * 14;
+        const y = 13 + Math.floor(i / 3) * 14;
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width="10.5" height="10.5" rx="3" fill={url(g(k))} />
+            <rect x={x} y={y} width="10.5" height="3.5" rx="1.75" fill="#fff" opacity=".3" />
+          </g>
+        );
+      })}
+    </>
+  ),
   files: (g) => (
     <>
       <defs>
@@ -224,6 +250,7 @@ ICONS.vmscreen = ICONS.virtualdesk;
 // The "Shapes" style: each app as a simple composition of shapes on its colour.
 const bg = (c: string) => <rect width="64" height="64" rx="15" fill={c} />;
 const SHAPES: Record<string, () => ReactNode> = {
+  launchpad: () => (<>{bg('#b91c1c')}{Array.from({ length: 9 }, (_, i) => <rect key={i} x={14 + (i % 3) * 13} y={14 + Math.floor(i / 3) * 13} width="10" height="10" rx="3" fill="#fff" opacity={i % 2 ? 0.6 : 0.95} />)}</>),
   files: () => (<>{bg('#1d4ed8')}<rect x="12" y="20" width="40" height="28" rx="4" fill="#60a5fa" /><rect x="12" y="16" width="18" height="8" rx="3" fill="#93c5fd" /></>),
   photos: () => (<>{bg('#fff7ed')}<circle cx="24" cy="26" r="11" fill="#f97316" /><circle cx="40" cy="26" r="11" fill="#ec4899" opacity=".85" /><circle cx="32" cy="40" r="11" fill="#8b5cf6" opacity=".85" /></>),
   appcenter: () => (<>{bg('#6d28d9')}<circle cx="32" cy="22" r="9" fill="none" stroke="#ede9fe" strokeWidth="4" /><rect x="14" y="22" width="36" height="28" rx="6" fill="#a78bfa" /></>),
