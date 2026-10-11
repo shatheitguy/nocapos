@@ -54,12 +54,12 @@ export type IconSize = 'small' | 'medium' | 'large';
 export type TitleButtons = 'right' | 'left';
 export type TitleDoubleClick = 'maximize' | 'minimize' | 'none';
 export type WeekStart = 'sun' | 'mon';
-/** NoCapOS app icons: frosted glass, tinted with the wallpaper's colour, or each app's own colours. */
-export type IconStyle = 'glass' | 'tinted' | 'colorful';
+/** NoCapOS app icons: dark glass tiles, free-standing objects, or abstract shapes on colour. */
+export type IconStyle = 'tiles' | 'objects' | 'shapes';
 export const ICON_STYLES: { id: IconStyle; label: string }[] = [
-  { id: 'glass', label: 'Glass' },
-  { id: 'tinted', label: 'Wallpaper colour' },
-  { id: 'colorful', label: 'Colourful' },
+  { id: 'tiles', label: 'Glass tiles' },
+  { id: 'objects', label: 'Objects' },
+  { id: 'shapes', label: 'Shapes' },
 ];
 
 
@@ -137,8 +137,8 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
-  transparency: 100,
-  iconStyle: 'glass',
+  transparency: 50,
+  iconStyle: 'objects',
   reduceMotion: false,
   squareCorners: false,
   clock24: false,
@@ -272,7 +272,7 @@ export function resetPrefs() {
 function snapshot() {
   const s = usePrefs.getState();
   const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-  return { ...values, brand1: true, glass1: true };
+  return { ...values, brand1: true, glass1: true, look2: true };
 }
 
 // Browser storage is a per-viewer convenience; it may be unavailable.
@@ -300,6 +300,12 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
     }
     // The old on/off switch becomes the far end of the Transparency slider.
     if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
+    // One-time move to the current default look: Objects icons, 50% transparency.
+    if (!raw.look2) {
+      delete out.iconStyle;
+      if (out.transparency === 100) delete out.transparency;
+    }
+    // Icon styles that no longer exist (older looks) fall back to the default.
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
@@ -434,9 +440,9 @@ export function applyPrefs(p: PrefValues) {
   // between makes the panels proportionally more opaque (see glass.css).
   const clear = Math.min(100, Math.max(0, p.transparency));
   root.toggleAttribute('data-solid', clear === 0);
+  root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
   root.style.setProperty('--clear', String(clear / 100));
-  root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
   root.dataset.titleButtons = p.titleButtons;

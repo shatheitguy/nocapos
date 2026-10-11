@@ -4,6 +4,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { AppArt } from '../components/AppArt';
 import { Icon } from '../components/Icon';
 import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
 import { useClock, useViewport } from '../lib/hooks';
@@ -17,6 +18,7 @@ import { useWM } from '../state/windows';
 import type { User } from '../api/types';
 import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
+import { accountMenuItems } from './accountMenu';
 import { NotifyBell } from './Notifications';
 
 type Menu = { x: number; y: number; appId?: string };
@@ -109,6 +111,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   useViewport(); // phones force a bottom dock, so follow the viewport
   const { position, autoHide } = effectiveDock(prefs);
   const [qsOpen, setQsOpen] = useState(false);
+  const [acctMenu, setAcctMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
   const [revealed, setRevealed] = useState(false);
   const hideTimer = useRef(0);
@@ -130,7 +133,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
   }, [autoHide, position]);
-  const hidden = autoHide && !revealed && !qsOpen && !clockOpen && !menu;
+  const hidden = autoHide && !revealed && !qsOpen && !clockOpen && !menu && !acctMenu;
 
   const isAdmin = user.role === 'admin';
   const allowed = (id: string) => !!APPS[id] && !APPS[id].hidden && (isAdmin || !APPS[id].adminOnly);
@@ -174,8 +177,8 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
         }}
       >
         <button type="button" className="dock-item launchpad" title="Launchpad" aria-label="Launchpad" onClick={onLauncher}>
-          <span className="launchpad-icon">
-            <Icon name="launcher" size={22} />
+          <span className="launchpad-icon art">
+            <AppArt id="launchpad" size={44} />
           </span>
         </button>
 
@@ -233,13 +236,23 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
           <button ref={clockRef} type="button" className={`tray-btn tray-clock ${clockOpen ? 'open' : ''}`} onClick={() => setClockOpen((v) => !v)} title="Clock & calendar">
             <TrayClock />
           </button>
-          <button type="button" className="tray-btn tray-avatar" onClick={() => setQsOpen((v) => !v)} aria-label="Account and Control Center">
+          <button
+            type="button"
+            className={`tray-btn tray-avatar ${acctMenu ? 'open' : ''}`}
+            aria-label={`${user.username} menu`}
+            title={user.username}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setAcctMenu(acctMenu ? null : { x: r.right - 220, y: r.top - 8 });
+            }}
+          >
             <UserAvatar name={user.username} />
           </button>
         </div>
       )}
+      {showTray && acctMenu && <ContextMenu x={acctMenu.x} y={acctMenu.y} above items={accountMenuItems(user, onLock)} onClose={() => setAcctMenu(null)} />}
       {showTray && clockOpen && <ClockPanel anchor={clockRef} onClose={() => setClockOpen(false)} />}
-      {showTray && qsOpen && <QuickSettings user={user} anchor={trayRef} onClose={() => setQsOpen(false)} onLock={onLock} />}
+      {showTray && qsOpen && <QuickSettings user={user} anchor={trayRef} onClose={() => setQsOpen(false)} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu)} onClose={() => setMenu(null)} />}
     </footer>
   );
