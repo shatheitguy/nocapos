@@ -136,8 +136,8 @@ export const DEFAULT_PREFS: PrefValues = {
   wallpaperDim: 0,
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
-  transparency: 100,
-  iconStyle: 'tiles',
+  transparency: 50,
+  iconStyle: 'objects',
   reduceMotion: false,
   squareCorners: false,
   clock24: false,
@@ -200,6 +200,11 @@ function load(): Partial<PrefValues> {
     }
     // The old on/off switch becomes the far end of the Transparency slider.
     if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
+    // One-time move to the current default look: Objects icons, 50% transparency.
+    if (!raw.look2) {
+      delete out.iconStyle;
+      if (out.transparency === 100) delete out.transparency;
+    }
     // Icon styles that no longer exist (older looks) fall back to the default.
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
@@ -226,7 +231,7 @@ export const usePrefs = create<Prefs>((set, get) => ({
       () => {
         const s = get();
         const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-        return JSON.stringify({ ...values, brand1: true, glass1: true });
+        return JSON.stringify({ ...values, brand1: true, glass1: true, look2: true });
       },
       300,
     );
