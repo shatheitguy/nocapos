@@ -99,6 +99,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, u.ID, "auth.password.change", u.Username, true, "")
+	s.syncSharingPassword(r.Context(), u.Username, req.New)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -122,6 +123,7 @@ func (s *Server) authReset(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		s.audit(r, "", "auth.password.reset", truncate(req.Username, 64), true, "via TOTP")
+		s.syncSharingPassword(r.Context(), req.Username, req.Password)
 		w.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrTOTPBadCode), errors.Is(err, auth.ErrTOTPNotEnrolled):
 		s.audit(r, "", "auth.password.reset", truncate(req.Username, 64), false, "")

@@ -54,6 +54,10 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 - **Storage** — disk health (SMART), ZFS pools (mirror, RAIDZ1/2/3), datasets, snapshots and scrubs, or
   use a single disk as storage. Erasing always needs a typed confirmation.
 - **Network drives & sharing** — connect SMB/NFS shares and share folders over SMB and WebDAV, inside Files.
+- **People and their spaces** — everyone gets a private home (their own Linux home on a native install),
+  shared folders with Read & write / Read only / No access per person, and a choice of which apps each
+  person sees. People can be desktop users or file-sharing-only (SMB/WebDAV with their own password).
+  Everything is checked on the server, and each person's desktop look stays their own.
 - **Cloud Imports** — bring files in from Google Drive, Dropbox, OneDrive and more (rclone).
 - **Virtual Desk** — run Windows, Linux and Android virtual machines (KVM): a four-step New VM wizard,
   live usage, snapshots, and the machine's screen in its own window.
@@ -114,6 +118,7 @@ backend/            alfad — Go daemon, single static binary with the UI embedd
   internal/backup     restic backups and Rewind
   internal/storage    disks, SMART and ZFS pools
   internal/netdrive   SMB/NFS mounts and SMB/WebDAV sharing
+  internal/spaces     homes, shared-folder permissions, per-person app access
   internal/cloudimport rclone cloud imports
   internal/stacks     Docker Compose stacks
   internal/hostctl    network, Wi-Fi, power

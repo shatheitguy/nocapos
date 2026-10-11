@@ -48,6 +48,8 @@ export interface StoreApp {
   installed?: StoreInstalled;
   /** Running job, or the last one if it ended in the last few minutes. */
   job?: StoreJob;
+  /** Administrators: who can use it (absent = everyone). */
+  access?: { everyone: boolean; users: string[] };
 }
 
 const path = (id: string) => `/api/v1/appstore/${encodeURIComponent(id)}`;

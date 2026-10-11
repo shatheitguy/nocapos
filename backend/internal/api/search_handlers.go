@@ -3,10 +3,12 @@ package api
 import (
 	"net/http"
 	"strconv"
+
+	"alfaos/alfad/internal/files"
 )
 
 // filesSearch searches file and folder names across the storage locations
-// (universal search). Same access as the rest of Files: admin only.
+// (universal search), limited to what the person can open in Files.
 func (s *Server) filesSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -18,7 +20,7 @@ func (s *Server) filesSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	count, building, capped := s.FileIndex.Stats()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"results":  s.FileIndex.Search(q, limit),
+		"results":  s.scopeHits(r, func(n int) []files.Hit { return s.FileIndex.Search(q, n) }, limit),
 		"indexed":  count,
 		"building": building,
 		"capped":   capped,

@@ -52,6 +52,9 @@ func (s *Service) loginSystem(ctx context.Context, username, password string, me
 	if err != nil {
 		return nil, err
 	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		return nil, err
+	}
 	return s.startSession(ctx, u, meta)
 }
 

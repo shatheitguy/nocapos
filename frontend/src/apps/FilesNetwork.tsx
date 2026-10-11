@@ -237,8 +237,6 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
   const [state, setState] = useState<{ support: NetSupport; sharing: Sharing } | null>(null);
   const [shareName, setShareName] = useState(shareSafe(name));
   const [readOnly, setReadOnly] = useState(false);
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
   const [smb, setSmb] = useState(false);
   const [dav, setDav] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -263,19 +261,13 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
     );
   }
   const { support, sharing } = state;
-  const needPw = !sharing.password_set;
   const canSmb = support.native && support.samba;
 
   const share = async () => {
     setError('');
-    if (needPw && pw !== pw2) return setError('The passwords don’t match');
     if (!smb && !dav) return setError('Choose at least one way to share');
     setBusy(true);
     try {
-      if (needPw) {
-        const r = await netApi.setPassword(pw);
-        if (!r.ok) return setError(r.error ?? 'Could not set the password');
-      }
       if (smb !== sharing.smb || dav !== sharing.webdav) {
         const r = await netApi.setProtocols({ smb: smb || sharing.smb, webdav: dav || sharing.webdav });
         if (!r.ok) return setError(r.error ?? 'Could not turn sharing on');
@@ -303,7 +295,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
             <Icon name="check" size={22} />
           </span>
           <p>
-            Other devices can open it now. Sign in as <b>{sharing.user}</b> with the sharing password.
+            Shared. People sign in with their own NoCapOS user name and password; choose who may use it in Settings → File Sharing (until then, only administrators can).
           </p>
           {addrs.map((a) => (
             <button key={a} type="button" className="ghost fn-addr" onClick={() => copy(a)}>
@@ -325,22 +317,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
           Share name
           <input value={shareName} maxLength={40} onChange={(e) => setShareName(e.target.value)} />
         </label>
-        <Toggle label="Read only" hint="Others can open and copy files, but not change or delete them" checked={readOnly} onChange={setReadOnly} />
-        {needPw && (
-          <>
-            <p className="fn-intro">
-              Everyone signs in as <b>{sharing.user}</b> with a sharing password, so your own password never goes into other devices.
-            </p>
-            <label>
-              Sharing password
-              <input type="password" value={pw} autoComplete="new-password" placeholder="At least 8 characters" onChange={(e) => setPw(e.target.value)} />
-            </label>
-            <label>
-              Confirm
-              <input type="password" value={pw2} autoComplete="new-password" onChange={(e) => setPw2(e.target.value)} />
-            </label>
-          </>
-        )}
+        <Toggle label="Read only for everyone" hint="People can open and copy files, but nobody can change or delete them" checked={readOnly} onChange={setReadOnly} />
         {(!sharing.smb || !sharing.webdav) && (
           <>
             {canSmb && !sharing.smb && <Toggle label="Share with Windows, Mac and Linux (SMB)" checked={smb} onChange={setSmb} />}
@@ -353,7 +330,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
           <button type="button" className="ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" disabled={busy || !shareName.trim() || (needPw && pw.length < 8)} onClick={() => void share()}>
+          <button type="button" disabled={busy || !shareName.trim()} onClick={() => void share()}>
             {busy ? 'Sharing…' : 'Share'}
           </button>
         </div>

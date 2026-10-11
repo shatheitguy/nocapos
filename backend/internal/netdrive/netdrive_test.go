@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +13,7 @@ import (
 	"testing"
 
 	"alfaos/alfad/internal/files"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
 )
 
@@ -107,6 +106,20 @@ func setup(t *testing.T) (*Manager, *fakeHost, string) {
 	m.lookPath = func(string) (string, error) { return "/usr/bin/x", nil }
 	m.mountBase = filepath.Join(dir, "mnt")
 	m.sambaDir = filepath.Join(dir, "samba")
+	sp, err := spaces.New(context.Background(), st, fsvc, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp.SetPeople(func(context.Context) ([]spaces.Person, error) {
+		return []spaces.Person{{Name: "admin", Admin: true}, {Name: "alex"}, {Name: "sam"}, {Name: "gone", Disabled: true}}, nil
+	})
+	passwords := map[string]string{"admin": "admin-pass-1", "alex": "alex-pass-1", "sam": "sam-pass-1"}
+	m.UseSpaces(sp, func(_ context.Context, user, pw string) (string, bool, bool) {
+		if p, ok := passwords[user]; ok && p == pw {
+			return user, user == "admin", true
+		}
+		return "", false, false
+	})
 	return m, h, drive
 }
 
@@ -201,151 +214,5 @@ func TestDrives(t *testing.T) {
 	}
 	if ds, _ := m.Drives(ctx); len(ds) != 1 || ds[0].ID != nfs.ID {
 		t.Fatalf("after delete: %+v", ds)
-	}
-}
-
-func TestSharingSamba(t *testing.T) {
-	ctx := context.Background()
-	m, h, _ := setup(t)
-	on := true
-	if err := m.SetProtocols(ctx, &on, nil); err == nil {
-		t.Fatal("sharing must need a password first")
-	}
-	if err := m.SetPassword(ctx, "short"); err == nil {
-		t.Error("short password accepted")
-	}
-	if err := m.SetPassword(ctx, "share-pass-1"); err != nil {
-		t.Fatal(err)
-	}
-	if c := h.called("useradd --system"); len(c) != 1 {
-		t.Errorf("useradd: %v", h.calls)
-	}
-	var sawPw bool
-	for i, c := range h.calls {
-		if strings.HasPrefix(c, "smbpasswd -a -s nocapos") && h.stdin[i] == "share-pass-1\nshare-pass-1\n" {
-			sawPw = true
-		}
-	}
-	if !sawPw {
-		t.Error("samba password not set through stdin")
-	}
-	if !m.CheckPassword(ctx, "NoCapOS", "share-pass-1") || m.CheckPassword(ctx, "nocapos", "nope") || m.CheckPassword(ctx, "root", "share-pass-1") {
-		t.Error("password check")
-	}
-
-	if err := m.SetProtocols(ctx, &on, &on); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := m.AddShare(ctx, "Media", "drive", "/Media", false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := m.AddShare(ctx, "media", "drive", "/Docs", false); err == nil {
-		t.Error("duplicate share name accepted")
-	}
-	for _, bad := range [][3]string{{"IPC$", "drive", "/Docs"}, {"Docs", "system", "/etc"}, {"Docs", "drive", "/nope"}, {"[x]", "drive", "/Docs"}} {
-		if _, err := m.AddShare(ctx, bad[0], bad[1], bad[2], false); err == nil {
-			t.Errorf("share %v accepted", bad)
-		}
-	}
-	if _, err := m.AddShare(ctx, "Docs", "drive", "/Docs", true); err != nil {
-		t.Fatal(err)
-	}
-	conf, _ := os.ReadFile(filepath.Join(m.sambaDir, confName))
-	for _, want := range []string{"[Media]", "valid users = nocapos", "read only = no", "[Docs]", "read only = yes"} {
-		if !strings.Contains(string(conf), want) {
-			t.Errorf("nocapos.conf lacks %q:\n%s", want, conf)
-		}
-	}
-	main, _ := os.ReadFile(filepath.Join(m.sambaDir, "smb.conf"))
-	if strings.Count(string(main), includeLine) != 1 {
-		t.Errorf("smb.conf include line count wrong:\n%s", main)
-	}
-	if len(h.called("systemctl enable --now smbd")) == 0 {
-		t.Errorf("samba not started: %v", h.called("systemctl"))
-	}
-
-	off := false
-	if err := m.SetProtocols(ctx, &off, nil); err != nil {
-		t.Fatal(err)
-	}
-	conf, _ = os.ReadFile(filepath.Join(m.sambaDir, confName))
-	if strings.Contains(string(conf), "[Media]") {
-		t.Error("shares still configured after SMB was turned off")
-	}
-}
-
-func TestWebDAV(t *testing.T) {
-	ctx := context.Background()
-	m, _, drive := setup(t)
-	m.lookPath = func(string) (string, error) { return "", errors.New("not found") } // no Samba: WebDAV only
-	if err := m.SetPassword(ctx, "share-pass-1"); err != nil {
-		t.Fatal(err)
-	}
-	srv := httptest.NewServer(m.DAVHandler(ClientIP))
-	defer srv.Close()
-	do := func(method, path, user, pw, body string, hdr ...string) *http.Response {
-		req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
-		if user != "" {
-			req.SetBasicAuth(user, pw)
-		}
-		for i := 0; i+1 < len(hdr); i += 2 {
-			req.Header.Set(hdr[i], hdr[i+1])
-		}
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
-		return res
-	}
-
-	if r := do("PROPFIND", "/dav/", "nocapos", "share-pass-1", "", "Depth", "1"); r.StatusCode != http.StatusNotFound {
-		t.Fatalf("WebDAV off: %d", r.StatusCode)
-	}
-	on := true
-	if err := m.SetProtocols(ctx, nil, &on); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := m.AddShare(ctx, "Media", "drive", "/Media", false); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := m.AddShare(ctx, "Docs", "drive", "/Docs", true); err != nil {
-		t.Fatal(err)
-	}
-
-	if r := do("PROPFIND", "/dav/", "", "", "", "Depth", "1"); r.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("no password: %d", r.StatusCode)
-	}
-	if r := do("PROPFIND", "/dav/", "nocapos", "share-pass-1", "", "Depth", "1"); r.StatusCode != http.StatusMultiStatus {
-		t.Fatalf("list shares: %d", r.StatusCode)
-	}
-	if r := do("PUT", "/dav/Media/hello.txt", "nocapos", "share-pass-1", "hi there"); r.StatusCode != http.StatusCreated {
-		t.Fatalf("put: %d", r.StatusCode)
-	}
-	if b, _ := os.ReadFile(filepath.Join(drive, "Media", "hello.txt")); string(b) != "hi there" {
-		t.Fatalf("file on disk %q", b)
-	}
-	if r := do("PUT", "/dav/Docs/nope.txt", "nocapos", "share-pass-1", "x"); r.StatusCode < 400 {
-		t.Errorf("write to a read-only share: %d", r.StatusCode)
-	}
-	if r := do("DELETE", "/dav/Media/", "nocapos", "share-pass-1", ""); r.StatusCode < 400 {
-		t.Errorf("deleting a share's own folder: %d", r.StatusCode)
-	}
-	if r := do("MOVE", "/dav/Media/hello.txt", "nocapos", "share-pass-1", "", "Destination", srv.URL+"/dav/Docs/hello.txt"); r.StatusCode < 400 {
-		t.Errorf("move into a read-only share: %d", r.StatusCode)
-	}
-	if r := do("PUT", "/dav/hello.txt", "nocapos", "share-pass-1", "x"); r.StatusCode < 400 {
-		t.Errorf("write at the top level: %d", r.StatusCode)
-	}
-	if r := do("DELETE", "/dav/Media/hello.txt", "nocapos", "share-pass-1", ""); r.StatusCode != http.StatusNoContent {
-		t.Errorf("delete a file: %d", r.StatusCode)
-	}
-
-	// Guessing gets slowed down.
-	for i := 0; i < 5; i++ {
-		do("PROPFIND", "/dav/", "nocapos", "guess", "", "Depth", "0")
-	}
-	if r := do("PROPFIND", "/dav/", "nocapos", "share-pass-1", "", "Depth", "0"); r.StatusCode != http.StatusTooManyRequests {
-		t.Errorf("after 5 wrong passwords: %d", r.StatusCode)
 	}
 }

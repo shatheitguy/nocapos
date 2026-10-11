@@ -86,8 +86,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   // System notifications (admins): updates, app problems, disk health, failed backups.
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
 
-  // Installed App Store apps for the home screen and Launchpad.
-  useEffect(() => (isAdmin ? watchStoreApps() : undefined), [isAdmin]);
+  // Installed App Store apps for the home screen and Launchpad (the server
+  // lists only the apps this person may use).
+  useEffect(() => watchStoreApps(), [user.id]);
 
   // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);

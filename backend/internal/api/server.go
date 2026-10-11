@@ -23,6 +23,7 @@ import (
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
@@ -53,6 +54,7 @@ type Deps struct {
 	Photos    *photos.Library
 	Backup    *backup.Manager
 	NetDrives *netdrive.Manager
+	Spaces    *spaces.Manager
 	Cloud     *cloudimport.Manager
 	Stacks    *stacks.Manager
 	Storage   *storage.Manager
@@ -144,6 +146,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/users", s.admin(s.usersCreate))
 	mux.Handle("PATCH /api/v1/users/{name}", s.admin(s.usersUpdate))
 	mux.Handle("DELETE /api/v1/users/{name}", s.admin(s.usersDelete))
+	// Each person's shared folders and apps (admin, audited).
+	mux.Handle("GET /api/v1/users/{name}/spaces", s.admin(s.userSpaces))
+	mux.Handle("PUT /api/v1/users/{name}/folders/{id}", s.admin(s.userFolderPerm))
+	mux.Handle("PUT /api/v1/users/{name}/apps/{app}", s.admin(s.userAppAccess))
+	// Your own desktop preferences, so they follow you between browsers.
+	mux.Handle("GET /api/v1/me/prefs", s.authed(s.prefsGet))
+	mux.Handle("PUT /api/v1/me/prefs", s.authed(s.prefsPut))
 	mux.Handle("POST /api/v1/system/power", s.admin(s.powerAction))
 
 	// Containers (admin only: controlling containers is root-equivalent)
@@ -170,7 +179,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/images", s.admin(s.listImages))
 
 	// App Store: one-click installs (admin, audited).
-	mux.Handle("GET /api/v1/appstore", s.admin(s.appstoreList))
+	// Everyone may list the installed apps they're allowed to use (filtered).
+	mux.Handle("GET /api/v1/appstore", s.authed(s.appstoreList))
+	mux.Handle("GET /api/v1/appstore/access", s.admin(s.appAccessList))
+	mux.Handle("PUT /api/v1/appstore/access/{id}", s.admin(s.appAccessSet))
 	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
 	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
 
@@ -203,29 +215,30 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/rdp/ticket", s.admin(s.rdpTicket))
 	mux.HandleFunc("GET /ws/rdp", s.rdpConnect)
 
-	// Files (admin only for now; per-user shares come with multi-user storage)
-	mux.Handle("GET /api/v1/files/roots", s.admin(s.filesRoots))
-	mux.Handle("GET /api/v1/files/list", s.admin(s.filesList))
-	mux.Handle("GET /api/v1/files/search", s.admin(s.filesSearch))
-	mux.Handle("POST /api/v1/files/conflicts", s.admin(s.filesConflicts))
-	mux.Handle("GET /api/v1/files/jobs", s.admin(s.filesJobs))
-	mux.Handle("GET /api/v1/files/jobs/{id}", s.admin(s.filesJob))
-	mux.Handle("POST /api/v1/files/jobs/{id}/cancel", s.admin(s.filesJobCancel))
-	mux.Handle("GET /api/v1/files/text", s.admin(s.filesReadText))
+	// Files: everyone with the desktop. Admins see every location; others
+	// their home and the shared folders they may use (checked per request).
+	mux.Handle("GET /api/v1/files/roots", s.authed(s.filesRoots))
+	mux.Handle("GET /api/v1/files/list", s.authed(s.filesList))
+	mux.Handle("GET /api/v1/files/search", s.authed(s.filesSearch))
+	mux.Handle("POST /api/v1/files/conflicts", s.authed(s.filesConflicts))
+	mux.Handle("GET /api/v1/files/jobs", s.authed(s.filesJobs))
+	mux.Handle("GET /api/v1/files/jobs/{id}", s.authed(s.filesJob))
+	mux.Handle("POST /api/v1/files/jobs/{id}/cancel", s.authed(s.filesJobCancel))
+	mux.Handle("GET /api/v1/files/text", s.authed(s.filesReadText))
 	// Save, mkdir, rename and delete update the search index in place.
-	mux.Handle("PUT /api/v1/files/text", s.admin(s.filesWriteText))
-	mux.Handle("POST /api/v1/files/mkdir", s.admin(s.filesMkdir))
-	mux.Handle("POST /api/v1/files/rename", s.admin(s.filesRename))
-	mux.Handle("POST /api/v1/files/delete", s.admin(s.filesDelete))
-	mux.Handle("POST /api/v1/files/transfer", s.admin(s.touchIndex(s.filesTransfer)))
-	mux.Handle("POST /api/v1/files/upload", s.admin(s.touchIndex(s.filesUpload)))
-	mux.Handle("POST /api/v1/files/ticket", s.admin(s.filesTicket))
-	mux.Handle("GET /api/v1/files/recent", s.admin(s.filesRecent))
-	mux.Handle("GET /api/v1/files/favorites", s.admin(s.filesFavorites))
-	mux.Handle("PUT /api/v1/files/favorites", s.admin(s.filesSetFavorites))
-	mux.Handle("GET /api/v1/files/external", s.admin(s.filesExternal))
-	mux.Handle("POST /api/v1/files/compress", s.admin(s.filesCompress))
-	mux.Handle("POST /api/v1/files/extract", s.admin(s.filesExtract))
+	mux.Handle("PUT /api/v1/files/text", s.authed(s.filesWriteText))
+	mux.Handle("POST /api/v1/files/mkdir", s.authed(s.filesMkdir))
+	mux.Handle("POST /api/v1/files/rename", s.authed(s.filesRename))
+	mux.Handle("POST /api/v1/files/delete", s.authed(s.filesDelete))
+	mux.Handle("POST /api/v1/files/transfer", s.authed(s.touchIndex(s.filesTransfer)))
+	mux.Handle("POST /api/v1/files/upload", s.authed(s.touchIndex(s.filesUpload)))
+	mux.Handle("POST /api/v1/files/ticket", s.authed(s.filesTicket))
+	mux.Handle("GET /api/v1/files/recent", s.authed(s.filesRecent))
+	mux.Handle("GET /api/v1/files/favorites", s.authed(s.filesFavorites))
+	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))
+	mux.Handle("GET /api/v1/files/external", s.authed(s.filesExternal))
+	mux.Handle("POST /api/v1/files/compress", s.authed(s.filesCompress))
+	mux.Handle("POST /api/v1/files/extract", s.authed(s.filesExtract))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
 
 	mux.Handle("GET /api/v1/cloud", s.admin(s.cloudOverview))
@@ -249,6 +262,13 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/netdrives/{id}/{action}", s.admin(s.netConnect))
 	mux.Handle("PATCH /api/v1/netdrives/{id}", s.admin(s.netUpdate))
 	mux.Handle("DELETE /api/v1/netdrives/{id}", s.admin(s.netDelete))
+	// Shared folders with per-person permissions (admin, audited).
+	mux.Handle("GET /api/v1/shares", s.admin(s.sharesList))
+	mux.Handle("POST /api/v1/shares", s.admin(s.sharesCreate))
+	mux.Handle("PUT /api/v1/shares/settings", s.admin(s.sharesSettings))
+	mux.Handle("PATCH /api/v1/shares/{id}", s.admin(s.sharesUpdate))
+	mux.Handle("DELETE /api/v1/shares/{id}", s.admin(s.sharesDelete))
+	mux.Handle("PUT /api/v1/shares/{id}/permissions", s.admin(s.sharesPermissions))
 	mux.Handle("PUT /api/v1/sharing/password", s.admin(s.sharePassword))
 	mux.Handle("PUT /api/v1/sharing", s.admin(s.shareProtocols))
 	mux.Handle("POST /api/v1/sharing/shares", s.admin(s.shareAdd))
@@ -275,21 +295,21 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/backup/jobs/{job}", s.admin(s.backupJob))
 	mux.Handle("POST /api/v1/backup/jobs/{job}/cancel", s.admin(s.backupCancel))
 
-	mux.Handle("GET /api/v1/photos", s.admin(s.photosList))
-	mux.Handle("POST /api/v1/photos/tickets", s.admin(s.photosTickets))
+	mux.Handle("GET /api/v1/photos", s.authed(s.photosList))
+	mux.Handle("POST /api/v1/photos/tickets", s.authed(s.photosTickets))
 	mux.HandleFunc("GET /api/v1/photos/thumb", s.photosThumb) // authorized by a Photos ticket
-	mux.Handle("POST /api/v1/photos/favorite", s.admin(s.photosFavorite))
-	mux.Handle("POST /api/v1/photos/delete", s.admin(s.touchIndex(s.photosDelete)))
-	mux.Handle("GET /api/v1/photos/albums", s.admin(s.photosAlbums))
-	mux.Handle("POST /api/v1/photos/albums", s.admin(s.photosAlbumCreate))
-	mux.Handle("PATCH /api/v1/photos/albums/{id}", s.admin(s.photosAlbumRename))
-	mux.Handle("DELETE /api/v1/photos/albums/{id}", s.admin(s.photosAlbumDelete))
-	mux.Handle("POST /api/v1/photos/albums/{id}/items", s.admin(s.photosAlbumItems))
-	mux.Handle("PUT /api/v1/photos/albums/{id}/cover", s.admin(s.photosAlbumCover))
-	mux.Handle("GET /api/v1/photos/info", s.admin(s.photosInfo))
-	mux.Handle("GET /api/v1/photos/trash", s.admin(s.photosTrash))
-	mux.Handle("POST /api/v1/photos/trash/restore", s.admin(s.touchIndex(s.photosRestore)))
-	mux.Handle("POST /api/v1/photos/trash/purge", s.admin(s.touchIndex(s.photosPurge)))
+	mux.Handle("POST /api/v1/photos/favorite", s.authed(s.photosFavorite))
+	mux.Handle("POST /api/v1/photos/delete", s.authed(s.touchIndex(s.photosDelete)))
+	mux.Handle("GET /api/v1/photos/albums", s.authed(s.photosAlbums))
+	mux.Handle("POST /api/v1/photos/albums", s.authed(s.photosAlbumCreate))
+	mux.Handle("PATCH /api/v1/photos/albums/{id}", s.authed(s.photosAlbumRename))
+	mux.Handle("DELETE /api/v1/photos/albums/{id}", s.authed(s.photosAlbumDelete))
+	mux.Handle("POST /api/v1/photos/albums/{id}/items", s.authed(s.photosAlbumItems))
+	mux.Handle("PUT /api/v1/photos/albums/{id}/cover", s.authed(s.photosAlbumCover))
+	mux.Handle("GET /api/v1/photos/info", s.authed(s.photosInfo))
+	mux.Handle("GET /api/v1/photos/trash", s.authed(s.photosTrash))
+	mux.Handle("POST /api/v1/photos/trash/restore", s.authed(s.touchIndex(s.photosRestore)))
+	mux.Handle("POST /api/v1/photos/trash/purge", s.authed(s.touchIndex(s.photosPurge)))
 
 	// AI Assistant. Providers hold API keys, so configuring them is admin-only;
 	// chatting and personal memory are per-user.

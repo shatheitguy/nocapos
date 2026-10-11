@@ -38,6 +38,10 @@ export interface Sharing {
   smb: boolean;
   webdav: boolean;
   shares: NetShare[];
+  /** People have their own access to folders: the shared account is off. */
+  per_user: boolean;
+  /** Samba can run here (native Linux, installed). */
+  samba_ready: boolean;
 }
 
 export interface NewDrive {

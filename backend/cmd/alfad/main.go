@@ -36,6 +36,7 @@ import (
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/scripts"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
@@ -214,6 +215,39 @@ func serve() error {
 	go backups.RunScheduler(ctx)
 	netDrives := netdrive.NewManager(st, box, fsvc, cfg.DataDir, log)
 	go netDrives.Run(ctx) // reconnect saved network drives
+
+	// Per-person spaces: homes, shared folders with permissions, app access.
+	userSpaces, err := spaces.New(ctx, st, fsvc, log)
+	if err != nil {
+		return err
+	}
+	if dir.Mode() == accounts.ModeSystem {
+		// Every person is a Linux user: their home is their Linux home.
+		userSpaces.SetHomes(spaces.LinuxHomes{Dir: "/home", Lookup: func(name string) (string, bool) {
+			a, err := dir.Lookup(context.Background(), name)
+			if err != nil {
+				return "", false
+			}
+			return a.Home, true
+		}})
+	}
+	userSpaces.SetPeople(func(ctx context.Context) ([]spaces.Person, error) {
+		list, err := dir.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]spaces.Person, 0, len(list))
+		for _, a := range list {
+			out = append(out, spaces.Person{Name: a.Username, Admin: a.Role == store.RoleAdmin, Disabled: a.Disabled})
+		}
+		return out, nil
+	})
+	netDrives.UseSpaces(userSpaces, svc.CheckPassword)
+	go func() {
+		if err := netDrives.ApplySamba(ctx); err != nil {
+			log.Warn("sharing: update samba", "err", err)
+		}
+	}()
 	cloud := cloudimport.NewManager(st, box, fsvc, cfg.DataDir, log)
 	go cloud.RunScheduler(ctx)
 
@@ -253,6 +287,7 @@ func serve() error {
 		Photos:    photoLib,
 		Backup:    backups,
 		NetDrives: netDrives,
+		Spaces:    userSpaces,
 		Cloud:     cloud,
 		Storage:   storageMgr,
 		VMs:       vms,
