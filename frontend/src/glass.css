@@ -302,8 +302,33 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-tuned] .window { --b: 0.66; }
 :root[data-tuned] :is(.widget, .home-search) { --b: 0.4; }
 :root[data-tuned] :is(.dock, .tray, .nb.mac, .nc-card.mac, .nc-peek, .nc-none) { --b: 0.5; }
-:root[data-tuned] :is(.menubar, .toast, .update-ready, .nc-pill, .nc-round, .nb-x) { --b: 0.7; }
+:root[data-tuned] :is(.toast, .update-ready, .nc-pill, .nc-round, .nb-x) { --b: 0.7; }
 :root[data-tuned] :is(.spotlight, .context-menu, .popover, .dialog, .nb.windows, .nc.windows) { --b: 0.8; }
-:root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .menubar, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
+:root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
   background: color-mix(in srgb, var(--tint) calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%), transparent) !important;
 }
+
+/* Search fields are a pill with an icon and a bare input: the input inside
+   must not draw its own glass box. */
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input,
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input:focus {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* ---------- menu bar ----------
+   No bar: the menu bar's items sit straight on the wallpaper, with a soft
+   shadow so they stay readable. At Solid transparency it gets a solid bar. */
+:root[data-ui='glass']:not([data-solid]) .menubar {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+:root[data-ui='glass']:not([data-solid]) .menubar svg { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }

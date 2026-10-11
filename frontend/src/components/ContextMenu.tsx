@@ -7,11 +7,17 @@ export interface MenuItem {
   icon?: IconName;
   danger?: boolean;
   disabled?: boolean;
+  /** Draw a separator line above this item. */
+  divider?: boolean;
   onClick: () => void;
 }
 
-/** A lightweight right-click menu, positioned at (x, y) and clamped to the viewport. */
-export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuItem[]; onClose: () => void }) {
+/**
+ * A lightweight right-click menu, positioned at (x, y) and clamped to the
+ * viewport. With `above`, y is where the menu's bottom edge goes (menus that
+ * open upwards from the taskbar).
+ */
+export function ContextMenu({ x, y, items, onClose, above = false }: { x: number; y: number; items: MenuItem[]; onClose: () => void; above?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
 
@@ -20,9 +26,9 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
     if (!el) return;
     const r = el.getBoundingClientRect();
     const nx = Math.min(x, window.innerWidth - r.width - 8);
-    const ny = Math.min(y, window.innerHeight - r.height - 8);
+    const ny = above ? y - r.height : Math.min(y, window.innerHeight - r.height - 8);
     setPos({ x: Math.max(8, nx), y: Math.max(8, ny) });
-  }, [x, y]);
+  }, [x, y, above]);
 
   useEffect(() => {
     // Close on an outside press, but ignore presses that land inside the menu
@@ -50,7 +56,8 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
       onPointerDown={(e) => e.stopPropagation()}
       role="menu"
     >
-      {items.map((it, i) => (
+      {items.map((it, i) => [
+        it.divider && i > 0 ? <hr key={`d${i}`} className="context-sep" /> : null,
         <button
           key={i}
           type="button"
@@ -65,8 +72,8 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
         >
           {it.icon && <Icon name={it.icon} size={15} />}
           <span>{it.label}</span>
-        </button>
-      ))}
+        </button>,
+      ])}
     </div>,
     document.body,
   );
