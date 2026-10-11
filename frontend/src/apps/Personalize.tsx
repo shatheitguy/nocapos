@@ -3,6 +3,7 @@ import { AccentPicker } from '../components/AccentPicker';
 import { Icon } from '../components/Icon';
 import {
   DEFAULT_PREFS,
+  ICON_STYLES,
   PERSONALIZATION_KEYS,
   UI_THEMES,
   WALLPAPERS,
@@ -138,6 +139,12 @@ export function Appearance() {
       <Section title="Display">
         <Slider label="Brightness" hint="Dims NoCapOS on this screen — also in the Control Center" value={prefs.brightness}
           min={30} max={100} step={1} format={(v) => `${v}%`} onChange={(brightness) => set({ brightness })} />
+      </Section>
+
+      <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad, on the desktop and in Settings. Installed apps keep their own icons.">
+        <Row label="Style">
+          <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
+        </Row>
       </Section>
 
       <Section title="Effects">

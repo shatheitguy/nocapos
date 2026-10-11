@@ -1,7 +1,9 @@
 import { useId, type ReactNode } from 'react';
+import { usePrefs } from '../state/prefs';
 
-// NoCapOS's own app icons, drawn on a 64×64 grid: a dark glass tile (soft
-// shine at the top, hairline edge) holding one glossy, colourful object.
+// NoCapOS's own app icons, drawn on a 64×64 grid: one glossy, colourful
+// object per app, shown on a dark glass tile (soft shine at the top, hairline
+// edge) or on its own; or, in the "Shapes" style, abstract shapes on colour.
 // `g` turns a local gradient name into one unique to this icon, so many
 // icons can share a page.
 
@@ -219,16 +221,52 @@ const ICONS: Record<string, Draw> = {
 // A virtual machine's screen window wears Virtual Desk's icon.
 ICONS.vmscreen = ICONS.virtualdesk;
 
-/** A NoCapOS app's icon, or null when it has none. */
+// The "Shapes" style: each app as a simple composition of shapes on its colour.
+const bg = (c: string) => <rect width="64" height="64" rx="15" fill={c} />;
+const SHAPES: Record<string, () => ReactNode> = {
+  files: () => (<>{bg('#1d4ed8')}<rect x="12" y="20" width="40" height="28" rx="4" fill="#60a5fa" /><rect x="12" y="16" width="18" height="8" rx="3" fill="#93c5fd" /></>),
+  photos: () => (<>{bg('#fff7ed')}<circle cx="24" cy="26" r="11" fill="#f97316" /><circle cx="40" cy="26" r="11" fill="#ec4899" opacity=".85" /><circle cx="32" cy="40" r="11" fill="#8b5cf6" opacity=".85" /></>),
+  appcenter: () => (<>{bg('#6d28d9')}<circle cx="32" cy="22" r="9" fill="none" stroke="#ede9fe" strokeWidth="4" /><rect x="14" y="22" width="36" height="28" rx="6" fill="#a78bfa" /></>),
+  settings: () => (<>{bg('#334155')}<circle cx="32" cy="32" r="17" fill="none" stroke="#cbd5e1" strokeWidth="6" strokeDasharray="7 4" /><circle cx="32" cy="32" r="6" fill="#f8fafc" /></>),
+  monitor: () => (<>{bg('#9f1239')}{[14, 26, 38].map((x, i) => <rect key={x} x={x} y={40 - i * 10} width="9" height={12 + i * 10} rx="3" fill="#fda4af" opacity={0.6 + i * 0.2} />)}</>),
+  terminal: () => (<>{bg('#020617')}<rect x="14" y="20" width="12" height="12" rx="2" fill="#22c55e" /><rect x="28" y="34" width="22" height="6" rx="3" fill="#22c55e" opacity=".6" /><rect x="14" y="44" width="30" height="4" rx="2" fill="#22c55e" opacity=".3" /></>),
+  assistant: () => (<>{bg('#7c3aed')}<path d="M29 13c1.5 9 5 12.5 14 14-9 1.5-12.5 5-14 14-1.5-9-5-12.5-14-14 9-1.5 12.5-5 14-14Z" fill="#f5d0fe" /><circle cx="46" cy="44" r="5" fill="#fde68a" /></>),
+  backups: () => (<>{bg('#b45309')}<circle cx="32" cy="32" r="17" fill="none" stroke="#fde68a" strokeWidth="6" opacity=".45" /><path d="M32 15a17 17 0 0 1 17 17" fill="none" stroke="#fde68a" strokeWidth="6" strokeLinecap="round" /><circle cx="32" cy="32" r="5" fill="#fff7ed" /></>),
+  storage: () => (<>{bg('#0f766e')}{[14, 27, 40].map((y, i) => <rect key={y} x="13" y={y} width="38" height="10" rx="5" fill="#5eead4" opacity={1 - i * 0.25} />)}</>),
+  containers: () => (<>{bg('#1e3a8a')}<rect x="13" y="13" width="17" height="17" rx="3" fill="#60a5fa" /><rect x="34" y="13" width="17" height="17" rx="3" fill="#93c5fd" /><rect x="13" y="34" width="17" height="17" rx="3" fill="#93c5fd" /><rect x="34" y="34" width="17" height="17" rx="3" fill="#dbeafe" /></>),
+  browser: () => (<>{bg('#c2410c')}<circle cx="32" cy="32" r="18" fill="#fdba74" /><path d="M32 14a18 18 0 0 1 0 36Z" fill="#fff7ed" opacity=".7" /></>),
+  remotedesktop: () => (<>{bg('#3730a3')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#a5b4fc" /><path d="m34 30 14 6-6 2 3 6-3 1.5-3-6-5 4Z" fill="#fff" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#a5b4fc" /></>),
+  virtualdesk: () => (<>{bg('#0e7490')}<rect x="22" y="14" width="28" height="20" rx="4" fill="#67e8f9" opacity=".6" /><rect x="14" y="24" width="28" height="20" rx="4" fill="#cffafe" /><rect x="24" y="48" width="8" height="4" rx="2" fill="#cffafe" /></>),
+  scripts: () => (<>{bg('#3f6212')}<path d="M22 16v32l26-16Z" fill="#bef264" /><rect x="14" y="44" width="16" height="5" rx="2.5" fill="#ecfccb" opacity=".6" /></>),
+  viewer: () => (<>{bg('#475569')}<rect x="16" y="11" width="32" height="42" rx="5" fill="#e2e8f0" />{[21, 28, 35, 42].map((y, i) => <rect key={y} x="22" y={y} width={i === 3 ? 12 : 20} height="3" rx="1.5" fill="#64748b" />)}</>),
+  logs: () => (<>{bg('#111827')}{[16, 25, 34, 43].map((y, i) => <rect key={y} x="14" y={y} width={[36, 26, 32, 18][i]} height="5" rx="2.5" fill={['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][i]} />)}</>),
+};
+SHAPES.vmscreen = SHAPES.virtualdesk;
+
+/**
+ * A NoCapOS app's icon in the chosen style, or null when it has none:
+ * "tiles" puts the object on a dark glass tile, "objects" shows it on its
+ * own, slightly larger, and "shapes" draws the app as shapes on its colour.
+ */
 export function AppArt({ id, size }: { id?: string; size: number }) {
   const uid = useId().replace(/:/g, '');
+  const style = usePrefs((s) => s.iconStyle);
   const draw = id ? ICONS[id] : undefined;
-  if (!draw) return null;
+  if (!draw || !id) return null;
   const g: G = (name) => `${uid}-${name}`;
+  const shape = style === 'shapes' ? SHAPES[id] : undefined;
   return (
     <svg className="app-art3d" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <Tile g={g} />
-      {draw(g)}
+      {shape ? (
+        shape()
+      ) : style === 'objects' ? (
+        <g transform="translate(32 32) scale(1.16) translate(-32 -32)">{draw(g)}</g>
+      ) : (
+        <>
+          <Tile g={g} />
+          {draw(g)}
+        </>
+      )}
     </svg>
   );
 }

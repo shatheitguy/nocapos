@@ -53,6 +53,13 @@ export type IconSize = 'small' | 'medium' | 'large';
 export type TitleButtons = 'right' | 'left';
 export type TitleDoubleClick = 'maximize' | 'minimize' | 'none';
 export type WeekStart = 'sun' | 'mon';
+/** NoCapOS app icons: dark glass tiles, free-standing objects, or abstract shapes on colour. */
+export type IconStyle = 'tiles' | 'objects' | 'shapes';
+export const ICON_STYLES: { id: IconStyle; label: string }[] = [
+  { id: 'tiles', label: 'Glass tiles' },
+  { id: 'objects', label: 'Objects' },
+  { id: 'shapes', label: 'Shapes' },
+];
 
 
 /** Whole-OS visual themes: frosted Glass (default), the original look, and the Cyber-Deck FUI theme. */
@@ -80,6 +87,7 @@ export interface PrefValues {
   accent: string;
   reduceTransparency: boolean; // kept in step with transparency === 0
   transparency: number; // panels: 0 = solid … 100 = full glass
+  iconStyle: IconStyle; // how NoCapOS's own app icons look
   reduceMotion: boolean;
   squareCorners: boolean;
   clock24: boolean;
@@ -129,6 +137,7 @@ export const DEFAULT_PREFS: PrefValues = {
   accent: '', // '' = the theme's own accent
   reduceTransparency: false,
   transparency: 100,
+  iconStyle: 'tiles',
   reduceMotion: false,
   squareCorners: false,
   clock24: false,
@@ -163,7 +172,7 @@ export const DEFAULT_PREFS: PrefValues = {
 
 /** The look-and-feel subset that "Reset personalization" restores. */
 export const PERSONALIZATION_KEYS: (keyof PrefValues)[] = [
-  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'reduceTransparency', 'transparency', 'reduceMotion', 'squareCorners',
+  'theme', 'uiTheme', 'fxGrid', 'wallpaper', 'wallpaperDim', 'accent', 'iconStyle', 'reduceTransparency', 'transparency', 'reduceMotion', 'squareCorners',
   'dockPosition', 'dockSize', 'dockMagnify', 'dockAutoHide', 'dockRecents',
   'dockIndicators', 'widgets', 'iconSize', 'iconLabels', 'iconSnap', 'titleButtons', 'titleDoubleClick',
 ];
@@ -191,6 +200,8 @@ function load(): Partial<PrefValues> {
     }
     // The old on/off switch becomes the far end of the Transparency slider.
     if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
+    // Icon styles that no longer exist (older looks) fall back to the default.
+    if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
     // One-time move to the NoCap brand look for people still on the old defaults.
@@ -331,6 +342,7 @@ export function applyPrefs(p: PrefValues) {
   // between makes the panels proportionally more opaque (see glass.css).
   const clear = Math.min(100, Math.max(0, p.transparency));
   root.toggleAttribute('data-solid', clear === 0);
+  root.dataset.icons = p.iconStyle;
   root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
   root.style.setProperty('--clear', String(clear / 100));
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
