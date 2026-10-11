@@ -19,7 +19,6 @@ import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggl
 import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
-import { SharingSettings } from './SharingSettings';
 import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings } from './SettingsSections';
 import { CATS, ENTRIES, SUBS, type Cat, type Sub } from './settingsPages';
 
@@ -29,7 +28,7 @@ import { CATS, ENTRIES, SUBS, type Cat, type Sub } from './settingsPages';
 
 
 /** Older links ("dock", "focus", …) still land in the right place. */
-const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general', shares: 'sharing', 'file-sharing': 'sharing' };
+const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general' };
 function resolve(id: string | undefined): { cat: Cat; sub: Sub | null } | null {
   if (!id) return null;
   const e = ENTRIES.find((x) => x.id === (ALIASES[id] ?? id));
@@ -49,7 +48,7 @@ const SIDEBAR: { title?: string; cats: Cat[] }[] = [
   { cats: ['network', 'general'] },
   { title: 'Personalization', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
   { title: 'Notifications & Sound', cats: ['notifications', 'sound'] },
-  { title: 'Security & Users', cats: ['lock', 'security', 'users', 'sharing'] },
+  { title: 'Security & Users', cats: ['lock', 'security', 'users'] },
 ];
 
 export function Settings({ win }: { win: WinState }) {
@@ -294,8 +293,6 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <YourAccount />;
     case 'users':
       return <UsersSettings isAdmin={isAdmin} withAccount={false} />;
-    case 'sharing':
-      return isAdmin ? <SharingSettings /> : null;
     default:
       return null;
   }

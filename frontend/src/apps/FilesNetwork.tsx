@@ -7,7 +7,8 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import type { FileRoot } from '../api/files';
 import { CloudImportsPanel } from './CloudImports';
-import { ConnectServerPanel, FileSharingPanel } from './NetworkDrives';
+import { ConnectServerPanel } from './NetworkDrives';
+import { SharingSettings } from './SharingSettings';
 import { Toggle } from './Personalize';
 
 // Network drives and sharing, inside Files: the sidebar's Network section,
@@ -117,7 +118,7 @@ export function NetworkSections({
 
   return (
     <>
-      {shares.length > 0 && (
+      {(
         <SideSection
           title="Shared folders"
           action={
@@ -147,6 +148,12 @@ export function NetworkSections({
               </button>
             );
           })}
+          {!shares.length && (
+            <button type="button" className="fs-item fs-hint" onClick={() => setDialog('sharing')}>
+              <Icon name="plus" size={15} />
+              <span className="fs-name">File Sharing…</span>
+            </button>
+          )}
         </SideSection>
       )}
 
@@ -223,7 +230,7 @@ export function NetworkSections({
             void onChanged();
           }}
         >
-          <FileSharingPanel />
+          <SharingSettings />
         </FilesModal>
       )}
     </>
@@ -295,7 +302,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
             <Icon name="check" size={22} />
           </span>
           <p>
-            Shared. People sign in with their own NoCapOS user name and password; choose who may use it in Settings → File Sharing (until then, only administrators can).
+            Shared. People sign in with their own NoCapOS user name and password; choose who may use it in Files → File Sharing (until then, only administrators can).
           </p>
           {addrs.map((a) => (
             <button key={a} type="button" className="ghost fn-addr" onClick={() => copy(a)}>
