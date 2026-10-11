@@ -1604,6 +1604,10 @@ button.danger-solid { background: var(--bad); color: #fff; }
 .share-head > .settings-row-text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .share-head > .user-actions { flex: none; display: flex; align-items: center; margin-left: auto; }
 .user-badges .badge { white-space: nowrap; }
+/* Forms inside a shared folder: text keeps its width, text boxes sit under their label. */
+.share-form .settings-row-text { flex: 1 1 auto; min-width: 0; }
+.share-form .settings-row.stacked .settings-row-control { width: 100%; }
+.share-form .settings-row.stacked .settings-row-control input { width: 100%; box-sizing: border-box; }
 .share-head > svg { flex: none; margin-top: 3px; color: var(--accent); }
 .share-head .settings-row-text { flex: 1; min-width: 0; }
 .share-form { width: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
