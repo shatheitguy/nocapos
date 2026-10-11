@@ -219,6 +219,26 @@ const ICONS: Record<string, Draw> = {
       <path d="m29 23 10 6-4.4 1.2 2.6 5-2.2 1.1-2.6-5L29 34Z" fill="#fff" />
     </>
   ),
+  virtualdesk: (g) => (
+    <>
+      <defs>
+        {tile(g('bg'), '#22d3ee', '#1e40af')}
+        {vgrad(g('back'), '--icon-soft-a', '#cffafe', '--icon-soft-b', '#67e8f9')}
+        {lin(g('frame'), '#ffffff', '#e2e8f0')}
+        {lin(g('screen'), '#818cf8', '#4338ca')}
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${g('bg')})`} />
+      <rect x="25" y="10" width="29" height="20" rx="3.5" fill="#000" opacity=".14" transform="translate(0 2)" />
+      <rect x="25" y="10" width="29" height="20" rx="3.5" fill={`url(#${g('back')})`} />
+      <rect x="28.5" y="13.5" width="14" height="3" rx="1.5" fill={ink('#0891b2')} opacity=".6" />
+      <rect x="9" y="19" width="36" height="25" rx="4" fill="#000" opacity=".18" transform="translate(0 2)" />
+      <rect x="9" y="19" width="36" height="25" rx="4" fill={`url(#${g('frame')})`} />
+      <rect x="12.5" y="22.5" width="29" height="18" rx="2" fill={`url(#${g('screen')})`} />
+      <path d="M24 26.5v10l8.6-5Z" fill="#fff" />
+      <path d="M23 44h8l1.8 5H21.2Z" fill={ink('#cbd5e1')} />
+      <rect x="17" y="49" width="20" height="3.4" rx="1.7" fill="#e2e8f0" />
+    </>
+  ),
   scripts: (g) => (
     <>
       <defs>
@@ -233,6 +253,9 @@ const ICONS: Record<string, Draw> = {
     </>
   ),
 };
+
+// A virtual machine's screen window wears Virtual Desk's icon.
+ICONS.vmscreen = ICONS.virtualdesk;
 
 /** A NoCapOS app's illustrated icon, or null when it has none. */
 export function AppArt({ id, size }: { id?: string; size: number }) {

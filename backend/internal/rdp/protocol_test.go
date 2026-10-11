@@ -65,3 +65,23 @@ func TestHandshakeError(t *testing.T) {
 		t.Fatalf("want guacd error, got %v", err)
 	}
 }
+
+func TestHandshakeVNC(t *testing.T) {
+	server := Encode("args", "VERSION_1_5_0", "hostname", "port", "password", "color-depth", "cursor") + Encode("ready", "$vm")
+	var sent bytes.Buffer
+	id, err := Handshake(&sent, NewReader(strings.NewReader(server)), Params{
+		Protocol: "vnc", Hostname: "127.0.0.1", Port: 5901, Width: 1024, Height: 768,
+	})
+	if err != nil || id != "$vm" {
+		t.Fatalf("Handshake = %q, %v", id, err)
+	}
+	out := sent.String()
+	for _, frag := range []string{
+		Encode("select", "vnc"),
+		Encode("connect", "VERSION_1_5_0", "127.0.0.1", "5901", "", "24", "remote"),
+	} {
+		if !strings.Contains(out, frag) {
+			t.Fatalf("client output missing %q in %q", frag, out)
+		}
+	}
+}

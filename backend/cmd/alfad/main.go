@@ -41,6 +41,7 @@ import (
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/tlsutil"
+	"alfaos/alfad/internal/vm"
 	"alfaos/alfad/internal/webapps"
 )
 
@@ -227,6 +228,23 @@ func serve() error {
 	storageMgr := storage.NewManager(storage.Options{Backend: storageBackend, Store: st, Files: fsvc, DataDir: cfg.DataDir, Log: log, Demo: storageDemo})
 	go storageMgr.Run(ctx)
 
+	// Virtual Desk. ALFA_VM_DEMO=1 swaps in sample machines kept in memory
+	// for trying the app anywhere; it never runs a real machine.
+	vmDemo := os.Getenv("ALFA_VM_DEMO") == "1"
+	vmDir := vm.Dir(cfg.DataDir, vmDemo)
+	var vmBackend vm.Backend = vm.NewHost(vmDir)
+	if vmDemo {
+		vmBackend = vm.NewDemo(vmDir)
+		log.Warn("virtual desk: demo mode, showing sample virtual machines")
+	}
+	vms := vm.NewManager(vm.Options{Backend: vmBackend, Dir: vmDir, Log: log, Demo: vmDemo, Roots: func() []string {
+		var out []string
+		for _, r := range fsvc.Roots() {
+			out = append(out, r.Path)
+		}
+		return out
+	}})
+
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
@@ -237,6 +255,7 @@ func serve() error {
 		NetDrives: netDrives,
 		Cloud:     cloud,
 		Storage:   storageMgr,
+		VMs:       vms,
 		Stacks:    stacks.NewManager(cfg.DataDir, cfg.DockerHost, log),
 		FileJobs:  files.NewJobs(fsvc),
 	})
