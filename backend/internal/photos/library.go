@@ -148,7 +148,23 @@ func (l *Library) EnsureFolder() (root string, err error) {
 // Photos not yet dated are dated in the background (scanning reports that);
 // meanwhile they sort by file time.
 func (l *Library) List(ctx context.Context, userID string) (items []Item, scanning bool, err error) {
-	hits := l.index.Under(Folder, isMedia)
+	return l.list(ctx, userID, l.index.Under(Folder, isMedia), true)
+}
+
+// HitsUnder lists the photos and videos inside dir of one fixed location.
+func (l *Library) HitsUnder(root, dir string) []files.Hit {
+	return l.index.UnderDir(root, dir, isMedia)
+}
+
+// ListHits is List over a chosen set of files (one person's own Photos
+// folders, re-rooted to the locations they can open).
+func (l *Library) ListHits(ctx context.Context, userID string, hits []files.Hit) ([]Item, bool, error) {
+	return l.list(ctx, userID, hits, false)
+}
+
+// list builds the library from hits. Only a full listing (prune) may forget
+// cached facts and thumbnails of files it doesn't include.
+func (l *Library) list(ctx context.Context, userID string, hits []files.Hit, prune bool) (items []Item, scanning bool, err error) {
 	metas, err := l.store.PhotoMetas(ctx)
 	if err != nil {
 		return nil, false, err
@@ -179,7 +195,7 @@ func (l *Library) List(ctx context.Context, userID string) (items []Item, scanni
 	l.mu.Lock()
 	if len(todo) > 0 && !l.scanning {
 		l.scanning = true
-		go l.scan(todo, hits)
+		go l.scan(todo, hits, prune)
 	}
 	scanning = l.scanning
 	l.mu.Unlock()
@@ -187,7 +203,7 @@ func (l *Library) List(ctx context.Context, userID string) (items []Item, scanni
 }
 
 // scan dates the given files and forgets cached facts about deleted ones.
-func (l *Library) scan(todo, all []files.Hit) {
+func (l *Library) scan(todo, all []files.Hit, prune bool) {
 	defer func() {
 		l.mu.Lock()
 		l.scanning = false
@@ -210,6 +226,9 @@ func (l *Library) scan(todo, all []files.Hit) {
 		}
 	}
 	flush()
+	if !prune {
+		return
+	}
 	keep := make(map[string]bool, len(all))
 	for _, h := range all {
 		keep[h.Root+"\x00"+h.Path] = true

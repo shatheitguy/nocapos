@@ -9,6 +9,7 @@ import { useClock, usePoll } from '../lib/hooks';
 import { useTimePrefs, zoned } from '../lib/time';
 import { openApp } from '../apps/meta';
 import { flushSaves, saveLater } from '../lib/saveLater';
+import { userKey } from '../state/prefs';
 import { useSystem } from '../state/system';
 
 // ---- Analog clock ----
@@ -53,7 +54,7 @@ export function NotesWidget() {
   useEffect(() => {
     flushSaves(); // a just-unmounted copy may still have a write queued
     try {
-      setText(localStorage.getItem('alfa.notes') ?? '');
+      setText(localStorage.getItem(userKey('alfa.notes')) ?? '');
     } catch {
       /* ignore */
     }
@@ -70,7 +71,7 @@ export function NotesWidget() {
         onChange={(e) => {
           const v = e.target.value;
           setText(v);
-          saveLater('alfa.notes', () => v, 300);
+          saveLater(userKey('alfa.notes'), () => v, 300);
         }}
       />
     </div>

@@ -14,6 +14,9 @@ import { appMenuItems } from './Shelf';
 
 const OPENS_WINDOW = new Set(['Open', 'Show', 'New window']);
 
+/** Only administrators can remove apps, so only they get wiggle mode. */
+const noWiggle = () => {};
+
 export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -148,10 +151,9 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
               <span>{a.title}</span>
             </button>
           ))}
-          {isAdmin &&
-            storeApps.map((a, i) => (
-              <StoreTile key={`store-${a.id}`} app={a} index={i} jiggle={jiggle} setJiggle={setJiggle} size={56} onOpened={onClose} buttonClass="launcher-app" />
-            ))}
+          {storeApps.map((a, i) => (
+            <StoreTile key={`store-${a.id}`} app={a} index={i} jiggle={jiggle} setJiggle={isAdmin ? setJiggle : noWiggle} size={56} onOpened={onClose} buttonClass="launcher-app" />
+          ))}
           {!apps.length && !shownFolders.length && !storeApps.length && <p className="muted">No apps match “{q}”.</p>}
         </div>
         <p className="launcher-tip muted small">{jiggle ? 'Tap ✕ to uninstall an app · Esc or click anywhere to finish' : 'Tip: drop an app onto another to make a folder, or drag it to the Dock or Desktop · click and hold an installed app to remove it'}</p>

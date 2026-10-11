@@ -8,6 +8,7 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { useWM } from '../state/windows';
 import { Choice, Row, Section } from './Personalize';
+import { PersonSpacesPanel } from './UsersSpaces';
 
 // Settings → Users & Roles. On a native Linux install these are the machine's
 // real Linux accounts; in Docker / on Windows they're NoCapOS accounts.
@@ -100,6 +101,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
   const [data, setData] = useState<PeopleList | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resetFor, setResetFor] = useState<string | null>(null);
+  const [spacesFor, setSpacesFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = async () => {
@@ -180,8 +182,10 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                 {p.you && <span className="badge you">You</span>}
                 {p.disabled && <span className="badge off">Disabled</span>}
                 {p.totp && <span className="badge">2FA</span>}
+                {p.access === 'files' && <span className="badge" title="Can’t sign in to the desktop; uses shared folders over the network">File sharing only</span>}
                 {linux && p.uid >= 0 && <span className="muted small">uid {p.uid} · {p.home}</span>}
               </span>
+              {spacesFor === p.username && <PersonSpacesPanel person={p} onChanged={load} />}
               {resetFor === p.username && (
                 <ResetPassword
                   name={p.username}
@@ -205,6 +209,10 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                 <option value="admin">Administrator</option>
                 <option value="user">Standard</option>
               </select>
+              <button type="button" className={`icon-btn neutral ${spacesFor === p.username ? 'on' : ''}`} title="Access, shared folders and apps" aria-label={`Access, shared folders and apps for ${p.username}`}
+                onClick={() => setSpacesFor(spacesFor === p.username ? null : p.username)}>
+                <Icon name="folder" size={15} />
+              </button>
               <button type="button" className="icon-btn neutral" title="Reset password" aria-label={`Reset password for ${p.username}`}
                 onClick={() => setResetFor(resetFor === p.username ? null : p.username)}>
                 <Icon name="key" size={15} />
@@ -256,6 +264,7 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [role, setRole] = useState<'admin' | 'user'>('user');
+  const [access, setAccess] = useState<'desktop' | 'files'>('desktop');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -268,7 +277,7 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
     if (pw.length < 10) return setErr('Passwords need at least 10 characters.');
     if (pw !== pw2) return setErr("The passwords don't match.");
     setBusy(true);
-    const r = await usersApi.create({ username, full_name: fullName || undefined, password: pw, role });
+    const r = await usersApi.create({ username, full_name: fullName || undefined, password: pw, role, access: role === 'admin' ? 'desktop' : access });
     setBusy(false);
     if (!r.ok) return setErr(r.error ?? 'Could not add that person');
     toast('success', `${username} was added`, linux ? 'A Linux account and home folder were created.' : undefined);
@@ -277,6 +286,7 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
     setPw('');
     setPw2('');
     setRole('user');
+    setAccess('desktop');
     onAdded();
   };
 
@@ -301,6 +311,11 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
         <Row label="Role" hint={role === 'admin' ? (linux ? 'Full control of NoCapOS, and sudo on this machine' : 'Full control of NoCapOS') : 'Uses apps; can’t manage the system'}>
           <Choice value={role} onChange={setRole} options={[{ id: 'user', label: 'Standard' }, { id: 'admin', label: 'Administrator' }]} />
         </Row>
+        {role === 'user' && (
+          <Row label="Access" hint={access === 'files' ? 'Can’t sign in here; connects to their home and shared folders from a computer or phone (SMB / WebDAV)' : 'Signs in to the NoCapOS desktop, and can use file sharing too'}>
+            <Choice value={access} onChange={setAccess} options={[{ id: 'desktop', label: 'Desktop' }, { id: 'files', label: 'File sharing only' }]} />
+          </Row>
+        )}
         <div className="user-add-foot">
           {err && <span className="error small">{err}</span>}
           <button type="submit" disabled={busy}>

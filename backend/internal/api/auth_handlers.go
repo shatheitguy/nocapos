@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -123,13 +124,39 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "")
+		s.keepSharingPassword(sess.User.Username, req.Password)
 		s.writeSession(w, http.StatusOK, sess)
+	case errors.Is(err, auth.ErrFilesOnly):
+		// The password was right: keep their network sign-in working.
+		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "file sharing only")
+		s.keepSharingPassword(req.Username, req.Password)
+		writeError(w, http.StatusForbidden, "files_only", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "invalid credentials")
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 	default:
 		s.internalError(w, r, err)
 	}
+}
+
+// keepSharingPassword refreshes a person's Samba password from a verified
+// sign-in, so Linux users made outside NoCapOS can use SMB too. It runs in
+// the background and only when SMB sharing is on.
+func (s *Server) keepSharingPassword(username, password string) {
+	if s.NetDrives == nil {
+		return
+	}
+	sh, err := s.NetDrives.Sharing(context.Background())
+	if err != nil || !sh.SMB || !sh.SambaReady {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := s.NetDrives.SyncUser(ctx, username, password); err != nil {
+			s.Log.Warn("sharing: set Samba password", "user", username, "err", err)
+		}
+	}()
 }
 
 func (s *Server) authRefresh(w http.ResponseWriter, r *http.Request) {

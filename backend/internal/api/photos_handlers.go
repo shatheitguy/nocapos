@@ -4,29 +4,69 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/photos"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
 )
 
 // Photos: the pictures and videos in the Photos folder of each storage
-// location. Same access as Files (admin only). Thumbnails and originals are
-// loaded by <img>/<video>, which can't send the Bearer token, so the app gets
-// one ticket per location scoped to its Photos folder.
+// location. Administrators see every location's Photos folder; everyone
+// else sees the Photos folder in their home and in the shared folders they
+// can read, with the same access checks as Files. Thumbnails and originals
+// are loaded by <img>/<video>, which can't send the Bearer token, so the app
+// gets one ticket per location scoped to its Photos folder.
 
 const photoTicketTTL = time.Hour
 
-func (s *Server) photosList(w http.ResponseWriter, r *http.Request) {
-	root, err := s.Photos.EnsureFolder()
-	if err != nil {
-		s.internalError(w, r, err)
-		return
+// errNoAccess: the person can't use that location (answered with 403).
+var errNoAccess = errors.New("you don't have access to that")
+
+// photoHits is a non-admin's library: their home's Photos folder and the
+// Photos folders of the shared folders they can read, re-rooted there.
+func (s *Server) photoHits(v spaces.Viewer) []files.Hit {
+	var hits []files.Hit
+	for _, l := range s.Spaces.Locations(v) {
+		if !s.Spaces.Access(v, l.ID, photos.Folder).CanRead() {
+			continue
+		}
+		// Found through the index of the fixed location that holds it.
+		if root, rel, ok := s.Spaces.IndexPlace(filepath.Join(l.Path, photos.Folder)); ok {
+			hits = append(hits, s.Photos.HitsUnder(root, strings.TrimPrefix(rel, "/"))...)
+		}
 	}
-	items, scanning, err := s.Photos.List(r.Context(), userFrom(r.Context()).ID)
+	return s.Spaces.MapHits(v, hits)
+}
+
+func (s *Server) photosList(w http.ResponseWriter, r *http.Request) {
+	v := s.viewer(r)
+	var (
+		root     string
+		items    []photos.Item
+		scanning bool
+		err      error
+	)
+	if v.Admin || s.Spaces == nil {
+		if root, err = s.Photos.EnsureFolder(); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+		items, scanning, err = s.Photos.List(r.Context(), userFrom(r.Context()).ID)
+	} else {
+		home, herr := s.Spaces.EnsureHome(v.Name)
+		if herr != nil {
+			s.internalError(w, r, herr)
+			return
+		}
+		root = spaces.HomeRootID(v.Name)
+		_ = os.MkdirAll(filepath.Join(home, photos.Folder), 0o750)
+		items, scanning, err = s.Photos.ListHits(r.Context(), userFrom(r.Context()).ID, s.photoHits(v))
+	}
 	if err != nil {
 		s.internalError(w, r, err)
 		return
@@ -44,13 +84,26 @@ func (s *Server) photosTickets(w http.ResponseWriter, r *http.Request) {
 	uid := userFrom(r.Context()).ID
 	out, trash := map[string]string{}, map[string]string{}
 	var exp time.Time
-	for _, root := range s.Files.Roots() {
-		if root.ID == "system" {
-			continue
+	var ids []string
+	v := s.viewer(r)
+	if v.Admin {
+		for _, root := range s.Files.Roots() {
+			if root.ID != "system" {
+				ids = append(ids, root.ID)
+			}
 		}
-		out[root.ID], exp = s.fileTickets.issueTTL(uid, root.ID, photos.Folder, photoTicketTTL)
+	}
+	if s.Spaces != nil {
+		for _, l := range s.Spaces.Locations(v) {
+			if l.Kind != "homes" {
+				ids = append(ids, l.ID)
+			}
+		}
+	}
+	for _, id := range ids {
+		out[id], exp = s.fileTickets.issueTTL(uid, id, photos.Folder, photoTicketTTL)
 		// Recently deleted photos are shown from the recycle bin.
-		trash[root.ID], _ = s.fileTickets.issueTTL(uid, root.ID, files.RecycleDir, photoTicketTTL)
+		trash[id], _ = s.fileTickets.issueTTL(uid, id, files.RecycleDir, photoTicketTTL)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tickets": out, "trash": trash, "expires_at": exp.UTC()})
 }
@@ -68,7 +121,7 @@ func (s *Server) photosThumb(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}
-	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled {
+	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}
@@ -109,19 +162,23 @@ type photoItemsRequest struct {
 	On    bool             `json:"on"`
 }
 
-// cleanPhotoKeys validates the photos named in a request.
-func (s *Server) cleanPhotoKeys(keys []store.PhotoKey) ([]store.PhotoKey, error) {
+// cleanPhotoKeys validates the photos named in a request and checks the
+// person may read them (or, with write, change them).
+func (s *Server) cleanPhotoKeys(r *http.Request, keys []store.PhotoKey, write bool) ([]store.PhotoKey, error) {
 	if len(keys) == 0 || len(keys) > 5000 {
 		return nil, files.ErrBadPath
 	}
 	out := make([]store.PhotoKey, 0, len(keys))
 	for _, k := range keys {
-		if _, err := s.Files.Root(k.Root); err != nil {
-			return nil, err
-		}
 		rel, err := files.Clean(k.Path)
 		if err != nil || rel == "." {
 			return nil, files.ErrBadPath
+		}
+		if p := s.access(r, k.Root, rel); !p.CanRead() || (write && !p.CanWrite()) {
+			return nil, errNoAccess
+		}
+		if _, err := s.Files.Root(k.Root); err != nil {
+			return nil, err
 		}
 		out = append(out, store.PhotoKey{Root: k.Root, Path: "/" + rel})
 	}
@@ -133,7 +190,7 @@ func (s *Server) photosFavorite(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	keys, err := s.cleanPhotoKeys(req.Items)
+	keys, err := s.cleanPhotoKeys(r, req.Items, false)
 	if err != nil {
 		s.fileError(w, r, err)
 		return
@@ -151,7 +208,7 @@ func (s *Server) photosDelete(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	keys, err := s.cleanPhotoKeys(req.Items)
+	keys, err := s.cleanPhotoKeys(r, req.Items, true)
 	if err != nil {
 		s.fileError(w, r, err)
 		return
@@ -215,7 +272,7 @@ func (s *Server) photosAlbumCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.Items) > 0 {
-		keys, err := s.cleanPhotoKeys(req.Items)
+		keys, err := s.cleanPhotoKeys(r, req.Items, false)
 		if err == nil {
 			err = s.Store.AddToPhotoAlbum(r.Context(), uid, id, keys)
 		}
@@ -287,7 +344,7 @@ func (s *Server) photosAlbumItems(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	keys, err := s.cleanPhotoKeys(req.Items)
+	keys, err := s.cleanPhotoKeys(r, req.Items, false)
 	if err != nil {
 		s.fileError(w, r, err)
 		return
@@ -308,6 +365,14 @@ func (s *Server) photosAlbumItems(w http.ResponseWriter, r *http.Request) {
 // photosInfo returns the camera details of one photo.
 func (s *Server) photosInfo(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	rel, err := files.Clean(q.Get("path"))
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, q.Get("root"), false, rel) {
+		return
+	}
 	d, err := s.Photos.Info(q.Get("root"), q.Get("path"))
 	if err != nil {
 		s.fileError(w, r, err)
@@ -328,7 +393,7 @@ func (s *Server) photosAlbumCover(w http.ResponseWriter, r *http.Request) {
 	}
 	var cover *store.PhotoKey
 	if req.Path != "" {
-		keys, err := s.cleanPhotoKeys([]store.PhotoKey{req})
+		keys, err := s.cleanPhotoKeys(r, []store.PhotoKey{req}, false)
 		if err != nil {
 			s.fileError(w, r, err)
 			return
@@ -343,12 +408,47 @@ func (s *Server) photosAlbumCover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) photosTrash(w http.ResponseWriter, r *http.Request) {
-	items, err := s.Photos.Deleted(r.Context())
+	items, err := s.photoTrash(r, false)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// photoTrash lists the recently deleted photos in recycle bins this person
+// can use (with write: change).
+func (s *Server) photoTrash(r *http.Request, write bool) ([]store.PhotoTrash, error) {
+	all, err := s.Photos.Deleted(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]store.PhotoTrash, 0, len(all))
+	for _, t := range all {
+		if p := s.access(r, t.Root, files.RecycleDir); p.CanRead() && (!write || p.CanWrite()) {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// ownTrashIDs keeps the ids of deleted photos this person may restore or purge.
+func (s *Server) ownTrashIDs(r *http.Request, ids []int64) ([]int64, error) {
+	mine, err := s.photoTrash(r, true)
+	if err != nil {
+		return nil, err
+	}
+	ok := map[int64]bool{}
+	for _, t := range mine {
+		ok[t.ID] = true
+	}
+	out := []int64{}
+	for _, id := range ids {
+		if ok[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 type photoTrashRequest struct {
@@ -373,6 +473,11 @@ func (s *Server) photosRestore(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ids, err := s.ownTrashIDs(r, ids)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
 	keys, err := s.Photos.Restore(r.Context(), ids)
 	s.audit(r, userFrom(r.Context()).ID, "photos.restore", strconv.Itoa(len(keys))+" item(s)", err == nil, "from recycle bin")
 	if err != nil {
@@ -391,7 +496,12 @@ func (s *Server) photosPurge(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := s.Photos.Purge(r.Context(), ids)
+	ids, err := s.ownTrashIDs(r, ids)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	err = s.Photos.Purge(r.Context(), ids)
 	s.audit(r, userFrom(r.Context()).ID, "photos.purge", strconv.Itoa(len(ids))+" item(s)", err == nil, "deleted for good")
 	if err != nil {
 		s.fileError(w, r, err)

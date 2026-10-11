@@ -6,6 +6,7 @@ import type { MenuEntry } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
 import { NetworkSections, SideSection } from './FilesNetwork';
+import { getUser } from '../api/client';
 import { FileGlyph } from './FilesParts';
 import type { useNetwork } from './NetworkDrives';
 import type { Special } from './Files';
@@ -132,8 +133,9 @@ export function FilesSidebar({
         </button>
         {others.map((r) => (
           <button key={r.id} type="button" className={`fs-item ${inside(r.id) ? 'on' : ''}`} title={r.total ? `${fmtBytes(r.free, 0)} free of ${fmtBytes(r.total, 0)}` : r.name} onClick={() => onGo(r.id, '/')}>
-            <Icon name={r.id === 'home' ? 'user' : 'drive'} size={17} />
+            <Icon name={r.kind === 'share' ? 'network' : r.kind === 'homes' ? 'users' : r.id === 'home' ? 'user' : 'drive'} size={17} />
             <span className="fs-name">{r.name}</span>
+            {r.read_only && <span className="fs-sub" title="You can look at this folder but not change it">Read only</span>}
           </button>
         ))}
       </div>
@@ -167,6 +169,7 @@ export function FilesSidebar({
         {!favs.length && <p className="fs-empty">Drag folders here, or right-click a folder and choose Add to Favorites.</p>}
       </SideSection>
 
+      {getUser()?.role === 'admin' && (
       <NetworkSections
         drives={net.drives}
         sharing={net.sharing}
@@ -177,6 +180,7 @@ export function FilesSidebar({
         onUnshare={onUnshare}
         openMenu={openMenu}
       />
+      )}
 
       {external.length > 0 && (
         <SideSection title="External storage">

@@ -18,6 +18,7 @@ import (
 
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
 )
 
@@ -93,6 +94,8 @@ func (s *Server) fileError(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "exists", "an item with that name already exists")
 	case errors.Is(err, fs.ErrPermission):
 		writeError(w, http.StatusForbidden, "permission_denied", "permission denied by the operating system")
+	case errors.Is(err, errNoAccess):
+		writeError(w, http.StatusForbidden, "forbidden", "You don't have access to this folder.")
 	case errors.Is(err, files.ErrProtected):
 		writeError(w, http.StatusForbidden, "protected", err.Error())
 	case errors.Is(err, files.ErrChanged):
@@ -135,20 +138,37 @@ func display(rel string) string {
 // ---------- handlers ----------
 
 type rootView struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Total uint64 `json:"total"`
-	Free  uint64 `json:"free"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Total    uint64 `json:"total"`
+	Free     uint64 `json:"free"`
+	Kind     string `json:"kind,omitempty"`      // home | share | homes (per-person locations)
+	ReadOnly bool   `json:"read_only,omitempty"` // a shared folder this person can only read
 }
 
+// filesRoots lists the locations this person can open: administrators get
+// every storage location (plus everyone's homes, when allowed); everyone
+// else gets their own home and the shared folders they've been given.
 func (s *Server) filesRoots(w http.ResponseWriter, r *http.Request) {
 	out := []rootView{}
-	for _, rt := range s.Files.Roots() {
-		v := rootView{ID: rt.ID, Name: rt.Name}
-		if total, _, free, err := hardware.DiskUsage(rt.Path); err == nil {
-			v.Total, v.Free = total, free
+	v := s.viewer(r)
+	if v.Admin {
+		for _, rt := range s.Files.Roots() {
+			rv := rootView{ID: rt.ID, Name: rt.Name}
+			if total, _, free, err := hardware.DiskUsage(rt.Path); err == nil {
+				rv.Total, rv.Free = total, free
+			}
+			out = append(out, rv)
 		}
-		out = append(out, v)
+	}
+	if s.Spaces != nil {
+		for _, l := range s.Spaces.Locations(v) {
+			rv := rootView{ID: l.ID, Name: l.Name, Kind: l.Kind, ReadOnly: l.ReadOnly}
+			if total, _, free, err := hardware.DiskUsage(l.Path); err == nil {
+				rv.Total, rv.Free = total, free
+			}
+			out = append(out, rv)
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -160,12 +180,26 @@ func (s *Server) filesList(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
-	entries, err := s.Files.List(q.Get("root"), rel)
+	root := q.Get("root")
+	if !s.canUse(w, r, root, false, rel) {
+		return
+	}
+	entries, err := s.Files.List(root, rel)
 	if err != nil {
 		s.fileError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"root": q.Get("root"), "path": display(rel), "entries": entries, "unix_perms": files.UnixPerms})
+	if s.Spaces != nil && s.Spaces.HideHomes(s.viewer(r), root, rel) {
+		kept := entries[:0]
+		for _, e := range entries {
+			if e.Name != spaces.HomesDir {
+				kept = append(kept, e)
+			}
+		}
+		entries = kept
+	}
+	ro := !s.access(r, root, rel).CanWrite()
+	writeJSON(w, http.StatusOK, map[string]any{"root": root, "path": display(rel), "entries": entries, "unix_perms": files.UnixPerms, "read_only": ro})
 }
 
 func (s *Server) filesReadText(w http.ResponseWriter, r *http.Request) {
@@ -173,6 +207,9 @@ func (s *Server) filesReadText(w http.ResponseWriter, r *http.Request) {
 	rel, err := files.Clean(q.Get("path"))
 	if err != nil {
 		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, q.Get("root"), false, rel) {
 		return
 	}
 	text, st, err := s.Files.ReadText(q.Get("root"), rel, maxTextBytes)
@@ -204,12 +241,16 @@ func (s *Server) filesWriteText(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	if !s.canUse(w, r, req.Root, true, rel) {
+		return
+	}
 	st, err := s.Files.WriteText(req.Root, rel, req.Content, req.ModTime)
 	s.audit(r, userFrom(r.Context()).ID, "files.save", req.Root+":"+display(rel), err == nil, "")
 	if err != nil {
 		s.fileError(w, r, err)
 		return
 	}
+	s.ownFiles(req.Root, rel)
 	s.FileIndex.Upsert(req.Root, rel)
 	writeJSON(w, http.StatusOK, map[string]any{"size": st.Size(), "mod_time": st.ModTime().UTC()})
 }
@@ -230,12 +271,16 @@ func (s *Server) filesMkdir(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	if !s.canUse(w, r, req.Root, true, dir) {
+		return
+	}
 	rel, err := s.Files.Mkdir(req.Root, dir, strings.TrimSpace(req.Name))
 	s.audit(r, userFrom(r.Context()).ID, "files.mkdir", req.Root+":"+display(path.Join(dir, req.Name)), err == nil, "")
 	if err != nil {
 		s.fileError(w, r, err)
 		return
 	}
+	s.ownFiles(req.Root, rel)
 	s.FileIndex.Upsert(req.Root, rel)
 	writeJSON(w, http.StatusCreated, map[string]string{"path": display(rel)})
 }
@@ -254,6 +299,9 @@ func (s *Server) filesRename(w http.ResponseWriter, r *http.Request) {
 	rel, err := files.Clean(req.Path)
 	if err != nil {
 		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, req.Root, true, rel) {
 		return
 	}
 	dst, err := s.Files.Rename(req.Root, rel, strings.TrimSpace(req.Name))
@@ -281,6 +329,12 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil || len(rels) == 0 {
 		writeError(w, http.StatusBadRequest, "bad_request", "no paths given")
 		return
+	}
+	if !s.canUse(w, r, req.Root, true, rels...) {
+		return
+	}
+	if s.Spaces != nil && !s.Spaces.Recycles(req.Root) {
+		req.Permanent = true // this shared folder has its recycle bin turned off
 	}
 	err = s.Files.Delete(req.Root, rels, req.Permanent)
 	detail := "to recycle bin"
@@ -325,6 +379,9 @@ func (s *Server) filesTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	if !s.canUse(w, r, req.Root, true, append(rels, dest)...) {
+		return
+	}
 	action := "files.copy"
 	if req.Move {
 		action = "files.move"
@@ -337,6 +394,7 @@ func (s *Server) filesTransfer(w http.ResponseWriter, r *http.Request) {
 		ar := r.Clone(context.WithoutCancel(r.Context()))
 		j := s.FileJobs.Start(uid, req.Root, rels, dest, req.Move, conflict, display, func(j files.Job) {
 			s.audit(ar, uid, action, what, j.Status == "done", j.Status+" "+j.Error)
+			s.ownResult(req.Root, j)
 			if s.FileIndex != nil {
 				s.FileIndex.Touch()
 			}
@@ -351,6 +409,7 @@ func (s *Server) filesTransfer(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	s.ownFiles(req.Root, res.Paths...)
 	for i := range res.Paths {
 		res.Paths[i] = display(res.Paths[i])
 	}
@@ -375,6 +434,9 @@ func (s *Server) filesConflicts(w http.ResponseWriter, r *http.Request) {
 	dest, err := files.Clean(req.Dest)
 	if err != nil {
 		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, req.Root, false, append(rels, dest)...) {
 		return
 	}
 	names, err := s.Files.Conflicts(req.Root, rels, dest)
@@ -421,6 +483,9 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	if !s.canUse(w, r, q.Get("root"), true, dir) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, s.Config.MaxUpload)
 	mr, err := r.MultipartReader()
 	if err != nil {
@@ -465,6 +530,7 @@ func (s *Server) filesUpload(w http.ResponseWriter, r *http.Request) {
 			skipped = append(skipped, name)
 			continue
 		}
+		s.ownFiles(q.Get("root"), rel)
 		saved = append(saved, display(rel))
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"paths": saved, "skipped": skipped})
@@ -483,6 +549,9 @@ func (s *Server) filesTicket(w http.ResponseWriter, r *http.Request) {
 	rel, err := files.Clean(req.Path)
 	if err != nil {
 		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, req.Root, false, rel) {
 		return
 	}
 	if _, err := s.Files.Root(req.Root); err != nil {
@@ -520,7 +589,8 @@ func (s *Server) filesRaw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired file link")
 		return
 	}
-	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled {
+	u, err := s.Store.UserByID(r.Context(), userID)
+	if err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired file link")
 		return
 	}
@@ -567,7 +637,41 @@ func (s *Server) filesRecent(w http.ResponseWriter, r *http.Request) {
 		limit = 100
 	}
 	count, building, _ := s.FileIndex.Stats()
-	writeJSON(w, http.StatusOK, map[string]any{"results": s.FileIndex.Recent(limit), "indexed": count, "building": building})
+	writeJSON(w, http.StatusOK, map[string]any{"results": s.scopeHits(r, func(n int) []files.Hit { return s.FileIndex.Recent(n) }, limit), "indexed": count, "building": building})
+}
+
+// scopeHits runs an index query and keeps only what this person can open
+// (re-rooted into their home and shared folders). Non-admins see a slice of
+// the index, so the query asks for more and the result is trimmed.
+func (s *Server) scopeHits(r *http.Request, query func(limit int) []files.Hit, limit int) []files.Hit {
+	v := s.viewer(r)
+	if s.Spaces == nil {
+		if v.Admin {
+			return query(limit)
+		}
+		return []files.Hit{}
+	}
+	want := limit
+	if !v.Admin {
+		want = limit * 20
+		if want > 5000 {
+			want = 5000
+		}
+	}
+	hits := s.Spaces.MapHits(v, query(want))
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits
+}
+
+// ticketHolderCan re-checks, when a file link is used, that the person it
+// was issued to may still read the file.
+func (s *Server) ticketHolderCan(u *store.User, root, rel string) bool {
+	if s.Spaces == nil {
+		return u.Role == store.RoleAdmin
+	}
+	return s.Spaces.Access(viewerOf(u), root, rel).CanRead()
 }
 
 const maxFavorites = 50
@@ -605,12 +709,23 @@ func (s *Server) filesFavorites(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	v := s.viewer(r)
 	if !set {
-		favs = s.defaultFavorites()
+		if v.Admin {
+			favs = s.defaultFavorites()
+		} else {
+			favs = nil
+		}
 	}
-	if favs == nil {
-		favs = []store.FileFavorite{}
+	// Only places this person can still open (permissions change).
+	kept := []store.FileFavorite{}
+	for _, f := range favs {
+		rel, err := files.Clean(f.Path)
+		if err == nil && s.access(r, f.Root, rel).CanRead() {
+			kept = append(kept, f)
+		}
 	}
+	favs = kept
 	writeJSON(w, http.StatusOK, map[string]any{"favorites": favs})
 }
 
@@ -660,6 +775,10 @@ type externalView struct {
 // through the whole-disk System location, so they only show when it exists.
 func (s *Server) filesExternal(w http.ResponseWriter, r *http.Request) {
 	out := []externalView{}
+	if !s.viewer(r).Admin {
+		writeJSON(w, http.StatusOK, out) // opened through the System view, which is admins'
+		return
+	}
 	if _, err := s.Files.Root("system"); err != nil {
 		writeJSON(w, http.StatusOK, out)
 		return
@@ -706,6 +825,9 @@ func (s *Server) filesCompress(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "Archive.zip"
 	}
+	if !s.canUse(w, r, req.Root, false, rels...) || !s.canUse(w, r, req.Root, true, dest) {
+		return
+	}
 	// Check the cheap things now so mistakes show right away, not as a failed job.
 	for _, rel := range rels {
 		if rel == "." {
@@ -742,6 +864,9 @@ func (s *Server) filesExtract(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, files.ErrNotArchive)
 		return
 	}
+	if !s.canUse(w, r, req.Root, false, rels[0]) || !s.canUse(w, r, req.Root, true, dest) {
+		return
+	}
 	s.startArchiveJob(w, r, "extract", req.Root, rels, dest, func(ctx context.Context, p func(files.Progress)) (files.TransferResult, error) {
 		out, err := s.Files.Extract(ctx, req.Root, rels[0], dest, p)
 		return files.TransferResult{Paths: nonEmpty(out)}, err
@@ -766,6 +891,7 @@ func (s *Server) startArchiveJob(w http.ResponseWriter, r *http.Request, kind, r
 	what := root + ":" + strings.Join(rels, ", ") + " → " + display(dest)
 	j := s.FileJobs.Run(uid, kind, root, rels, dest, files.ConflictRename, display, work, func(j files.Job) {
 		s.audit(ar, uid, "files."+kind, what, j.Status == "done", j.Status+" "+j.Error)
+		s.ownResult(root, j)
 		if s.FileIndex != nil {
 			s.FileIndex.Touch()
 		}

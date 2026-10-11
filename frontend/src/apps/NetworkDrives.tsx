@@ -5,19 +5,21 @@ import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { Choice, Row, Section, Toggle } from './Personalize';
 
-export function useNetwork() {
+/** Network drives and sharing (administrators only; off for everyone else). */
+export function useNetwork(enabled = true) {
   const [support, setSupport] = useState<NetSupport | null>(null);
   const [drives, setDrives] = useState<NetDrive[]>([]);
   const [sharing, setSharing] = useState<Sharing | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
+    if (!enabled) return;
     const r = await netApi.overview();
     if (!r.ok) return setError(r.error ?? 'Could not load');
     setError('');
     setSupport(r.data.support);
     setDrives(r.data.drives);
     setSharing(r.data.sharing);
-  }, []);
+  }, [enabled]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -207,9 +209,12 @@ export function FileSharingPanel() {
 
   return (
     <div className="stack">
-      <p className="settings-section-hint">Share folders with your computers and phones on the network. Everyone signs in with the sharing account below.</p>
+      <p className="settings-section-hint">
+        Share folders with your computers and phones on the network. People sign in with their own NoCapOS user name and password; choose who may use each
+        folder in Settings → File Sharing.
+      </p>
 
-      <PasswordSection sharing={sharing} onDone={load} />
+      {!sharing.per_user && <PasswordSection sharing={sharing} onDone={load} />}
 
       <Section title="Share over">
         {support.native && !support.samba ? (
@@ -219,7 +224,7 @@ export function FileSharingPanel() {
             label="SMB (Windows, Mac, Linux)"
             hint={support.native ? 'Shows up like a normal network drive in File Explorer and Finder' : 'Needs NoCapOS installed on Linux'}
             checked={sharing.smb}
-            disabled={!support.native || !sharing.password_set}
+            disabled={!support.native}
             onChange={(on) => void setProto({ smb: on })}
           />
         )}
@@ -227,7 +232,6 @@ export function FileSharingPanel() {
           label="WebDAV (phones, anywhere)"
           hint="Works from phone file apps and from outside your home through the NoCapOS address"
           checked={sharing.webdav}
-          disabled={!sharing.password_set}
           onChange={(on) => void setProto({ webdav: on })}
         />
       </Section>

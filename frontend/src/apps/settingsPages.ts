@@ -2,13 +2,13 @@
 // search can list the pages without loading the whole app.
 import type { IconName } from '../components/Icon';
 
-export type Cat = 'network' | 'general' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
+export type Cat = 'network' | 'general' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'sharing' | 'account';
 export type Sub =
   | 'about' | 'update' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
   | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
-  | 'account' | 'users'
+  | 'account' | 'users' | 'sharing'
   | 'wifi' | `iface:${string}`;
 
 export interface CatInfo {
@@ -34,6 +34,7 @@ export const CATS: CatInfo[] = [
   { id: 'lock', label: 'Lock Screen', icon: 'lock', color: '#48484a', groups: [] },
   { id: 'security', label: 'Privacy & Security', icon: 'shield', color: '#30a0ff', groups: [] },
   { id: 'users', label: 'Users & Groups', icon: 'users', color: '#007aff', admin: true, groups: [] },
+  { id: 'sharing', label: 'File Sharing', icon: 'network', color: '#34c759', admin: true, groups: [] },
   { id: 'account', label: 'Your Account', icon: 'user', color: '#007aff', groups: [] },
 ];
 
@@ -56,6 +57,7 @@ export const SUBS: Record<string, { label: string; icon: IconName; color: string
   lock: { label: 'Lock Screen', icon: 'lock', color: '#48484a', desc: 'Auto-lock and screen saver' },
   account: { label: 'Your Account', icon: 'user', color: '#007aff', desc: 'Photo, name and sign out' },
   users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add people and choose who is an administrator' },
+  sharing: { label: 'File Sharing', icon: 'network', color: '#34c759', admin: true, desc: 'Shared folders, who may use them, and SMB / WebDAV' },
   wifi: { label: 'Wi-Fi', icon: 'wifi', color: '#0a84ff' },
 };
 
@@ -99,7 +101,9 @@ export const ENTRIES: Entry[] = [
     options: ['Two-factor authentication', 'Change password'] },
   { id: 'lock', cat: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
   { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out', options: ['Profile photo', 'Close other windows', 'Sign out'] },
-  { id: 'users', cat: 'users', admin: true, label: 'Users & Groups', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role'] },
+  { id: 'users', cat: 'users', admin: true, label: 'Users & Groups', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role', 'Access', 'Desktop or file sharing only', 'Shared folders', 'Apps'] },
+  { id: 'sharing', cat: 'sharing', admin: true, label: 'File Sharing', icon: 'network', desc: 'Shared folders, who may use them, and SMB / WebDAV', keywords: 'share shared folders permissions smb samba webdav network nas homes read write',
+    options: ['Shared folders', 'Permissions', 'Add a shared folder', 'Share over SMB', 'Share over WebDAV', 'Install Samba', 'Administrators can open people’s homes'] },
 ];
 
 /** Every Settings page, for universal search. */
