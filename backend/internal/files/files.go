@@ -96,6 +96,21 @@ type Service struct {
 	// themselves (nor any folder containing them), but whose contents are
 	// ordinary files — e.g. /home or /srv on a root install.
 	points []string
+	// resolve finds locations that aren't in roots: people's homes and
+	// shared folders, which come and go with accounts and settings.
+	resolve Resolver
+}
+
+// Resolver maps the id of a location that isn't fixed (a person's home, a
+// shared folder) to its folder. It does no access control: callers check
+// who may use a location before using it.
+type Resolver func(id string) (*Root, bool)
+
+// SetResolver installs the lookup for locations beyond the fixed ones.
+func (s *Service) SetResolver(r Resolver) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resolve = r
 }
 
 // ProtectPoints marks folders that may not themselves be removed or moved.
@@ -199,14 +214,21 @@ func (s *Service) Roots() []Root {
 	return append([]Root(nil), s.roots...)
 }
 
-// Root returns a copy of one storage location.
+// Root returns a copy of one storage location (fixed, or found by the resolver).
 func (s *Service) Root(id string) (*Root, error) {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	for i := range s.roots {
 		if s.roots[i].ID == id {
 			r := s.roots[i]
+			s.mu.RUnlock()
 			return &r, nil
+		}
+	}
+	resolve := s.resolve
+	s.mu.RUnlock()
+	if resolve != nil && id != "" {
+		if r, ok := resolve(id); ok {
+			return r, nil
 		}
 	}
 	return nil, ErrUnknownRoot

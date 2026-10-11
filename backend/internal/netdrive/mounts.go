@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"alfaos/alfad/internal/files"
+	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/syspkg"
 )
@@ -89,6 +90,11 @@ type Manager struct {
 	mu    sync.Mutex
 	state map[int64]*driveState
 	dav   *davAuth
+
+	// Sharing: shared folders and people (see sharing.go).
+	spaces    *spaces.Manager
+	checkUser UserCheck
+	sambaMu   sync.Mutex // one Samba update at a time
 }
 
 type driveState struct {
@@ -140,7 +146,7 @@ func (m *Manager) Install(ctx context.Context, tool string) error {
 		return fmt.Errorf("%s still isn't available after installing", toolBinary[tool])
 	}
 	if tool == "samba" {
-		return m.applySamba(ctx)
+		return m.ApplySamba(ctx)
 	}
 	return nil
 }

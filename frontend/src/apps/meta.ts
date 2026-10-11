@@ -34,7 +34,6 @@ export const APPS: Record<string, AppMeta> = {
     tile: ['#ffc53d', '#f08c00'],
     size: { w: 1000, h: 640 },
     description: 'Browse, upload and manage your files',
-    adminOnly: true,
   },
   photos: {
     id: 'photos',
@@ -43,7 +42,6 @@ export const APPS: Record<string, AppMeta> = {
     tile: ['#ff8a5c', '#e2366f'],
     size: { w: 1080, h: 700 },
     description: 'Your photos and videos: timeline, favorites and albums',
-    adminOnly: true,
   },
   backups: {
     id: 'backups',
@@ -165,7 +163,6 @@ export const APPS: Record<string, AppMeta> = {
     tile: ['#4f7cff', '#2d4fd6'],
     size: { w: 900, h: 620 },
     description: 'Preview and edit files',
-    adminOnly: true,
     hidden: true,
   },
   logs: {

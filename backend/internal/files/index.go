@@ -173,10 +173,23 @@ func indexed(rootID string) bool {
 	return rootID != "system" && !strings.HasPrefix(rootID, "net:")
 }
 
+// fixed reports whether root is one of the indexed fixed locations. Changes
+// made through a person's home or a shared folder (which the index sees as
+// part of a fixed location) schedule a rebuild instead of an update in place.
+func (ix *Index) fixed(root string) bool {
+	for _, r := range ix.svc.Roots() {
+		if r.ID == root {
+			return true
+		}
+	}
+	ix.Touch()
+	return false
+}
+
 // Upsert adds or refreshes one path (a saved file, a new folder) without a
 // rebuild. rel is root-relative. A folder's contents aren't walked.
 func (ix *Index) Upsert(root, rel string) {
-	if ix == nil || !indexed(root) {
+	if ix == nil || !indexed(root) || !ix.fixed(root) {
 		return
 	}
 	rel = strings.Trim(rel, "/")
@@ -212,7 +225,7 @@ func (ix *Index) Upsert(root, rel string) {
 
 // Rename moves a path (and anything inside it) to its new name in place.
 func (ix *Index) Rename(root, from, to string) {
-	if ix == nil || !indexed(root) {
+	if ix == nil || !indexed(root) || !ix.fixed(root) {
 		return
 	}
 	from, to = strings.Trim(from, "/"), strings.Trim(to, "/")
@@ -344,10 +357,31 @@ func (ix *Index) Under(folder string, match func(lowerName string) bool) []Hit {
 	return hits
 }
 
+// UnderDir returns the files (not folders) inside dir (a slash path within
+// the location, without leading slash) of one location whose lower-case
+// name passes match. Photos uses it for a person's own Photos folders.
+func (ix *Index) UnderDir(root, dir string, match func(lowerName string) bool) []Hit {
+	prefix := strings.Trim(dir, "/") + "/"
+	if prefix == "/" {
+		prefix = ""
+	}
+	var hits []Hit
+	ix.mu.RLock()
+	defer ix.mu.RUnlock()
+	for i := range ix.entries {
+		e := &ix.entries[i]
+		if e.dir || e.root != root || !strings.HasPrefix(e.rel, prefix) || !match(e.lower) {
+			continue
+		}
+		hits = append(hits, Hit{Root: e.root, Path: "/" + e.rel, Name: e.name, Size: e.size, ModTime: e.modTime})
+	}
+	return hits
+}
+
 // Remove drops paths (and anything inside them) right away, so a deleted file
 // doesn't show up again before the next rebuild. rels are root-relative.
 func (ix *Index) Remove(root string, rels []string) {
-	if ix == nil {
+	if ix == nil || !ix.fixed(root) {
 		return
 	}
 	ix.mu.Lock()

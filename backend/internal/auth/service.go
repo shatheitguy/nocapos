@@ -21,6 +21,9 @@ var (
 	ErrTokenReuse         = errors.New("refresh token reuse detected")
 	ErrSetupDone          = errors.New("setup already completed")
 	ErrSetupToken         = errors.New("invalid setup token")
+	// ErrFilesOnly: the account is for file sharing only (SMB / WebDAV),
+	// not for signing in to the desktop.
+	ErrFilesOnly = errors.New("this account is for file sharing only; connect to the shared folders from your computer or phone instead")
 )
 
 // A revoked refresh token presented within this window is treated as a benign
@@ -131,7 +134,53 @@ func (s *Service) Login(ctx context.Context, username, password string, meta Cli
 	if !ok || u.Disabled {
 		return nil, ErrInvalidCredentials
 	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		return nil, err
+	}
 	return s.startSession(ctx, u, meta)
+}
+
+// desktopAllowed refuses web sessions to file-sharing-only accounts.
+// Administrators always have the desktop.
+func (s *Service) desktopAllowed(ctx context.Context, u *store.User) error {
+	if u.Role == store.RoleAdmin {
+		return nil
+	}
+	access, err := s.st.UserAccess(ctx, u.Username)
+	if err != nil {
+		return err
+	}
+	if access == store.AccessFiles {
+		return ErrFilesOnly
+	}
+	return nil
+}
+
+// CheckPassword verifies someone's password without starting a session,
+// for the file sharing services (WebDAV). It returns the user name as
+// stored and whether they're an administrator; disabled accounts fail.
+func (s *Service) CheckPassword(ctx context.Context, username, password string) (string, bool, bool) {
+	if s.sys != nil {
+		role, disabled, err := s.sys.RoleOf(ctx, username)
+		if err != nil || disabled {
+			_, _ = VerifyPassword(password, dummyHash())
+			return "", false, false
+		}
+		if ok, err := s.sys.Verify(ctx, username, password); err != nil || !ok {
+			return "", false, false
+		}
+		return username, role == store.RoleAdmin, true
+	}
+	u, err := s.st.UserByUsername(ctx, username)
+	if err != nil {
+		_, _ = VerifyPassword(password, dummyHash())
+		return "", false, false
+	}
+	ok, err := VerifyPassword(password, u.PasswordHash)
+	if err != nil || !ok || u.Disabled {
+		return "", false, false
+	}
+	return u.Username, u.Role == store.RoleAdmin, true
 }
 
 func (s *Service) Refresh(ctx context.Context, raw string, meta ClientMeta) (*Session, error) {
@@ -169,6 +218,10 @@ func (s *Service) Refresh(ctx context.Context, raw string, meta ClientMeta) (*Se
 		if err := s.checkSystemUser(ctx, u, now); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		_ = s.st.RevokeFamily(ctx, rt.FamilyID, now)
+		return nil, ErrInvalidToken
 	}
 	sess, err := s.issue(ctx, u, rt.FamilyID, rt.FamilyExpiresAt, meta, hash)
 	if errors.Is(err, store.ErrConflict) {
@@ -215,6 +268,11 @@ func (s *Service) Authenticate(ctx context.Context, token string) (*store.User, 
 	}
 	if u.Disabled {
 		return nil, ErrInvalidToken
+	}
+	if err := s.desktopAllowed(ctx, u); errors.Is(err, ErrFilesOnly) {
+		return nil, ErrInvalidToken
+	} else if err != nil {
+		return nil, err
 	}
 	return u, nil
 }

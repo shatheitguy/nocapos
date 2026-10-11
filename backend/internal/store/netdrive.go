@@ -84,76 +84,8 @@ func (s *Store) DeleteNetMount(ctx context.Context, id int64) error {
 	return nil
 }
 
-// NetShare is a folder NoCapOS shares over SMB and WebDAV.
-type NetShare struct {
-	ID        int64
-	Name      string
-	Root      string
-	Path      string
-	ReadOnly  bool
-	CreatedAt time.Time
-}
-
-func (s *Store) NetShares(ctx context.Context) ([]*NetShare, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, root, path, read_only, created_at FROM net_shares ORDER BY name COLLATE NOCASE`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []*NetShare
-	for rows.Next() {
-		var sh NetShare
-		var ro int
-		var created int64
-		if err := rows.Scan(&sh.ID, &sh.Name, &sh.Root, &sh.Path, &ro, &created); err != nil {
-			return nil, err
-		}
-		sh.ReadOnly, sh.CreatedAt = ro != 0, unixOrZero(created)
-		out = append(out, &sh)
-	}
-	return out, rows.Err()
-}
-
 // ErrExists means a row with that name already exists.
 var ErrExists = errors.New("already exists")
-
-func (s *Store) CreateNetShare(ctx context.Context, sh *NetShare) (int64, error) {
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM net_shares WHERE name = ? COLLATE NOCASE`, sh.Name).Scan(&n); err != nil {
-		return 0, err
-	}
-	if n > 0 {
-		return 0, ErrExists
-	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO net_shares (name, root, path, read_only, created_at) VALUES (?, ?, ?, ?, ?)`,
-		sh.Name, sh.Root, sh.Path, boolInt(sh.ReadOnly), time.Now().Unix())
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
-}
-
-func (s *Store) SetNetShareReadOnly(ctx context.Context, id int64, ro bool) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE net_shares SET read_only = ? WHERE id = ?`, boolInt(ro), id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-func (s *Store) DeleteNetShare(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM net_shares WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
 
 // Setting reads a server-wide setting ("" when unset).
 func (s *Store) Setting(ctx context.Context, key string) (string, error) {

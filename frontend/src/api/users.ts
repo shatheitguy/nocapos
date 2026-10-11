@@ -11,6 +11,8 @@ export interface Person {
   shell?: string;
   totp: boolean;
   you: boolean;
+  /** desktop: signs in to NoCapOS; files: file sharing only (SMB / WebDAV). */
+  access: 'desktop' | 'files';
 }
 
 export interface PeopleList {
@@ -22,7 +24,7 @@ const path = (name: string) => `/api/v1/users/${encodeURIComponent(name)}`;
 
 export const usersApi = {
   list: () => api<PeopleList>('/api/v1/users'),
-  create: (body: { username: string; full_name?: string; password: string; role: 'admin' | 'user' }) =>
+  create: (body: { username: string; full_name?: string; password: string; role: 'admin' | 'user'; access?: 'desktop' | 'files' }) =>
     api<{ username: string }>('/api/v1/users', { method: 'POST', body }),
   setRole: (name: string, role: 'admin' | 'user') => api(path(name), { method: 'PATCH', body: { role } }),
   setDisabled: (name: string, disabled: boolean) => api(path(name), { method: 'PATCH', body: { disabled } }),

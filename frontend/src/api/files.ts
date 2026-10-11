@@ -5,6 +5,10 @@ export interface FileRoot {
   name: string;
   total: number;
   free: number;
+  /** Per-person locations: your home, a shared folder, or (admins) everyone's homes. */
+  kind?: 'home' | 'share' | 'homes';
+  /** A shared folder you can look at but not change. */
+  read_only?: boolean;
 }
 
 export interface FileEntry {

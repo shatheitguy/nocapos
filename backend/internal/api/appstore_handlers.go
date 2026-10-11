@@ -7,15 +7,51 @@ import (
 
 	"alfaos/alfad/internal/appstore"
 	"alfaos/alfad/internal/docker"
+	"alfaos/alfad/internal/spaces"
+	"alfaos/alfad/internal/store"
 )
 
 // App Store: one-click installs of catalog apps as containers. Installing an
-// app runs software on the host, so every route is admin-only and audited.
+// app runs software on the host, so changes are admin-only and audited.
+// Everyone signed in can list the installed apps they may use (to open them
+// from the home screen); that list is filtered here, on the server.
 
 type storeApp struct {
 	appstore.App
 	Installed *appstore.Installed `json:"installed,omitempty"`
-	Job       *appstore.Job       `json:"job,omitempty"` // running, or ended in the last few minutes
+	Job       *appstore.Job       `json:"job,omitempty"`    // running, or ended in the last few minutes
+	Access    *store.AppAccess    `json:"access,omitempty"` // admins: who can use it (nil = everyone)
+}
+
+// installedApps lists the catalog apps that are installed.
+func (s *Server) installedApps(ctx context.Context) ([]appstore.App, error) {
+	status, err := s.AppStore.Status(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []appstore.App
+	for _, a := range s.AppStore.Catalog() {
+		if status[a.ID] != nil {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// visibleStoreApps is the non-admin view: installed apps this person may
+// use, without the app's own admin credentials or container details.
+func visibleStoreApps(catalog []appstore.App, status map[string]*appstore.Installed, rules map[string]*store.AppAccess, v spaces.Viewer) []storeApp {
+	apps := []storeApp{}
+	for _, a := range catalog {
+		in := status[a.ID]
+		if in == nil || !spaces.AppAllowed(rules[a.ID], v) {
+			continue
+		}
+		c := *in
+		c.Credentials, c.Containers = nil, nil
+		apps = append(apps, storeApp{App: a, Installed: &c})
+	}
+	return apps
 }
 
 func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
@@ -24,10 +60,21 @@ func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	var rules map[string]*store.AppAccess
+	if s.Spaces != nil {
+		if rules, err = s.Spaces.AppRules(r.Context()); err != nil {
+			s.internalError(w, r, err)
+			return
+		}
+	}
+	if v := s.viewer(r); !v.Admin {
+		writeJSON(w, http.StatusOK, map[string]any{"apps": visibleStoreApps(s.AppStore.Catalog(), status, rules, v), "docker": true})
+		return
+	}
 	jobs := s.AppStore.Jobs()
 	apps := make([]storeApp, 0, len(s.AppStore.Catalog()))
 	for _, a := range s.AppStore.Catalog() {
-		sa := storeApp{App: a, Installed: status[a.ID]}
+		sa := storeApp{App: a, Installed: status[a.ID], Access: rules[a.ID]}
 		if j, ok := jobs[a.ID]; ok {
 			sa.Job = &j
 		}

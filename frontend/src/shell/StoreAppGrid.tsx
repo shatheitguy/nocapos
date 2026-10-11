@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent as RPointerEvent } from 'react';
 import { appURL, openStoreApp, type StoreApp } from '../api/appstore';
 import { openApp } from '../apps/meta';
+import { getUser } from '../api/client';
 import { AppIcon } from '../components/AppTile';
 import { Icon } from '../components/Icon';
 import { uninstallStoreApp } from '../state/storeApps';
@@ -65,7 +66,7 @@ export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, 
     hold.current = null;
     if (held || jiggle) return;
     if (app.installed && appURL(app)) openStoreApp(app);
-    else openApp('appcenter', { props: { app: app.id } });
+    else if (getUser()?.role === 'admin') openApp('appcenter', { props: { app: app.id } });
     onOpened?.();
   };
 
