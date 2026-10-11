@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { api } from '../api/client';
 import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
 import type { Snapshot, SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
-import { useViewport } from '../lib/hooks';
+import { useDocumentVisible, useViewport } from '../lib/hooks';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { usePrefs } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { useFolders } from '../state/folders';
@@ -33,13 +35,13 @@ import { WidgetLayer } from './WidgetLayer';
 import { Window } from './Window';
 
 export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
-  const windows = useWM((s) => s.windows);
+  // Ids only: each Window subscribes to its own state, so a drag doesn't
+  // re-render the whole desktop.
+  const windowIds = useWM(useShallow((s) => s.windows.map((w) => w.id)));
   const widgets = usePrefs((s) => s.widgets);
   const lockTimeout = usePrefs((s) => s.lockTimeout);
   const screensaver = usePrefs((s) => s.screensaver);
   const saverDelay = usePrefs((s) => s.saverDelay);
-  // Maximized/snapped windows fill the work area, which moves with the dock.
-  usePrefs((s) => `${s.dockPosition}:${s.dockSize}:${s.dockAutoHide}:${s.titleButtons}`);
   const vp = useViewport();
   const compact = vp.w < 640;
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
@@ -61,9 +63,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
     void connect();
     const offStatus = onSocketStatus(sys.setOnline);
-    const offMetrics = subscribe('system.metrics', (d) => sys.push(d as Snapshot));
     return () => {
-      offMetrics();
       offStatus();
       disconnect();
       useWM.getState().reset();
@@ -74,6 +74,14 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       useSpotlight.getState().set(false);
     };
   }, [user.id]);
+
+  // Live metrics only while the tab is visible; nothing on screen needs them otherwise.
+  const visible = useDocumentVisible();
+  useEffect(() => {
+    if (!visible) return;
+    const sys = useSystem.getState();
+    return subscribe('system.metrics', (d) => sys.push(d as Snapshot));
+  }, [visible, user.id]);
 
   // System notifications (admins): updates, app problems, disk health, failed backups.
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
@@ -162,30 +170,68 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
           }
         }}
       >
-        {widgets && compact && <WidgetLayer username={user.username} compact />}
+        {widgets && compact && (
+          <ErrorBoundary title="Widgets" fallback="hidden">
+            <WidgetLayer username={user.username} compact />
+          </ErrorBoundary>
+        )}
       </div>
 
-      {glass && !compact && !launcher && <HomeHeader username={user.username} isAdmin={isAdmin} />}
-      {!compact && <DesktopIcons isAdmin={isAdmin} />}
-      {widgets && !compact && <WidgetLayer username={user.username} compact={false} />}
+      {glass && !compact && !launcher && (
+        <ErrorBoundary title="Home header" fallback="hidden">
+          <HomeHeader username={user.username} isAdmin={isAdmin} />
+        </ErrorBoundary>
+      )}
+      {!compact && (
+        <ErrorBoundary title="Desktop icons" fallback="hidden">
+          <DesktopIcons isAdmin={isAdmin} />
+        </ErrorBoundary>
+      )}
+      {widgets && !compact && (
+        <ErrorBoundary title="Widgets" fallback="hidden">
+          <WidgetLayer username={user.username} compact={false} />
+        </ErrorBoundary>
+      )}
 
       <div className="window-layer">
-        {windows.map((w) => (
-          <Window key={w.id} win={w} compact={compact} />
+        {windowIds.map((id) => (
+          <Window key={id} id={id} compact={compact} />
         ))}
       </div>
 
-      {menuBar && <MenuBar user={user} onLock={onLock} onLauncher={toggleLauncher} />}
-      <Shelf user={user} onLauncher={toggleLauncher} onLock={onLock} showTray={!menuBar} />
-      {launcher && <Launcher isAdmin={isAdmin} onClose={() => setLauncher(false)} />}
-      {spotlight && <Spotlight isAdmin={isAdmin} onLock={onLock} />}
+      {menuBar && (
+        <ErrorBoundary title="Menu bar" fallback="hidden">
+          <MenuBar user={user} onLock={onLock} onLauncher={toggleLauncher} />
+        </ErrorBoundary>
+      )}
+      <ErrorBoundary title="Dock" fallback="hidden">
+        <Shelf user={user} onLauncher={toggleLauncher} onLock={onLock} showTray={!menuBar} />
+      </ErrorBoundary>
+      {launcher && (
+        <ErrorBoundary title="Launchpad" fallback="hidden">
+          <Launcher isAdmin={isAdmin} onClose={() => setLauncher(false)} />
+        </ErrorBoundary>
+      )}
+      {spotlight && (
+        <ErrorBoundary title="Search" fallback="hidden">
+          <Spotlight isAdmin={isAdmin} onLock={onLock} />
+        </ErrorBoundary>
+      )}
       {deskMenu && <ContextMenu x={deskMenu.x} y={deskMenu.y} items={deskMenuItems()} onClose={() => setDeskMenu(null)} />}
       <DragGhost />
       <ConfirmHost />
       <PowerOverlay />
-      {isAdmin && <NotificationLayer />}
-      <UpdateReady />
-      <Toasts />
+      {isAdmin && (
+        <ErrorBoundary title="Notifications" fallback="hidden">
+          <NotificationLayer />
+        </ErrorBoundary>
+      )}
+      <ErrorBoundary title="Update notice" fallback="hidden">
+        <UpdateReady />
+      </ErrorBoundary>
+      <ErrorBoundary title="Toasts" fallback="hidden">
+        <Toasts />
+      </ErrorBoundary>
     </div>
   );
 }

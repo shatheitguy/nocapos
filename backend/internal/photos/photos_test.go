@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -241,6 +242,42 @@ func TestLibrary(t *testing.T) {
 	}
 	if _, err := lib.Thumb(ctx, "drive", "/../outside.jpg", "s"); err == nil {
 		t.Error("a path outside the location must be refused")
+	}
+
+	// Concurrent requests for the same thumbnail share one result.
+	var wg sync.WaitGroup
+	got := make([]string, 4)
+	for i := range got {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			got[i], _ = lib.Thumb(ctx, "drive", "/Photos/beach.jpg", "l")
+		}(i)
+	}
+	wg.Wait()
+	for _, g := range got {
+		if g == "" || g != got[0] {
+			t.Fatalf("concurrent thumbs: %v", got)
+		}
+	}
+
+	// The sweep keeps live thumbnails and drops old orphans.
+	orphan := filepath.Join(filepath.Dir(p), "0000000000000000000000000000000000000000.jpg")
+	if err := os.WriteFile(orphan, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-2 * time.Hour)
+	for _, f := range []string{orphan, p} {
+		if err := os.Chtimes(f, stale, stale); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lib.sweepCache(ix.Under(Folder, isMedia))
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
+		t.Error("orphaned thumbnail should be removed")
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Errorf("live thumbnail removed: %v", err)
 	}
 }
 
