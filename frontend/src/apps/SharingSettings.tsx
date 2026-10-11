@@ -200,7 +200,7 @@ function PermMatrix({ folder: f, data, onChanged }: { folder: SharedFolder; data
 function FolderFields({ v, set }: { v: FolderInput; set: (p: Partial<FolderInput>) => void }) {
   return (
     <>
-      <Row label="Description" hint="Optional; shown in network browsers">
+      <Row label="Description" hint="Optional; shown in network browsers" stacked>
         <input value={v.description ?? ''} maxLength={200} onChange={(e) => set({ description: e.target.value })} />
       </Row>
       <Toggle label="Recycle bin" hint="Deleted files go to the folder’s Trash first, from Files and over the network" checked={v.recycle ?? true} onChange={(on) => set({ recycle: on })} />
@@ -222,7 +222,7 @@ function EditFolder({ folder: f, onDone }: { folder: SharedFolder; onDone: () =>
   };
   return (
     <form className="share-form" onSubmit={(e) => void save(e)}>
-      <Row label="Name" hint="Also its name on the network">
+      <Row label="Name" hint="Also its name on the network" stacked>
         <input value={v.name ?? ''} maxLength={40} onChange={(e) => setV({ ...v, name: e.target.value })} />
       </Row>
       <FolderFields v={v} set={(p) => setV({ ...v, ...p })} />
