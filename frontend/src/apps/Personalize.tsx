@@ -3,7 +3,6 @@ import { AccentPicker } from '../components/AccentPicker';
 import { Icon } from '../components/Icon';
 import {
   DEFAULT_PREFS,
-  ICON_STYLES,
   PERSONALIZATION_KEYS,
   UI_THEMES,
   WALLPAPERS,
@@ -94,28 +93,12 @@ export function Slider({ label, hint, value, min, max, step = 1, format, onChang
 
 // ---- Appearance ----
 
-const SOLID_ICONS_KEY = 'alfa.iconsAutoSolid';
-
 export function Appearance() {
   const prefs = usePrefs();
   const set = prefs.set;
   const classic = prefs.uiTheme === 'classic';
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
-  // Glass icons need transparency: turning it down switches them to Colourful,
-  // and turning it back up restores Glass if that switch was ours.
-  const setTransparency = (transparency: number) => {
-    const reduceTransparency = transparency === 0;
-    if (reduceTransparency && prefs.iconStyle === 'glass') {
-      set({ transparency, reduceTransparency, iconStyle: 'colorful' });
-      try { localStorage.setItem(SOLID_ICONS_KEY, '1'); } catch { /* private mode */ }
-      return;
-    }
-    let ours = false;
-    if (!reduceTransparency && prefs.reduceTransparency) {
-      try { ours = localStorage.getItem(SOLID_ICONS_KEY) === '1'; localStorage.removeItem(SOLID_ICONS_KEY); } catch { /* private mode */ }
-    }
-    set(ours && prefs.iconStyle === 'colorful' ? { transparency, reduceTransparency, iconStyle: 'glass' } : { transparency, reduceTransparency });
-  };
+  const setTransparency = (transparency: number) => set({ transparency, reduceTransparency: transparency === 0 });
   return (
     <div className="stack settings-page">
       <Section title="Theme" hint={current.blurb}>
@@ -151,12 +134,6 @@ export function Appearance() {
         </Row>
       </Section>
 
-
-      <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad and on the desktop. Installed apps keep their own icons.">
-        <Row label="Style">
-          <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
-        </Row>
-      </Section>
 
       <Section title="Display">
         <Slider label="Brightness" hint="Dims NoCapOS on this screen — also in the Control Center" value={prefs.brightness}

@@ -326,42 +326,12 @@ button.widget:active { transform: none; }
 .app-icon.art, .app-icon:not(.logo) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.24); }
 .app-icon.art { overflow: hidden; }
 .app-icon.art svg { display: block; width: 100%; height: 100%; }
-/* Icon styles (Settings → Appearance → App icons). "tinted": tiles in the
-   theme's accent; "glass": frosted see-through tiles with white artwork. */
-:root[data-icons='tinted'] {
-  --icon-a: color-mix(in srgb, var(--accent) 72%, #fff);
-  --icon-b: color-mix(in srgb, var(--accent) 78%, #000);
-  --icon-ink: color-mix(in srgb, var(--accent) 72%, #000);
-  --icon-hi: #fff;
+/* NoCapOS's icons are dark glass tiles drawn in AppArt; apps without artwork,
+   the Launchpad and Trash get the same tile with a coloured symbol. */
+.app-icon:not(.logo):not(.art), .launchpad-icon, .trash-icon {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 50%), linear-gradient(180deg, #3b3e49, #1a1c22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 6px 16px rgba(0, 0, 0, 0.24);
 }
-:root[data-icons='glass'] {
-  --icon-a: transparent;
-  --icon-b: transparent;
-  --icon-ink: color-mix(in srgb, var(--accent) 65%, #000);
-  --icon-hi: #fff;
-  --icon-soft-a: rgba(255, 255, 255, 0.8);
-  --icon-soft-b: rgba(255, 255, 255, 0.55);
-  --icon-gear-a: #ffffff;
-  --icon-gear-b: #e2e8f0;
-  --icon-hub-a: color-mix(in srgb, var(--accent) 70%, #000);
-  --icon-hub-b: color-mix(in srgb, var(--accent) 55%, #000);
-}
-:root[data-icons='tinted'] {
-  --icon-soft-a: rgba(255, 255, 255, 0.75);
-  --icon-soft-b: rgba(255, 255, 255, 0.5);
-}
-:root[data-icons='glass'] .app-icon.art,
-:root[data-icons='glass'] .app-icon:not(.logo):not(.art),
-:root[data-icons='glass'] .launchpad-icon,
-:root[data-icons='glass'] .trash-icon {
-  background:
-    radial-gradient(120% 80% at 30% 0%, rgba(255, 255, 255, 0.42), transparent 60%),
-    linear-gradient(160deg, color-mix(in srgb, var(--accent) 30%, rgba(255, 255, 255, 0.18)), color-mix(in srgb, var(--accent) 14%, rgba(255, 255, 255, 0.04)));
-  backdrop-filter: blur(16px) saturate(1.8);
-  -webkit-backdrop-filter: blur(16px) saturate(1.8);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.22), inset 0 -8px 16px rgba(255, 255, 255, 0.06), 0 8px 20px rgba(0, 0, 0, 0.22);
-}
-:root[data-icons='glass'] .app-icon.art svg { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.22)); }
 /* Installed apps: their own icon, as it is. */
 .app-icon.logo { background: none; }
 .app-icon.logo img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.28)); }
@@ -904,8 +874,8 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 .dock-item:hover:not(:disabled) .app-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-sep { width: 1px; height: 40px; background: color-mix(in srgb, var(--text) 18%, transparent); margin: 0 5px; align-self: center; }
 .launchpad-icon, .trash-icon { display: grid; place-items: center; width: var(--dock-icon, 44px); height: var(--dock-icon, 44px); border-radius: 13px; box-shadow: 0 6px 16px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.25); }
-.launchpad-icon { background: linear-gradient(180deg, var(--icon-a, #ff3b3b), var(--icon-b, #a5101a)); color: #fff; }
-.trash-icon { background: linear-gradient(180deg, var(--icon-a, #8e9bb5), var(--icon-b, #556179)); color: #fff; }
+.launchpad-icon { color: #ff5a5f; }
+.trash-icon { color: #cbd5e1; }
 .dock-item.launchpad:hover .launchpad-icon, .dock-item.trash:hover .trash-icon { transform: var(--dock-lift) scale(var(--dock-mag, 1.12)); }
 .dock-item.draggable { cursor: grab; touch-action: none; }
 .dock-item img, .dock-item svg, .dock-item .app-icon { -webkit-user-drag: none; user-select: none; }
