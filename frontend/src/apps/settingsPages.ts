@@ -95,7 +95,7 @@ export const ENTRIES: Entry[] = [
   { id: 'notifications', cat: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Banner style, what to be told about, Focus and sounds', keywords: 'do not disturb dnd silence alerts banners toasts macos windows notification center updates', options: ['Banner style', 'Send a test notification', 'Notify me about', 'Focus', 'Play a sound for notifications'] },
   { id: 'sound', cat: 'sound', label: 'Sound', icon: 'sound', desc: 'Sound effects and volume', keywords: 'volume mute clicks effects',
     options: ['Play sound effects', 'Volume', 'Clicking buttons and icons', 'Opening and closing windows', 'Locking and unlocking'] },
-  { id: 'security', cat: 'security', label: 'Password & Two-Factor', icon: 'key', desc: 'Change your password and ask for a code when you sign in', keywords: '2fa totp otp authenticator security password',
+  { id: 'security', cat: 'security', label: 'Privacy & Security', icon: 'shield', desc: 'Two-factor authentication and your password', keywords: '2fa two-factor totp otp authenticator security password privacy',
     options: ['Two-factor authentication', 'Change password'] },
   { id: 'lock', cat: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
   { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out', options: ['Profile photo', 'Close other windows', 'Sign out'] },
