@@ -2436,3 +2436,17 @@ button.ce-add-line { align-self: flex-start; }
 }
 .st-tabs .segmented button { white-space: nowrap; }
 .context-menu .context-sep { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
+
+/* The account panel behind your photo: Control Center's size and place. */
+.acct-panel { width: 280px; gap: 10px; padding: 14px 10px 10px; }
+.acct-panel .qs-user { padding: 0 6px 4px; }
+.acct-list { display: flex; flex-direction: column; }
+.acct-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 10px; border-radius: 10px;
+  background: transparent; color: var(--text); font-weight: 400; font-size: 13.5px; justify-content: flex-start; text-align: left;
+}
+.acct-item svg { color: var(--muted); flex: none; }
+.acct-item:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 9%, transparent); }
+.acct-item.danger { color: var(--bad); }
+.acct-sep { border: 0; border-top: 1px solid var(--border); margin: 5px 8px; }
+:root[data-menubar] .acct-panel.left { left: 8px; right: auto; }
