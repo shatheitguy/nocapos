@@ -4,7 +4,7 @@ import type { Container, ContainerDetail, ContainerStats, DockerEvent } from '..
 import { Bar, Sparkline } from '../components/Charts';
 import { Icon } from '../components/Icon';
 import { fmtAgo, fmtBytes, fmtPct, fmtRate } from '../lib/format';
-import { useTopic } from '../lib/hooks';
+import { usePoll, useTopic } from '../lib/hooks';
 import { resubscribe } from '../api/socket';
 import { toast } from '../state/toasts';
 import { openApp } from './meta';
@@ -44,9 +44,8 @@ export function Containers() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 15_000);
-    return () => window.clearInterval(t);
   }, [load]);
+  usePoll(load, 15_000);
 
   useTopic<DockerEvent>(
     'docker.events',

@@ -1,11 +1,13 @@
-import { Component, useRef, useState, type ErrorInfo, type ReactNode, type PointerEvent as RPointerEvent } from 'react';
+import { memo, Suspense, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { APP_COMPONENTS } from '../apps/components';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Icon } from '../components/Icon';
 import { AppIcon } from '../components/AppTile';
+import { useViewport, WindowShownContext } from '../lib/hooks';
 import { usePrefs, workArea } from '../state/prefs';
-import { effectiveRect, useWM, type Rect, type WinState } from '../state/windows';
+import { effectiveRect, flushLayout, useWM, type Rect, type WinState } from '../state/windows';
 
 const MIN_W = 360;
 const MIN_H = 240;
@@ -15,7 +17,41 @@ type Preview = 'left' | 'right' | 'max' | null;
 type Dir = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 const DIRS: Dir[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
-export function Window({ win, compact }: { win: WinState; compact: boolean }) {
+/**
+ * One app window. Memoized and subscribed to its own entry only, so dragging
+ * or focusing one window doesn't re-render the others.
+ */
+export const Window = memo(function Window({ id, compact }: { id: string; compact: boolean }) {
+  const win = useWM((s) => s.windows.find((w) => w.id === id));
+  // Maximized/snapped rects depend on the viewport and the dock's edge.
+  useViewport();
+  usePrefs((s) => `${s.dockPosition}:${s.dockSize}:${s.dockAutoHide}:${s.titleButtons}`);
+  return win ? <WindowFrame win={win} compact={compact} /> : null;
+});
+
+/**
+ * The app inside a window. Only re-rendered when what it can see changes
+ * (props, title), not on every move or resize of its window.
+ */
+const AppBody = memo(
+  function AppBody({ win }: { win: WinState }) {
+    const Body = APP_COMPONENTS[win.appId];
+    return (
+      <Suspense
+        fallback={
+          <div className="empty">
+            <span className="spinner" />
+          </div>
+        }
+      >
+        <Body win={win} />
+      </Suspense>
+    );
+  },
+  (a, b) => a.win.id === b.win.id && a.win.appId === b.win.appId && a.win.title === b.win.title && a.win.props === b.win.props,
+);
+
+function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
   const focused = useWM((s) => s.focused === win.id);
   const wm = useWM.getState();
   const [preview, setPreview] = useState<Preview>(null);
@@ -64,6 +100,7 @@ export function Window({ win, compact }: { win: WinState; compact: boolean }) {
     if (preview === 'max') wm.toggleMaximize(win.id);
     else if (preview) wm.snapTo(win.id, preview);
     setPreview(null);
+    flushLayout();
   };
 
   // ---- resize ----
@@ -93,6 +130,7 @@ export function Window({ win, compact }: { win: WinState; compact: boolean }) {
       wm.resize(win.id, { x, y, w, h });
     };
     const up = () => {
+      flushLayout();
       el.removeEventListener('pointermove', move);
       el.removeEventListener('pointerup', up);
       el.removeEventListener('pointercancel', up);
@@ -161,7 +199,9 @@ export function Window({ win, compact }: { win: WinState; compact: boolean }) {
         </div>
         <div className="window-body">
           <ErrorBoundary title={win.title}>
-            <Body win={win} />
+            <WindowShownContext.Provider value={!win.minimized}>
+              <AppBody win={win} />
+            </WindowShownContext.Provider>
           </ErrorBoundary>
         </div>
         {!tiled &&
@@ -171,29 +211,4 @@ export function Window({ win, compact }: { win: WinState; compact: boolean }) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={titleMenu()} onClose={() => setMenu(null)} />}
     </>
   );
-}
-
-class ErrorBoundary extends Component<{ title: string; children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error(`${this.props.title} crashed`, error, info.componentStack);
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="empty">
-          <Icon name="alert" size={32} />
-          <h3>{this.props.title} stopped working</h3>
-          <p className="muted">{this.state.error.message}</p>
-          <button type="button" onClick={() => this.setState({ error: null })}>
-            Reload app
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }

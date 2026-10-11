@@ -26,18 +26,32 @@ export const shownOnHome = (a: StoreApp) => !!a.installed || (!!a.job && !a.job.
 
 const busy = (apps: StoreApp[]) => apps.some((a) => a.job && !a.job.done);
 
-/** Keeps the list fresh; returns a stop function. */
+/** Keeps the list fresh while the tab is visible; returns a stop function. */
 export function watchStoreApps(): () => void {
   let timer: number | undefined;
   let stopped = false;
+  let running = false;
   const tick = async () => {
-    await useStoreApps.getState().load();
+    timer = undefined;
+    // Hidden tab: stop here; becoming visible starts the loop again.
+    if (stopped || running || document.hidden) return;
+    running = true;
+    try {
+      await useStoreApps.getState().load();
+    } finally {
+      running = false;
+    }
     if (!stopped) timer = window.setTimeout(tick, busy(useStoreApps.getState().apps) ? 2000 : 20000);
   };
+  const onVisible = () => {
+    if (!document.hidden && timer === undefined) void tick();
+  };
+  document.addEventListener('visibilitychange', onVisible);
   void tick();
   return () => {
     stopped = true;
     window.clearTimeout(timer);
+    document.removeEventListener('visibilitychange', onVisible);
   };
 }
 

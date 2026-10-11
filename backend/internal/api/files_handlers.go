@@ -210,6 +210,7 @@ func (s *Server) filesWriteText(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	s.FileIndex.Upsert(req.Root, rel)
 	writeJSON(w, http.StatusOK, map[string]any{"size": st.Size(), "mod_time": st.ModTime().UTC()})
 }
 
@@ -235,6 +236,7 @@ func (s *Server) filesMkdir(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	s.FileIndex.Upsert(req.Root, rel)
 	writeJSON(w, http.StatusCreated, map[string]string{"path": display(rel)})
 }
 
@@ -260,6 +262,7 @@ func (s *Server) filesRename(w http.ResponseWriter, r *http.Request) {
 		s.fileError(w, r, err)
 		return
 	}
+	s.FileIndex.Rename(req.Root, rel, dst)
 	writeJSON(w, http.StatusOK, map[string]string{"path": display(dst)})
 }
 

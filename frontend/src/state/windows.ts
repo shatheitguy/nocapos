@@ -1,6 +1,7 @@
 // Window manager state: stacking, focus, minimize/maximize, snapping, and a
 // per-user layout that survives reloads and sign-out/sign-in.
 import { create } from 'zustand';
+import { saveLater, flushSaves } from '../lib/saveLater';
 import { workArea } from './prefs';
 
 export type Snap = 'left' | 'right' | null;
@@ -50,14 +51,14 @@ interface WM {
 
 let layoutKey: string | null = null;
 
+// Moves and resizes call this on every pointermove, so the write is batched.
 function persist(windows: WinState[]) {
   if (!layoutKey) return;
-  try {
-    localStorage.setItem(layoutKey, JSON.stringify(windows));
-  } catch {
-    /* ignore */
-  }
+  saveLater(layoutKey, () => JSON.stringify(windows));
 }
+
+/** Writes the layout now (end of a drag/resize). */
+export const flushLayout = flushSaves;
 
 function clampRect(r: Rect): Rect {
   const { w: vw, h: vh } = workArea();
@@ -141,6 +142,7 @@ export const useWM = create<WM>((set, get) => {
     resize: (id, r) => update((ws) => ws.map((w) => (w.id === id ? { ...w, ...clampRect(r), snap: null } : w))),
 
     restoreLayout: (userId) => {
+      flushSaves();
       layoutKey = `alfa.layout.${userId}`;
       let saved: WinState[] = [];
       try {
@@ -154,6 +156,7 @@ export const useWM = create<WM>((set, get) => {
     },
 
     reset: () => {
+      flushSaves();
       layoutKey = null;
       set({ windows: [], focused: null, topZ: 1 });
     },

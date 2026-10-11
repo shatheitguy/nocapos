@@ -26,7 +26,11 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
   const now = useClock(tp.clockSeconds ? 1000 : 15_000);
   const focusMode = usePrefs((s) => s.focusMode);
   const online = useSystem((s) => s.online);
-  const front = useWM((s) => s.windows.find((w) => w.id === s.focused && !w.minimized));
+  // A string, so moving the front window doesn't re-render the menu bar.
+  const frontTitle = useWM((s) => {
+    const w = s.windows.find((x) => x.id === s.focused && !x.minimized);
+    return w ? (APPS[w.appId]?.title ?? w.title) : 'Desktop';
+  });
   const [brandMenu, setBrandMenu] = useState<{ x: number; y: number } | null>(null);
   const [ccOpen, setCcOpen] = useState(false);
   const ccRef = useRef<HTMLButtonElement>(null);
@@ -61,7 +65,7 @@ export function MenuBar({ user, onLock, onLauncher }: { user: User; onLock: () =
       >
         <LogoMark size={15} />
       </button>
-      <b className="mb-app">{front ? APPS[front.appId]?.title ?? front.title : 'Desktop'}</b>
+      <b className="mb-app">{frontTitle}</b>
 
       <span className="spacer" />
 

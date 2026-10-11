@@ -1,6 +1,7 @@
 // Free-floating, movable & resizable desktop widgets with a per-user saved
 // layout (localStorage, like the window layout).
 import { create } from 'zustand';
+import { flushSaves, saveLater } from '../lib/saveLater';
 import { workArea } from './prefs';
 
 export type WidgetType =
@@ -92,13 +93,10 @@ function defaultLayout(): WidgetInstance[] {
   return out;
 }
 
+// Batched: drags and resizes update the layout on every pointermove.
 function persist(widgets: WidgetInstance[]) {
   if (!key) return;
-  try {
-    localStorage.setItem(key, JSON.stringify(widgets));
-  } catch {
-    /* ignore */
-  }
+  saveLater(key, () => JSON.stringify(widgets));
 }
 
 function clampPos(x: number, y: number, w: number, h: number) {
@@ -151,6 +149,7 @@ export const useWidgets = create<WidgetStore>((set, get) => {
     remove: (type) => update((ws) => ws.filter((w) => w.type !== type)),
 
     restore: (userId) => {
+      flushSaves();
       key = `alfa.widgets.${userId}`;
       let saved: WidgetInstance[] | null = null;
       try {
@@ -174,6 +173,7 @@ export const useWidgets = create<WidgetStore>((set, get) => {
     },
 
     _reset: () => {
+      flushSaves();
       key = null;
       set({ widgets: [], editing: false });
     },

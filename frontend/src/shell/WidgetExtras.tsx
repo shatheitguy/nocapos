@@ -5,9 +5,10 @@ import { Bar } from '../components/Charts';
 import { Icon } from '../components/Icon';
 import { MonthCalendar } from '../components/MonthCalendar';
 import { fmtBytes, fmtUptime } from '../lib/format';
-import { useClock } from '../lib/hooks';
+import { useClock, usePoll } from '../lib/hooks';
 import { useTimePrefs, zoned } from '../lib/time';
 import { openApp } from '../apps/meta';
+import { flushSaves, saveLater } from '../lib/saveLater';
 import { useSystem } from '../state/system';
 
 // ---- Analog clock ----
@@ -50,11 +51,13 @@ export function CalendarWidget() {
 export function NotesWidget() {
   const [text, setText] = useState('');
   useEffect(() => {
+    flushSaves(); // a just-unmounted copy may still have a write queued
     try {
       setText(localStorage.getItem('alfa.notes') ?? '');
     } catch {
       /* ignore */
     }
+    return flushSaves;
   }, []);
   return (
     <div className="widget glass notes-widget">
@@ -65,12 +68,9 @@ export function NotesWidget() {
         value={text}
         placeholder="Jot something down…"
         onChange={(e) => {
-          setText(e.target.value);
-          try {
-            localStorage.setItem('alfa.notes', e.target.value);
-          } catch {
-            /* ignore */
-          }
+          const v = e.target.value;
+          setText(v);
+          saveLater('alfa.notes', () => v, 300);
         }}
       />
     </div>
@@ -127,20 +127,15 @@ export function UptimeWidget() {
 // ---- Containers status ----
 export function ContainersWidget() {
   const [data, setData] = useState<{ running: number; total: number } | null>(null);
+  const load = async () => {
+    const r = await api<Container[]>('/api/v1/containers');
+    if (r.ok) setData({ running: r.data.filter((c) => c.state === 'running').length, total: r.data.length });
+    else setData({ running: 0, total: 0 });
+  };
   useEffect(() => {
-    let live = true;
-    const load = async () => {
-      const r = await api<Container[]>('/api/v1/containers');
-      if (live && r.ok) setData({ running: r.data.filter((c) => c.state === 'running').length, total: r.data.length });
-      else if (live) setData({ running: 0, total: 0 });
-    };
     void load();
-    const t = window.setInterval(() => void load(), 10_000);
-    return () => {
-      live = false;
-      window.clearInterval(t);
-    };
   }, []);
+  usePoll(load, 10_000);
   return (
     <button type="button" className="widget glass" onClick={() => openApp('containers')}>
       <div className="widget-head">

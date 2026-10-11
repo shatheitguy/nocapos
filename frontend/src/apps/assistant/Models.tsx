@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { aiApi, type ModelInfo, type Provider } from '../../api/ai';
 import { Icon } from '../../components/Icon';
 import { fmtBytes } from '../../lib/format';
+import { usePoll } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
 import { Empty } from '../Monitor';
 
@@ -31,10 +32,8 @@ export function Models({ provider }: { provider: Provider | null }) {
 
   useEffect(() => {
     void load();
-    if (!isLocal) return;
-    const t = window.setInterval(() => void load(), 5000);
-    return () => window.clearInterval(t);
-  }, [load, isLocal]);
+  }, [load]);
+  usePoll(load, 5000, isLocal);
 
   if (!provider) return <Empty icon="sparkles" text="Add a provider first." />;
 

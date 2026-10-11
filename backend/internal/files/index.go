@@ -2,6 +2,7 @@ package files
 
 import (
 	"io/fs"
+	"os"
 	"path"
 	"path/filepath"
 	"sort"
@@ -11,13 +12,15 @@ import (
 )
 
 // Index is an in-memory list of file names across the storage locations, for
-// universal search. It is rebuilt in the background on a timer and shortly
-// after any change made through Files. The whole-disk "system" location and
-// network drives are skipped (too large to index; browse them instead).
+// universal search. Saves, new folders, renames and deletes made through Files
+// update it in place; bulk changes (uploads, copies, restores) schedule a
+// rebuild shortly after, and a slow timer catches changes made outside
+// NoCapOS. The whole-disk "system" location and network drives are skipped
+// (too large to index; browse them instead).
 
 const (
 	maxIndexed      = 300_000
-	rebuildEvery    = 10 * time.Minute
+	rebuildEvery    = 6 * time.Hour
 	rebuildDebounce = 4 * time.Second
 )
 
@@ -41,6 +44,7 @@ type Index struct {
 	capped   bool
 
 	kick chan struct{}
+	done <-chan struct{}
 }
 
 // Hit is one search result.
@@ -55,7 +59,7 @@ type Hit struct {
 
 // NewIndex starts background indexing; stop it by closing done.
 func NewIndex(svc *Service, done <-chan struct{}) *Index {
-	ix := &Index{svc: svc, kick: make(chan struct{}, 1)}
+	ix := &Index{svc: svc, kick: make(chan struct{}, 1), done: done}
 	go ix.loop(done)
 	return ix
 }
@@ -110,6 +114,9 @@ func (ix *Index) rebuild() {
 		}
 		base := filepath.Clean(r.Path)
 		_ = filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+			if ix.stopping() {
+				return fs.SkipAll
+			}
 			if err != nil {
 				if d != nil && d.IsDir() {
 					return fs.SkipDir
@@ -144,8 +151,100 @@ func (ix *Index) rebuild() {
 	}
 
 	ix.mu.Lock()
+	defer ix.mu.Unlock()
+	if ix.stopping() {
+		ix.building = false // shutting down: keep what we had, the walk was cut short
+		return
+	}
 	ix.entries, ix.built, ix.building, ix.capped = out, time.Now(), false, capped
-	ix.mu.Unlock()
+}
+
+func (ix *Index) stopping() bool {
+	select {
+	case <-ix.done:
+		return true
+	default:
+		return false
+	}
+}
+
+// indexed reports whether a location is part of the index at all.
+func indexed(rootID string) bool {
+	return rootID != "system" && !strings.HasPrefix(rootID, "net:")
+}
+
+// Upsert adds or refreshes one path (a saved file, a new folder) without a
+// rebuild. rel is root-relative. A folder's contents aren't walked.
+func (ix *Index) Upsert(root, rel string) {
+	if ix == nil || !indexed(root) {
+		return
+	}
+	rel = strings.Trim(rel, "/")
+	if rel == "" || rel == "." || rel == RecycleDir || strings.HasPrefix(rel, RecycleDir+"/") {
+		return
+	}
+	r, err := ix.svc.Root(root)
+	if err != nil {
+		return
+	}
+	info, err := os.Lstat(filepath.Join(r.Path, filepath.FromSlash(rel)))
+	if err != nil {
+		return
+	}
+	name := path.Base(rel)
+	e := indexEntry{root: root, rel: rel, name: name, lower: strings.ToLower(name), dir: info.IsDir(), modTime: info.ModTime().UTC()}
+	if !e.dir {
+		e.size = info.Size()
+	}
+	ix.mu.Lock()
+	defer ix.mu.Unlock()
+	ix.followUp()
+	for i := range ix.entries {
+		if ix.entries[i].root == root && ix.entries[i].rel == rel {
+			ix.entries[i] = e
+			return
+		}
+	}
+	if len(ix.entries) < maxIndexed {
+		ix.entries = append(ix.entries, e)
+	}
+}
+
+// Rename moves a path (and anything inside it) to its new name in place.
+func (ix *Index) Rename(root, from, to string) {
+	if ix == nil || !indexed(root) {
+		return
+	}
+	from, to = strings.Trim(from, "/"), strings.Trim(to, "/")
+	if from == "" || to == "" || from == to {
+		return
+	}
+	ix.mu.Lock()
+	defer ix.mu.Unlock()
+	ix.followUp()
+	for i := range ix.entries {
+		e := &ix.entries[i]
+		if e.root != root {
+			continue
+		}
+		switch {
+		case e.rel == from:
+			e.rel = to
+			e.name = path.Base(to)
+			e.lower = strings.ToLower(e.name)
+		case strings.HasPrefix(e.rel, from+"/"):
+			e.rel = to + e.rel[len(from):]
+		}
+	}
+}
+
+// followUp schedules another rebuild when one is running now: it may have
+// walked past a change made in place and would otherwise undo it. Called
+// with ix.mu held.
+func (ix *Index) followUp() {
+	if ix.building {
+		ix.Touch()
+	}
 }
 
 // Stats reports how many entries are indexed and whether a build is running.

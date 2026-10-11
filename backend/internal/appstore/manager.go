@@ -233,6 +233,15 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 	if _, busy := m.active[app]; busy {
 		return "", ErrBusy
 	}
+	// Forget jobs that finished long ago (the UI only shows recent ones).
+	for id, old := range m.jobs {
+		if s := old.snapshot(); s.Done && time.Since(s.Ended) > time.Hour {
+			delete(m.jobs, id)
+			if m.last[s.App] == id {
+				delete(m.last, s.App)
+			}
+		}
+	}
 	j := &job{Job: Job{ID: randomString(16), App: app, Action: action, Phase: "Starting…", Started: time.Now().UTC()}}
 	m.jobs[j.ID] = j
 	m.active[app] = j.ID
