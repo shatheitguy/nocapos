@@ -8,7 +8,7 @@
 **Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a full windowed
 desktop in your browser. It installs on top of your existing Linux (Debian, Ubuntu, Raspberry Pi OS,
 Fedora, Arch), manages the machine as root, and runs apps in Docker:
-files, photos, backups, RAID storage, network sharing and one-click apps, all in a frosted-glass desktop.
+files, photos, backups, RAID storage, virtual machines, network sharing and one-click apps, all in a frosted-glass desktop.
 
 🌐 **Website:** https://shatheitguy.github.io/nocapos/
 
@@ -55,10 +55,14 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
   use a single disk as storage. Erasing always needs a typed confirmation.
 - **Network drives & sharing** — connect SMB/NFS shares and share folders over SMB and WebDAV, inside Files.
 - **Cloud Imports** — bring files in from Google Drive, Dropbox, OneDrive and more (rclone).
+- **Virtual Desk** — run Windows, Linux and Android virtual machines (KVM): a four-step New VM wizard,
+  live usage, snapshots, and the machine's screen in its own window.
 - **Docker** — edit any container (ports, folders, macvlan/ipvlan networks with fixed IPs, environment,
   limits), create networks and run Compose stacks.
 - **Your server, managed** — sign in with the machine's Linux accounts, users and roles, Wi-Fi and network
   (DHCP/static with automatic rollback), software update check, restart and shut down.
+- **Notifications** — updates, app updates, app errors, storage and backups, as macOS-style banners with
+  the menu-bar desktop or Windows-style toasts with the taskbar.
 - **Terminal, Monitor, Remote Desktop, Brave, Scripts and an AI Assistant** (local Ollama or cloud).
 - **Security** — argon2id passwords, two-factor sign-in, rotating sessions, an audit log of every admin
   action and a strict Content-Security-Policy.
@@ -70,11 +74,13 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 | ![Launchpad](docs/screenshots/launchpad.jpg) **Launchpad** — glass icons for NoCapOS apps, real icons for installed apps | ![Files](docs/screenshots/files.jpg) **Files** — favorites, recents, network devices and quick look |
 | ![Photos](docs/screenshots/photos.jpg) **Photos** — timeline, On this day, albums and favorites | ![App Store](docs/screenshots/app-store.jpg) **App Store** — featured apps, categories and updates |
 | ![Settings](docs/screenshots/settings.jpg) **Settings** — Network, General, Personalization, Security and more | ![Storage](docs/screenshots/storage.jpg) **Storage** — disk health and ZFS pools (sample data) |
+| ![Virtual Desk](docs/screenshots/virtual-desk.jpg) **Virtual Desk** — virtual machines with live usage (sample data) | ![New VM](docs/screenshots/virtual-desk-new.jpg) **New VM** — pick the system, ISO, resources and network |
 | ![Lock screen](docs/screenshots/login.jpg) **Lock screen** — your photo over the wallpaper | ![Cyber-Deck](docs/screenshots/cyber-deck.jpg) **Cyber-Deck** — an optional sci-fi theme |
 
 ## Updating
 
-Run the installer again — it upgrades in place and keeps your accounts, settings and files. Every push
+Run the installer again — it upgrades in place and keeps your accounts, settings and files. If the new
+version doesn't start, the installer puts the previous version and its database back automatically. Every push
 to `main` is built by GitHub Actions and published under [Releases](../../releases), so `releases/latest`
 always has the newest build.
 
@@ -84,13 +90,13 @@ Requirements: Go 1.25+, Node 20+.
 
 ```powershell
 .\build.ps1                                   # UI + backend\bin\alfad.exe for this machine
-.\package.ps1 -Version 0.3.0                  # Linux bundles in dist\ (amd64, arm64, armv7) + SHA256SUMS
+.\package.ps1 -Version 0.4.0                  # Linux bundles in dist\ (amd64, arm64, armv7) + SHA256SUMS
 ```
 
 ```bash
 cd frontend && npm install && npm run build   # builds the UI into backend/web/dist
 cd ../backend && CGO_ENABLED=0 go build -o bin/alfad ./cmd/alfad
-bash scripts/package.sh 0.3.0                 # (from the repo root) Linux bundles in dist/
+bash scripts/package.sh 0.4.0                 # (from the repo root) Linux bundles in dist/
 ```
 
 Run it locally with `backend/bin/alfad` and open `http://127.0.0.1:8080`; the first start prints the
