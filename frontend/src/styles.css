@@ -1015,7 +1015,10 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
 .terminal-bar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #11151d; border-bottom: 1px solid rgba(255,255,255,.08); color: #d7dde8; }
 .terminal-bar .status-dot.warn { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent); }
 .term-label { font-family: var(--mono); font-size: 12px; color: #aeb6c6; }
-.terminal-mount { flex: 1; min-height: 0; padding: 6px 8px; }
+.terminal-mount { flex: 1; min-height: 0; padding: 6px 8px; overflow: hidden; display: flex; }
+/* xterm sizes itself from its parent's box; that box has no padding, so the
+   grid fits exactly and never overflows into a resize loop. */
+.terminal-host { flex: 1; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
 .terminal-mount .xterm { height: 100%; }
 .terminal-mount .xterm-viewport { overflow-y: auto; }
 
@@ -1527,6 +1530,8 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
 }
 .terminal-app.crt .terminal-mount .xterm-screen { filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 55%, transparent)) brightness(1.08); }
 @keyframes crt-flicker { 0%, 100% { opacity: 1; } 47% { opacity: 0.93; } 48% { opacity: 1; } }
+:root[data-reduce-motion] .crt-overlay { animation: none; }
+@media (prefers-reduced-motion: reduce) { .crt-overlay { animation: none; } }
 
 .term-history { width: 260px; flex: none; display: flex; flex-direction: column; background: #0a0e15; border-left: 1px solid rgba(255, 255, 255, 0.08); color: #d7dde8; min-height: 0; }
 .term-history-head { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }

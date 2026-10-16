@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Terminal as XTerm, type ITheme } from '@xterm/xterm';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import { FitAddon } from '@xterm/addon-fit';
@@ -7,7 +7,7 @@ import '@xterm/xterm/css/xterm.css';
 import { openTerminal, terminalApi, type TerminalInfo, type TerminalSocket } from '../api/terminal';
 import { Icon } from '../components/Icon';
 import { usePrefs } from '../state/prefs';
-import type { WinState } from '../state/windows';
+import { useWM, type WinState } from '../state/windows';
 
 type Status = 'connecting' | 'open' | 'closed';
 
@@ -34,6 +34,68 @@ const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(\x07|\x1b\\)|\x1b[@-_]/g;
 // A password prompt was the last thing printed — don't record what's typed next.
 const SECRET_PROMPT = /(password|passphrase|passcode|pin)[^\n]*:\s*$/i;
 const PRIVILEGED = /^(sudo|su|doas)\b/;
+
+let webgl2: boolean | undefined;
+/** Whether this browser can draw with WebGL 2 at all (checked once). */
+function hasWebgl2() {
+  if (webgl2 === undefined) {
+    try {
+      webgl2 = !!document.createElement('canvas').getContext('webgl2');
+    } catch {
+      webgl2 = false;
+    }
+  }
+  return webgl2;
+}
+
+const TERM_FONT = '"Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace';
+
+/**
+ * Creates and opens an xterm in `host`, drawing on the GPU when it can. The
+ * renderer is chosen before the terminal opens, so xterm never paints a first
+ * frame with its DOM renderer (whose injected <style> NoCapOS's CSP blocks)
+ * and then repaints. If WebGL fails to start, or its context is lost later
+ * (GPU reset, too many contexts), the 2D canvas renderer takes over.
+ */
+function openXterm(host: HTMLElement, theme: ITheme, fontSize: number): XTerm {
+  const make = (gpu: boolean) => {
+    const term = new XTerm({ cursorBlink: true, fontFamily: TERM_FONT, fontSize, theme, scrollback: 5000, allowProposedApi: true });
+    if (gpu) {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => {
+        webgl.dispose();
+        try {
+          term.loadAddon(new CanvasAddon());
+        } catch {
+          /* DOM renderer as a last resort */
+        }
+      });
+      term.loadAddon(webgl);
+    } else {
+      try {
+        term.loadAddon(new CanvasAddon());
+      } catch {
+        /* DOM renderer as a last resort */
+      }
+    }
+    try {
+      term.open(host);
+    } catch (e) {
+      term.dispose();
+      throw e;
+    }
+    return term;
+  };
+  if (hasWebgl2()) {
+    try {
+      return make(true);
+    } catch {
+      host.replaceChildren();
+      webgl2 = false;
+    }
+  }
+  return make(false);
+}
 
 /**
  * Xterm.js terminal wired to a PTY in alfad. The target is in window props:
@@ -85,47 +147,38 @@ export function Terminal({ win }: { win: WinState }) {
     void terminalApi.info().then((r) => r.ok && setInfo(r.data));
   }, []);
 
-  useEffect(() => {
+  // Created in a layout effect: the terminal is sized to its window before the
+  // first paint, instead of appearing at 80×24 and jumping to fit.
+  useLayoutEffect(() => {
     const el = mountRef.current;
     if (!el) return;
 
     const prefs = usePrefs.getState();
-    const term = new XTerm({
-      cursorBlink: true,
-      fontFamily: '"Cascadia Code", "JetBrains Mono", ui-monospace, Consolas, monospace',
-      fontSize: prefs.termFontSize,
-      theme: xtermTheme(prefs.uiTheme, themeAccent),
-      scrollback: 5000,
-      allowProposedApi: true,
-    });
+    const term = openXterm(el, xtermTheme(prefs.uiTheme, themeAccent), prefs.termFontSize);
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.open(el);
-    // Draw on a GPU canvas. xterm's default DOM renderer injects a <style> tag
-    // for fonts and colors, which NoCapOS's CSP (style-src 'self') blocks.
-    const useCanvas = () => {
-      try {
-        term.loadAddon(new CanvasAddon());
-      } catch {
-        /* DOM renderer as a last resort */
-      }
-    };
-    try {
-      const webgl = new WebglAddon();
-      webgl.onContextLoss(() => {
-        webgl.dispose();
-        useCanvas();
-      });
-      term.loadAddon(webgl);
-    } catch {
-      useCanvas();
-    }
-    fit.fit();
-    term.focus();
     termRef.current = term;
     fitRef.current = fit;
 
     let disposed = false;
+    let pending = ''; // typed before the session is up
+
+    // Only resize when the cell grid really changes: every resize clears and
+    // redraws the whole screen, and a resize that changes nothing still costs
+    // a frame (the flicker while a window opened or settled).
+    const refit = () => {
+      const d = fit.proposeDimensions();
+      if (!d || !Number.isFinite(d.cols) || !Number.isFinite(d.rows) || d.cols < 2 || d.rows < 1) return;
+      if (d.cols === term.cols && d.rows === term.rows) return;
+      term.resize(d.cols, d.rows);
+      sockRef.current?.resize(term.cols, term.rows);
+    };
+    try {
+      refit();
+    } catch {
+      /* not laid out yet; the observer below catches up */
+    }
+    term.focus();
 
     // Track the typed line so finished commands land in the history panel.
     const track = (d: string) => {
@@ -145,6 +198,14 @@ export function Terminal({ win }: { win: WinState }) {
       }
     };
 
+    // Keys work from the first moment: anything typed while connecting is sent once the shell is up.
+    let live = false;
+    const input = term.onData((d) => {
+      track(d);
+      if (live) sockRef.current?.send(d);
+      else pending += d;
+    });
+
     (async () => {
       const t = await terminalApi.ticket(target, term.cols, term.rows);
       if (disposed) return;
@@ -153,45 +214,53 @@ export function Terminal({ win }: { win: WinState }) {
         setError(t.error ?? 'Could not start the terminal');
         return;
       }
-      const sock = openTerminal(t.data.ticket, {
+      sockRef.current = openTerminal(t.data.ticket, {
         onOpen: () => {
+          live = true;
           setStatus('open');
           sockRef.current?.resize(term.cols, term.rows);
+          if (pending) {
+            sockRef.current?.send(pending);
+            pending = '';
+          }
         },
         onData: (text) => {
           term.write(text);
           outTail.current = (outTail.current + text).slice(-240);
         },
         onClose: (reason) => {
+          live = false;
           setStatus('closed');
           if (reason) setError(reason);
           term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n');
         },
       });
-      sockRef.current = sock;
-      term.onData((d) => {
-        track(d);
-        sock.send(d);
-      });
     })();
 
-    const onResize = () => {
-      try {
-        fit.fit();
-        sockRef.current?.resize(term.cols, term.rows);
-      } catch {
-        /* element not laid out yet */
-      }
-    };
-    const ro = new ResizeObserver(onResize);
+    // Window resizes arrive in bursts; fit once per frame at most.
+    let frame = 0;
+    const ro = new ResizeObserver(() => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        try {
+          refit();
+        } catch {
+          /* element not laid out yet */
+        }
+      });
+    });
     ro.observe(el);
 
     return () => {
       disposed = true;
       ro.disconnect();
+      cancelAnimationFrame(frame);
+      input.dispose();
       sockRef.current?.close();
       sockRef.current = null;
       termRef.current = null;
+      fitRef.current = null;
       term.dispose();
       window.clearTimeout(flashTimer.current);
     };
@@ -199,10 +268,23 @@ export function Terminal({ win }: { win: WinState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
+  // Bringing the window to the front puts the keyboard back in the terminal
+  // (unless something inside it, like the history filter, already has focus).
+  useEffect(
+    () =>
+      useWM.subscribe((s, prev) => {
+        if (s.focused !== win.id || prev.focused === win.id) return;
+        const box = mountRef.current?.closest('.terminal-app');
+        if (box && !box.contains(document.activeElement)) termRef.current?.focus();
+      }),
+    [win.id],
+  );
+
   // Live font size / theme changes.
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
+    if (term.options.fontSize === fontSize) return;
     term.options.fontSize = fontSize;
     try {
       fitRef.current?.fit();
@@ -269,7 +351,9 @@ export function Terminal({ win }: { win: WinState }) {
 
       <div className="terminal-body">
         <div className="terminal-screen">
-          <div className="terminal-mount" ref={mountRef} />
+          <div className="terminal-mount">
+            <div className="terminal-host" ref={mountRef} />
+          </div>
           {crt && <div className="crt-overlay" aria-hidden />}
         </div>
 
