@@ -224,7 +224,9 @@ type NewDrive struct {
 	Auto     bool   `json:"auto"`
 }
 
-var hostRe = regexp.MustCompile(`^[A-Za-z0-9._:\[\]-]{1,253}$`)
+// hostRe: a host name or address. It never starts with '-', so mount and
+// showmount can't read it as an option.
+var hostRe = regexp.MustCompile(`^[A-Za-z0-9._:\[\]][A-Za-z0-9._:\[\]-]{0,252}$`)
 
 func validate(in *NewDrive) error {
 	in.Name, in.Host, in.Share, in.Username = strings.TrimSpace(in.Name), strings.TrimSpace(in.Host), strings.TrimSpace(in.Share), strings.TrimSpace(in.Username)
@@ -346,9 +348,10 @@ func (m *Manager) mount(ctx context.Context, d *store.NetMount) (err error) {
 				}
 				opts += ",credentials=" + m.credFile(d.ID)
 			}
-			args = []string{"-t", "cifs", "//" + d.Host + "/" + d.Share, mp, "-o", opts}
+			args = []string{"-t", "cifs", "-o", opts, "--", "//" + d.Host + "/" + d.Share, mp}
 		case "nfs":
-			args = []string{"-t", "nfs", d.Host + ":" + d.Share, mp, "-o", "soft,timeo=150,retrans=2"}
+			// "--": nothing after it is an option, whatever the host says.
+			args = []string{"-t", "nfs", "-o", "soft,timeo=150,retrans=2", "--", d.Host + ":" + d.Share, mp}
 		}
 		cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
@@ -493,7 +496,7 @@ func (m *Manager) Exports(ctx context.Context, host string) ([]string, error) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := m.run(cctx, "", "showmount", "-e", "--no-headers", host)
+	out, err := m.run(cctx, "", "showmount", "-e", "--no-headers", "--", host)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't ask %s for its shares: %s", host, lastLine(out))
 	}

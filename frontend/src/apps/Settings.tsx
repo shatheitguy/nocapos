@@ -532,7 +532,10 @@ function About({ isAdmin }: { isAdmin: boolean }) {
     ['Architecture', h.arch],
     ...(ips ? [['IP addresses', ips.length ? ips.join('\n') : 'None'] as [string, string]] : []),
     ['NoCapOS', info.version],
-    ['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : `Not connected${info.docker_error ? ` — ${info.docker_error}` : ''}`],
+    // Engine details are for administrators only.
+    ...(info.docker || info.docker_error
+      ? [['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : `Not connected — ${info.docker_error}`] as [string, string]]
+      : []),
   ];
   const copy = () =>
     void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', 'Device info copied'));

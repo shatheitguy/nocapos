@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"os/user"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -172,7 +173,13 @@ func linuxOwner(username string) (int, int, bool) {
 // Own gives files just made in a person's home (by NoCapOS, which runs as
 // root) to that person, so ownership on disk is right. rels are paths
 // inside the home location; folders are handed over with their contents.
-// Links are never followed. Only Linux homes are touched.
+// Only Linux homes are touched.
+//
+// The home belongs to its owner, who can swap a folder for a link to /etc
+// while this runs. So the walk goes through an os.Root opened on the home:
+// every step is resolved relative to an open directory and can't leave the
+// home, links are changed themselves (never followed), and a folder is only
+// descended into through its own Root.
 func (m *Manager) Own(rootID string, rels ...string) {
 	if !m.LinuxHomes() || m.owner == nil || !strings.HasPrefix(rootID, homePrefix) {
 		return
@@ -180,7 +187,7 @@ func (m *Manager) Own(rootID string, rels ...string) {
 	var todo []string
 	for _, rel := range rels {
 		if c := strings.Trim(rel, "/"); c != "" && c != "." {
-			todo = append(todo, rel) // never the whole home
+			todo = append(todo, c) // never the whole home
 		}
 	}
 	name := strings.TrimPrefix(rootID, homePrefix)
@@ -192,19 +199,88 @@ func (m *Manager) Own(rootID string, rels ...string) {
 	if !ok {
 		return
 	}
+	r, err := os.OpenRoot(home)
+	if err != nil {
+		return
+	}
+	defer r.Close()
 	for _, rel := range todo {
-		full, err := Inside(home, rel)
-		if err != nil || full == "" {
+		if _, err := Inside(home, rel); err != nil {
 			continue
 		}
-		_ = filepath.WalkDir(full, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return nil
+		dir, base := path.Split(filepath.ToSlash(rel))
+		parent := r
+		if dir = strings.Trim(dir, "/"); dir != "" {
+			if parent, err = r.OpenRoot(dir); err != nil {
+				continue
 			}
-			_ = os.Lchown(p, uid, gid)
-			return nil
-		})
+		}
+		ownTree(parent, base, uid, gid, 0)
+		if parent != r {
+			parent.Close()
+		}
 	}
+}
+
+// lchownIn changes one entry's owner without following a link; replaceable
+// in tests.
+var lchownIn = func(r *os.Root, name string, uid, gid int) error { return r.Lchown(name, uid, gid) }
+
+const maxOwnDepth = 128
+
+func ownTree(r *os.Root, name string, uid, gid, depth int) {
+	fi, err := r.Lstat(name)
+	if err != nil {
+		return
+	}
+	_ = lchownIn(r, name, uid, gid)
+	if !fi.IsDir() || fi.Mode()&fs.ModeSymlink != 0 || depth >= maxOwnDepth {
+		return
+	}
+	sub, err := r.OpenRoot(name)
+	if err != nil {
+		return
+	}
+	defer sub.Close()
+	// Swapped for a link since Lstat? OpenRoot followed it, but only within
+	// r, and the target isn't a folder we were asked about: leave it.
+	if fi2, err := sub.Stat("."); err != nil || !os.SameFile(fi, fi2) {
+		return
+	}
+	d, err := sub.Open(".")
+	if err != nil {
+		return
+	}
+	entries, _ := d.ReadDir(-1)
+	d.Close()
+	for _, e := range entries {
+		ownTree(sub, e.Name(), uid, gid, depth+1)
+	}
+}
+
+// EnsureHomeFolder makes a folder at the top of a person's home (Photos,
+// say) without following links, and gives it to them.
+func (m *Manager) EnsureHomeFolder(name, folder string) error {
+	home, err := m.EnsureHome(name)
+	if err != nil {
+		return err
+	}
+	if !validHomeName(folder) {
+		return ErrOutside
+	}
+	r, err := os.OpenRoot(home)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if err := r.Mkdir(folder, 0o750); err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	if fi, err := r.Lstat(folder); err != nil || !fi.IsDir() {
+		return ErrOutside // a link or a file where the folder should be
+	}
+	m.Own(HomeRootID(name), "/"+folder)
+	return nil
 }
 
 // IndexPlace finds which indexed fixed location holds a folder, and where
