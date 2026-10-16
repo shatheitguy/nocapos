@@ -180,7 +180,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
       {glass && !compact && !launcher && (
         <ErrorBoundary title="Home header" fallback="hidden">
-          <HomeHeader username={user.username} isAdmin={isAdmin} />
+          <HomeHeader username={user.username} />
         </ErrorBoundary>
       )}
       {!compact && (
