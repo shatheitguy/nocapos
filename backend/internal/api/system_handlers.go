@@ -7,6 +7,7 @@ import (
 
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/store"
 )
 
 type systemInfoResponse struct {
@@ -22,6 +23,11 @@ func (s *Server) systemInfo(w http.ResponseWriter, r *http.Request) {
 		Version:      s.Version,
 		Host:         s.Sampler.HostInfo(),
 		Accelerators: s.Sampler.Accelerators(),
+	}
+	if userFrom(r.Context()).Role != store.RoleAdmin {
+		// Engine details (versions, paths, drivers) are for administrators.
+		writeJSON(w, http.StatusOK, resp)
+		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()

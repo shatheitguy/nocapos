@@ -144,3 +144,18 @@ func TestSambaAccountsNeverForRootOrDisabled(t *testing.T) {
 		t.Errorf("root not refused everywhere:\n%s", conf)
 	}
 }
+
+func TestHostsCantBeOptions(t *testing.T) {
+	for _, host := range []string{"-oexec", "--help", "-", "-t nfs"} {
+		in := NewDrive{Name: "x", Kind: "nfs", Host: host, Share: "/x"}
+		if err := validate(&in); err == nil {
+			t.Errorf("host %q accepted", host)
+		}
+	}
+	for _, host := range []string{"nas.local", "192.168.1.20", "[fe80::1]", "nas-2"} {
+		in := NewDrive{Name: "x", Kind: "nfs", Host: host, Share: "/x"}
+		if err := validate(&in); err != nil {
+			t.Errorf("host %q refused: %v", host, err)
+		}
+	}
+}
