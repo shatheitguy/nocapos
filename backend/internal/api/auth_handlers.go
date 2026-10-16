@@ -208,7 +208,7 @@ func (s *Server) keepSharingPassword(username, password string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := s.NetDrives.SyncUser(ctx, username, password); err != nil {
+		if err := s.NetDrives.KeepUser(ctx, username, password); err != nil {
 			s.Log.Warn("sharing: set Samba password", "user", username, "err", err)
 		}
 	}()

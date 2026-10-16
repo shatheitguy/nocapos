@@ -33,6 +33,7 @@ func TestRenderSambaGolden(t *testing.T) {
    force user = root
    force group = root
    valid users = %S
+   invalid users = root
    browseable = no
    read only = no
    create mask = 0640
@@ -49,6 +50,7 @@ func TestRenderSambaGolden(t *testing.T) {
    comment = Movies and music
    path = /srv/nocap/Media
    valid users = admin alex sam
+   invalid users = root
    read list = sam
    write list = admin alex
    read only = yes
@@ -68,6 +70,7 @@ func TestRenderSambaGolden(t *testing.T) {
 [Hidden]
    path = /srv/nocap/Hidden
    valid users = admin
+   invalid users = root
    write list = admin
    read only = yes
    browseable = no
@@ -178,9 +181,9 @@ func TestSharingSamba(t *testing.T) {
 	}
 	conf = readConf(t, m)
 	for _, want := range []string{
-		"[Media]\n   path = ", "valid users = admin alex sam\n   read list = sam\n   write list = admin alex\n",
+		"[Media]\n   path = ", "valid users = admin alex sam\n   invalid users = root\n   read list = sam\n   write list = admin alex\n",
 		// Docs is read-only for everyone, whatever their permission.
-		"valid users = admin sam\n   read list = admin sam\n   read only = yes",
+		"valid users = admin sam\n   invalid users = root\n   read list = admin sam\n   read only = yes",
 	} {
 		if !strings.Contains(conf, want) {
 			t.Errorf("per-user nocapos.conf lacks %q:\n%s", want, conf)

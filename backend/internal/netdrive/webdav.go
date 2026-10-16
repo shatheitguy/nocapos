@@ -75,12 +75,21 @@ func (a *davAuth) evictLocked(now time.Time) {
 		}
 	}
 	for len(a.fails) >= maxDavFails {
-		var oldest string
-		var at time.Time
+		// The least recently seen address that isn't waiting right now; only
+		// if every address is waiting does one of those go.
+		var oldest, oldestBlocked string
+		var at, atBlocked time.Time
 		for k, f := range a.fails {
-			if oldest == "" || f.last.Before(at) {
+			if now.Before(f.until) {
+				if oldestBlocked == "" || f.last.Before(atBlocked) {
+					oldestBlocked, atBlocked = k, f.last
+				}
+			} else if oldest == "" || f.last.Before(at) {
 				oldest, at = k, f.last
 			}
+		}
+		if oldest == "" {
+			oldest = oldestBlocked
 		}
 		delete(a.fails, oldest)
 	}
