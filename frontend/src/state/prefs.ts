@@ -441,7 +441,7 @@ export function applyPrefs(p: PrefValues) {
   const clear = Math.min(100, Math.max(0, p.transparency));
   root.toggleAttribute('data-solid', clear === 0);
   root.dataset.icons = p.iconStyle;
-  root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
+  root.toggleAttribute('data-tuned', clear > 0);
   root.style.setProperty('--clear', String(clear / 100));
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);
