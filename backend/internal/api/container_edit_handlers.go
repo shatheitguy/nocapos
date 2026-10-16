@@ -205,6 +205,17 @@ func (s *Server) containerRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.crashes.Expect(d.ID, d.Name)
+	// ?volumes=1 also deletes the named volumes only this container used.
+	if r.URL.Query().Get("volumes") == "1" {
+		removed, err := s.Docker.RemoveContainerAndVolumes(r.Context(), d.ID)
+		s.audit(r, userFrom(r.Context()).ID, "container.remove", d.Name, err == nil, "with volumes: "+strings.Join(removed, ", ")+errText(err))
+		if err != nil {
+			s.editError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"volumes": removed})
+		return
+	}
 	err = s.Docker.RemoveContainer(r.Context(), d.ID)
 	s.audit(r, userFrom(r.Context()).ID, "container.remove", d.Name, err == nil, errText(err))
 	if err != nil {
