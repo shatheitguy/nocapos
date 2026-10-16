@@ -14,6 +14,12 @@
 #   --port N            HTTPS port for native installs (default 443)
 #   --no-docker         don't install Docker (the App Store stays off until Docker is present)
 #   --install-docker    install Docker from get.docker.com without asking
+#   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
+#                       engine, Brave, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
+#                       to install each one later, from its app or from Packages
+#   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
+#   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
+#                       If Avahi already has a host-name set (by you), that one is kept.
 #   --yes               answer yes to prompts
 #   --purge             with --uninstall: also delete accounts, settings and TLS keys
 set -euo pipefail
@@ -34,6 +40,9 @@ INSTALL_DOCKER=ask
 ASSUME_YES=0
 UNINSTALL=0
 PURGE=0
+MINIMAL=0
+BRANDING=1
+MDNS_NAME=nocap
 ARGS=("$@")
 
 info() { printf '\033[1;31m==>\033[0m %s\n' "$*"; }
@@ -56,10 +65,13 @@ while [ $# -gt 0 ]; do
     --port) PORT="${2:?--port needs a number}"; shift ;;
     --no-docker) INSTALL_DOCKER=no ;;
     --install-docker) INSTALL_DOCKER=yes ;;
+    --minimal) MINIMAL=1 ;;
+    --no-branding) BRANDING=0 ;;
+    --mdns-name) MDNS_NAME="${2:?--mdns-name needs a name}"; shift ;;
     --yes | -y) ASSUME_YES=1 ;;
     --uninstall) UNINSTALL=1 ;;
     --purge) PURGE=1 ;;
-    -h | --help) sed -n '2,20p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
+    -h | --help) sed -n '2,27p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -68,6 +80,7 @@ done
 [ "$(id -u)" -eq 0 ] || die "run as root: sudo bash install.sh (or: curl -fsSL ... | sudo bash)"
 case "$STORAGE" in /*) ;; *) die "--storage must be an absolute path" ;; esac
 case "$PORT" in '' | *[!0-9]*) die "--port must be a number" ;; esac
+[[ "$MDNS_NAME" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$ ]] || die "--mdns-name: use letters, numbers and dashes"
 
 case "$(uname -m)" in
   x86_64 | amd64) ARCH=amd64 ;;
@@ -185,22 +198,254 @@ ensure_docker() { # $1 = required (1) or optional (0)
   warn "Skipping Docker: $NAME runs, the App Store stays off until Docker is installed."
 }
 
-# restic powers Backups and rclone powers Cloud Imports; best effort — the
-# apps offer to install them later too.
-ensure_tools() {
-  local pkg missing=()
-  for pkg in restic rclone; do has "$pkg" || missing+=("$pkg"); done
-  [ "${#missing[@]}" -eq 0 ] && return 0
-  info "Installing ${missing[*]} (for Backups and Cloud Imports)"
-  if has apt-get; then
-    DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null 2>&1 ||
-      { apt-get update >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null 2>&1; } || true
-  elif has dnf; then dnf install -y "${missing[@]}" >/dev/null 2>&1 || true
-  elif has pacman; then pacman -Sy --noconfirm "${missing[@]}" >/dev/null 2>&1 || true
-  elif has zypper; then zypper --non-interactive install "${missing[@]}" >/dev/null 2>&1 || true
-  elif has apk; then apk add "${missing[@]}" >/dev/null 2>&1 || true
+# ---------------------------------------------------------------- host packages
+# What NoCapOS's features need from the host, per package manager. One line per
+# feature: feature|apt|dnf|pacman|zypper ("-" = this distribution doesn't have
+# it). Keep in sync with backend/internal/syspkg/features.go (a test checks).
+# Packages a distribution doesn't carry are skipped with a warning; none of
+# them is required, so the install never fails over one. --minimal skips all.
+PKG_TABLE='
+virtualization|qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients ovmf swtpm swtpm-tools|qemu-kvm qemu-img libvirt edk2-ovmf swtpm swtpm-tools|qemu-base libvirt edk2-ovmf swtpm dnsmasq|qemu-kvm qemu-tools libvirt qemu-ovmf-x86_64 swtpm
+sharing|samba smbclient cifs-utils nfs-common|samba samba-client cifs-utils nfs-utils|samba smbclient cifs-utils nfs-utils|samba samba-client cifs-utils nfs-client
+remote-desktop|guacd libguac-client-rdp0 libguac-client-vnc0|guacd libguac-client-rdp libguac-client-vnc|-|-
+mdns|avahi-daemon libnss-mdns|avahi nss-mdns|avahi nss-mdns|avahi nss-mdns
+smart|smartmontools|smartmontools|smartmontools|smartmontools
+zfs|zfsutils-linux|-|-|-
+media|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
+backup|restic rclone|restic rclone|restic rclone|restic rclone
+'
+
+pkg_manager() {
+  if has apt-get; then echo apt
+  elif has dnf; then echo dnf
+  elif has pacman; then echo pacman
+  elif has zypper; then echo zypper
+  else echo none; fi
+}
+
+pkg_refresh() { # $1 = manager
+  case "$1" in
+    apt) apt-get update -q >/dev/null 2>&1 ;;
+    dnf) dnf -q makecache >/dev/null 2>&1 ;;
+    pacman) pacman -Sy >/dev/null 2>&1 ;;
+    zypper) zypper --non-interactive -q refresh >/dev/null 2>&1 ;;
+  esac
+}
+
+pkg_available() { # $1 = manager, $2 = package
+  case "$1" in
+    apt) apt-cache show "$2" >/dev/null 2>&1 ;;
+    dnf) dnf -q info "$2" >/dev/null 2>&1 ;;
+    pacman) pacman -Si "$2" >/dev/null 2>&1 ;;
+    zypper) zypper --non-interactive -q info "$2" 2>/dev/null | grep -q '^Name' ;;
+    *) return 1 ;;
+  esac
+}
+
+pkg_install() { # $1 = manager, rest = packages
+  local mgr="$1"; shift
+  case "$mgr" in
+    apt) DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -q \
+      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@" >/dev/null 2>&1 ;;
+    dnf) dnf install -y -q "$@" >/dev/null 2>&1 ;;
+    pacman) pacman -S --noconfirm --needed "$@" >/dev/null 2>&1 ;;
+    zypper) zypper --non-interactive -q install "$@" >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_ubuntu() { grep -qE '^ID="?ubuntu"?$' /etc/os-release 2>/dev/null; }
+
+install_host_packages() {
+  local mgr col line feature list p avail skipped
+  mgr="$(pkg_manager)"
+  case "$mgr" in
+    apt) col=2 ;; dnf) col=3 ;; pacman) col=4 ;; zypper) col=5 ;;
+    *) warn "No supported package manager: skipping the host packages (NoCapOS offers them later)."; return 0 ;;
+  esac
+  info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks and media (skip with --minimal)"
+  pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    feature="${line%%|*}"
+    list="$(cut -d'|' -f"$col" <<<"$line")"
+    [ "$list" = "-" ] && { warn "$feature: no packages for this distribution; skipped"; continue; }
+    if [ "$feature" = zfs ] && ! is_ubuntu; then
+      warn "zfs: NoCapOS installs ZFS on Ubuntu; on this system follow OpenZFS's instructions for your distribution"
+      continue
+    fi
+    avail=() skipped=()
+    for p in $list; do
+      if pkg_available "$mgr" "$p"; then avail+=("$p"); else skipped+=("$p"); fi
+    done
+    [ "${#skipped[@]}" -eq 0 ] || warn "$feature: not available here, skipped: ${skipped[*]}"
+    [ "${#avail[@]}" -gt 0 ] || continue
+    printf '    %s: %s\n' "$feature" "${avail[*]}"
+    if ! pkg_install "$mgr" "${avail[@]}"; then
+      # One broken package shouldn't take the rest of the feature down.
+      for p in "${avail[@]}"; do pkg_install "$mgr" "$p" || warn "$feature: couldn't install $p"; done
+    fi
+  done <<<"$PKG_TABLE"
+  enable_host_services
+}
+
+enable_host_services() {
+  if has virsh; then
+    systemctl enable --now libvirtd >/dev/null 2>&1 ||
+      systemctl enable --now virtqemud.socket virtnetworkd.socket virtstoraged.socket >/dev/null 2>&1 ||
+      warn "libvirt is installed but its service didn't start"
+    virsh net-autostart default >/dev/null 2>&1 || true
+    virsh net-start default >/dev/null 2>&1 || true
   fi
-  for pkg in "${missing[@]}"; do has "$pkg" || warn "Couldn't install $pkg; NoCapOS will offer to install it later."; done
+  if has avahi-daemon || [ -x /usr/sbin/avahi-daemon ]; then
+    systemctl enable --now avahi-daemon >/dev/null 2>&1 || warn "avahi-daemon didn't start"
+  fi
+}
+
+# Brave comes from Brave's official repository, installed by the same script
+# the Brave app runs on first launch (alfad carries it: `nocapos install-brave`).
+install_brave() {
+  case "$(pkg_manager)" in apt | dnf) ;; *) warn "Brave: NoCapOS installs it on apt and dnf systems; skipped"; return 0 ;; esac
+  info "Installing Brave and its stream tools (from Brave's repository)"
+  "$BIN" install-brave >/dev/null 2>&1 || warn "Brave didn't install now; the Brave app installs it on first launch."
+}
+
+# ---------------------------------------------------------------- console
+# The text console shows a NoCapOS banner with the addresses to open. Every
+# file changed here is backed up to $BRAND_DIR and put back by uninstall.sh.
+BRAND_DIR="$DATA/console-backup"
+
+nocap_logo() {
+  cat <<'LOGO'
+  _   _        ____             ___  ____
+ | \ | | ___  / ___|__ _ _ __  / _ \/ ___|
+ |  \| |/ _ \| |   / _` | '_ \| | | \___ \
+ | |\  | (_) | |__| (_| | |_) | |_| |___) |
+ |_| \_|\___/ \____\__,_| .__/ \___/|____/
+                        |_|
+LOGO
+}
+
+# Network cards worth listing (not Docker, VM or VPN bridges).
+lan_ifaces() {
+  has ip || return 0
+  ip -o -4 addr show scope global 2>/dev/null | awk '{print $2}' | sort -u |
+    grep -Ev '^(lo|docker|br-|veth|virbr|cni|podman|flannel|cali|vxlan|tun|tap|wg|tailscale|zt)' || true
+}
+
+backup_once() { # $1 = file, $2 = backup name; keeps the very first original
+  if [ -e "$BRAND_DIR/$2" ] || [ -e "$BRAND_DIR/$2.absent" ]; then return 0; fi
+  if [ -e "$1" ]; then cp -p "$1" "$BRAND_DIR/$2"; else touch "$BRAND_DIR/$2.absent"; fi
+}
+
+brand_console() {
+  mkdir -p "$BRAND_DIR"
+  chmod 700 "$BRAND_DIR"
+  local suffix="" ifaces i
+  [ "$PORT" = 443 ] || suffix=":$PORT"
+  ifaces="$(lan_ifaces)"
+
+  # /etc/issue: agetty fills in \4{eth0} with the card's current address, so
+  # the banner stays right when DHCP hands out a new one. Backslashes in the
+  # logo are doubled because agetty reads them as escapes.
+  backup_once /etc/issue issue
+  {
+    nocap_logo | sed 's/\\/\\\\/g'
+    echo
+    echo "  Powered By Sha The IT Guy"
+    echo
+    echo "  Open NoCapOS in a browser on your network:"
+    echo "    http://$MDNS_NAME.local"
+    if [ -n "$ifaces" ]; then
+      for i in $ifaces; do echo "    https://\\4{$i}$suffix"; done
+    else
+      echo "    https://\\4$suffix"
+    fi
+    echo
+    echo "  \\S{PRETTY_NAME}  \\n  \\l"
+    echo
+  } >/etc/issue
+
+  # MOTD after SSH/console login. Debian/Ubuntu build it from the scripts in
+  # /etc/update-motd.d: switch the stock ones off (chmod -x, listed so
+  # uninstall.sh switches them back on) and add ours, which reads the
+  # addresses at login time. Elsewhere /etc/motd is a static file.
+  backup_once /etc/motd motd
+  if [ -d /etc/update-motd.d ]; then
+    local f
+    for f in /etc/update-motd.d/*; do
+      [ -f "$f" ] && [ -x "$f" ] && [ "$(basename "$f")" != 05-nocapos ] || continue
+      chmod -x "$f"
+      basename "$f" >>"$BRAND_DIR/motd-disabled.list"
+    done
+    {
+      echo '#!/bin/sh'
+      echo '# NoCapOS login banner (removed by uninstall.sh)'
+      echo "cat <<'LOGO'"
+      nocap_logo
+      echo 'LOGO'
+      echo 'echo'
+      echo 'echo "  Powered By Sha The IT Guy"'
+      echo 'echo'
+      echo "echo \"  http://$MDNS_NAME.local\""
+      echo "for ip in \$(hostname -I 2>/dev/null); do case \"\$ip\" in *:*|172.1[7-9].*|172.2[0-9].*|172.3[01].*) continue ;; esac; echo \"  https://\$ip$suffix\"; done"
+      echo 'echo'
+    } >/etc/update-motd.d/05-nocapos
+    chmod 755 /etc/update-motd.d/05-nocapos
+    : >/etc/motd
+  else
+    {
+      nocap_logo
+      echo
+      echo "  Powered By Sha The IT Guy"
+      echo
+      echo "  http://$MDNS_NAME.local"
+      for i in $(hostname -I 2>/dev/null); do case "$i" in *:*) ;; *) echo "  https://$i$suffix" ;; esac; done
+      echo
+    } >/etc/motd
+  fi
+}
+
+# mDNS: announce this server as <name>.local (default nocap.local) and
+# publish NoCapOS as a web service. The system hostname is left alone; if
+# Avahi already has a host-name of its own (set by you), it is kept.
+setup_mdns() {
+  if [ ! -d /etc/avahi ]; then
+    warn "Avahi isn't installed, so $MDNS_NAME.local won't resolve (install avahi-daemon, then re-run the installer)"
+    return 0
+  fi
+  mkdir -p "$BRAND_DIR" /etc/avahi/services
+  local conf=/etc/avahi/avahi-daemon.conf current=""
+  [ -f "$conf" ] && current="$(sed -n 's/^[[:space:]]*host-name[[:space:]]*=[[:space:]]*//p' "$conf" | head -1 | tr -d '[:space:]')"
+  if [ -z "$current" ]; then
+    backup_once "$conf" avahi-daemon.conf
+    if [ -f "$conf" ] && grep -q '^\[server\]' "$conf"; then
+      sed -i "/^\[server\]/a host-name=$MDNS_NAME" "$conf"
+    else
+      printf '[server]\nhost-name=%s\n' "$MDNS_NAME" >>"$conf"
+    fi
+  elif [ "$current" != "$MDNS_NAME" ]; then
+    info "Avahi already announces this server as $current.local; keeping that name"
+    MDNS_NAME="$current"
+  fi
+  cat >/etc/avahi/services/nocapos.service <<EOF
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- NoCapOS web desktop (removed by uninstall.sh) -->
+<service-group>
+  <name replace-wildcards="yes">NoCapOS on %h</name>
+  <service>
+    <type>_https._tcp</type>
+    <port>$PORT</port>
+  </service>
+  <service>
+    <type>_http._tcp</type>
+    <port>80</port>
+  </service>
+</service-group>
+EOF
+  systemctl enable avahi-daemon >/dev/null 2>&1 || true
+  systemctl restart avahi-daemon >/dev/null 2>&1 || warn "avahi-daemon didn't restart; $MDNS_NAME.local may not resolve yet"
 }
 
 finish() { # $1 = URL, $2 = token
@@ -212,7 +457,7 @@ finish() { # $1 = URL, $2 = token
   if [ -n "$2" ]; then echo "   First-run setup token:  $2"; else echo "   Sign in with your existing account."; fi
   echo "   Files: NoCap Drive is $STORAGE"
   if has ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
-    echo "   ufw is active — allow access with:  sudo ufw allow $PORT/tcp"
+    echo "   ufw is active — allow access with:  sudo ufw allow $PORT/tcp && sudo ufw allow 80/tcp && sudo ufw allow 5353/udp"
   fi
 }
 
@@ -336,7 +581,11 @@ install_native_mode() {
   if [ "$fresh" -eq 1 ] && port_busy "$PORT"; then die "port $PORT is already in use (choose another with --port N)"; fi
 
   ensure_docker 0
-  ensure_tools
+  if [ "$MINIMAL" -eq 1 ]; then
+    info "Minimal install: skipping the optional host packages (Packages in NoCapOS installs them later)"
+  else
+    install_host_packages
+  fi
 
   info "Installing $BIN"
   systemctl stop nocapos 2>/dev/null || true
@@ -376,9 +625,13 @@ EOF
     [ "$can_rollback" -eq 1 ] && rollback_native
     die "$NAME did not start; check: journalctl -u nocapos -e"
   fi
+  [ "$MINIMAL" -eq 1 ] || install_brave
+  setup_mdns
+  if [ "$BRANDING" -eq 1 ]; then brand_console; fi
   local url="https://HOST/"
   [ "$PORT" = 443 ] || url="https://HOST:$PORT/"
   finish "$url" "$TOKEN"
+  if [ -d /etc/avahi ]; then echo "   Or:    http://$MDNS_NAME.local (redirects to HTTPS)"; fi
   echo "   $NAME runs as root and can manage this server: Linux users (sign in with them), network, power,"
   echo "   storage and a root terminal — all admin-only and recorded in the audit log."
   echo "   Turn on two-factor sign-in under Settings → Security."

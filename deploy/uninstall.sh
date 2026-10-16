@@ -47,6 +47,7 @@ done
 echo "This removes $NAME from this server:"
 echo "  - the nocapos service and program"
 echo "  - its Samba sharing settings and network-drive mounts"
+echo "  - its console banner, MOTD and nocap.local announcement (the originals are put back)"
 [ "$PURGE" -eq 1 ] && echo "  - its accounts, settings, database and TLS keys ($ETC, $DATA)"
 [ "$REMOVE_APPS" -eq 1 ] && echo "  - App Store apps, including their data volumes"
 echo "Your files (NoCap Drive, shared folders, people's homes) are NOT deleted."
@@ -129,6 +130,35 @@ if has docker; then
   fi
 fi
 
+# ---------------------------------------------------------------- console and mDNS
+# Put back the login banner, the MOTD scripts and Avahi's settings exactly as
+# they were before NoCapOS (install.sh kept the originals in $BRAND_DIR).
+BRAND_DIR="$DATA/console-backup"
+restore_file() { # $1 = file, $2 = backup name
+  if [ -f "$BRAND_DIR/$2" ]; then cp -p "$BRAND_DIR/$2" "$1"
+  elif [ -f "$BRAND_DIR/$2.absent" ]; then rm -f "$1"; fi
+}
+if [ -d "$BRAND_DIR" ] || [ -f /etc/update-motd.d/05-nocapos ] || [ -f /etc/avahi/services/nocapos.service ]; then
+  info "Restoring the console banner, MOTD and Avahi settings"
+  restore_file /etc/issue issue
+  restore_file /etc/motd motd
+  rm -f /etc/update-motd.d/05-nocapos
+  if [ -f "$BRAND_DIR/motd-disabled.list" ]; then
+    while IFS= read -r f; do
+      case "$f" in */* | '') continue ;; esac
+      if [ -f "/etc/update-motd.d/$f" ]; then chmod +x "/etc/update-motd.d/$f"; fi
+    done <"$BRAND_DIR/motd-disabled.list"
+  fi
+  rm -f /etc/avahi/services/nocapos.service
+  if [ -f "$BRAND_DIR/avahi-daemon.conf" ] || [ -f "$BRAND_DIR/avahi-daemon.conf.absent" ]; then
+    restore_file /etc/avahi/avahi-daemon.conf avahi-daemon.conf
+    systemctl restart avahi-daemon 2>/dev/null || true
+  elif has systemctl; then
+    systemctl reload avahi-daemon 2>/dev/null || true
+  fi
+  rm -rf "$BRAND_DIR"
+fi
+
 # ---------------------------------------------------------------- data
 if [ "$PURGE" -eq 1 ]; then
   info "Deleting accounts, settings and keys"
@@ -140,4 +170,6 @@ info "$NAME removed."
 [ "$PURGE" -eq 1 ] || echo "   Accounts and settings were kept in $DATA (use --purge to delete them)."
 echo "   Linux user accounts, their homes and Samba passwords were left as they are."
 echo "   Virtual machines (if any) are still defined in libvirt."
+echo "   Host packages the installer added (QEMU/libvirt, Samba, guacd, Brave, Avahi, ...) stay installed;"
+echo "   remove them with your package manager if you don't need them."
 echo "   Your files were NOT touched."
