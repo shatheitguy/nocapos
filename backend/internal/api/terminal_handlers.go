@@ -20,11 +20,12 @@ import (
 const terminalTicketTTL = 30 * time.Second
 
 type terminalTicket struct {
-	userID string
-	target string // "host" or "container:<id>"
-	cols   int
-	rows   int
-	exp    time.Time
+	userID  string
+	session string
+	target  string // "host" or "container:<id>"
+	cols    int
+	rows    int
+	exp     time.Time
 }
 
 type terminalTicketStore struct {
@@ -95,7 +96,7 @@ func (s *Server) terminalTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cols, rows := clampSize(req.Cols, req.Rows)
-	id := s.terminalTickets.issue(terminalTicket{userID: userFrom(r.Context()).ID, target: req.Target, cols: cols, rows: rows})
+	id := s.terminalTickets.issue(terminalTicket{userID: userFrom(r.Context()).ID, session: sessionFrom(r.Context()), target: req.Target, cols: cols, rows: rows})
 	s.audit(r, userFrom(r.Context()).ID, "terminal.open", req.Target, true, "")
 	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(terminalTicketTTL.Seconds())})
 }
@@ -122,8 +123,8 @@ func (s *Server) terminalConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired terminal ticket")
 		return
 	}
-	u, err := s.Store.UserByID(r.Context(), tk.userID)
-	if err != nil || u.Disabled || u.Role != "admin" {
+	u, err := s.currentUser(r.Context(), tk.userID, tk.session, true)
+	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired terminal ticket")
 		return
 	}
@@ -136,6 +137,12 @@ func (s *Server) terminalConnect(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	// A shell is root-equivalent: it ends the moment its owner signs out or
+	// stops being an administrator.
+	defer s.live.add(u.ID, tk.session, func() {
+		cancel()
+		conn.Close(websocket.StatusPolicyViolation, "session changed")
+	})()
 
 	var sess terminal.Session
 	kind, arg, _ := strings.Cut(tk.target, ":")

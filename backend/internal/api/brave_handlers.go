@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -16,7 +17,9 @@ import (
 const (
 	braveCookie = "nocap_brave"
 	bravePrefix = "/apps/brave"
-	braveTTL    = 12 * time.Hour
+	// The cookie is renewed each time the window opens Brave; it names the
+	// person and login session, which are re-checked on every request.
+	braveTTL = time.Hour
 )
 
 func randomKey(n int) []byte {
@@ -36,7 +39,7 @@ func (s *Server) braveStart(w http.ResponseWriter, r *http.Request) {
 	// assets and the VNC WebSocket can reach the proxy without a bearer header.
 	http.SetCookie(w, &http.Cookie{
 		Name:     braveCookie,
-		Value:    s.signBrave(time.Now().Add(braveTTL)),
+		Value:    s.signBrave(userFrom(r.Context()).ID, sessionFrom(r.Context()), time.Now().Add(braveTTL)),
 		Path:     bravePrefix,
 		MaxAge:   int(braveTTL.Seconds()),
 		HttpOnly: true,
@@ -53,10 +56,22 @@ func (s *Server) braveStatus(w http.ResponseWriter, r *http.Request) {
 // --- the reverse proxy (cookie-gated) ---
 
 func (s *Server) braveProxy(w http.ResponseWriter, r *http.Request) {
-	if !s.braveCookieValid(r) {
+	userID, sid, ok := s.braveCookie(r)
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "open Brave from NoCapOS first")
 		return
 	}
+	// Still an administrator, still signed in from that session?
+	if _, err := s.currentUser(r.Context(), userID, sid, true); err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "open Brave from NoCapOS first")
+		return
+	}
+	// The VNC WebSocket lives on; signing out or losing admin ends it (the
+	// proxy closes an upgraded connection when its request context ends).
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	defer s.live.add(userID, sid, cancel)()
+	r = r.WithContext(ctx)
 	port, scheme := s.brave.Target()
 	if port == 0 {
 		writeError(w, http.StatusServiceUnavailable, "not_ready", "Brave is still starting")
@@ -103,29 +118,36 @@ func (s *Server) braveRedirect(w http.ResponseWriter, r *http.Request) {
 
 // --- cookie signing (in-memory key, valid for this process' lifetime) ---
 
-func (s *Server) signBrave(exp time.Time) string {
-	payload := strconv.FormatInt(exp.Unix(), 10)
+func (s *Server) signBrave(userID, session string, exp time.Time) string {
+	payload := userID + "~" + session + "~" + strconv.FormatInt(exp.Unix(), 10)
 	mac := hmac.New(sha256.New, s.braveKey)
 	mac.Write([]byte(payload))
 	sig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	return payload + "." + sig
 }
 
-func (s *Server) braveCookieValid(r *http.Request) bool {
+func (s *Server) braveCookie(r *http.Request) (userID, session string, ok bool) {
 	c, err := r.Cookie(braveCookie)
 	if err != nil {
-		return false
+		return "", "", false
 	}
 	payload, sig, ok := strings.Cut(c.Value, ".")
 	if !ok {
-		return false
+		return "", "", false
 	}
 	mac := hmac.New(sha256.New, s.braveKey)
 	mac.Write([]byte(payload))
 	want := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	if !hmac.Equal([]byte(sig), []byte(want)) {
-		return false
+		return "", "", false
 	}
-	exp, err := strconv.ParseInt(payload, 10, 64)
-	return err == nil && time.Now().Unix() < exp
+	parts := strings.Split(payload, "~")
+	if len(parts) != 3 || parts[0] == "" {
+		return "", "", false
+	}
+	exp, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil || time.Now().Unix() >= exp {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }

@@ -56,17 +56,18 @@ type Sealer interface {
 }
 
 type Service struct {
-	st  *store.Store
-	iss *Issuer
-	opt Options
-	box Sealer
-	sys SystemAccounts // nil = NoCapOS's own accounts
-	now func() time.Time
-	// reset rate limiting is handled at the handler layer
+	st   *store.Store
+	iss  *Issuer
+	opt  Options
+	box  Sealer
+	sys  SystemAccounts // nil = NoCapOS's own accounts
+	now  func() time.Time
+	lock *Lockout // per-account failed attempts (password and 2FA code)
+	mfa  mfaStore // sign-ins waiting for their 2FA code
 }
 
 func NewService(st *store.Store, iss *Issuer, opt Options) *Service {
-	return &Service{st: st, iss: iss, opt: opt, now: time.Now}
+	return &Service{st: st, iss: iss, opt: opt, now: time.Now, lock: NewLockout()}
 }
 
 // SetSealer provides the box used to encrypt TOTP secrets at rest.
@@ -115,10 +116,40 @@ func (s *Service) Setup(ctx context.Context, setupToken, username, password stri
 	return s.startSession(ctx, u, meta)
 }
 
+// Login checks a password. Accounts with 2FA get an *MFAChallenge error
+// instead of a session (finish with LoginTOTP); ErrFilesOnly means the
+// password was right but the account has no desktop. Failures count toward
+// a per-account lockout (ErrLocked).
 func (s *Service) Login(ctx context.Context, username, password string, meta ClientMeta) (*Session, error) {
-	if s.sys != nil {
-		return s.loginSystem(ctx, username, password, meta)
+	if s.lock.Locked(username) {
+		_, _ = VerifyPassword(password, dummyHash()) // keep timing uniform
+		return nil, ErrLocked
 	}
+	var (
+		u   *store.User
+		err error
+	)
+	if s.sys != nil {
+		u, err = s.loginSystem(ctx, username, password)
+	} else {
+		u, err = s.loginApp(ctx, username, password)
+	}
+	if errors.Is(err, ErrInvalidCredentials) {
+		s.lock.Fail(username)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		return nil, err
+	}
+	if !u.TOTPEnabled {
+		s.lock.Succeed(username) // with 2FA, only the code step clears failures
+	}
+	return s.challengeOrSession(ctx, u, meta)
+}
+
+func (s *Service) loginApp(ctx context.Context, username, password string) (*store.User, error) {
 	u, err := s.st.UserByUsername(ctx, username)
 	if errors.Is(err, store.ErrNotFound) {
 		_, _ = VerifyPassword(password, dummyHash())
@@ -134,10 +165,43 @@ func (s *Service) Login(ctx context.Context, username, password string, meta Cli
 	if !ok || u.Disabled {
 		return nil, ErrInvalidCredentials
 	}
-	if err := s.desktopAllowed(ctx, u); err != nil {
-		return nil, err
+	return u, nil
+}
+
+// ConfirmPassword re-checks a signed-in person's password before a sensitive
+// change (2FA settings, a new password). Wrong passwords count toward the
+// account's lockout.
+func (s *Service) ConfirmPassword(ctx context.Context, userID, password string) error {
+	u, err := s.st.UserByID(ctx, userID)
+	if err != nil {
+		return err
 	}
-	return s.startSession(ctx, u, meta)
+	if s.lock.Locked(u.Username) {
+		return ErrLocked
+	}
+	var ok bool
+	if s.sys != nil {
+		ok, err = s.sys.Verify(ctx, u.Username, password)
+	} else {
+		ok, err = VerifyPassword(password, u.PasswordHash)
+	}
+	if err != nil {
+		return err
+	}
+	if !ok {
+		s.lock.Fail(u.Username)
+		return ErrInvalidCredentials
+	}
+	return nil
+}
+
+// DesktopAllowed reports (nil) whether a person may use the desktop right
+// now: not disabled and not a file-sharing-only account.
+func (s *Service) DesktopAllowed(ctx context.Context, u *store.User) error {
+	if u.Disabled {
+		return ErrInvalidToken
+	}
+	return s.desktopAllowed(ctx, u)
 }
 
 // desktopAllowed refuses web sessions to file-sharing-only accounts.
@@ -163,6 +227,11 @@ func (s *Service) CheckPassword(ctx context.Context, username, password string) 
 	if s.sys != nil {
 		role, disabled, err := s.sys.RoleOf(ctx, username)
 		if err != nil || disabled {
+			_, _ = VerifyPassword(password, dummyHash())
+			return "", false, false
+		}
+		// Disabled in NoCapOS counts too, even if the host account isn't locked.
+		if u, err := s.st.UserByUsername(ctx, username); err == nil && u.Disabled {
 			_, _ = VerifyPassword(password, dummyHash())
 			return "", false, false
 		}
@@ -230,51 +299,73 @@ func (s *Service) Refresh(ctx context.Context, raw string, meta ClientMeta) (*Se
 	return sess, err
 }
 
-func (s *Service) Logout(ctx context.Context, raw string) error {
+// Logout ends the session the refresh token belongs to and returns whose
+// it was and its ID (empty when there was none).
+func (s *Service) Logout(ctx context.Context, raw string) (userID, sessionID string, err error) {
 	if raw == "" {
-		return nil
+		return "", "", nil
 	}
 	rt, err := s.st.RefreshTokenByHash(ctx, hashToken(raw))
 	if errors.Is(err, store.ErrNotFound) {
-		return nil
+		return "", "", nil
 	}
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	return s.st.RevokeFamily(ctx, rt.FamilyID, s.now())
+	return rt.UserID, rt.FamilyID, s.st.RevokeFamily(ctx, rt.FamilyID, s.now())
 }
 
 // Authenticate validates an access token and returns the current user. It
 // re-reads the user and session so disabling an account or logging out takes
 // effect immediately instead of when the token expires.
 func (s *Service) Authenticate(ctx context.Context, token string) (*store.User, error) {
+	u, _, err := s.AuthenticateSession(ctx, token)
+	return u, err
+}
+
+// AuthenticateSession is Authenticate that also returns the session (refresh
+// token family) the access token belongs to.
+func (s *Service) AuthenticateSession(ctx context.Context, token string) (*store.User, string, error) {
+	u, claims, err := s.authenticate(ctx, token)
+	if err != nil {
+		return nil, "", err
+	}
+	return u, claims.SessionID, nil
+}
+
+// SessionActive reports whether a login session is still live.
+func (s *Service) SessionActive(ctx context.Context, sessionID string) (bool, error) {
+	return s.st.FamilyActive(ctx, sessionID, s.now())
+}
+
+func (s *Service) authenticate(ctx context.Context, token string) (*store.User, *Claims, error) {
 	claims, err := s.iss.Verify(token)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	active, err := s.st.FamilyActive(ctx, claims.SessionID, s.now())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !active {
-		return nil, ErrInvalidToken
+		return nil, nil, ErrInvalidToken
 	}
 	u, err := s.st.UserByID(ctx, claims.Subject)
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, ErrInvalidToken
+		return nil, nil, ErrInvalidToken
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if u.Disabled {
-		return nil, ErrInvalidToken
+		return nil, nil, ErrInvalidToken
 	}
 	if err := s.desktopAllowed(ctx, u); errors.Is(err, ErrFilesOnly) {
-		return nil, ErrInvalidToken
+		return nil, nil, ErrInvalidToken
 	} else if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return u, nil
+	return u, claims, nil
 }
 
 func (s *Service) startSession(ctx context.Context, u *store.User, meta ClientMeta) (*Session, error) {

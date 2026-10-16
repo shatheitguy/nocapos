@@ -164,6 +164,12 @@ func (h *Hub) subscribe(c *client, topic string) (start func(), err error) {
 	if topic == "" || len(topic) > 200 {
 		return nil, errors.New("invalid topic")
 	}
+	// Authorization is decided on every subscribe, against the person as they
+	// are now (the resolver may read the database, so outside the lock).
+	sub, err := h.resolve(topic, c.user)
+	if err != nil {
+		return nil, err
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -172,10 +178,6 @@ func (h *Hub) subscribe(c *client, topic string) (start func(), err error) {
 	}
 	if len(c.topics) >= maxTopicsPerClient {
 		return nil, fmt.Errorf("at most %d subscriptions per connection", maxTopicsPerClient)
-	}
-	sub, err := h.resolve(topic, c.user)
-	if err != nil {
-		return nil, err
 	}
 	key := topic
 	if !sub.Shared {

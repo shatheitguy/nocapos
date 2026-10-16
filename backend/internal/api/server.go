@@ -70,10 +70,13 @@ type Server struct {
 	terminalTickets terminalTicketStore
 	rdpTickets      rdpTicketStore
 	loginLimiter    *auth.Limiter
-	brave           *webapps.Brave
-	braveKey        []byte
-	notify          *notify.Service
-	crashes         *notify.CrashWatch
+	// sensitiveLimiter: password checks by signed-in people, per account.
+	sensitiveLimiter *auth.Limiter
+	live             liveConns
+	brave            *webapps.Brave
+	braveKey         []byte
+	notify           *notify.Service
+	crashes          *notify.CrashWatch
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -82,9 +85,10 @@ func New(ctx context.Context, d Deps) *Server {
 		Deps:    d,
 		tickets: auth.NewTicketStore(30 * time.Second),
 		// 5 attempts burst, then one every 12s per client IP.
-		loginLimiter: auth.NewLimiter(12*time.Second, 5),
-		brave:        d.Brave,
-		braveKey:     randomKey(32),
+		loginLimiter:     auth.NewLimiter(12*time.Second, 5),
+		sensitiveLimiter: auth.NewLimiter(12*time.Second, 5),
+		brave:            d.Brave,
+		braveKey:         randomKey(32),
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
 	s.notify = notify.New(d.Store, d.Log)
@@ -107,10 +111,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("POST /api/v1/auth/setup", s.authSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
+	mux.HandleFunc("POST /api/v1/auth/login/totp", s.authLoginTOTP)
 	mux.HandleFunc("POST /api/v1/auth/refresh", s.authRefresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authLogout)
 	mux.Handle("GET /api/v1/auth/me", s.authed(s.authMe))
-	mux.HandleFunc("POST /api/v1/auth/reset", s.authReset)
+	mux.HandleFunc("POST /api/v1/auth/reset", s.authReset) // removed: answers 410
 	mux.Handle("POST /api/v1/auth/password", s.authed(s.changePassword))
 	mux.Handle("GET /api/v1/auth/totp", s.authed(s.totpStatus))
 	mux.Handle("POST /api/v1/auth/totp/setup", s.authed(s.totpSetup))
@@ -319,8 +324,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/ai/providers/{id}", s.admin(s.aiDeleteProvider))
 	mux.Handle("GET /api/v1/ai/models", s.authed(s.aiModels))
 	mux.Handle("GET /api/v1/ai/running", s.authed(s.aiRunning))
-	mux.Handle("POST /api/v1/ai/load", s.authed(s.aiLoadModel))
-	mux.Handle("POST /api/v1/ai/unload", s.authed(s.aiUnloadModel))
+	mux.Handle("POST /api/v1/ai/load", s.admin(s.aiLoadModel))
+	mux.Handle("POST /api/v1/ai/unload", s.admin(s.aiUnloadModel))
 
 	mux.Handle("GET /api/v1/ai/conversations", s.authed(s.aiListConversations))
 	mux.Handle("POST /api/v1/ai/conversations", s.authed(s.aiCreateConversation))

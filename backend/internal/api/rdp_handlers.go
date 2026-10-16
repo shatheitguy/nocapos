@@ -19,9 +19,10 @@ import (
 const rdpTicketTTL = 60 * time.Second
 
 type rdpTicket struct {
-	userID string
-	params rdp.Params
-	exp    time.Time
+	userID  string
+	session string
+	params  rdp.Params
+	exp     time.Time
 }
 
 // rdpTicketStore holds single-use tickets. A ticket carries the RDP
@@ -105,7 +106,7 @@ func (s *Server) rdpTicket(w http.ResponseWriter, r *http.Request) {
 	req.DPI = clampRange(req.DPI, 48, 384, 96)
 
 	uid := userFrom(r.Context()).ID
-	id := s.rdpTickets.issue(rdpTicket{userID: uid, params: rdp.Params{
+	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: rdp.Params{
 		Hostname: req.Hostname, Port: req.Port, Username: req.Username, Password: req.Password,
 		Domain: req.Domain, Security: req.Security, IgnoreCert: req.IgnoreCert,
 		Width: req.Width, Height: req.Height, DPI: req.DPI,
@@ -134,8 +135,8 @@ func (s *Server) rdpConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired remote desktop ticket")
 		return
 	}
-	u, err := s.Store.UserByID(r.Context(), tk.userID)
-	if err != nil || u.Disabled || u.Role != "admin" {
+	u, err := s.currentUser(r.Context(), tk.userID, tk.session, true)
+	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired remote desktop ticket")
 		return
 	}
@@ -149,6 +150,10 @@ func (s *Server) rdpConnect(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadLimit(4 << 20)
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	defer s.live.add(u.ID, tk.session, func() {
+		cancel()
+		conn.Close(websocket.StatusPolicyViolation, "session changed")
+	})()
 
 	// Guacamole status codes: 0x0201 upstream unavailable, 0x0203 upstream error.
 	fail := func(msg, code string) {

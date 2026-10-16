@@ -112,6 +112,14 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+// mfaResponse is what a right password gets on an account with 2FA: no
+// session yet, just a short-lived token to send back with the code.
+type mfaResponse struct {
+	MFARequired bool      `json:"mfa_required"`
+	MFAToken    string    `json:"mfa_token"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
 func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 	if s.limited(w, r) {
 		return
@@ -121,18 +129,65 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sess, err := s.Auth.Login(r.Context(), req.Username, req.Password, s.meta(r))
+	var challenge *auth.MFAChallenge
 	switch {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "")
 		s.keepSharingPassword(sess.User.Username, req.Password)
 		s.writeSession(w, http.StatusOK, sess)
+	case errors.As(err, &challenge):
+		// The password was right; the session waits for the 2FA code.
+		s.audit(r, "", "auth.login", truncate(req.Username, 64), true, "password ok, waiting for 2FA code")
+		s.keepSharingPassword(req.Username, req.Password)
+		writeJSON(w, http.StatusOK, mfaResponse{MFARequired: true, MFAToken: challenge.Token, ExpiresAt: challenge.ExpiresAt.UTC()})
 	case errors.Is(err, auth.ErrFilesOnly):
 		// The password was right: keep their network sign-in working.
 		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "file sharing only")
 		s.keepSharingPassword(req.Username, req.Password)
 		writeError(w, http.StatusForbidden, "files_only", err.Error())
+	case errors.Is(err, auth.ErrLocked):
+		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "account locked out")
+		w.Header().Set("Retry-After", "900")
+		writeError(w, http.StatusTooManyRequests, "locked", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "invalid credentials")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
+	default:
+		s.internalError(w, r, err)
+	}
+}
+
+type loginTOTPRequest struct {
+	MFAToken string `json:"mfa_token"`
+	Code     string `json:"code"`
+}
+
+// authLoginTOTP finishes a sign-in on an account with 2FA.
+func (s *Server) authLoginTOTP(w http.ResponseWriter, r *http.Request) {
+	if s.limited(w, r) {
+		return
+	}
+	var req loginTOTPRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	sess, err := s.Auth.LoginTOTP(r.Context(), req.MFAToken, req.Code, s.meta(r))
+	switch {
+	case err == nil:
+		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "with 2FA code")
+		s.writeSession(w, http.StatusOK, sess)
+	case errors.Is(err, auth.ErrTOTPBadCode):
+		s.audit(r, "", "auth.login.totp", "", false, "wrong or reused code")
+		writeError(w, http.StatusUnauthorized, "bad_code", err.Error())
+	case errors.Is(err, auth.ErrMFAExpired):
+		writeError(w, http.StatusUnauthorized, "mfa_expired", err.Error())
+	case errors.Is(err, auth.ErrLocked):
+		s.audit(r, "", "auth.login.totp", "", false, "account locked out")
+		w.Header().Set("Retry-After", "900")
+		writeError(w, http.StatusTooManyRequests, "locked", err.Error())
+	case errors.Is(err, auth.ErrFilesOnly):
+		writeError(w, http.StatusForbidden, "files_only", err.Error())
+	case errors.Is(err, auth.ErrInvalidCredentials):
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 	default:
 		s.internalError(w, r, err)
@@ -190,10 +245,13 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c, err := r.Cookie(refreshCookie); err == nil {
-		if err := s.Auth.Logout(r.Context(), c.Value); err != nil {
+		userID, sid, err := s.Auth.Logout(r.Context(), c.Value)
+		if err != nil {
 			s.internalError(w, r, err)
 			return
 		}
+		// Terminals, remote desktops and Brave opened from this session end too.
+		s.live.closeSession(userID, sid)
 	}
 	s.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)

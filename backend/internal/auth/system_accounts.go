@@ -32,7 +32,7 @@ func (s *Service) SystemAccountsEnabled() bool { return s.sys != nil }
 
 // loginSystem verifies against the host and makes sure a matching NoCapOS
 // record exists with the account's current role.
-func (s *Service) loginSystem(ctx context.Context, username, password string, meta ClientMeta) (*Session, error) {
+func (s *Service) loginSystem(ctx context.Context, username, password string) (*store.User, error) {
 	role, disabled, err := s.sys.RoleOf(ctx, username)
 	if err != nil || disabled {
 		_, _ = VerifyPassword(password, dummyHash()) // keep timing uniform
@@ -48,18 +48,13 @@ func (s *Service) loginSystem(ctx context.Context, username, password string, me
 	if !ok {
 		return nil, ErrInvalidCredentials
 	}
-	u, err := s.syncSystemUser(ctx, username, role)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.desktopAllowed(ctx, u); err != nil {
-		return nil, err
-	}
-	return s.startSession(ctx, u, meta)
+	return s.syncSystemUser(ctx, username, role)
 }
 
 // syncSystemUser returns the NoCapOS record for a host account, creating it
-// on first sign-in and keeping its role in step with the host.
+// on first sign-in and keeping its role in step with the host. An account
+// disabled in NoCapOS stays disabled (ErrInvalidCredentials) even when the
+// host account isn't locked: only an administrator turns it back on.
 func (s *Service) syncSystemUser(ctx context.Context, username, role string) (*store.User, error) {
 	u, err := s.st.UserByUsername(ctx, username)
 	if errors.Is(err, store.ErrNotFound) {
@@ -78,17 +73,14 @@ func (s *Service) syncSystemUser(ctx context.Context, username, role string) (*s
 	if err != nil {
 		return nil, err
 	}
+	if u.Disabled {
+		return nil, ErrInvalidCredentials
+	}
 	if u.Role != role {
 		if err := s.st.SetRole(ctx, u.ID, role); err != nil {
 			return nil, err
 		}
 		u.Role = role
-	}
-	if u.Disabled {
-		if err := s.st.SetDisabled(ctx, u.ID, false); err != nil {
-			return nil, err
-		}
-		u.Disabled = false
 	}
 	return u, nil
 }
