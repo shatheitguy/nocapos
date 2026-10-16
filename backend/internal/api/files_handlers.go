@@ -590,7 +590,7 @@ func (s *Server) filesRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.Store.UserByID(r.Context(), userID)
-	if err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
+	if err != nil || u.Disabled || !s.ticketHolderCan(r.Context(), u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired file link")
 		return
 	}
@@ -666,8 +666,15 @@ func (s *Server) scopeHits(r *http.Request, query func(limit int) []files.Hit, l
 }
 
 // ticketHolderCan re-checks, when a file link is used, that the person it
-// was issued to may still read the file.
-func (s *Server) ticketHolderCan(u *store.User, root, rel string) bool {
+// was issued to may still use the desktop (not disabled, not switched to
+// file sharing only) and may still read the file.
+func (s *Server) ticketHolderCan(ctx context.Context, u *store.User, root, rel string) bool {
+	if s.Auth != nil && s.Auth.DesktopAllowed(ctx, u) != nil {
+		return false
+	}
+	if s.Auth == nil && u.Disabled {
+		return false
+	}
 	if s.Spaces == nil {
 		return u.Role == store.RoleAdmin
 	}

@@ -10,6 +10,7 @@ import (
 var (
 	ErrTOTPNotEnrolled = errors.New("two-factor authentication is not set up")
 	ErrTOTPBadCode     = errors.New("that code is not valid — check your authenticator app")
+	ErrTOTPEnabled     = errors.New("two-factor authentication is already on; turn it off first to set it up again")
 	ErrNoSealer        = errors.New("secret storage is not configured")
 )
 
@@ -25,15 +26,23 @@ func (s *Service) TOTPStatus(ctx context.Context, userID string) (bool, error) {
 }
 
 // BeginTOTP generates a fresh secret and stores it (not yet enabled). Returns
-// the secret and the otpauth URI for the QR code. A second call replaces an
-// in-progress (not yet enabled) enrolment.
-func (s *Service) BeginTOTP(ctx context.Context, userID string) (secret, uri string, err error) {
+// the secret and the otpauth URI for the QR code. It needs the current
+// password, and refuses while 2FA is on: replacing a working authenticator
+// goes through DisableTOTP (password and code) first. A second call replaces
+// an in-progress (not yet enabled) enrolment.
+func (s *Service) BeginTOTP(ctx context.Context, userID, password string) (secret, uri string, err error) {
 	if s.box == nil {
 		return "", "", ErrNoSealer
+	}
+	if err := s.ConfirmPassword(ctx, userID, password); err != nil {
+		return "", "", err
 	}
 	u, err := s.st.UserByID(ctx, userID)
 	if err != nil {
 		return "", "", err
+	}
+	if u.TOTPEnabled {
+		return "", "", ErrTOTPEnabled
 	}
 	secret = NewTOTPSecret()
 	if err := s.st.SetTOTP(ctx, userID, s.box.Seal(secret), false); err != nil {
@@ -43,20 +52,66 @@ func (s *Service) BeginTOTP(ctx context.Context, userID string) (secret, uri str
 }
 
 // EnableTOTP verifies a code against the pending secret and turns 2FA on.
+// The code is used up, so it can't also sign someone in.
 func (s *Service) EnableTOTP(ctx context.Context, userID, code string) error {
+	u, err := s.st.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u.TOTPEnabled {
+		return ErrTOTPEnabled
+	}
 	secret, err := s.totpSecret(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if !VerifyTOTP(secret, code) {
-		return ErrTOTPBadCode
+	if err := s.useCode(ctx, u, secret, code); err != nil {
+		return err
 	}
 	return s.st.SetTOTP(ctx, userID, s.box.Seal(secret), true)
 }
 
-// DisableTOTP turns 2FA off (the password was already checked by the handler).
-func (s *Service) DisableTOTP(ctx context.Context, userID string) error {
+// DisableTOTP turns 2FA off. It needs both the current password and a
+// current code from the authenticator.
+func (s *Service) DisableTOTP(ctx context.Context, userID, password, code string) error {
+	if err := s.ConfirmPassword(ctx, userID, password); err != nil {
+		return err
+	}
+	u, err := s.st.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !u.TOTPEnabled {
+		return s.st.SetTOTP(ctx, userID, nil, false) // drop a half-finished enrolment
+	}
+	secret, err := s.totpSecret(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.useCode(ctx, u, secret, code); err != nil {
+		return err
+	}
 	return s.st.SetTOTP(ctx, userID, nil, false)
+}
+
+// useCode checks a code, refuses one that was already used, and counts
+// wrong codes toward the account's lockout.
+func (s *Service) useCode(ctx context.Context, u *store.User, secret, code string) error {
+	if s.lock.Locked(u.Username) {
+		return ErrLocked
+	}
+	step, ok := MatchTOTP(secret, code, s.now())
+	if ok {
+		var err error
+		if ok, err = s.st.UseTOTPStep(ctx, u.ID, step); err != nil {
+			return err
+		}
+	}
+	if !ok {
+		s.lock.Fail(u.Username)
+		return ErrTOTPBadCode
+	}
+	return nil
 }
 
 func (s *Service) totpSecret(ctx context.Context, userID string) (string, error) {
@@ -75,53 +130,21 @@ func (s *Service) totpSecret(ctx context.Context, userID string) (string, error)
 
 // ChangePassword updates the password after verifying the current one.
 func (s *Service) ChangePassword(ctx context.Context, userID, current, next string) error {
+	if err := s.ConfirmPassword(ctx, userID, current); err != nil {
+		return err
+	}
 	u, err := s.st.UserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
-	var ok bool
-	if s.sys != nil {
-		ok, err = s.sys.Verify(ctx, u.Username, current)
-	} else {
-		ok, err = VerifyPassword(current, u.PasswordHash)
-	}
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return ErrInvalidCredentials
-	}
 	return s.setPassword(ctx, u, next)
 }
 
-// ResetPassword is the "forgot password" flow: with a valid TOTP code, set a
-// new password without the old one. Requires the user to have 2FA enabled.
-func (s *Service) ResetPassword(ctx context.Context, username, code, next string) error {
-	u, err := s.st.UserByUsername(ctx, username)
-	if errors.Is(err, store.ErrNotFound) {
-		// Run a verify anyway to keep timing uniform, then fail.
-		VerifyTOTP(NewTOTPSecret(), code)
-		return ErrInvalidCredentials
-	}
-	if err != nil {
-		return err
-	}
-	if !u.TOTPEnabled || len(u.TOTPSecret) == 0 {
-		return ErrTOTPNotEnrolled
-	}
-	secret, err := s.box.Open(u.TOTPSecret)
-	if err != nil {
-		return err
-	}
-	if !VerifyTOTP(secret, code) {
-		return ErrTOTPBadCode
-	}
-	if err := s.setPassword(ctx, u, next); err != nil {
-		return err
-	}
-	// Revoke every active session so a thief with the old password is logged out.
-	return s.st.RevokeAllUserSessions(ctx, u.ID, s.now())
-}
+// There is deliberately no "forgot password" reset here: a code from the
+// authenticator alone must never be enough to take over an account. An
+// administrator resets passwords in Users & Groups; a sole administrator
+// uses `nocapos reset-password <user>` as root on the machine itself
+// (see ResetLocal).
 
 func (s *Service) setPassword(ctx context.Context, u *store.User, next string) error {
 	if err := ValidatePassword(next); err != nil {
@@ -135,4 +158,31 @@ func (s *Service) setPassword(ctx context.Context, u *store.User, next string) e
 		return err
 	}
 	return s.st.SetPassword(ctx, u.ID, hash)
+}
+
+// ResetLocal is the local recovery for a locked-out (sole) administrator,
+// run as root on the machine: it sets a new password, turns 2FA off and
+// ends every session. Never reachable over the network.
+func (s *Service) ResetLocal(ctx context.Context, username, next string) error {
+	u, err := s.st.UserByUsername(ctx, username)
+	if errors.Is(err, store.ErrNotFound) && s.sys != nil {
+		// A Linux user who never signed in to NoCapOS: just the password.
+		if _, _, rerr := s.sys.RoleOf(ctx, username); rerr != nil {
+			return rerr
+		}
+		if err := ValidatePassword(next); err != nil {
+			return err
+		}
+		return s.sys.SetPassword(ctx, username, next)
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.setPassword(ctx, u, next); err != nil {
+		return err
+	}
+	if err := s.st.SetTOTP(ctx, u.ID, nil, false); err != nil {
+		return err
+	}
+	return s.st.RevokeAllUserSessions(ctx, u.ID, s.now())
 }

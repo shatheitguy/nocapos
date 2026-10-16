@@ -17,8 +17,9 @@ type TicketStore struct {
 }
 
 type ticket struct {
-	userID string
-	exp    time.Time
+	userID  string
+	session string
+	exp     time.Time
 }
 
 func NewTicketStore(ttl time.Duration) *TicketStore {
@@ -26,6 +27,12 @@ func NewTicketStore(ttl time.Duration) *TicketStore {
 }
 
 func (t *TicketStore) Issue(userID string) (string, time.Time) {
+	return t.IssueSession(userID, "")
+}
+
+// IssueSession issues a ticket that also remembers the login session it came
+// from, so whatever it opens ends when that session does.
+func (t *TicketStore) IssueSession(userID, session string) (string, time.Time) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		panic(err)
@@ -41,23 +48,29 @@ func (t *TicketStore) Issue(userID string) (string, time.Time) {
 			delete(t.tickets, k)
 		}
 	}
-	t.tickets[tok] = ticket{userID: userID, exp: exp}
+	t.tickets[tok] = ticket{userID: userID, session: session, exp: exp}
 	return tok, exp
 }
 
 func (t *TicketStore) Redeem(tok string) (string, bool) {
+	userID, _, ok := t.RedeemSession(tok)
+	return userID, ok
+}
+
+// RedeemSession consumes a ticket and returns its user and session.
+func (t *TicketStore) RedeemSession(tok string) (userID, session string, ok bool) {
 	if tok == "" {
-		return "", false
+		return "", "", false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	v, ok := t.tickets[tok]
-	if !ok {
-		return "", false
+	v, found := t.tickets[tok]
+	if !found {
+		return "", "", false
 	}
 	delete(t.tickets, tok)
 	if time.Now().After(v.exp) {
-		return "", false
+		return "", "", false
 	}
-	return v.userID, true
+	return v.userID, v.session, true
 }

@@ -73,16 +73,25 @@ func currentCounter() uint64 {
 
 // VerifyTOTP checks a user-entered code against the secret, allowing ±1 step.
 func VerifyTOTP(secret, input string) bool {
+	_, ok := MatchTOTP(secret, input, time.Now())
+	return ok
+}
+
+// MatchTOTP checks a code like VerifyTOTP and also returns the time step it
+// belongs to, so callers can refuse a code that was already used.
+func MatchTOTP(secret, input string, now time.Time) (int64, bool) {
 	input = strings.TrimSpace(input)
 	if len(input) != totpDigits {
-		return false
+		return 0, false
 	}
-	counter := currentCounter()
+	counter := uint64(now.Unix()) / uint64(totpPeriod.Seconds())
+	var step int64
+	found := false
 	for i := -totpSkew; i <= totpSkew; i++ {
 		c, ok := totpCode(secret, counter+uint64(int64(i)))
-		if ok && subtle.ConstantTimeCompare([]byte(c), []byte(input)) == 1 {
-			return true
+		if ok && subtle.ConstantTimeCompare([]byte(c), []byte(input)) == 1 && !found {
+			step, found = int64(counter)+int64(i), true
 		}
 	}
-	return false
+	return step, found
 }

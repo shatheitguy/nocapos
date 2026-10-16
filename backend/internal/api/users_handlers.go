@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"alfaos/alfad/internal/accounts"
 	"alfaos/alfad/internal/auth"
@@ -151,7 +150,15 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 		err = s.Accounts.SetRole(ctx, name, *req.Role)
 		s.audit(r, me.ID, "user.role", name+" → "+*req.Role, err == nil, errText(err))
 		if err == nil {
-			s.syncRecord(r, name, func(u *store.User) error { return s.Store.SetRole(ctx, u.ID, *req.Role) })
+			s.syncRecord(r, name, func(u *store.User) error {
+				if *req.Role != store.RoleAdmin {
+					// Demoted: open terminals, remote desktops and admin feeds end now.
+					defer s.signOutEverywhere(ctx, u)
+				} else {
+					defer s.closeLive(u) // reconnects with the new rights
+				}
+				return s.Store.SetRole(ctx, u.ID, *req.Role)
+			})
 			s.spacesChanged(ctx)
 		}
 	case req.Access != nil:
@@ -172,17 +179,20 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, me.ID, "user.access", name+" → "+*req.Access, err == nil, errText(err))
 		if err == nil && *req.Access == store.AccessFiles {
 			// File sharing only: end their desktop sessions now.
-			s.syncRecord(r, name, func(u *store.User) error { return s.Store.RevokeAllUserSessions(ctx, u.ID, time.Now()) })
+			s.syncRecord(r, name, func(u *store.User) error { s.signOutEverywhere(ctx, u); return nil })
 		}
 	case req.Disabled != nil:
 		err = s.Accounts.SetDisabled(ctx, name, *req.Disabled)
 		s.audit(r, me.ID, "user.disable", name+" → "+onOffWord(*req.Disabled), err == nil, errText(err))
 		if err == nil {
 			s.syncRecord(r, name, func(u *store.User) error {
-				if *req.Disabled {
-					_ = s.Store.RevokeAllUserSessions(ctx, u.ID, time.Now())
+				if err := s.Store.SetDisabled(ctx, u.ID, *req.Disabled); err != nil {
+					return err
 				}
-				return s.Store.SetDisabled(ctx, u.ID, *req.Disabled)
+				if *req.Disabled {
+					s.signOutEverywhere(ctx, u)
+				}
+				return nil
 			})
 			if s.NetDrives != nil {
 				s.NetDrives.SetUserEnabled(ctx, name, !*req.Disabled)
@@ -197,7 +207,7 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == nil && !self {
 			// A password reset signs that person out everywhere.
-			s.syncRecord(r, name, func(u *store.User) error { return s.Store.RevokeAllUserSessions(ctx, u.ID, time.Now()) })
+			s.syncRecord(r, name, func(u *store.User) error { s.signOutEverywhere(ctx, u); return nil })
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "bad_request", "nothing to change")
@@ -237,6 +247,7 @@ func (s *Server) usersDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	// Drop NoCapOS's own record too (sessions, chats and settings cascade).
 	if u, err := s.Store.UserByUsername(r.Context(), name); err == nil {
+		s.live.closeUser(u.ID)
 		_ = s.Store.DeleteUser(r.Context(), u.ID)
 	}
 	// Their access type, folder permissions and app access go too; their

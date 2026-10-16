@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -32,7 +33,13 @@ type davAuth struct {
 type failCount struct {
 	n     int
 	until time.Time
+	last  time.Time
 }
+
+// maxDavFails bounds the failure table. When it's full, entries whose wait
+// is over go first, then the least recently seen, so a flood of addresses
+// can't wipe the wait of the one actually guessing.
+const maxDavFails = 10000
 
 func newDavAuth() *davAuth { return &davAuth{fails: map[string]*failCount{}} }
 
@@ -48,15 +55,34 @@ func (a *davAuth) failed(ip string) {
 	defer a.mu.Unlock()
 	f := a.fails[ip]
 	if f == nil {
-		if len(a.fails) > 10000 {
-			a.fails = map[string]*failCount{}
+		if len(a.fails) >= maxDavFails {
+			a.evictLocked(time.Now())
 		}
 		f = &failCount{}
 		a.fails[ip] = f
 	}
 	f.n++
+	f.last = time.Now()
 	if f.n >= 5 {
 		f.until = time.Now().Add(time.Duration(f.n-4) * 30 * time.Second)
+	}
+}
+
+func (a *davAuth) evictLocked(now time.Time) {
+	for k, f := range a.fails {
+		if !now.Before(f.until) && now.Sub(f.last) > 10*time.Minute {
+			delete(a.fails, k)
+		}
+	}
+	for len(a.fails) >= maxDavFails {
+		var oldest string
+		var at time.Time
+		for k, f := range a.fails {
+			if oldest == "" || f.last.Before(at) {
+				oldest, at = k, f.last
+			}
+		}
+		delete(a.fails, oldest)
 	}
 }
 
@@ -105,9 +131,43 @@ func (m *Manager) DAVHandler(clientIP func(*http.Request) string) http.Handler {
 			return
 		}
 		m.dav.ok(ip)
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodPost: // all three serve the file
+			downloadOnly(w, r.URL.Path)
+		}
 		h := &webdav.Handler{Prefix: DAVPrefix, FileSystem: &davFS{m: m, entries: entries}, LockSystem: locks}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// downloadOnly makes a file served from the NoCapOS address a download and
+// never a page: people's files share the origin with the desktop, so an
+// uploaded .html or .svg opened in the browser must not run script there.
+func downloadOnly(w http.ResponseWriter, p string) {
+	h := w.Header()
+	h.Set("Content-Type", davContentType(p))
+	h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(p)}))
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	h.Set("Cross-Origin-Resource-Policy", "same-origin")
+}
+
+// davContentType keeps harmless types (pictures, audio, video, plain text,
+// PDF) and sends everything else, notably HTML, SVG, XML and scripts, as
+// opaque bytes.
+func davContentType(p string) string {
+	t := mime.TypeByExtension(strings.ToLower(path.Ext(p)))
+	base, _, _ := strings.Cut(t, ";")
+	base = strings.TrimSpace(strings.ToLower(base))
+	switch {
+	case base == "", strings.Contains(base, "xml"), strings.Contains(base, "html"), strings.Contains(base, "svg"),
+		strings.Contains(base, "script"), strings.Contains(base, "xsl"):
+		return "application/octet-stream"
+	case strings.HasPrefix(base, "image/"), strings.HasPrefix(base, "audio/"), strings.HasPrefix(base, "video/"),
+		base == "text/plain", base == "application/pdf":
+		return t
+	}
+	return "application/octet-stream"
 }
 
 // davEntries signs someone in and lists the folders they can reach.

@@ -121,7 +121,7 @@ func (s *Server) photosThumb(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}
-	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
+	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled || !s.ticketHolderCan(r.Context(), u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}
