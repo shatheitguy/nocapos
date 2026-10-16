@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -87,6 +88,34 @@ wait:
 	}
 	log, _ := os.ReadFile(filepath.Join(b.dataDir, "brave.log"))
 	return 0, errors.New("Brave did not start: " + tail(log, 3))
+}
+
+// InstallNative installs Brave (from its official repository) and the stream
+// tools, exactly as Brave's first launch does. The installer and the Packages
+// app's repair button use it, so all three share one script.
+func InstallNative(ctx context.Context, out io.Writer) error {
+	dir, err := os.MkdirTemp("", "nocapos-brave-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	script := filepath.Join(dir, "brave-run.sh")
+	if err := os.WriteFile(script, braveScript, 0o700); err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, "bash", script, "install")
+	cmd.Stdout, cmd.Stderr = out, out
+	return cmd.Run()
+}
+
+// NativeInstalled reports whether Brave is installed on this host.
+func NativeInstalled() bool {
+	for _, b := range []string{"brave-browser", "brave-browser-stable", "brave"} {
+		if _, err := exec.LookPath(b); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func stopProcess(p *os.Process) {

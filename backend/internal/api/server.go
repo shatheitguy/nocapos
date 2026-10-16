@@ -27,8 +27,10 @@ import (
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
+	"alfaos/alfad/internal/syspkg"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/vm"
+	"alfaos/alfad/internal/webaddr"
 	"alfaos/alfad/internal/webapps"
 	"alfaos/alfad/internal/ws"
 	"alfaos/alfad/web"
@@ -74,6 +76,10 @@ type Server struct {
 	braveKey        []byte
 	notify          *notify.Service
 	crashes         *notify.CrashWatch
+	ctStats         *docker.StatsSampler // Containers app's live cards
+	webBook         *webaddr.Book        // admins' own web addresses for apps/containers
+	pkgJobs         *syspkg.Jobs         // Packages app's background jobs
+	pkgAdmin        *syspkg.Admin
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -89,6 +95,10 @@ func New(ctx context.Context, d Deps) *Server {
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
 	s.notify = notify.New(d.Store, d.Log)
 	s.crashes = notify.NewCrashWatch()
+	s.ctStats = docker.NewStatsSampler(d.Docker)
+	s.webBook = webaddr.NewBook(d.Store)
+	s.pkgJobs = syspkg.NewJobs()
+	s.pkgAdmin = syspkg.NewAdmin()
 	if d.AppStore != nil {
 		s.crashes.Busy = d.AppStore.Busy
 	}
@@ -157,6 +167,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Containers (admin only: controlling containers is root-equivalent)
 	mux.Handle("GET /api/v1/containers", s.admin(s.listContainers))
+	mux.Handle("GET /api/v1/containers/stats", s.admin(s.containerStats))
+	mux.Handle("PUT /api/v1/containers/{id}/web-address", s.admin(s.containerWebAddress))
+	mux.Handle("PUT /api/v1/appstore/{id}/web-address", s.admin(s.appWebAddress))
 	mux.Handle("GET /api/v1/containers/{id}", s.admin(s.inspectContainer))
 	mux.Handle("POST /api/v1/containers/{id}/{action}", s.admin(s.containerAction))
 	mux.Handle("POST /api/v1/containers", s.admin(s.containerCreate))
@@ -343,6 +356,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Notification Center (admin).
 	s.notifyRoutes(mux)
+
+	// Packages: the host's system packages (admin, audited).
+	s.packageRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
