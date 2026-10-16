@@ -59,10 +59,12 @@ func main() {
 		err = serve()
 	case "healthcheck":
 		err = healthcheck()
+	case "reset-password":
+		err = resetPassword(os.Args[2:])
 	case "version":
 		fmt.Println(version)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version|reset-password <user>]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -92,6 +94,13 @@ func serve() error {
 		return err
 	}
 	defer st.Close()
+
+	// Sessions don't survive a reboot: everyone signs in again.
+	if n, err := auth.EndSessionsAfterReboot(ctx, st, auth.BootID()); err != nil {
+		return fmt.Errorf("sessions: %w", err)
+	} else if n > 0 {
+		log.Info("machine restarted since last run; signed everyone out", "sessions", n)
+	}
 
 	secret := cfg.JWTSecret
 	if secret == nil {

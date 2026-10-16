@@ -75,8 +75,9 @@ func (l *Lockout) Succeed(username string) {
 	l.mu.Unlock()
 }
 
-// evictLocked drops expired entries, then the oldest ones, so the map stays
-// bounded without forgetting accounts that are locked right now.
+// evictLocked drops expired entries, then the least recently seen ones that
+// aren't locked, so the map stays bounded without forgetting accounts that
+// are locked right now.
 func (l *Lockout) evictLocked(now time.Time) {
 	for k, st := range l.m {
 		if now.Sub(st.last) > lockoutDuration && !now.Before(st.until) {
@@ -84,12 +85,19 @@ func (l *Lockout) evictLocked(now time.Time) {
 		}
 	}
 	for len(l.m) >= maxLockoutKeys {
-		var oldest string
-		var at time.Time
+		var oldest, oldestLocked string
+		var at, atLocked time.Time
 		for k, st := range l.m {
-			if oldest == "" || st.last.Before(at) {
+			if now.Before(st.until) {
+				if oldestLocked == "" || st.last.Before(atLocked) {
+					oldestLocked, atLocked = k, st.last
+				}
+			} else if oldest == "" || st.last.Before(at) {
 				oldest, at = k, st.last
 			}
+		}
+		if oldest == "" {
+			oldest = oldestLocked
 		}
 		delete(l.m, oldest)
 	}
