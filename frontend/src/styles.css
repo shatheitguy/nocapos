@@ -1522,6 +1522,11 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
 .term-history-run:hover:not(:disabled) { color: var(--accent); filter: none; }
 .term-root-tag { font: 700 9px var(--mono); color: #1a0d00; background: #ffaa00; border-radius: 4px; padding: 1px 4px; margin-right: 6px; vertical-align: 1px; }
 .term-history-empty { padding: 14px; font-size: 12px; color: #7f889a; line-height: 1.5; }
+.term-root-prompt { position: absolute; z-index: 6; left: 50%; top: 18px; transform: translateX(-50%); width: min(380px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; background: #121824; border: 1px solid rgba(255, 170, 0, 0.45); color: #d7dde8; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.term-root-prompt p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.term-root-prompt.note { border-color: rgba(255, 255, 255, 0.14); font-size: 12.5px; line-height: 1.5; }
+.term-root-prompt input { padding: 7px 10px !important; font: 13px var(--mono) !important; background: #0a0e15 !important; border: 1px solid rgba(255, 255, 255, 0.14) !important; color: #d7dde8 !important; }
+.term-root-actions { display: flex; justify-content: flex-end; gap: 6px; }
 
 /* ============ Control Center ============ */
 .control-center { width: 360px; }
