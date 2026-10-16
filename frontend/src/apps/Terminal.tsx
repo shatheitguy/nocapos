@@ -65,8 +65,15 @@ export function Terminal({ win }: { win: WinState }) {
   const [showHistory, setShowHistory] = useState(false);
   const [filter, setFilter] = useState('');
   const [flash, setFlash] = useState(false);
+  // Root shell: an administrator confirms their password to get one; the
+  // normal host shell is their own Linux account.
+  const [rootMode, setRootMode] = useState(false);
+  const [askRoot, setAskRoot] = useState(false);
+  const [rootPw, setRootPw] = useState('');
+  const rootPwRef = useRef('');
 
-  const hostRoot = isHost && !!info?.host_root;
+  const hostRoot = isHost && (rootMode || !!info?.host_root);
+  const shellTarget = isHost && rootMode ? 'host-root' : target;
 
   // Record a command and flash the safety badge if it ran with root powers.
   const record = (cmd: string) => {
@@ -146,11 +153,14 @@ export function Terminal({ win }: { win: WinState }) {
     };
 
     (async () => {
-      const t = await terminalApi.ticket(target, term.cols, term.rows);
+      const password = shellTarget === 'host-root' ? rootPwRef.current : undefined;
+      rootPwRef.current = ''; // used once, never kept
+      const t = await terminalApi.ticket(shellTarget, term.cols, term.rows, password);
       if (disposed) return;
       if (!t.ok) {
         setStatus('closed');
         setError(t.error ?? 'Could not start the terminal');
+        if (shellTarget === 'host-root') setRootMode(false); // back to your own shell
         return;
       }
       const sock = openTerminal(t.data.ticket, {
@@ -195,9 +205,9 @@ export function Terminal({ win }: { win: WinState }) {
       term.dispose();
       window.clearTimeout(flashTimer.current);
     };
-    // Re-mount only when the target changes.
+    // Re-mount only when the target (or root shell) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target]);
+  }, [shellTarget]);
 
   // Live font size / theme changes.
   useEffect(() => {
@@ -237,10 +247,14 @@ export function Terminal({ win }: { win: WinState }) {
         {isHost ? (
           <span
             className={`term-badge ${hostRoot ? 'root' : 'host'} ${flash ? 'flash' : ''}`}
-            title={hostRoot ? 'Commands here run on the host machine as root' : 'Commands here run on the host machine'}
+            title={
+              hostRoot
+                ? 'Commands here run on the host machine as root'
+                : `Commands here run on the host machine as ${info?.host_user || 'your account'}; use sudo for administration`
+            }
           >
             <Icon name={hostRoot ? 'shield' : 'monitor'} size={12} />
-            {hostRoot ? 'HOST BARE-METAL · ROOT' : `HOST · ${info?.host_user || 'user'}`}
+            {hostRoot ? 'HOST · ROOT' : `HOST · ${info?.host_user || 'user'}`}
           </span>
         ) : (
           <span className={`term-badge container ${flash ? 'flash' : ''}`} title="Commands run inside this container">
@@ -251,6 +265,17 @@ export function Terminal({ win }: { win: WinState }) {
         {status === 'connecting' && <span className="muted small">connecting…</span>}
         {status === 'closed' && <span className="muted small">{error ?? 'disconnected'}</span>}
         <div className="term-tools">
+          {isHost && info?.root_available && !info.host_root && (
+            <button
+              type="button"
+              className={rootMode ? 'on' : ''}
+              title={rootMode ? 'Back to a shell as your own account' : 'Open a root shell (asks for your password)'}
+              aria-pressed={rootMode}
+              onClick={() => (rootMode ? setRootMode(false) : setAskRoot(true))}
+            >
+              <Icon name="shield" size={12} /> {rootMode ? 'Exit root' : 'Root shell'}
+            </button>
+          )}
           <button type="button" title="Smaller text" aria-label="Smaller text" onClick={() => zoom(-1)} disabled={fontSize <= MIN_FONT}>
             A−
           </button>
@@ -271,6 +296,50 @@ export function Terminal({ win }: { win: WinState }) {
         <div className="terminal-screen">
           <div className="terminal-mount" ref={mountRef} />
           {crt && <div className="crt-overlay" aria-hidden />}
+          {askRoot && (
+            <form
+              className="term-root-prompt"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!rootPw) return;
+                rootPwRef.current = rootPw;
+                setRootPw('');
+                setAskRoot(false);
+                setError(null);
+                setRootMode(true);
+              }}
+            >
+              <p>
+                <Icon name="shield" size={14} /> A root shell can change anything on this machine. Enter your password to open one.
+              </p>
+              <input
+                type="password"
+                value={rootPw}
+                onChange={(e) => setRootPw(e.target.value)}
+                placeholder="Your password"
+                aria-label="Your password"
+                autoComplete="current-password"
+                autoFocus
+              />
+              <div className="term-root-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAskRoot(false);
+                    setRootPw('');
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={!rootPw}>
+                  Open root shell
+                </button>
+              </div>
+            </form>
+          )}
+          {isHost && status === 'closed' && info?.host_error && !rootMode && (
+            <p className="term-root-prompt note">{info.host_error}</p>
+          )}
         </div>
 
         {showHistory && (
