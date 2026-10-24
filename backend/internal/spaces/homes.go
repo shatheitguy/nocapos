@@ -205,13 +205,21 @@ func (m *Manager) Own(rootID string, rels ...string) {
 	}
 	defer r.Close()
 	for _, rel := range todo {
-		if _, err := Inside(home, rel); err != nil {
+		// Lexical only: ".." can't climb above home (path.Clean on a string
+		// rooted at "/" clamps it there), but a real symlink inside home is
+		// left alone to resolve through below — Own() means to lchown a
+		// link some other way out of the user's own home, never to follow
+		// it, so checking where it points (as Inside does) would be wrong
+		// here: it would skip the very links this is for. os.Root is what
+		// actually keeps every step below inside home.
+		clean := strings.TrimPrefix(path.Clean("/"+strings.ReplaceAll(rel, `\`, "/")), "/")
+		if clean == "" || clean == "." {
 			continue
 		}
-		dir, base := path.Split(filepath.ToSlash(rel))
+		dir, base := path.Split(clean)
 		parent := r
 		if dir = strings.Trim(dir, "/"); dir != "" {
-			if parent, err = r.OpenRoot(dir); err != nil {
+			if parent, err = r.OpenRoot(filepath.FromSlash(dir)); err != nil {
 				continue
 			}
 		}
