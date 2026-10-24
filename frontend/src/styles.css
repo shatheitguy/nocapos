@@ -531,7 +531,7 @@ button.widget:active { transform: none; }
   padding: max(16px, 7vh) 16px 96px;
   animation: fade 0.15s ease-out;
 }
-.launcher-panel { width: min(1080px, 100%); min-height: 0; display: flex; flex-direction: column; gap: 18px; }
+.launcher-panel { width: min(1080px, 100%); min-height: 0; display: flex; flex-direction: column; gap: 18px; touch-action: none; }
 .launcher-panel > .search { width: min(560px, 100%); align-self: center; flex: none; }
 .search {
   display: flex;
@@ -989,6 +989,92 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 .widget-edit-toolbar .widget-add { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); }
 .widget-stack { display: flex; flex-direction: column; gap: 14px; }
 .widget-static { width: 100%; }
+
+/* ---------- widgets adapt to their size ----------
+   Each widget's box is a size container, so its content reflows as it is
+   resized (and on phones, where widgets stack at the screen's width): small
+   shows the key number, medium adds a chart, large shows everything. Text
+   that still doesn't fit is cut with an ellipsis, never spilled. */
+.widget-frame .widget-content { container: widget / size; }
+.widget-static { container: widget / inline-size; }
+.widget-head { gap: 8px; min-width: 0; }
+.widget-head > span:first-child { min-width: 0; overflow: hidden; }
+.widget-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.widget-aside { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+.row-head > span { min-width: 0; }
+.row-head .widget-title { display: inline-flex; align-items: center; gap: 4px; }
+.row-head .widget-aside { flex: none; max-width: 60%; }
+.widget-frame .widget-col { display: flex; flex-direction: column; }
+.widget-frame .widget-col > * { flex: none; }
+.widget-frame .widget-col > .widget-list { flex: 1 1 auto; min-height: 0; overflow: auto; scrollbar-width: none; }
+.widget-list > .widget-row:first-child { margin-top: 4px; }
+.widget .ring svg { width: var(--ring, 84px); height: var(--ring, 84px); }
+.widget .ring { width: auto !important; min-width: 0; }
+.uptime-load { margin-top: 6px; }
+.uptime-widget .big, .cont-stat .big { white-space: nowrap; }
+.xfer-widget { display: flex; flex-direction: column; }
+.xfer-widget .xfer-list { flex: 1; min-height: 0; }
+.widget-frame .analog { max-width: none; max-height: none; }
+.widget-frame .clock-time { font-size: clamp(24px, min(20cqw, 44cqh), 72px); }
+.widget-frame .clock-date { font-size: clamp(12px, min(5.4cqw, 13cqh), 18px); }
+.widget-frame :is(.clock-time, .clock-date, .clock-greet) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.widget-frame .uptime-widget .big { font-size: clamp(18px, 12cqw, 30px); }
+.widget-frame .cont-stat .big { font-size: clamp(20px, 14cqw, 34px); }
+
+/* Medium: the number and one chart; detail lists go. */
+@container widget (max-height: 239px) {
+  .system-widget .system-disks { display: none; }
+  .widget .ring-sub { display: none; }
+}
+@container widget (max-height: 129px) {
+  .clock-greet { display: none; }
+}
+/* Small: the key number only. */
+@container widget (max-width: 239px) or (max-height: 169px) {
+  .widget { padding: 11px 13px; }
+  .widget-head { margin-bottom: 6px; font-size: 13px; }
+  .widget .ring { --ring: 60px; }
+  .widget .ring-label { font-size: 11.5px; }
+  .system-widget .spark, .system-widget .widget-aside { display: none; }
+  .net-widget .net-rates { font-size: 15px; gap: 10px; flex-wrap: wrap; }
+  .cont-stat { gap: 16px; }
+  .holo { gap: 6px; }
+  .holo-axis, .holo-legend span { display: none; }
+  .holo-foot > :nth-child(3) { display: none; }
+  .holo-legend { gap: 6px; }
+  .holo-ring-svg { min-height: 0; }
+  .holo-gauges { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+  .holo-gauge-cell span { display: none; }
+  .cgrid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+  .ccard-image { display: none; }
+  .notes-widget .widget-head { display: none; }
+  .notes-widget textarea { margin-top: 0; min-height: 0; }
+  .script-out { min-height: 0; }
+  .uptime-os { display: none; }
+  .mcal-today { display: none; }
+  .mcal.compact button.cal-day { padding: 1px 0; font-size: 11px; }
+}
+@container widget (max-width: 199px) {
+  .widget .ring-label { display: none; }
+  .holo-legend { display: none; }
+  .holo-foot { font-size: 10.5px; }
+}
+@container widget (max-height: 139px) {
+  .clock-date { display: none; }
+  .net-widget .spark { display: none; }
+  .cores-widget .holo-heat, .cores-widget .holo-foot { display: none; }
+  .netwave-widget .holo-canvas { display: none; }
+  .netwave-widget .holo-foot { margin-top: auto; }
+  .uptime-load { display: none; }
+  .cont-stat .muted { display: none; }
+  .ccard-status { display: none; }
+}
+@container widget (max-height: 119px) {
+  .holo-rings { display: none; }
+  .holo-empty { display: none; }
+  .widget .ring { --ring: 46px; }
+  .widget .ring-label { display: none; }
+}
 
 /* ============ lock screen / screensaver / security ============ */
 .auth-screen.lock { gap: 22px; }
