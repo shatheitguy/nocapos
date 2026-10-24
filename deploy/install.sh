@@ -2,7 +2,7 @@
 # NoCapOS installer for Linux servers: Debian, Ubuntu, Raspberry Pi OS,
 # Fedora, Arch, ... (amd64, arm64, armv7). NoCapOS runs on top of your
 # existing Linux and manages it: users, network, storage,
-# power, a root terminal and one-click Docker apps.
+# power, a host terminal and one-click Docker apps.
 #
 #   curl -fsSL <release-url>/install.sh | sudo bash      download + install
 #   sudo bash install.sh                  native install (recommended): runs as root, full control of this server
@@ -380,7 +380,7 @@ EOF
   [ "$PORT" = 443 ] || url="https://HOST:$PORT/"
   finish "$url" "$TOKEN"
   echo "   $NAME runs as root and can manage this server: Linux users (sign in with them), network, power,"
-  echo "   storage and a root terminal — all admin-only and recorded in the audit log."
+  echo "   storage and a host terminal — all admin-only and recorded in the audit log."
   echo "   Turn on two-factor sign-in under Settings → Security."
   echo "   Manage:  systemctl status|restart nocapos · journalctl -u nocapos -f · settings in $ETC/nocapos.env"
 }
