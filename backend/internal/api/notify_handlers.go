@@ -327,6 +327,34 @@ func storageNotification(a storage.Alert) notify.Notification {
 	}
 }
 
+// notifyTestDone reports a finished SMART self-test with its result.
+func (s *Server) notifyTestDone(res storage.TestResult) {
+	s.add(context.Background(), testNotification(res, time.Now()))
+}
+
+func testNotification(res storage.TestResult, at time.Time) notify.Notification {
+	kind := "Short"
+	if res.Kind == "long" {
+		kind = "Long"
+	}
+	n := notify.Notification{
+		Key:  fmt.Sprintf("smarttest:%s:%d", res.Disk, at.Unix()),
+		Kind: notify.KindStorage, Level: "success",
+		Title: kind + " disk test passed: " + res.Model,
+		Body:  "The disk's self-test (" + res.Disk + ") finished: " + res.Status + ".",
+		Icon:  "storage", Action: &notify.Action{App: "storage", Props: map[string]any{"disk": res.Disk}},
+	}
+	switch {
+	case res.Aborted:
+		n.Level, n.Title = "warning", kind+" disk test stopped: "+res.Model
+		n.Body = "The self-test on " + res.Disk + " didn't finish (" + res.Status + "). Run it again when the disk is idle."
+	case !res.Passed:
+		n.Level, n.Title = "error", kind+" disk test failed: "+res.Model
+		n.Body = "The self-test on " + res.Disk + " reported: " + res.Status + ". Back up what's on it and plan to replace it."
+	}
+	return n
+}
+
 func (s *Server) notifyBackup(ctx context.Context, res backup.Result) {
 	if res.Status != "failed" {
 		return

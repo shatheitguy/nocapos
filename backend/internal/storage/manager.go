@@ -62,11 +62,15 @@ type Manager struct {
 
 	// InUse lists folders apps keep data in (set by the API from Docker).
 	InUse func(ctx context.Context) []PathUse
+	// OnTestDone hears when a SMART self-test NoCapOS started has finished.
+	OnTestDone func(TestResult)
 
 	mu         sync.Mutex
 	busy       map[string]string // lock key -> what's running
 	jobs       []*Job
 	smart      map[string]smartEntry
+	tests      map[string]*runningTest // by smartKey
+	testPoll   time.Duration
 	refreshing bool
 	alerts     []Alert
 	subs       map[chan []Alert]struct{}
@@ -100,7 +104,8 @@ func NewManager(o Options) *Manager {
 	}
 	return &Manager{be: o.Backend, st: o.Store, files: o.Files, dataDir: filepath.ToSlash(o.DataDir), log: o.Log, demo: o.Demo,
 		native: o.Native, canInst: o.CanInstall, pkgMgr: o.PkgManager,
-		busy: map[string]string{}, smart: map[string]smartEntry{}, subs: map[chan []Alert]struct{}{}}
+		busy: map[string]string{}, smart: map[string]smartEntry{}, subs: map[chan []Alert]struct{}{},
+		tests: map[string]*runningTest{}, testPoll: 15 * time.Second}
 }
 
 // ---- status ----
@@ -377,6 +382,9 @@ func (m *Manager) attachSmart(ctx context.Context, disks []Disk) {
 	if stale {
 		go m.refreshSmart(append([]Disk(nil), disks...))
 	}
+	for i := range disks {
+		disks[i].Smart = m.withTest(disks[i], disks[i].Smart)
+	}
 }
 
 func (m *Manager) readSmart(ctx context.Context, d Disk) *SmartSummary {
@@ -478,9 +486,13 @@ func (m *Manager) SmartDetail(ctx context.Context, name string) (*SmartReport, e
 	if err != nil {
 		return nil, err
 	}
+	cached := r.Summary
 	m.mu.Lock()
-	m.smart[smartKey(d)] = smartEntry{s: &r.Summary, at: time.Now()}
+	m.smart[smartKey(d)] = smartEntry{s: &cached, at: time.Now()}
 	m.mu.Unlock()
+	if s := m.withTest(d, &r.Summary); s != nil {
+		r.Summary = *s
+	}
 	return r, nil
 }
 
@@ -507,9 +519,14 @@ func (m *Manager) SmartTest(ctx context.Context, name, kind string, done func(er
 		return nil, err
 	}
 	return m.startJob("smart-test", name, unlock, func(ctx context.Context) error {
-		err := m.be.SmartTest(ctx, d, kind)
+		// Only smartctl runs here and while following the test: starting a
+		// self-test never touches the network or anything else on the host.
+		if err := m.be.SmartTest(ctx, d, kind); err != nil {
+			return err
+		}
 		m.readSmart(ctx, d)
-		return err
+		go m.followTest(d, kind)
+		return nil
 	}, done), nil
 }
 

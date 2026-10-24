@@ -13,6 +13,7 @@ import {
   type Layout,
   type Pool,
   type SmartReport,
+  type SmartSummary,
   type Vdev,
 } from '../api/storage';
 import { usePoll } from '../lib/hooks';
@@ -47,6 +48,41 @@ export function SmartBadge({ disk }: { disk: Disk }) {
       {h.label}
       {temp != null && <span className="st-temp">· {temp}°C</span>}
     </span>
+  );
+}
+
+/** "about 2 h 10 min" for a number of seconds. */
+export function fmtETA(sec: number): string {
+  if (sec < 60) return 'less than a minute';
+  const m = Math.round(sec / 60);
+  if (m < 60) return `about ${m} min`;
+  const h = Math.floor(m / 60);
+  return `about ${h} h${m % 60 ? ` ${m % 60} min` : ''}`;
+}
+
+/** A running SMART self-test: how far along, how long to go, and a bar. */
+export function TestProgress({ s, compact }: { s?: SmartSummary; compact?: boolean }) {
+  if (!s?.test_running) return null;
+  const left = s.test_remaining;
+  const done = left != null ? 100 - left : null;
+  const kind = s.test_kind === 'long' ? 'Long test' : s.test_kind === 'short' ? 'Short test' : 'Self-test';
+  const parts = [kind + ' running', done != null ? `${done}% done` : '', s.test_eta_sec != null ? `${fmtETA(s.test_eta_sec)} left` : ''].filter(Boolean);
+  if (compact) {
+    // Inside the disk card's button: only inline elements.
+    return (
+      <span className="st-disk-test">
+        <span>{parts.join(' · ')}</span>
+        <span className="st-meter" role="progressbar" aria-valuenow={done ?? 0} aria-valuemin={0} aria-valuemax={100}>
+          <span style={{ width: `${done ?? 5}%` }} />
+        </span>
+      </span>
+    );
+  }
+  return (
+    <div className="st-scan">
+      <span>{parts.join(' · ')}</span>
+      <Meter pct={done ?? 5} />
+    </div>
   );
 }
 
@@ -621,7 +657,12 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
     const r = await storageApi.smartTest(disk.name, type);
     setTesting(false);
     if (!r.ok) return toast('error', 'Couldn’t start the test', r.error);
-    toast('info', type === 'short' ? 'Short test started' : 'Long test started', type === 'short' ? 'It takes about 2 minutes.' : 'It can take several hours; the disk stays usable.');
+    const mins = type === 'short' ? (smart?.summary.short_test_min ?? 2) : smart?.summary.long_test_min;
+    toast(
+      'info',
+      type === 'short' ? 'Short test started' : 'Long test started',
+      `${mins ? `It takes ${fmtETA(mins * 60)}` : 'It can take several hours'}; the disk stays usable and you'll get a notification with the result.`,
+    );
     window.setTimeout(() => void load(), 1500);
   };
   const s = smart?.summary ?? disk.smart;
@@ -704,12 +745,7 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
               </p>
             </div>
           </div>
-          {s?.test_running && (
-            <div className="st-scan">
-              <span>Self-test running{s.test_remaining != null ? ` · ${s.test_remaining}% left` : ''}</span>
-              <Meter pct={100 - (s.test_remaining ?? 50)} />
-            </div>
-          )}
+          <TestProgress s={s} />
           <div className="st-stats">
             {s?.temperature_c != null && <div><span>Temperature</span><b>{s.temperature_c}°C</b></div>}
             {s?.power_on_hours != null && <div><span>Powered on</span><b>{Math.round(s.power_on_hours / 24).toLocaleString()} days</b></div>}

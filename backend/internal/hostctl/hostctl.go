@@ -58,8 +58,12 @@ func InContainer() bool {
 var runCmd = run
 
 func run(ctx context.Context, name string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
+	// Callers with longer work (joining Wi-Fi) set their own deadline.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+	}
 	out, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	s := strings.TrimSpace(string(out))
 	if err != nil {

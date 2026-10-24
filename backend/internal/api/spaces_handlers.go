@@ -183,6 +183,13 @@ func folderChange(in spaces.FolderInput) string {
 			parts = append(parts, k+"="+strconv.FormatBool(*v))
 		}
 	}
+	if in.Guest != nil {
+		g := *in.Guest
+		if g == "" {
+			g = "off"
+		}
+		parts = append(parts, "guest="+g)
+	}
 	if len(parts) == 0 {
 		return ""
 	}
