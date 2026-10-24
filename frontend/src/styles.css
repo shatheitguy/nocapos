@@ -2288,6 +2288,21 @@ button.bk-entry-name:hover:not(:disabled) { filter: none; text-decoration: under
 .nd-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; }
 button.nd-chip { padding: 5px 10px; border-radius: 99px; background: var(--surface-3); color: var(--text); font-weight: 500; font-size: 12.5px; }
 button.nd-chip.on { background: var(--accent-soft); color: var(--accent); }
+.nd-scan { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 0; max-height: 240px; overflow: auto; }
+button.nd-server { display: flex; align-items: center; gap: 10px; justify-content: flex-start; text-align: left; padding: 8px 10px; border-radius: 10px; background: transparent; color: var(--text); font-weight: 400; }
+button.nd-server:hover:not(:disabled) { background: var(--surface-3); }
+button.nd-server.on { background: var(--accent-soft); }
+.nd-server-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nd-server-text .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guest-warn { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 14%, transparent); font-size: 12.5px; line-height: 1.45; }
+.guest-warn > svg { flex: none; color: var(--warn); margin-top: 1px; }
+.wifi-error { flex-basis: 100%; margin: 0; padding: 0 8px 6px 36px; font-size: 12px; color: var(--bad); line-height: 1.4; }
+.wifi-other { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
+.wifi-other input[type='text'], .wifi-other input[type='password'] { padding: 7px 10px; }
+.wifi-other .wifi-error { padding: 0; }
+.wifi-other label.check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.host-edit { display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.host-edit input { width: 220px; padding: 7px 10px; font-family: var(--mono); font-size: 13px; }
 .nd-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px 14px; }
 .nd-pad { padding: 0 14px; }
 .nd-cmd, .nd-user { padding: 5px 10px; border-radius: 8px; background: var(--surface-3); font-size: 12.5px; user-select: all; }

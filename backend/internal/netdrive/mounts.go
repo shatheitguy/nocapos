@@ -68,8 +68,10 @@ var (
 		"smb":   {"apt": {"cifs-utils"}, "dnf": {"cifs-utils"}, "pacman": {"cifs-utils"}, "zypper": {"cifs-utils"}, "apk": {"cifs-utils"}},
 		"nfs":   {"apt": {"nfs-common"}, "dnf": {"nfs-utils"}, "pacman": {"nfs-utils"}, "zypper": {"nfs-client"}, "apk": {"nfs-utils"}},
 		"samba": {"apt": {"samba"}, "dnf": {"samba"}, "pacman": {"samba"}, "zypper": {"samba"}, "apk": {"samba"}},
+		// smbclient and nmblookup: finding servers and their shares.
+		"smbclient": {"apt": {"smbclient", "samba-common-bin"}, "dnf": {"samba-client"}, "pacman": {"smbclient"}, "zypper": {"samba-client"}, "apk": {"samba-client"}},
 	}
-	toolBinary = map[string]string{"smb": "mount.cifs", "nfs": "mount.nfs", "samba": "smbd"}
+	toolBinary = map[string]string{"smb": "mount.cifs", "nfs": "mount.nfs", "samba": "smbd", "smbclient": "smbclient"}
 )
 
 type Manager struct {
@@ -122,6 +124,7 @@ type Support struct {
 	SMB        bool `json:"smb"`         // mount.cifs present
 	NFS        bool `json:"nfs"`         // mount.nfs present
 	Samba      bool `json:"samba"`       // smbd present
+	SMBClient  bool `json:"smbclient"`   // smbclient present (finding servers and shares)
 }
 
 func (m *Manager) has(tool string) bool {
@@ -130,7 +133,7 @@ func (m *Manager) has(tool string) bool {
 }
 
 func (m *Manager) Support() Support {
-	return Support{Native: m.native(), CanInstall: m.native() && syspkg.Manager() != "", SMB: m.has("smb"), NFS: m.has("nfs"), Samba: m.has("samba")}
+	return Support{Native: m.native(), CanInstall: m.native() && syspkg.Manager() != "", SMB: m.has("smb"), NFS: m.has("nfs"), Samba: m.has("samba"), SMBClient: m.has("smbclient")}
 }
 
 // Install installs a missing tool ("smb", "nfs" or "samba").

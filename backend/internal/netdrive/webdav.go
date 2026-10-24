@@ -126,6 +126,12 @@ func (m *Manager) DAVHandler(clientIP func(*http.Request) string) http.Handler {
 			return
 		}
 		user, pw, hasAuth := r.BasicAuth()
+		if !hasAuth {
+			if g := m.davGuest(r.URL.Path); g != nil { // a folder open to guests (guest.go)
+				(&webdav.Handler{Prefix: DAVPrefix, FileSystem: &davFS{m: m, entries: g}, LockSystem: locks}).ServeHTTP(w, r)
+				return
+			}
+		}
 		var entries []davEntry
 		ok := false
 		if hasAuth {

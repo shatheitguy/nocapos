@@ -22,6 +22,7 @@ import (
 	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
+	"alfaos/alfad/internal/removable"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/stacks"
@@ -59,6 +60,7 @@ type Deps struct {
 	Stacks    *stacks.Manager
 	Storage   *storage.Manager
 	VMs       *vm.Manager
+	Removable *removable.Watcher // USB drives (nil where they can't be followed)
 	Version   string
 }
 
@@ -98,6 +100,10 @@ func New(ctx context.Context, d Deps) *Server {
 	}
 	if d.Storage != nil {
 		d.Storage.InUse = s.storageInUse
+		d.Storage.OnTestDone = s.notifyTestDone
+	}
+	if d.Removable != nil {
+		d.Removable.SetOnChange(s.notifyDrives)
 	}
 	return s
 }
@@ -145,6 +151,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/system/network/ipv4/keep", s.admin(s.ipv4Keep))
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))
 	mux.Handle("GET /api/v1/system/power", s.authed(s.powerInfo))
+	mux.Handle("PUT /api/v1/system/hostname", s.admin(s.hostnameSet))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))
@@ -242,6 +249,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/files/favorites", s.authed(s.filesFavorites))
 	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))
 	mux.Handle("GET /api/v1/files/external", s.authed(s.filesExternal))
+	mux.Handle("POST /api/v1/files/external/eject", s.admin(s.filesEject))
 	mux.Handle("POST /api/v1/files/compress", s.authed(s.filesCompress))
 	mux.Handle("POST /api/v1/files/extract", s.authed(s.filesExtract))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
@@ -264,6 +272,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))
 	mux.Handle("POST /api/v1/netdrives/install", s.admin(s.netInstall))
 	mux.Handle("GET /api/v1/netdrives/exports", s.admin(s.netExports))
+	mux.Handle("GET /api/v1/netdrives/discover", s.admin(s.netDiscover))
+	mux.Handle("GET /api/v1/netdrives/shares", s.admin(s.netServerShares))
 	mux.Handle("POST /api/v1/netdrives/{id}/{action}", s.admin(s.netConnect))
 	mux.Handle("PATCH /api/v1/netdrives/{id}", s.admin(s.netUpdate))
 	mux.Handle("DELETE /api/v1/netdrives/{id}", s.admin(s.netDelete))
