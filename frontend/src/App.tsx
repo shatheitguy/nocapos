@@ -9,7 +9,7 @@ import { installUiFeedback, playCue } from './lib/uiSound';
 import { applyPrefs, resetPrefs, restorePrefs, usePrefs } from './state/prefs';
 import { useRecents } from './state/recents';
 
-type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string } | { kind: 'desktop'; user: User };
+type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string; lockedUserId?: string } | { kind: 'desktop'; user: User };
 
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: 'boot' });
@@ -85,12 +85,12 @@ export function App() {
   // Lock = end the server session but keep the username and window layout,
   // so unlocking requires the password and restores the desktop as it was.
   const lock = async () => {
-    const name = phase.kind === 'desktop' ? phase.user.username : undefined;
-    setPhase({ kind: 'auth', mode: 'locked', lockedUser: name });
+    const u = phase.kind === 'desktop' ? phase.user : undefined;
+    setPhase({ kind: 'auth', mode: 'locked', lockedUser: u?.username, lockedUserId: u?.id });
     await logout();
   };
 
   if (phase.kind === 'boot') return <div className="boot"><Logo size={110} /></div>;
-  if (phase.kind === 'auth') return <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} />;
+  if (phase.kind === 'auth') return <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} lockedUserId={phase.lockedUserId} />;
   return <Desktop user={phase.user} onLock={() => void lock()} />;
 }
