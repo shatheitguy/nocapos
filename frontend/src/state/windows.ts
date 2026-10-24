@@ -150,7 +150,11 @@ export const useWM = create<WM>((set, get) => {
       } catch {
         saved = [];
       }
-      const windows = Array.isArray(saved) ? saved.map((w) => ({ ...w, ...clampRect(w) })) : [];
+      // One window per id: a layout saved twice over (two tabs, an old bug) must not show a window twice.
+      const ids = new Set<string>();
+      const windows = (Array.isArray(saved) ? saved : [])
+        .filter((w) => w && typeof w.id === 'string' && !ids.has(w.id) && !!ids.add(w.id))
+        .map((w) => ({ ...w, ...clampRect(w) }));
       const topZ = windows.reduce((m, w) => Math.max(m, w.z), 1);
       set({ windows, topZ, focused: topVisible(windows) });
     },

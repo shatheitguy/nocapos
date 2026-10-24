@@ -43,6 +43,24 @@ func mustGet(t *testing.T, m *Manager, name string) *VM {
 	return v
 }
 
+func TestUniqueVMs(t *testing.T) {
+	in := []VM{
+		{Name: "Windows 11", UUID: "a"},
+		{Name: "Windows 11", UUID: "a"},
+		{Name: "Ubuntu", UUID: "b"},
+		{Name: "Nameless"},
+		{Name: "Nameless"},
+		{Name: "Other"},
+	}
+	var names []string
+	for _, v := range uniqueVMs(in) {
+		names = append(names, v.Name)
+	}
+	if strings.Join(names, ",") != "Windows 11,Ubuntu,Nameless,Other" {
+		t.Fatalf("uniqueVMs = %v", names)
+	}
+}
+
 func TestUnavailableOffLinux(t *testing.T) {
 	m := NewManager(Options{Backend: NewDemo(t.TempDir()), Dir: t.TempDir(), Native: func() bool { return false }})
 	st := m.Status(context.Background())
