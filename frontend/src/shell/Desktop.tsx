@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../api/client';
 import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
@@ -7,7 +7,7 @@ import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { useDocumentVisible, useViewport } from '../lib/hooks';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { usePrefs } from '../state/prefs';
+import { usePrefs, usePrefsSynced } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { useFolders } from '../state/folders';
 import { useDock } from '../state/dock';
@@ -34,6 +34,9 @@ import { Toasts } from './Toasts';
 import { WidgetLayer } from './WidgetLayer';
 import { Window } from './Window';
 
+// Shown once, so it's fetched only when needed.
+const Welcome = lazy(() => import('./Welcome').then((m) => ({ default: m.Welcome })));
+
 export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   // Ids only: each Window subscribes to its own state, so a drag doesn't
   // re-render the whole desktop.
@@ -50,6 +53,11 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const [deskMenu, setDeskMenu] = useState<{ x: number; y: number } | null>(null);
   const isAdmin = user.role === 'admin';
   const glass = usePrefs((s) => s.uiTheme === 'glass');
+  // First start: once this person's prefs are back from the server, an
+  // administrator who hasn't finished (or skipped) the welcome sees it.
+  const prefsSynced = usePrefsSynced((s) => s.synced);
+  const welcomeDone = usePrefs((s) => s.welcomeDone);
+  const welcome = isAdmin && prefsSynced && !welcomeDone;
 
   // Session lifetime: restore layouts, open the socket, stream metrics.
   useEffect(() => {
@@ -180,7 +188,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
       {glass && !compact && !launcher && (
         <ErrorBoundary title="Home header" fallback="hidden">
-          <HomeHeader username={user.username} isAdmin={isAdmin} />
+          <HomeHeader username={user.username} />
         </ErrorBoundary>
       )}
       {!compact && (
@@ -220,6 +228,13 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       )}
       {deskMenu && <ContextMenu x={deskMenu.x} y={deskMenu.y} items={deskMenuItems()} onClose={() => setDeskMenu(null)} />}
       <DragGhost />
+      {welcome && (
+        <ErrorBoundary title="Welcome" fallback="hidden">
+          <Suspense fallback={null}>
+            <Welcome user={user} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
       <ConfirmHost />
       <PowerOverlay />
       {isAdmin && (

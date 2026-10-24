@@ -220,6 +220,7 @@ func (m *Manager) List(ctx context.Context) ([]VM, error) {
 	if err != nil {
 		return nil, err
 	}
+	vms = uniqueVMs(vms)
 	m.mu.Lock()
 	for i := range vms {
 		vms[i].Busy = m.busy[vms[i].UUID]
@@ -227,6 +228,25 @@ func (m *Manager) List(ctx context.Context) ([]VM, error) {
 	m.mu.Unlock()
 	sort.Slice(vms, func(i, j int) bool { return strings.ToLower(vms[i].Name) < strings.ToLower(vms[j].Name) })
 	return vms, nil
+}
+
+// uniqueVMs keeps one entry per machine (by UUID, or by name when libvirt
+// reported none), so a backend that lists a domain twice doesn't show it twice.
+func uniqueVMs(vms []VM) []VM {
+	seen := make(map[string]bool, len(vms))
+	out := vms[:0]
+	for _, v := range vms {
+		id := v.UUID
+		if id == "" {
+			id = "name:" + v.Name
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, v)
+	}
+	return out
 }
 
 // Get finds a machine by name.

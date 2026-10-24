@@ -31,12 +31,12 @@ export function SystemWidget() {
   if (!latest) return <div className="widget glass skeleton" />;
   const disks = latest.disks ?? [];
   return (
-    <button type="button" className="widget glass" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass widget-col system-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span>
-          <Icon name="monitor" size={15} /> {info?.host.hostname ?? 'System'}
+          <Icon name="monitor" size={15} /> <span className="widget-title">{info?.host.hostname ?? 'System'}</span>
         </span>
-        <span className="muted small">up {fmtUptime(latest.uptime)}</span>
+        <span className="muted small widget-aside">up {fmtUptime(latest.uptime)}</span>
       </div>
       <div className="rings">
         <Ring value={latest.cpu.percent} label="CPU" sub={info ? `${info.host.cpu_cores} cores` : undefined} />
@@ -47,19 +47,23 @@ export function SystemWidget() {
         />
       </div>
       <Sparkline values={history.map((h) => h.cpu)} max={100} height={36} className="accent" />
-      {disks.slice(0, 2).map((d) => (
-        <div key={d.path} className="widget-row">
-          <div className="row-head small">
-            <span>
-              <Icon name="disk" size={13} /> {d.path}
-            </span>
-            <span className="muted">
-              {fmtBytes(d.free, 0)} free of {fmtBytes(d.total, 0)}
-            </span>
-          </div>
-          <Bar value={d.percent} />
+      {disks.length > 0 && (
+        <div className="widget-list system-disks">
+          {disks.slice(0, 2).map((d) => (
+            <div key={d.path} className="widget-row">
+              <div className="row-head small">
+                <span className="widget-title">
+                  <Icon name="disk" size={13} /> {d.path}
+                </span>
+                <span className="muted widget-aside">
+                  {fmtBytes(d.free, 0)} free of {fmtBytes(d.total, 0)}
+                </span>
+              </div>
+              <Bar value={d.percent} />
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </button>
   );
 }
@@ -71,12 +75,12 @@ export function NetworkWidget() {
   if (!latest || !nics.length) return null;
   const last = history[history.length - 1];
   return (
-    <div className="widget glass">
+    <div className="widget glass widget-col net-widget">
       <div className="widget-head">
         <span>
           <Icon name="network" size={15} /> Network
         </span>
-        <span className="muted small">{nics.map((n) => n.interface).join(', ')}</span>
+        <span className="muted small widget-aside">{nics.map((n) => n.interface).join(', ')}</span>
       </div>
       <div className="net-rates">
         <span>
@@ -96,24 +100,26 @@ export function AcceleratorWidget() {
   const gpus = (latest?.accelerators ?? []).filter((a) => a.kind !== 'display');
   if (!gpus.length) return null;
   return (
-    <div className="widget glass">
+    <div className="widget glass widget-col">
       <div className="widget-head">
         <span>
-          <Icon name="gpu" size={15} /> AI accelerators
+          <Icon name="gpu" size={15} /> <span className="widget-title">AI accelerators</span>
         </span>
         <span className="muted small">{gpus.length}</span>
       </div>
-      {gpus.slice(0, 3).map((g) => (
-        <div key={g.id} className="widget-row">
-          <div className="row-head small">
-            <span>{g.name}</span>
-            <span className="muted">
-              {g.metrics.utilization != null ? `${g.metrics.utilization.toFixed(0)}%` : g.kind.toUpperCase()}
-            </span>
+      <div className="widget-list">
+        {gpus.slice(0, 3).map((g) => (
+          <div key={g.id} className="widget-row">
+            <div className="row-head small">
+              <span className="widget-title">{g.name}</span>
+              <span className="muted">
+                {g.metrics.utilization != null ? `${g.metrics.utilization.toFixed(0)}%` : g.kind.toUpperCase()}
+              </span>
+            </div>
+            {g.metrics.utilization != null && <Bar value={g.metrics.utilization} />}
           </div>
-          {g.metrics.utilization != null && <Bar value={g.metrics.utilization} />}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

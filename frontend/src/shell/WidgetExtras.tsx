@@ -83,22 +83,24 @@ export function StorageWidget() {
   const latest = useSystem((s) => s.latest);
   const disks = latest?.disks ?? [];
   return (
-    <button type="button" className="widget glass" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass widget-col storage-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span><Icon name="disk" size={15} /> Storage</span>
       </div>
       {disks.length === 0 ? (
         <p className="muted small">No volumes reported.</p>
       ) : (
-        disks.map((d) => (
-          <div key={d.path} className="widget-row">
-            <div className="row-head small">
-              <span>{d.path}</span>
-              <span className="muted">{fmtBytes(d.free, 0)} free</span>
+        <div className="widget-list">
+          {disks.map((d) => (
+            <div key={d.path} className="widget-row">
+              <div className="row-head small">
+                <span className="widget-title">{d.path}</span>
+                <span className="muted widget-aside">{fmtBytes(d.free, 0)} free</span>
+              </div>
+              <Bar value={d.percent} />
             </div>
-            <Bar value={d.percent} />
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </button>
   );
@@ -110,14 +112,14 @@ export function UptimeWidget() {
   const info = useSystem((s) => s.info);
   if (!latest) return <div className="widget glass skeleton" />;
   return (
-    <div className="widget glass">
+    <div className="widget glass uptime-widget">
       <div className="widget-head">
         <span><Icon name="power" size={15} /> Uptime</span>
       </div>
       <div className="big">{fmtUptime(latest.uptime)}</div>
-      <div className="muted small">{info?.host.os}</div>
+      <div className="muted small uptime-os">{info?.host.os}</div>
       {(latest.cpu.load1 || latest.cpu.load5) > 0 && (
-        <div className="muted small" style={{ marginTop: 6 }}>
+        <div className="muted small uptime-load">
           load {latest.cpu.load1.toFixed(2)} · {latest.cpu.load5.toFixed(2)} · {latest.cpu.load15.toFixed(2)}
         </div>
       )}
@@ -138,7 +140,7 @@ export function ContainersWidget() {
   }, []);
   usePoll(load, 10_000);
   return (
-    <button type="button" className="widget glass" onClick={() => openApp('containers')}>
+    <button type="button" className="widget glass cont-widget" onClick={() => openApp('containers')}>
       <div className="widget-head">
         <span><Icon name="containers" size={15} /> Containers</span>
       </div>
