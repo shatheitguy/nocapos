@@ -60,6 +60,7 @@ func (s *Server) appstoreList(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	s.fillAppWebURLs(r.Context(), status)
 	var rules map[string]*store.AppAccess
 	if s.Spaces != nil {
 		if rules, err = s.Spaces.AppRules(r.Context()); err != nil {

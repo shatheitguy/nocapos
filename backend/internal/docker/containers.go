@@ -29,12 +29,18 @@ type containerSummary struct {
 		PublicPort  uint16
 		Type        string
 	}
-	Labels map[string]string
+	Labels          map[string]string
+	NetworkSettings struct {
+		Networks map[string]struct {
+			IPAddress string
+		}
+	}
 }
 
 type containerJSON struct {
 	ID           string `json:"Id"`
 	Name         string
+	Image        string // image id
 	Created      time.Time
 	RestartCount int
 	State        struct {
@@ -47,9 +53,11 @@ type containerJSON struct {
 		Health     *struct{ Status string }
 	}
 	Config struct {
-		Image  string
-		Tty    bool
-		Labels map[string]string
+		Image        string
+		Tty          bool
+		Labels       map[string]string
+		Env          []string
+		ExposedPorts map[string]struct{}
 	}
 	HostConfig struct {
 		Privileged    bool
@@ -59,12 +67,17 @@ type containerJSON struct {
 	}
 	Mounts []struct {
 		Type        string
+		Name        string
 		Source      string
 		Destination string
 		RW          bool
 	}
 	NetworkSettings struct {
-		Networks map[string]struct{ IPAddress string }
+		Networks map[string]struct {
+			IPAddress  string
+			Gateway    string
+			MacAddress string
+		}
 	}
 }
 
@@ -116,26 +129,44 @@ type Container struct {
 	Project string            `json:"project,omitempty"`
 	System  bool              `json:"system"`
 	Labels  map[string]string `json:"labels"`
+	// Networks with the container's address on each (from the list call).
+	Networks []NetworkAttachment `json:"networks"`
+
+	// Filled in by the API from an inspect, for the Containers app's cards.
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	RestartCount int        `json:"restart_count"`
+	Health       string     `json:"health,omitempty"`
+	WebURL       string     `json:"web_url,omitempty"`     // where "Open" goes when it isn't host:published port
+	WebAddress   string     `json:"web_address,omitempty"` // the admin's own address for it
 }
 
 type Mount struct {
 	Type        string `json:"type"`
+	Name        string `json:"name,omitempty"` // named volumes
 	Source      string `json:"source"`
 	Destination string `json:"destination"`
 	RW          bool   `json:"rw"`
 }
 
 type NetworkAttachment struct {
-	Name string `json:"name"`
-	IP   string `json:"ip,omitempty"`
+	Name    string `json:"name"`
+	IP      string `json:"ip,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+	MAC     string `json:"mac,omitempty"`
+	Driver  string `json:"driver,omitempty"` // filled in by the API: bridge, macvlan, ipvlan…
 }
 
-// ContainerDetail deliberately omits Config.Env: environment variables
-// routinely hold credentials and are never sent to the browser.
+// ContainerDetail deliberately omits environment values: they routinely hold
+// credentials and are never sent to the browser (only the names are).
 type ContainerDetail struct {
 	ID            string              `json:"id"`
 	Name          string              `json:"name"`
 	Image         string              `json:"image"`
+	ImageID       string              `json:"image_id"`
+	EnvNames      []string            `json:"env_names"`
+	ExposedPorts  []string            `json:"exposed_ports"` // "8096/tcp"
+	WebURL        string              `json:"web_url,omitempty"`
+	WebAddress    string              `json:"web_address,omitempty"`
 	Created       time.Time           `json:"created"`
 	State         string              `json:"state"`
 	Running       bool                `json:"running"`
@@ -247,6 +278,11 @@ func (c *Client) ListContainers(ctx context.Context, all bool) ([]Container, err
 		for _, p := range r.Ports {
 			ct.Ports = append(ct.Ports, Port{IP: p.IP, Private: p.PrivatePort, Public: p.PublicPort, Protocol: p.Type})
 		}
+		ct.Networks = make([]NetworkAttachment, 0, len(r.NetworkSettings.Networks))
+		for name, n := range r.NetworkSettings.Networks {
+			ct.Networks = append(ct.Networks, NetworkAttachment{Name: name, IP: n.IPAddress})
+		}
+		sort.Slice(ct.Networks, func(i, j int) bool { return ct.Networks[i].Name < ct.Networks[j].Name })
 		out = append(out, ct)
 	}
 	return out, nil
@@ -269,6 +305,9 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (*ContainerDet
 		ID:            raw.ID,
 		Name:          strings.TrimPrefix(raw.Name, "/"),
 		Image:         raw.Config.Image,
+		ImageID:       raw.Image,
+		EnvNames:      envNames(raw.Config.Env),
+		ExposedPorts:  make([]string, 0, len(raw.Config.ExposedPorts)),
 		Created:       raw.Created,
 		State:         raw.State.Status,
 		Running:       raw.State.Running,
@@ -291,13 +330,95 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (*ContainerDet
 		d.Health = raw.State.Health.Status
 	}
 	for _, m := range raw.Mounts {
-		d.Mounts = append(d.Mounts, Mount{Type: m.Type, Source: m.Source, Destination: m.Destination, RW: m.RW})
+		d.Mounts = append(d.Mounts, Mount{Type: m.Type, Name: m.Name, Source: m.Source, Destination: m.Destination, RW: m.RW})
 	}
 	for name, n := range raw.NetworkSettings.Networks {
-		d.Networks = append(d.Networks, NetworkAttachment{Name: name, IP: n.IPAddress})
+		d.Networks = append(d.Networks, NetworkAttachment{Name: name, IP: n.IPAddress, Gateway: n.Gateway, MAC: n.MacAddress})
 	}
 	sort.Slice(d.Networks, func(i, j int) bool { return d.Networks[i].Name < d.Networks[j].Name })
+	for p := range raw.Config.ExposedPorts {
+		d.ExposedPorts = append(d.ExposedPorts, p)
+	}
+	sort.Strings(d.ExposedPorts)
 	return d, nil
+}
+
+// envNames returns just the names of KEY=value pairs, sorted.
+func envNames(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if k, _, _ := strings.Cut(kv, "="); k != "" {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// PauseContainer freezes every process in the container.
+func (c *Client) PauseContainer(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/pause", nil, nil)
+}
+
+func (c *Client) UnpauseContainer(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/unpause", nil, nil)
+}
+
+// KillContainer stops the container at once (SIGKILL), without a grace period.
+func (c *Client) KillContainer(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodPost, "/containers/"+url.PathEscape(id)+"/kill", nil, nil)
+}
+
+// RemoveContainerAndVolumes force-removes a container with its anonymous
+// volumes, then the named volumes it used unless another container still
+// uses them (the engine refuses those). It returns the volumes removed.
+func (c *Client) RemoveContainerAndVolumes(ctx context.Context, id string) ([]string, error) {
+	d, err := c.InspectContainer(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.removeContainer(ctx, d.ID, true); err != nil {
+		return nil, err
+	}
+	removed := []string{}
+	for _, m := range d.Mounts {
+		if m.Type != "volume" || m.Name == "" {
+			continue
+		}
+		// No force: a volume another container uses stays.
+		if err := c.do(ctx, http.MethodDelete, "/volumes/"+url.PathEscape(m.Name), nil, nil); err == nil {
+			removed = append(removed, m.Name)
+		}
+	}
+	return removed, nil
+}
+
+// ImageID returns the id of a local image.
+func (c *Client) ImageID(ctx context.Context, ref string) (string, error) {
+	var out struct {
+		ID string `json:"Id"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/images/"+ref+"/json", nil, &out); err != nil {
+		return "", err
+	}
+	return out.ID, nil
+}
+
+// NetworkDrivers maps each network's name to its driver (bridge, macvlan…)
+// with a single list call.
+func (c *Client) NetworkDrivers(ctx context.Context) (map[string]string, error) {
+	var list []struct {
+		Name   string `json:"Name"`
+		Driver string `json:"Driver"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/networks", nil, &list); err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(list))
+	for _, n := range list {
+		out[n.Name] = n.Driver
+	}
+	return out, nil
 }
 
 // 304 Not Modified (already started/stopped) is treated as success.

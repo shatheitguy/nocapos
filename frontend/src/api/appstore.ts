@@ -19,6 +19,11 @@ export interface StoreInstalled {
   containers: { service: string; id: string; state: string }[] | null;
   credentials?: { username?: string; password?: string };
   installed_at: string;
+  /** Where "Open" goes when it isn't this server + web_port: the admin's own
+   *  address, or the app's own IP on a macvlan/ipvlan network. */
+  web_url?: string;
+  /** The admin's own web address (empty = automatic). */
+  web_address?: string;
 }
 
 export interface StoreApp {
@@ -59,10 +64,14 @@ export const storeApi = {
   act: (id: string, action: 'install' | 'update' | 'start' | 'stop' | 'restart') => api<{ job?: string }>(`${path(id)}/${action}`, { method: 'POST' }),
   uninstall: (id: string, deleteData: boolean) => api<{ job: string }>(`${path(id)}/uninstall`, { method: 'POST', body: { delete_data: deleteData } }),
   job: (id: string) => api<StoreJob>(`/api/v1/appstore/jobs/${encodeURIComponent(id)}`),
+  /** Save the address Open uses ('' = automatic). */
+  setWebAddress: (id: string, url: string) => api<{ url: string }>(`${path(id)}/web-address`, { method: 'PUT', body: { url } }),
 };
 
-/** The app's web address on this server (apps serve plain HTTP on their own port). */
+/** The app's web address: the admin's own or its macvlan/ipvlan IP when
+ *  there is one, else this server on the app's own port (plain HTTP). */
 export function appURL(a: StoreApp): string | null {
+  if (a.installed?.web_url) return a.installed.web_url;
   if (!a.installed?.web_port) return null;
   return `http://${window.location.hostname}:${a.installed.web_port}${a.web?.path ?? '/'}`;
 }

@@ -5,7 +5,7 @@ import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 
-// Edit a container (or add a new one), Portainer-style but in NoCapOS: image,
+// Edit a container (or add a new one): image,
 // ports, storage, networks incl. macvlan/ipvlan, environment and limits.
 // Saving recreates the container; if anything fails the old one comes back.
 

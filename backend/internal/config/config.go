@@ -67,6 +67,11 @@ type Config struct {
 	TLSCert string
 	TLSKey  string
 	TLSAuto bool
+
+	// HTTPRedirectAddr is a plain-HTTP listener that only redirects to HTTPS
+	// (so http://nocap.local works). Defaults to ":80" with built-in TLS on
+	// Linux; ALFA_HTTP_REDIRECT_ADDR=off turns it off.
+	HTTPRedirectAddr string
 }
 
 func (c *Config) TLSEnabled() bool { return c.TLSAuto || c.TLSCert != "" }
@@ -124,6 +129,13 @@ func Load() (*Config, error) {
 	c.TLSCert, c.TLSKey = os.Getenv("ALFA_TLS_CERT"), os.Getenv("ALFA_TLS_KEY")
 	if (c.TLSCert == "") != (c.TLSKey == "") {
 		return nil, errors.New("ALFA_TLS_CERT and ALFA_TLS_KEY must be set together")
+	}
+	switch v := strings.TrimSpace(os.Getenv("ALFA_HTTP_REDIRECT_ADDR")); {
+	case strings.EqualFold(v, "off"):
+	case v != "":
+		c.HTTPRedirectAddr = v
+	case c.TLSEnabled() && runtime.GOOS == "linux":
+		c.HTTPRedirectAddr = ":80"
 	}
 
 	// Secure cookies need HTTPS (Traefik or built-in TLS). A loopback-only

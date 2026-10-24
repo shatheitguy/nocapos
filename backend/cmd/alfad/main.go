@@ -64,8 +64,11 @@ func main() {
 		err = resetPassword(os.Args[2:])
 	case "version":
 		fmt.Println(version)
+	case "install-brave":
+		// Used by install.sh: the same install Brave's first launch does.
+		err = webapps.InstallNative(context.Background(), os.Stdout)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version|reset-password <user>]\n")
+		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version|reset-password <user>|install-brave]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -343,6 +346,10 @@ func serve() error {
 	} else {
 		go func() { errCh <- httpSrv.Serve(ln) }()
 	}
+	if certFile != "" && cfg.HTTPRedirectAddr != "" {
+		redirect := startHTTPRedirect(cfg.HTTPRedirectAddr, ln.Addr(), log)
+		defer redirect.Close()
+	}
 	log.Info("alfad ready", "addr", ln.Addr().String(), "tls", certFile != "")
 
 	select {
@@ -356,6 +363,32 @@ func serve() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return httpSrv.Shutdown(shutdownCtx)
+}
+
+// startHTTPRedirect serves a plain-HTTP listener that only redirects to the
+// HTTPS address, so http://nocap.local and http://<ip> open NoCapOS. A busy
+// port (another web server) is logged and skipped.
+func startHTTPRedirect(addr string, httpsAddr net.Addr, log *slog.Logger) *http.Server {
+	port := ""
+	if tcp, ok := httpsAddr.(*net.TCPAddr); ok {
+		port = strconv.Itoa(tcp.Port)
+	}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           tlsutil.RedirectHandler(port),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Warn("http redirect not started (is another web server using the port?)", "addr", addr, "err", err)
+		return srv
+	}
+	go func() { _ = srv.Serve(ln) }()
+	log.Info("redirecting http to https", "addr", addr)
+	return srv
 }
 
 // listen binds the configured address. When the address is the built-in

@@ -7,7 +7,11 @@ import type { WinState } from '../state/windows';
 const MAX_LINES = 5000;
 
 export function Logs({ win }: { win: WinState }) {
-  const id = win.props?.id ?? '';
+  return <LogView id={win.props?.id ?? ''} />;
+}
+
+/** A container's live log, for the Logs window and the Containers app. */
+export function LogView({ id }: { id: string }) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [ended, setEnded] = useState<string | null>(null);
   const [follow, setFollow] = useState(true);
