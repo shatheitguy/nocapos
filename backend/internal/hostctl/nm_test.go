@@ -2,6 +2,7 @@ package hostctl
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -68,36 +69,221 @@ func TestWiFiNetworks(t *testing.T) {
 	}
 }
 
-func TestWiFiConnectKeepsPasswordOffCommandLine(t *testing.T) {
-	var fileBody string
-	f := &fakeNM{}
-	withFake(t, f)
-	runCmd = func(ctx context.Context, name string, args ...string) (string, error) {
-		f.calls = append(f.calls, name+" "+strings.Join(args, " "))
-		if i := indexOf(args, "passwd-file"); i >= 0 {
-			b, _ := os.ReadFile(args[i+1])
-			fileBody = string(b)
+func TestWiFiConnectArgs(t *testing.T) {
+	cases := []struct {
+		j          WiFiJoin
+		passwdFile string
+		want       []string
+	}{
+		{WiFiJoin{SSID: "Office", Password: "s3cret-pass", Device: "wlan0"}, "/tmp/nocap-wifi-1",
+			[]string{"--wait", "45", "device", "wifi", "connect", "Office", "passwd-file", "/tmp/nocap-wifi-1", "ifname", "wlan0"}},
+		// Spaces and quotes stay inside one argument: no shell, no escaping.
+		{WiFiJoin{SSID: `Joe's "Fast" Wi-Fi`, Password: `p@ss word"`}, "/tmp/nocap-wifi-2",
+			[]string{"--wait", "45", "device", "wifi", "connect", `Joe's "Fast" Wi-Fi`, "passwd-file", "/tmp/nocap-wifi-2"}},
+		{WiFiJoin{SSID: "Hidden Lab", Password: "abcdefgh", Hidden: true, Device: "wlp2s0"}, "/tmp/nocap-wifi-3",
+			[]string{"--wait", "45", "device", "wifi", "connect", "Hidden Lab", "passwd-file", "/tmp/nocap-wifi-3", "ifname", "wlp2s0", "hidden", "yes"}},
+		{WiFiJoin{SSID: "Cafe Free"}, "", []string{"--wait", "45", "device", "wifi", "connect", "Cafe Free"}},
+	}
+	for _, c := range cases {
+		if got := wifiConnectArgs(c.j, c.passwdFile); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%+v:\n got %q\nwant %q", c.j, got, c.want)
 		}
-		return "", nil
 	}
-	if err := WiFiConnect(context.Background(), "Office", "s3cret-pass"); err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(strings.Join(f.calls, " "), "s3cret-pass") {
-		t.Fatalf("password leaked onto the command line: %v", f.calls)
-	}
-	if fileBody != "802-11-wireless-security.psk:s3cret-pass\n" {
-		t.Fatalf("password file = %q", fileBody)
+	for _, bad := range []WiFiJoin{{}, {SSID: strings.Repeat("x", 33)}, {SSID: "a\nb"}, {SSID: "ok", Password: "x\ny"}, {SSID: "ok", Device: "wl an0"}} {
+		if bad.Validate() == nil {
+			t.Errorf("%+v accepted", bad)
+		}
 	}
 }
 
-func indexOf(xs []string, v string) int {
-	for i, x := range xs {
-		if x == v {
-			return i
+// The password must never show up as a command argument, where `ps` or
+// /proc/<pid>/cmdline would expose it to any other local user.
+func TestWiFiConnectKeepsPasswordOffCommandLine(t *testing.T) {
+	s := &scriptNM{out: map[string]string{
+		"nmcli -t -f DEVICE,TYPE device":             "wlan0:wifi",
+		"nmcli -t -f NAME,UUID,TYPE connection show": "",
+	}}
+	old, oldCan := runCmd, canControl
+	runCmd, canControl = s.run, func() error { return nil }
+	t.Cleanup(func() { runCmd, canControl = old, oldCan })
+
+	const secret = "s3cret-pass-off-argv"
+	if err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office", Password: secret}); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range s.calls {
+		if strings.Contains(call, secret) {
+			t.Fatalf("password appeared in a command line: %q", call)
 		}
 	}
-	return -1
+	var sawPasswdFile bool
+	for _, call := range s.calls {
+		if !strings.Contains(call, "passwd-file") {
+			continue
+		}
+		sawPasswdFile = true
+		i := strings.Index(call, "passwd-file ") + len("passwd-file ")
+		path := strings.Fields(call[i:])[0]
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("passwd-file %s was not cleaned up", path)
+		}
+	}
+	if !sawPasswdFile {
+		t.Fatal("expected a passwd-file argument")
+	}
+}
+
+// scriptNM answers by prefix and can fail a call.
+type scriptNM struct {
+	calls []string
+	out   map[string]string
+	fail  map[string]string // prefix → error output
+}
+
+func (s *scriptNM) run(_ context.Context, name string, args ...string) (string, error) {
+	call := name + " " + strings.Join(args, " ")
+	s.calls = append(s.calls, call)
+	for p, out := range s.fail {
+		if strings.HasPrefix(call, p) {
+			return out, errors.New(out)
+		}
+	}
+	for p, out := range s.out {
+		if strings.HasPrefix(call, p) {
+			return out, nil
+		}
+	}
+	return "", nil
+}
+
+func TestWiFiConnectReplacesStaleProfile(t *testing.T) {
+	s := &scriptNM{out: map[string]string{
+		"nmcli -t -f DEVICE,TYPE device":             "wlan0:wifi\neth0:ethernet",
+		"nmcli -t -f NAME,UUID,TYPE connection show": "Office:u-1:802-11-wireless\nOffice 1:u-2:802-11-wireless\nOffice Guest:u-3:802-11-wireless\nOffice:u-4:802-3-ethernet",
+	}}
+	old, oldCan := runCmd, canControl
+	runCmd, canControl = s.run, func() error { return nil }
+	t.Cleanup(func() { runCmd, canControl = old, oldCan })
+
+	if err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office", Password: "new-pass-1"}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(s.calls, "\n")
+	for _, want := range []string{"nmcli connection delete uuid u-1", "nmcli connection delete uuid u-2",
+		"nmcli --wait 45 device wifi connect Office passwd-file", "ifname wlan0"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("missing %q in:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "new-pass-1") {
+		t.Errorf("password appeared in a command line:\n%s", joined)
+	}
+	if strings.Contains(joined, "u-3") || strings.Contains(joined, "u-4") {
+		t.Errorf("deleted another network's profile:\n%s", joined)
+	}
+
+	// A wrong password: the error says so (with nmcli's words) and the
+	// profile it made is cleaned up.
+	s.calls = nil
+	s.fail = map[string]string{"nmcli --wait": "Error: Connection activation failed: (7) Secrets were required, but not provided."}
+	err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office", Password: "typo-pass"})
+	if err == nil || !strings.Contains(err.Error(), "wasn't accepted") || !strings.Contains(err.Error(), "Secrets were required") {
+		t.Fatalf("error = %v", err)
+	}
+	if n := strings.Count(strings.Join(s.calls, "\n"), "connection delete uuid u-1"); n != 2 {
+		t.Errorf("stale/new profile deletes = %d:\n%s", n, strings.Join(s.calls, "\n"))
+	}
+
+	// A saved network without a new password is joined as is.
+	s.calls, s.fail = nil, nil
+	if err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(s.calls, "\n"), "delete") {
+		t.Errorf("deleted a saved profile without a new password: %v", s.calls)
+	}
+}
+
+func TestWiFiErrorMessages(t *testing.T) {
+	j := WiFiJoin{SSID: "Home", Password: "x"}
+	for out, want := range map[string]string{
+		"Error: No network with SSID 'Home' found.":                                        "isn't in range",
+		"Error: Connection activation failed: IP configuration could not be reserved":      "address",
+		"Error: Timeout expired (45 seconds)":                                              "too long",
+		"Error: Failed to add/activate new connection: weird thing":                        "couldn't join Home: Failed to add/activate",
+		"Error: Connection activation failed: (7) Secrets were required, but not provided": "wasn't accepted",
+	} {
+		if got := wifiError(j, out, errors.New("exit status 4")).Error(); !strings.Contains(got, want) {
+			t.Errorf("%q → %q, want %q", out, got, want)
+		}
+	}
+}
+
+func TestValidHostname(t *testing.T) {
+	for in, want := range map[string]string{"nas": "nas", "Living-Room-NAS": "living-room-nas", " box1 ": "box1", "nas.home.arpa": "nas.home.arpa"} {
+		if got, err := ValidHostname(in); err != nil || got != want {
+			t.Errorf("%q → %q, %v", in, got, err)
+		}
+	}
+	for _, bad := range []string{"", "-nas", "nas-", "my_nas", "nas box", "nas..lan", strings.Repeat("a", 64), "123", "héllo", "a;rm -rf"} {
+		if _, err := ValidHostname(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func TestHostsWithName(t *testing.T) {
+	deb := "127.0.0.1\tlocalhost\n127.0.1.1\told-name\n\n# IPv6\n::1 localhost ip6-localhost\n"
+	if got := hostsWithName(deb, "nas"); got != "127.0.0.1\tlocalhost\n127.0.1.1\tnas\n\n# IPv6\n::1 localhost ip6-localhost\n" {
+		t.Errorf("replace:\n%s", got)
+	}
+	if got := hostsWithName("127.0.0.1 localhost\n::1 localhost\n", "nas.lan"); got != "127.0.0.1 localhost\n127.0.1.1\tnas.lan nas\n::1 localhost\n" {
+		t.Errorf("add:\n%s", got)
+	}
+	if got := hostsWithName("", "nas"); got != "127.0.1.1\tnas\n" {
+		t.Errorf("empty:\n%q", got)
+	}
+}
+
+func TestSetHostname(t *testing.T) {
+	dir := t.TempDir()
+	oldHosts, oldName, oldLook, oldCan, oldRun := hostsFile, hostnameFile, lookPath, canRename, runCmd
+	t.Cleanup(func() {
+		hostsFile, hostnameFile, lookPath, canRename, runCmd = oldHosts, oldName, oldLook, oldCan, oldRun
+	})
+	hostsFile, hostnameFile = dir+"/hosts", dir+"/hostname"
+	_ = os.WriteFile(hostsFile, []byte("127.0.0.1 localhost\n127.0.1.1 old\n"), 0o644)
+	canRename = func() error { return nil }
+	s := &scriptNM{fail: map[string]string{"hostnamectl": "Failed to connect to bus"}}
+	runCmd = s.run
+	lookPath = func(n string) (string, error) {
+		if n == "hostnamectl" || n == "avahi-daemon" {
+			return "/usr/bin/" + n, nil
+		}
+		return "", errors.New("not found")
+	}
+	got, err := SetHostname(context.Background(), "Media-Box")
+	if err != nil || got != "media-box" {
+		t.Fatalf("SetHostname = %q, %v", got, err)
+	}
+	b, _ := os.ReadFile(hostnameFile)
+	h, _ := os.ReadFile(hostsFile)
+	if string(b) != "media-box\n" || !strings.Contains(string(h), "127.0.1.1\tmedia-box") {
+		t.Errorf("files: hostname=%q hosts=%q", b, h)
+	}
+	joined := strings.Join(s.calls, "\n")
+	for _, want := range []string{"hostnamectl set-hostname media-box", "\nhostname media-box", "systemctl try-restart avahi-daemon"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("missing %q:\n%s", want, joined)
+		}
+	}
+	if _, err := SetHostname(context.Background(), "bad name"); err == nil {
+		t.Error("invalid name accepted")
+	}
+	canRename = func() error { return ErrUnsupported }
+	if _, err := SetHostname(context.Background(), "ok"); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("unsupported host: %v", err)
+	}
 }
 
 func TestFillIPv4NM(t *testing.T) {

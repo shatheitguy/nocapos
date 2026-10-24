@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { netApi, type NetDrive, type NetSupport, type Sharing } from '../api/netdrive';
+import { netApi, type Discovery, type FoundServer, type NetDrive, type NetSupport, type Sharing } from '../api/netdrive';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { Choice, Row, Section, Toggle } from './Personalize';
@@ -26,7 +26,7 @@ export function useNetwork(enabled = true) {
 }
 
 /** Install a missing host tool (cifs-utils, NFS, Samba). */
-function InstallRow({ label, hint, tool, support, cmd, onDone }: { label: string; hint: string; tool: 'smb' | 'nfs' | 'samba'; support: NetSupport; cmd: string; onDone: () => void }) {
+function InstallRow({ label, hint, tool, support, cmd, onDone }: { label: string; hint: string; tool: 'smb' | 'nfs' | 'samba' | 'smbclient'; support: NetSupport; cmd: string; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const install = async () => {
     setBusy(true);
@@ -99,6 +99,18 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
   const [exports, setExports] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // SMB shares of the server picked from the network list (null = not asked).
+  const [smbShares, setSmbShares] = useState<{ host: string; shares: string[] | null; error?: string } | null>(null);
+
+  const pickServer = async (s: FoundServer) => {
+    setHost(s.host);
+    setKind('smb');
+    setShare('');
+    if (s.browsable) return setSmbShares({ host: s.host, shares: s.shares ?? [] });
+    setSmbShares({ host: s.host, shares: null });
+    const r = await netApi.serverShares(s.host);
+    setSmbShares({ host: s.host, shares: r.ok ? r.data.shares : [], error: r.ok ? undefined : r.error });
+  };
 
   const find = async () => {
     setExports(null);
@@ -121,6 +133,8 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
   };
 
   return (
+    <>
+    {support.smb && <ServerScan support={support} picked={host} onPick={(s) => void pickServer(s)} />}
     <Section title="Add a network drive">
       <Row label="Type">
         <Choice
@@ -136,8 +150,33 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
         />
       </Row>
       <Row label="Server" hint="Name or IP address, e.g. 192.168.1.20 or nas.local">
-        <input value={host} spellCheck={false} placeholder="192.168.1.20" onChange={(e) => setHost(e.target.value)} />
+        <input
+          value={host}
+          spellCheck={false}
+          placeholder="192.168.1.20"
+          onChange={(e) => {
+            setHost(e.target.value);
+            setSmbShares(null);
+          }}
+        />
       </Row>
+      {kind === 'smb' && smbShares && smbShares.host === host && (
+        <div className="nd-chips">
+          {smbShares.shares === null ? (
+            <span className="muted small">
+              <span className="spinner sm" /> Asking {host} for its shared folders…
+            </span>
+          ) : smbShares.shares.length ? (
+            smbShares.shares.map((x) => (
+              <button key={x} type="button" className={`nd-chip ${share === x ? 'on' : ''}`} onClick={() => setShare(x)}>
+                {x}
+              </button>
+            ))
+          ) : (
+            <span className="muted small">{smbShares.error ?? `${host} didn’t list any shared folders; type the share’s name.`}</span>
+          )}
+        </div>
+      )}
       <Row label={kind === 'smb' ? 'Share' : 'Export'} hint={kind === 'smb' ? 'The shared folder’s name, e.g. Media' : 'e.g. /volume1/media'}>
         <div className="nd-inline">
           <input value={share} spellCheck={false} placeholder={kind === 'smb' ? 'Media' : '/volume1/media'} onChange={(e) => setShare(e.target.value)} />
@@ -179,6 +218,63 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
       <div className="nd-footer">
         <button type="button" disabled={busy || !host.trim() || !share.trim()} onClick={() => void add()}>
           {busy ? <span className="spinner sm" /> : <Icon name="plus" size={14} />} {busy ? 'Connecting…' : 'Connect'}
+        </button>
+      </div>
+    </Section>
+    </>
+  );
+}
+
+/** File servers found on the local network (SMB), refreshable. */
+function ServerScan({ support, picked, onPick }: { support: NetSupport; picked: string; onPick: (s: FoundServer) => void }) {
+  const [scan, setScan] = useState<Discovery | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState('');
+  const run = useCallback(async () => {
+    setScanning(true);
+    const r = await netApi.discover();
+    setScanning(false);
+    if (!r.ok) return setError(r.error ?? 'Could not scan the network');
+    setError('');
+    setScan(r.data);
+  }, []);
+  useEffect(() => {
+    void run();
+  }, [run]);
+  const tools = scan?.tools;
+  return (
+    <Section title="On your network">
+      <div className="nd-scan">
+        {scanning && !scan && (
+          <p className="muted small nd-pad">
+            <span className="spinner sm" /> Looking for file servers…
+          </p>
+        )}
+        {error && <p className="error nd-pad">{error}</p>}
+        {scan && scan.servers.length === 0 && !scanning && (
+          <p className="muted small nd-pad">{tools && !tools.avahi && !tools.nmblookup ? 'Can’t look for servers yet.' : 'No file servers answered. Type the server’s address below.'}</p>
+        )}
+        {scan?.servers.map((s) => (
+          <button key={s.host} type="button" className={`nd-server ${picked === s.host ? 'on' : ''}`} onClick={() => onPick(s)}>
+            <Icon name="network" size={16} />
+            <span className="nd-server-text">
+              <b>{s.name || s.hostname || s.host}</b>
+              <span className="muted small">
+                {s.host}
+                {s.hostname && s.hostname !== s.name ? ` · ${s.hostname}` : ''}
+                {s.browsable ? ` · ${s.shares?.length ? s.shares.join(', ') : 'no shared folders listed'}` : ''}
+              </span>
+            </span>
+          </button>
+        ))}
+        {scan?.hint && <p className="muted small nd-pad">{scan.hint}</p>}
+      </div>
+      {support.native && !support.smbclient && (
+        <InstallRow label="Samba client tools" hint="Find servers on your network and list their shared folders" tool="smbclient" support={support} cmd="sudo apt install smbclient" onDone={() => void run()} />
+      )}
+      <div className="nd-footer">
+        <button type="button" className="ghost" disabled={scanning} onClick={() => void run()}>
+          {scanning ? <span className="spinner sm" /> : <Icon name="restart" size={14} />} {scanning ? 'Scanning…' : 'Scan again'}
         </button>
       </div>
     </Section>

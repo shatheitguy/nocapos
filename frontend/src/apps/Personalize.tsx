@@ -94,33 +94,51 @@ export function Slider({ label, hint, value, min, max, step = 1, format, onChang
 
 // ---- Appearance ----
 
+/** The theme cards: Glass, NoCap classic and Cyber-Deck, applied on click. */
+export function ThemeGallery() {
+  const uiTheme = usePrefs((s) => s.uiTheme);
+  const set = usePrefs((s) => s.set);
+  return (
+    <div className="theme-gallery">
+      {UI_THEMES.map((t) => (
+        <button key={t.id} type="button" className={`theme-card ${uiTheme === t.id ? 'on' : ''}`} data-preview={t.id}
+          onClick={() => set({ uiTheme: t.id })} aria-pressed={uiTheme === t.id}>
+          <span className="theme-preview">
+            <span className="theme-preview-window" style={t.id === 'cyberdeck' ? { borderColor: t.swatch[0], boxShadow: `0 0 12px ${t.swatch[0]}66` } : undefined}>
+              <span style={{ background: t.id === 'glass' ? 'var(--accent)' : t.swatch[0] }} />
+              <span style={{ background: t.id === 'glass' ? 'rgba(255,255,255,.75)' : t.swatch[1] }} />
+            </span>
+          </span>
+          <span className="theme-name">
+            {t.name === 'NoCap' ? 'NoCap classic' : t.name}
+            {uiTheme === t.id && <Icon name="check" size={14} />}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The Transparency slider (0% solid … 100% the most see-through). */
+export function TransparencySlider() {
+  const transparency = usePrefs((s) => s.transparency);
+  const set = usePrefs((s) => s.set);
+  return (
+    <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is sharper and faster; 0% is fully solid." value={transparency}
+      min={0} max={100} step={5} format={(v) => (v === 0 ? 'Solid' : `${v}%`)} onChange={(v) => set({ transparency: v, reduceTransparency: v === 0 })} />
+  );
+}
+
 export function Appearance() {
   const prefs = usePrefs();
   const set = prefs.set;
   const classic = prefs.uiTheme === 'classic';
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
-  const setTransparency = (transparency: number) => set({ transparency, reduceTransparency: transparency === 0 });
   return (
     <div className="stack settings-page">
       <Section title="Theme" hint={current.blurb}>
         <Row>
-          <div className="theme-gallery">
-            {UI_THEMES.map((t) => (
-              <button key={t.id} type="button" className={`theme-card ${prefs.uiTheme === t.id ? 'on' : ''}`} data-preview={t.id}
-                onClick={() => set({ uiTheme: t.id })} aria-pressed={prefs.uiTheme === t.id}>
-                <span className="theme-preview">
-                  <span className="theme-preview-window" style={t.id === 'cyberdeck' ? { borderColor: t.swatch[0], boxShadow: `0 0 12px ${t.swatch[0]}66` } : undefined}>
-                    <span style={{ background: t.id === 'glass' ? 'var(--accent)' : t.swatch[0] }} />
-                    <span style={{ background: t.id === 'glass' ? 'rgba(255,255,255,.75)' : t.swatch[1] }} />
-                  </span>
-                </span>
-                <span className="theme-name">
-                  {t.name === 'NoCap' ? 'NoCap classic' : t.name}
-                  {prefs.uiTheme === t.id && <Icon name="check" size={14} />}
-                </span>
-              </button>
-            ))}
-          </div>
+          <ThemeGallery />
         </Row>
         {classic && (
           <Row label="Light or dark" hint="Auto follows your device's light or dark mode">
@@ -151,8 +169,7 @@ export function Appearance() {
         {prefs.uiTheme === 'cyberdeck' && (
           <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
-        <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is sharper and faster; 0% is fully solid." value={prefs.transparency}
-          min={0} max={100} step={5} format={(v) => (v === 0 ? 'Solid' : `${v}%`)} onChange={setTransparency} />
+        <TransparencySlider />
         <Toggle label="Reduce motion" hint="Turn off animations, scan sweeps and click pulses" checked={prefs.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
         {classic && (
           <Toggle label="Square corners" hint="Sharper windows and panels" checked={prefs.squareCorners} onChange={(squareCorners) => set({ squareCorners })} />

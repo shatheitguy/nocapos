@@ -15,13 +15,15 @@ export type NoticeLevel = 'info' | 'success' | 'warning' | 'error';
 export interface Notice {
   id: number;
   key: string;
-  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'test';
+  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'device' | 'test';
   level: NoticeLevel;
   title: string;
   body?: string;
   /** NoCapOS app id, or "store:<id>" for an App Store app. */
   icon?: string;
   action?: { app: string; props?: Record<string, string> };
+  /** Goes straight to the Notification Center: no banner, no sound. */
+  quiet?: boolean;
   created_at: string;
   read_at?: string;
 }
@@ -33,6 +35,7 @@ export interface NotifySettings {
   app_errors: boolean;
   storage: boolean;
   backups: boolean;
+  devices: boolean;
 }
 
 interface Event {
@@ -128,6 +131,7 @@ function arrived(n: Notice) {
   const focus = usePrefs.getState().focusMode;
   // Focus: no banners or sounds, except errors (as with toasts). They still land in the center.
   if (focus && n.level !== 'error') return;
+  if (n.quiet) return;
   playCue(n.level === 'error' ? 'error' : n.level === 'success' ? 'success' : 'info');
   if (s.centerOpen) return; // already on screen in the center
   useNotifications.setState({ banners: [...useNotifications.getState().banners, n].slice(-MAX_BANNERS) });

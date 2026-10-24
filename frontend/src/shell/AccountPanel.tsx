@@ -56,7 +56,14 @@ export function AccountPanel({
             }}
           >
             {it.icon && <Icon name={it.icon} size={16} />}
-            <span>{it.label}</span>
+            {it.hint ? (
+              <span className="acct-text">
+                <span>{it.label}</span>
+                <small>{it.hint}</small>
+              </span>
+            ) : (
+              <span>{it.label}</span>
+            )}
           </button>,
         ])}
       </div>

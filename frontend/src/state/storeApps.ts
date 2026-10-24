@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { storeApi, type StoreApp } from '../api/appstore';
+import { appURL, openStoreApp, storeApi, type StoreApp } from '../api/appstore';
+import { getUser } from '../api/client';
+import { openApp } from '../apps/meta';
 import { choiceDialog } from './confirm';
 import { toast } from './toasts';
 
@@ -23,6 +25,22 @@ export const useStoreApps = create<StoreApps>((set) => ({
 
 /** Apps that are installed, or being installed or removed right now. */
 export const shownOnHome = (a: StoreApp) => !!a.installed || (!!a.job && !a.job.done && a.job.action !== 'uninstall');
+
+// An installed app on the desktop is a shortcut keyed "store:<id>", next to
+// NoCapOS's own app ids and "folder:<id>". Installing an app never adds one;
+// people put it there from Launchpad (menu or drag) and remove it like any icon.
+const STORE_PREFIX = 'store:';
+export const storeKey = (id: string) => STORE_PREFIX + id;
+export const isStoreKey = (key: string) => key.startsWith(STORE_PREFIX);
+export const storeIdOf = (key: string) => key.slice(STORE_PREFIX.length);
+/** The installed app behind a "store:<id>" key, if it is still there. */
+export const storeAppOf = (key: string) => (isStoreKey(key) ? useStoreApps.getState().apps.find((a) => a.id === storeIdOf(key) && shownOnHome(a)) : undefined);
+
+/** Open an installed app in its own tab, or its App Store page while it installs. */
+export function launchStoreApp(app: StoreApp) {
+  if (app.installed && appURL(app)) openStoreApp(app);
+  else if (getUser()?.role === 'admin') openApp('appcenter', { props: { app: app.id } });
+}
 
 const busy = (apps: StoreApp[]) => apps.some((a) => a.job && !a.job.done);
 

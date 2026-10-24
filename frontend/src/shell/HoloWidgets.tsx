@@ -135,7 +135,7 @@ export function CoreHeatmapWidget() {
   const hottest = n ? cores.reduce((best, v, i) => (v > cores[best] ? i : best), 0) : -1;
 
   return (
-    <button type="button" className="widget glass holo" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass holo cores-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span>
           <Icon name="cpu" size={15} /> CPU cores
@@ -182,7 +182,7 @@ export function MemoryRingsWidget() {
   if (!m) return <div className="widget glass skeleton" />;
   const swapPct = m.swap_total ? (m.swap_used / m.swap_total) * 100 : 0;
   return (
-    <button type="button" className="widget glass holo" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass holo mem-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span>
           <Icon name="memory" size={15} /> Memory
@@ -284,7 +284,7 @@ export function NetWaveWidget() {
   );
 
   return (
-    <button type="button" className="widget glass holo" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass holo netwave-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span>
           <Icon name="network" size={15} /> Network
@@ -333,7 +333,7 @@ function Gauge({ pct }: { pct: number }) {
 export function StorageGaugesWidget() {
   const disks = useSystem((s) => s.latest?.disks ?? NONE);
   return (
-    <button type="button" className="widget glass holo" onClick={() => openApp('monitor')}>
+    <button type="button" className="widget glass holo gauges-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">
         <span>
           <Icon name="disk" size={15} /> Storage

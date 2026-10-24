@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { netApi } from '../api/netdrive';
+import { netApi, type GuestMode } from '../api/netdrive';
 import { PERM_LABEL, sharesApi, type FolderInput, type Perm, type SharedFolder, type SharesOverview } from '../api/shares';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
-import { Row, Section, Toggle } from './Personalize';
+import { Choice, Row, Section, Toggle } from './Personalize';
 
 // Files → File Sharing: shared folders and who may use them, how they're
 // offered on the network (SMB and WebDAV), and people's private homes.
@@ -122,6 +122,7 @@ function FolderRow({ folder: f, data, onChanged }: { folder: SharedFolder; data:
             <span className="badge">{where}</span>
             <span className="badge">{granted === 0 ? 'Administrators only' : `${granted} ${granted === 1 ? 'person' : 'people'}`}</span>
             {f.read_only && <span className="badge">Read only for everyone</span>}
+            {f.guest && <span className="badge off">{f.guest === 'rw' && !f.read_only ? 'Guests can read & write' : 'Guests can read'}</span>}
             {!f.network && <span className="badge">Hidden on the network</span>}
             {!f.recycle && <span className="badge">No recycle bin</span>}
             {f.missing && <span className="badge off">Folder missing</span>}
@@ -206,12 +207,48 @@ function FolderFields({ v, set }: { v: FolderInput; set: (p: Partial<FolderInput
       <Toggle label="Recycle bin" hint="Deleted files go to the folder’s Trash first, from Files and over the network" checked={v.recycle ?? true} onChange={(on) => set({ recycle: on })} />
       <Toggle label="Visible on the network" hint="Listed when browsing this server; when off it opens only by name" checked={v.network ?? true} onChange={(on) => set({ network: on })} />
       <Toggle label="Read only for everyone" hint="Nobody can change it, whatever their permission" checked={v.read_only ?? false} onChange={(on) => set({ read_only: on })} />
+      <GuestFields guest={v.guest ?? ''} readOnly={!!v.read_only} onChange={(guest) => set({ guest })} />
+    </>
+  );
+}
+
+/** "Guest access (no password)" with its mode and a clear warning. */
+export function GuestFields({ guest, readOnly, onChange }: { guest: GuestMode; readOnly: boolean; onChange: (g: GuestMode) => void }) {
+  return (
+    <>
+      <Toggle
+        label="Guest access (no password)"
+        hint="Anyone on your network can open this folder without signing in"
+        checked={guest !== ''}
+        onChange={(on) => onChange(on ? 'ro' : '')}
+      />
+      {guest !== '' && (
+        <>
+          <Row label="Guests can">
+            <Choice
+              value={readOnly ? 'ro' : guest}
+              options={[
+                { id: 'ro' as const, label: 'Only read' },
+                ...(readOnly ? [] : [{ id: 'rw' as const, label: 'Read & write' }]),
+              ]}
+              onChange={(g) => onChange(g)}
+            />
+          </Row>
+          <div className="guest-warn">
+            <Icon name="alert" size={16} />
+            <span>
+              Anyone on this network — every phone, TV and visitor’s laptop — can open this folder without a password
+              {guest === 'rw' && !readOnly ? ', and change or delete what’s in it' : ''}. Only use it for files you’d happily share with all of them.
+            </span>
+          </div>
+        </>
+      )}
     </>
   );
 }
 
 function EditFolder({ folder: f, onDone }: { folder: SharedFolder; onDone: () => void }) {
-  const [v, setV] = useState<FolderInput>({ name: f.name, description: f.description, recycle: f.recycle, network: f.network, read_only: f.read_only });
+  const [v, setV] = useState<FolderInput>({ name: f.name, description: f.description, recycle: f.recycle, network: f.network, read_only: f.read_only, guest: f.guest ?? '' });
   const [busy, setBusy] = useState(false);
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -273,7 +310,7 @@ function DeleteFolder({ folder: f, onDone, onCancel }: { folder: SharedFolder; o
 }
 
 function AddFolder({ data, onAdded }: { data: SharesOverview; onAdded: () => void }) {
-  const blank: FolderInput = { name: '', root: data.storage?.id ?? '', path: '', description: '', recycle: true, network: true, read_only: false };
+  const blank: FolderInput = { name: '', root: data.storage?.id ?? '', path: '', description: '', recycle: true, network: true, read_only: false, guest: '' };
   const [v, setV] = useState<FolderInput>(blank);
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {

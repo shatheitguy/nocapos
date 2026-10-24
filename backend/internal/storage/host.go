@@ -221,7 +221,15 @@ func (h *Host) Smart(ctx context.Context, d Disk) (*SmartReport, error) {
 	if len(bytes.TrimSpace(out)) == 0 && err != nil {
 		return nil, err
 	}
-	return ParseSmart(out)
+	r, perr := ParseSmart(out)
+	if perr != nil && bytes.Contains(out, []byte("UNRECOGNIZED OPTION")) {
+		// smartctl older than 7.0 has no JSON: read the test status as text.
+		text, _ := h.cmd(ctx, readTimeout, h.smartArgs(d, "-c", "-n", "standby"))
+		running, left := ParseSelfTestStatus(string(text))
+		return &SmartReport{Summary: SmartSummary{Available: true, TestRunning: running, TestRemaining: left},
+			Attributes: []SmartAttribute{}, SelfTests: []SelfTest{}}, nil
+	}
+	return r, perr
 }
 
 func (h *Host) SmartTest(ctx context.Context, d Disk, kind string) error {

@@ -61,7 +61,23 @@ type Stats struct {
 	NetTxRate  float64   `json:"net_tx_rate"`
 	BlockRead  uint64    `json:"block_read"`
 	BlockWrite uint64    `json:"block_write"`
-	Pids       uint64    `json:"pids"`
+	// Disk throughput, bytes/s.
+	BlockReadRate  float64 `json:"block_read_rate"`
+	BlockWriteRate float64 `json:"block_write_rate"`
+	Pids           uint64  `json:"pids"`
+}
+
+// withRates fills in the per-second network and disk rates from the
+// previous sample of the same container.
+func (s *Stats) withRates(prev Stats) {
+	dt := s.Time.Sub(prev.Time).Seconds()
+	if dt <= 0 {
+		return
+	}
+	s.NetRxRate = rate(s.NetRx, prev.NetRx, dt)
+	s.NetTxRate = rate(s.NetTx, prev.NetTx, dt)
+	s.BlockReadRate = rate(s.BlockRead, prev.BlockRead, dt)
+	s.BlockWriteRate = rate(s.BlockWrite, prev.BlockWrite, dt)
 }
 
 func (s *statsJSON) toStats() Stats {
@@ -102,7 +118,9 @@ func cpuPercent(s *statsJSON) float64 {
 	if online == 0 {
 		online = float64(len(s.CPUStats.CPUUsage.PercpuUsage))
 	}
-	if cpuDelta <= 0 || sysDelta <= 0 {
+	// No previous sample (one-shot stats, or a stream's first frame): the
+	// deltas would be the lifetime average, not current usage.
+	if s.PreCPUStats.SystemUsage == 0 || cpuDelta <= 0 || sysDelta <= 0 {
 		return 0
 	}
 	return cpuDelta / sysDelta * online * 100
@@ -139,10 +157,7 @@ func (c *Client) Stats(ctx context.Context, id string, fn func(Stats) error) err
 		}
 		s := raw.toStats()
 		if prev != nil {
-			if dt := s.Time.Sub(prev.Time).Seconds(); dt > 0 {
-				s.NetRxRate = rate(s.NetRx, prev.NetRx, dt)
-				s.NetTxRate = rate(s.NetTx, prev.NetTx, dt)
-			}
+			s.withRates(*prev)
 		}
 		if err := fn(s); err != nil {
 			return err

@@ -1,21 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { accountsMode, login, setup } from '../api/client';
-import { resetPassword } from '../api/account';
+import { accountsMode, login, loginCode, setup } from '../api/client';
 import { Icon } from '../components/Icon';
-import { Logo, LogoMark } from '../components/Logo';
+import { Logo } from '../components/Logo';
 import { UserAvatar } from '../components/UserAvatar';
 import { forgetLastUser, lastUser } from '../lib/avatar';
 import { useClock } from '../lib/hooks';
 import { fmtTime } from '../lib/time';
 import { usePrefs } from '../state/prefs';
+import { layoutKeyFor, useWM } from '../state/windows';
 
 export type AuthMode = 'setup' | 'login' | 'locked';
 
 /** macOS-style login / lock screen: big clock, user photo, password pill. */
-export function AuthScreen({ mode, lockedUser }: { mode: AuthMode; lockedUser?: string }) {
+export function AuthScreen({ mode, lockedUser, lockedUserId }: { mode: AuthMode; lockedUser?: string; lockedUserId?: string }) {
   const now = useClock(1000);
   const tp = usePrefs.getState();
-  const [view, setView] = useState<'main' | 'forgot'>('main');
 
   return (
     <div className={`auth-screen mac ${mode === 'locked' ? 'lock' : ''}`}>
@@ -25,13 +24,7 @@ export function AuthScreen({ mode, lockedUser }: { mode: AuthMode; lockedUser?: 
         </div>
         <div className="mac-time">{fmtTime(now, { ...tp, clockSeconds: false }, false).replace(/\s?[AP]M$/i, '')}</div>
       </div>
-      {view === 'forgot' ? (
-        <ForgotPassword initialUser={lockedUser ?? lastUser()?.username} onBack={() => setView('main')} />
-      ) : mode === 'setup' ? (
-        <SetupForm />
-      ) : (
-        <LoginForm mode={mode} lockedUser={lockedUser} onForgot={() => setView('forgot')} />
-      )}
+      {mode === 'setup' ? <SetupForm /> : <LoginForm mode={mode} lockedUser={lockedUser} lockedUserId={lockedUserId} />}
     </div>
   );
 }
@@ -44,6 +37,7 @@ function PasswordPill({
   placeholder,
   busy,
   shake,
+  code = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -52,33 +46,52 @@ function PasswordPill({
   placeholder: string;
   busy: boolean;
   shake: number;
+  /** The 6-digit code from an authenticator app instead of a password. */
+  code?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   return (
     <div className="mac-pass-wrap">
       <div key={shake} className={`mac-pill pass ${shake ? 'shake' : ''}`}>
-        <input
-          type={shown ? 'text' : 'password'}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete={autoComplete}
-          placeholder={placeholder}
-          aria-label="Password"
-          autoFocus={autoFocus}
-          spellCheck={false}
-          required
-        />
-        <button
-          type="button"
-          className="mac-eye"
-          aria-label={shown ? 'Hide password' : 'Show password'}
-          title={shown ? 'Hide password' : 'Show password'}
-          onMouseDown={(e) => e.preventDefault()} // keep focus in the field
-          onClick={() => setShown(!shown)}
-        >
-          <Icon name="eye" size={14} />
-        </button>
-        <button type="submit" className="mac-go" aria-label="Sign in" disabled={busy || !value}>
+        {code ? (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            placeholder={placeholder}
+            aria-label="Code from your authenticator app"
+            autoFocus={autoFocus}
+            spellCheck={false}
+            required
+          />
+        ) : (
+          <>
+            <input
+              type={shown ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              autoComplete={autoComplete}
+              placeholder={placeholder}
+              aria-label="Password"
+              autoFocus={autoFocus}
+              spellCheck={false}
+              required
+            />
+            <button
+              type="button"
+              className="mac-eye"
+              aria-label={shown ? 'Hide password' : 'Show password'}
+              title={shown ? 'Hide password' : 'Show password'}
+              onMouseDown={(e) => e.preventDefault()} // keep focus in the field
+              onClick={() => setShown(!shown)}
+            >
+              <Icon name="eye" size={14} />
+            </button>
+          </>
+        )}
+        <button type="submit" className="mac-go" aria-label="Sign in" disabled={busy || !value || (code && value.length !== 6)}>
           {busy ? <span className="spinner sm" /> : <Icon name="chevronRight" size={16} />}
         </button>
       </div>
@@ -86,7 +99,7 @@ function PasswordPill({
   );
 }
 
-function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?: string; onForgot: () => void }) {
+function LoginForm({ mode, lockedUser, lockedUserId }: { mode: AuthMode; lockedUser?: string; lockedUserId?: string }) {
   const remembered = mode === 'locked' ? null : lastUser();
   const [other, setOther] = useState(false);
   const known = lockedUser ?? (other ? undefined : remembered?.username);
@@ -97,24 +110,80 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
   const [linux, setLinux] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  // Two-factor step: the password was right, now the code.
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [code, setCode] = useState('');
   useEffect(() => {
     void accountsMode().then((m) => setLinux(m === 'system'));
   }, []);
 
+  const fail = (msg: string) => {
+    setError(msg);
+    setShake((n) => n + 1);
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    setError('');
+    if (mfaToken) {
+      if (code.length !== 6) return;
+      setBusy(true);
+      const r = await loginCode(mfaToken, code);
+      setBusy(false);
+      setCode('');
+      if (r.error) {
+        if (r.expired) {
+          setMfaToken(null); // start again from the password
+          setPassword('');
+        }
+        fail(r.error);
+      }
+      return;
+    }
     const name = (known ?? username).trim();
     if (!name || !password) return;
-    setError('');
     setBusy(true);
-    const err = await login(name, password);
+    const r = await login(name, password);
     setBusy(false);
-    if (err) {
-      setError(err);
-      setPassword('');
-      setShake((n) => n + 1);
+    setPassword('');
+    if (r.ok) return;
+    if ('mfaToken' in r) {
+      setMfaToken(r.mfaToken);
+      return;
     }
+    fail(r.error);
   };
+
+  const cancelCode = () => {
+    setMfaToken(null);
+    setCode('');
+    setError('');
+  };
+
+  // Log Out from the lock screen: the windows kept for unlocking are closed
+  // and the next sign-in starts with a clean desktop.
+  const logOutFromLock = () => {
+    useWM.getState().reset();
+    if (lockedUserId) {
+      try {
+        localStorage.removeItem(layoutKeyFor(lockedUserId));
+      } catch {
+        /* storage unavailable */
+      }
+    }
+    window.location.reload();
+  };
+
+  const hint =
+    error ||
+    (mfaToken
+      ? 'Enter the 6-digit code from your authenticator app'
+      : mode === 'locked'
+        ? 'Locked: your apps and windows are still open'
+        : linux && !known
+          ? "Use this computer's Linux account"
+          : '');
 
   return (
     <form className="mac-login" onSubmit={submit}>
@@ -130,31 +199,57 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
             placeholder="Name"
             aria-label="User name"
             maxLength={32}
-            autoFocus
+            autoFocus={!mfaToken}
             spellCheck={false}
+            readOnly={!!mfaToken}
             required
           />
         </div>
       )}
-      <PasswordPill
-        value={password}
-        onChange={setPassword}
-        autoFocus={!!known}
-        autoComplete="current-password"
-        placeholder={mode === 'locked' ? 'Enter Password to unlock' : 'Enter Password'}
-        busy={busy}
-        shake={shake}
-      />
+      {mfaToken ? (
+        <PasswordPill key="code" code value={code} onChange={setCode} autoFocus autoComplete="one-time-code" placeholder="6-digit code" busy={busy} shake={shake} />
+      ) : (
+        <PasswordPill
+          key="password"
+          value={password}
+          onChange={setPassword}
+          autoFocus={!!known}
+          autoComplete="current-password"
+          placeholder={mode === 'locked' ? 'Enter Password to unlock' : 'Enter Password'}
+          busy={busy}
+          shake={shake}
+        />
+      )}
       <p className={`mac-hint ${error ? 'err' : ''}`} role="alert">
-        {error || (linux && !known ? "Use this computer's Linux account" : '')}
+        {hint}
       </p>
-      <button type="button" className="mac-link" onClick={onForgot}>
-        Forgot password?
-      </button>
+      {mfaToken ? (
+        <button type="button" className="mac-link" onClick={cancelCode}>
+          Back to password
+        </button>
+      ) : (
+        <button type="button" className="mac-link" aria-expanded={forgot} onClick={() => setForgot((v) => !v)}>
+          Forgot password?
+        </button>
+      )}
+      {forgot && !mfaToken && (
+        <p className="mac-sub">
+          Ask an administrator to reset it in Settings → Users &amp; Groups. If you are the only administrator, run{' '}
+          <code>sudo nocapos reset-password {known ?? (username.trim() || '<user>')}</code> on the server.
+        </p>
+      )}
 
       <div className="mac-actions">
         {mode === 'locked' ? (
-          <MacAction icon="users" label="Switch User" onClick={() => window.location.reload()} />
+          <>
+            <MacAction
+              icon="users"
+              label="Switch User"
+              title="Shows the sign-in screen; your windows stay for when you come back"
+              onClick={() => window.location.reload()}
+            />
+            <MacAction icon="logout" label="Log Out" title="Closes all your windows and ends your session" onClick={logOutFromLock} />
+          </>
         ) : known ? (
           <MacAction icon="user" label="Other User…" onClick={() => setOther(true)} />
         ) : remembered ? (
@@ -175,9 +270,19 @@ function LoginForm({ mode, lockedUser, onForgot }: { mode: AuthMode; lockedUser?
   );
 }
 
-function MacAction({ icon, label, onClick }: { icon: 'users' | 'user' | 'chevronLeft' | 'close'; label: string; onClick: () => void }) {
+function MacAction({
+  icon,
+  label,
+  title,
+  onClick,
+}: {
+  icon: 'users' | 'user' | 'chevronLeft' | 'close' | 'logout';
+  label: string;
+  title?: string;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" className="mac-action" onClick={onClick}>
+    <button type="button" className="mac-action" title={title} onClick={onClick}>
       <span>
         <Icon name={icon} size={18} />
       </span>
@@ -235,87 +340,6 @@ function SetupForm() {
       <p className={`mac-hint ${error ? 'err' : ''}`} role="alert">
         {error}
       </p>
-    </form>
-  );
-}
-
-function ForgotPassword({ initialUser, onBack }: { initialUser?: string; onBack: () => void }) {
-  const [username, setUsername] = useState(initialUser ?? '');
-  const [code, setCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (password.length < 10) return setError('New password must be at least 10 characters.');
-    if (password !== confirm) return setError('Passwords do not match.');
-    if (code.trim().length !== 6) return setError('Enter the 6-digit code from your authenticator app.');
-    setBusy(true);
-    const err = await resetPassword(username.trim(), code.trim(), password);
-    setBusy(false);
-    if (err) {
-      setError(err);
-      return;
-    }
-    setDone(true);
-    setTimeout(onBack, 2200);
-  };
-
-  if (done) {
-    return (
-      <div className="auth-card glass">
-        <LogoMark size={56} className="auth-mark" />
-        <h1>Password changed</h1>
-        <p className="muted">You can now sign in with your new password.</p>
-        <button type="button" onClick={onBack}>
-          Back to sign in
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <form className="auth-card glass" onSubmit={submit}>
-      <h1>Reset password</h1>
-      <p className="muted">
-        Enter your username and the 6-digit code from your authenticator app, then choose a new password. (Only works if
-        you set up two-factor authentication.)
-      </p>
-      <label>
-        Username
-        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required autoFocus={!initialUser} />
-      </label>
-      <label>
-        Authenticator code
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          inputMode="numeric"
-          placeholder="123456"
-          autoFocus={!!initialUser}
-        />
-      </label>
-      <label>
-        New password
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required />
-      </label>
-      <label>
-        Confirm password
-        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required />
-      </label>
-      <p className="error" role="alert">
-        {error}
-      </p>
-      <button type="submit" disabled={busy}>
-        {busy ? 'Please wait…' : 'Reset password'}
-      </button>
-      <button type="button" className="link" onClick={onBack}>
-        Back
-      </button>
     </form>
   );
 }

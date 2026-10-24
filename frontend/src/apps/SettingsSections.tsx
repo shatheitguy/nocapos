@@ -159,7 +159,7 @@ export function LockScreen() {
           </Row>
         )}
       </Section>
-      <p className="settings-tip">Forgot your password? Turn on two-factor authentication in Security to reset it from the lock screen.</p>
+      <p className="settings-tip">Forgot your password? An administrator can reset it in Users &amp; Groups.</p>
     </div>
   );
 }
@@ -221,6 +221,13 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   const [enroll, setEnroll] = useState<{ secret: string; uri: string; qr: string } | null>(null);
   const [code, setCode] = useState('');
   const [enrollErr, setEnrollErr] = useState('');
+  // Turning 2FA on asks for your password first; turning it off asks for
+  // your password and a current code.
+  const [ask, setAsk] = useState<null | 'on' | 'off'>(null);
+  const [password, setPassword] = useState('');
+  const [offCode, setOffCode] = useState('');
+  const [askErr, setAskErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     const r = await accountApi.totpStatus();
@@ -228,12 +235,22 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
     return r.ok ? r.data.enabled : null;
   };
 
+  const closeAsk = () => {
+    setAsk(null);
+    setPassword('');
+    setOffCode('');
+    setAskErr('');
+  };
+
   const start = async () => {
-    const r = await accountApi.totpSetup();
+    setBusy(true);
+    const r = await accountApi.totpSetup(password);
+    setBusy(false);
     if (!r.ok) {
-      toast('error', 'Could not start setup', r.error);
+      setAskErr(r.error ?? 'Could not start setup');
       return;
     }
+    closeAsk();
     const qr = await QRCode.toDataURL(r.data.uri, { margin: 1, width: 220 });
     setEnroll({ secret: r.data.secret, uri: r.data.uri, qr });
     setCode('');
@@ -242,7 +259,7 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
 
   useEffect(() => {
     void load().then((on) => {
-      if (autoStart && on === false) void start();
+      if (autoStart && on === false) setAsk('on');
     });
     // Only on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -260,23 +277,74 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   };
 
   const disable = async () => {
-    const pw = window.prompt('Enter your password to turn off two-factor authentication:');
-    if (!pw) return;
-    const r = await accountApi.totpDisable(pw);
+    setBusy(true);
+    const r = await accountApi.totpDisable(password, offCode);
+    setBusy(false);
     if (!r.ok) {
-      toast('error', 'Could not disable 2FA', r.error);
+      setAskErr(r.error ?? 'Could not turn off two-factor authentication');
+      setOffCode('');
       return;
     }
+    closeAsk();
     toast('success', 'Two-factor authentication disabled');
     void load();
   };
 
   return (
     <Section title="Two-factor authentication"
-      hint="Protect your account with an authenticator app (Google Authenticator, Authy, 1Password…). It's also how you reset your password from the lock screen if you forget it.">
+      hint="Protect your account with an authenticator app (Google Authenticator, Authy, 1Password…). Signing in then needs your password and a code from the app.">
       <Toggle label="Ask for a code when signing in" hint={enabled === null ? 'Checking…' : enabled ? 'On' : enroll ? 'Finish setting up below' : 'Off'}
-        checked={!!enabled || !!enroll} disabled={enabled === null}
-        onChange={(on) => (on ? void start() : enroll ? setEnroll(null) : void disable())} />
+        checked={!!enabled || !!enroll || ask === 'on'} disabled={enabled === null}
+        onChange={(on) => {
+          setAskErr('');
+          if (on) setAsk('on');
+          else if (enroll) setEnroll(null);
+          else if (ask === 'on') closeAsk();
+          else setAsk('off');
+        }} />
+      {ask && (
+        <div className="settings-row full">
+          <form
+            className="totp-enroll"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void (ask === 'on' ? start() : disable());
+            }}
+          >
+            <p className="small">
+              {ask === 'on'
+                ? 'Enter your password to set up two-factor authentication.'
+                : 'Enter your password and a current code from your authenticator app to turn two-factor authentication off.'}
+            </p>
+            <label>
+              Password
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus required />
+            </label>
+            {ask === 'off' && (
+              <label>
+                Code from your authenticator app
+                <input
+                  value={offCode}
+                  onChange={(e) => setOffCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  required
+                />
+              </label>
+            )}
+            {askErr && <p className="error">{askErr}</p>}
+            <div className="btn-group">
+              <button type="submit" className={ask === 'off' ? 'danger' : ''} disabled={busy || !password || (ask === 'off' && offCode.length !== 6)}>
+                {ask === 'on' ? 'Continue' : 'Turn off'}
+              </button>
+              <button type="button" className="ghost" onClick={closeAsk}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       {enroll && (
         <div className="settings-row full">
           <div className="totp-enroll">

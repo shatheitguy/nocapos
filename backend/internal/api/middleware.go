@@ -18,7 +18,10 @@ import (
 
 type ctxKey int
 
-const userKey ctxKey = 0
+const (
+	userKey    ctxKey = 0
+	sessionKey ctxKey = 1
+)
 
 func userFrom(ctx context.Context) *store.User {
 	u, _ := ctx.Value(userKey).(*store.User)
@@ -34,7 +37,7 @@ func (s *Server) authed(h http.HandlerFunc) http.Handler {
 			writeError(w, http.StatusUnauthorized, "unauthorized", "missing bearer token")
 			return
 		}
-		u, err := s.Auth.Authenticate(r.Context(), tok)
+		u, sid, err := s.Auth.AuthenticateSession(r.Context(), tok)
 		if errors.Is(err, auth.ErrInvalidToken) {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="alfa", error="invalid_token"`)
 			writeError(w, http.StatusUnauthorized, "invalid_token", "invalid or expired token")
@@ -44,7 +47,8 @@ func (s *Server) authed(h http.HandlerFunc) http.Handler {
 			s.internalError(w, r, err)
 			return
 		}
-		h(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+		ctx := context.WithValue(context.WithValue(r.Context(), userKey, u), sessionKey, sid)
+		h(w, r.WithContext(ctx))
 	})
 }
 
@@ -77,7 +81,35 @@ const (
 	// blob: images are how the Remote Desktop client paints decoded frames.
 	uiCSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; " +
 		"connect-src 'self'; frame-src https: http:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+	// User content served from the NoCapOS origin (WebDAV): never a page,
+	// never script, whatever the file says it is.
+	userContentCSP = "sandbox; default-src 'none'"
 )
+
+// uiCSPFor narrows script-src to the build's /assets/ folder on this host, so
+// nothing stored by people (WebDAV, file links) can ever load as UI script
+// even if it were served with a script type. A Host header that isn't a
+// plain host[:port] keeps the 'self' policy.
+func uiCSPFor(host string) string {
+	if !plainHost(host) {
+		return uiCSP
+	}
+	return strings.Replace(uiCSP, "script-src 'self'", "script-src "+host+"/assets/", 1)
+}
+
+func plainHost(h string) bool {
+	if h == "" || len(h) > 255 {
+		return false
+	}
+	for _, c := range h {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '-', c == ':', c == '[', c == ']':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,17 +121,25 @@ func securityHeaders(next http.Handler) http.Handler {
 			// Streamed app content (e.g. Brave). It is framed same-origin by the
 			// desktop, so no X-Frame-Options DENY here; the proxy manages the
 			// upstream's own security headers.
+		case isUserContentPath(r.URL.Path):
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Content-Security-Policy", userContentCSP)
 		case isAPIPath(r.URL.Path):
 			h.Set("X-Frame-Options", "DENY")
 			h.Set("Content-Security-Policy", apiCSP)
 			h.Set("Cache-Control", "no-store")
 		default:
 			h.Set("X-Frame-Options", "DENY")
-			h.Set("Content-Security-Policy", uiCSP)
+			h.Set("Content-Security-Policy", uiCSPFor(r.Host))
 			h.Set("Cache-Control", "no-cache")
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isUserContentPath: where people's own files are served as they are.
+func isUserContentPath(p string) bool {
+	return p == "/dav" || strings.HasPrefix(p, "/dav/")
 }
 
 func isAPIPath(p string) bool {

@@ -13,7 +13,7 @@ import { notifyApi, type NotifySettings } from '../state/notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
-import type { Snapshot } from '../api/types';
+import type { Snapshot, SystemInfo } from '../api/types';
 import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
 import { FocusSettings } from './SystemPages';
@@ -364,6 +364,7 @@ const NOTIFY_TOPICS: { key: keyof NotifySettings; label: string; hint: string }[
   { key: 'app_errors', label: 'App problems', hint: 'An app stops unexpectedly, or an install or update fails' },
   { key: 'storage', label: 'Disk and pool health', hint: 'A disk is failing or a RAID pool is degraded' },
   { key: 'backups', label: 'Backups', hint: 'A backup plan fails to run' },
+  { key: 'devices', label: 'USB drives', hint: 'A USB drive or memory card is plugged in or removed' },
 ];
 
 function Notifications({ isAdmin }: { isAdmin: boolean }) {
@@ -532,7 +533,10 @@ function About({ isAdmin }: { isAdmin: boolean }) {
     ['Architecture', h.arch],
     ...(ips ? [['IP addresses', ips.length ? ips.join('\n') : 'None'] as [string, string]] : []),
     ['NoCapOS', info.version],
-    ['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : `Not connected${info.docker_error ? ` — ${info.docker_error}` : ''}`],
+    // Engine details are for administrators only.
+    ...(info.docker || info.docker_error
+      ? [['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : `Not connected — ${info.docker_error}`] as [string, string]]
+      : []),
   ];
   const copy = () =>
     void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', 'Device info copied'));
@@ -540,7 +544,7 @@ function About({ isAdmin }: { isAdmin: boolean }) {
     <div className="stack settings-page">
       <div className="set-about-hero">
         <Logo size={72} />
-        <h3>{h.hostname}</h3>
+        {isAdmin ? <HostnameEdit name={h.hostname} /> : <h3>{h.hostname}</h3>}
         <span className="muted">NoCapOS {info.version}</span>
       </div>
       <dl className="ucard set-device-list">
@@ -555,6 +559,68 @@ function About({ isAdmin }: { isAdmin: boolean }) {
         <Icon name="copy" size={13} /> Copy details
       </button>
     </div>
+  );
+}
+
+// RFC 1123: letters, digits and hyphens, not at either end; dots between labels.
+const HOSTNAME_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
+/** The device name, renamed in place (administrators). It applies at once. */
+function HostnameEdit({ name }: { name: string }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const valid = HOSTNAME_RE.test(value.trim()) && !/^[\d.]+$/.test(value.trim());
+  const save = async () => {
+    const next = value.trim();
+    if (next.toLowerCase() === name.toLowerCase()) return setEditing(false);
+    setBusy(true);
+    const r = await hostApi.setHostname(next);
+    setBusy(false);
+    if (!r.ok) return toast('error', 'Couldn’t rename this device', r.error);
+    const info = await api<SystemInfo>('/api/v1/system/info');
+    if (info.ok) useSystem.getState().setInfo(info.data);
+    toast('success', `This device is now “${r.data.hostname}”`, `On your network it answers as ${r.data.hostname.split('.')[0]}.local.`);
+    setEditing(false);
+  };
+  if (!editing) {
+    return (
+      <div className="host-edit">
+        <h3>{name}</h3>
+        <button
+          type="button"
+          className="icon-btn neutral"
+          title="Rename this device"
+          aria-label="Rename this device"
+          onClick={() => {
+            setValue(name);
+            setEditing(true);
+          }}
+        >
+          <Icon name="edit" size={14} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="host-edit"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (valid) void save();
+      }}
+    >
+      <input autoFocus value={value} maxLength={63} spellCheck={false} aria-label="Device name" onChange={(e) => setValue(e.target.value)} />
+      <button type="submit" className="small" disabled={!valid || busy}>
+        {busy ? 'Renaming…' : 'Rename'}
+      </button>
+      <button type="button" className="ghost small" onClick={() => setEditing(false)}>
+        Cancel
+      </button>
+      <span className="muted small" style={{ flexBasis: '100%', textAlign: 'center' }}>
+        {valid || !value ? 'Letters, digits and hyphens, e.g. living-room-nas. It takes effect right away.' : 'Use only letters, digits and hyphens (not at the start or end).'}
+      </span>
+    </form>
   );
 }
 

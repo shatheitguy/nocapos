@@ -30,6 +30,14 @@ export interface WiFiNetwork {
   saved: boolean;
 }
 
+/** Joining a network: hidden ones are joined by name. */
+export interface WiFiJoin {
+  ssid: string;
+  password?: string;
+  hidden?: boolean;
+  device?: string;
+}
+
 export interface NetInterface {
   name: string;
   kind: 'wifi' | 'ethernet' | 'other';
@@ -59,7 +67,8 @@ export const hostApi = {
     api<NetworkState>('/api/v1/system/network', { method: 'POST', body }),
   power: () => api<PowerInfo>('/api/v1/system/power'),
   wifiList: (rescan: boolean) => api<WiFiNetwork[]>(`/api/v1/system/wifi${rescan ? '?rescan=1' : ''}`),
-  wifiConnect: (ssid: string, password?: string) => api<NetworkState>('/api/v1/system/wifi/connect', { method: 'POST', body: { ssid, password } }),
+  wifiConnect: (j: WiFiJoin) => api<NetworkState>('/api/v1/system/wifi/connect', { method: 'POST', body: j }),
+  setHostname: (hostname: string) => api<{ hostname: string }>('/api/v1/system/hostname', { method: 'PUT', body: { hostname } }),
   wifiDisconnect: (device: string) => api<NetworkState>('/api/v1/system/wifi/disconnect', { method: 'POST', body: { device } }),
   setIPv4: (connection: string, cfg: IPv4Config) =>
     api<{ token: string; revert_in: number }>('/api/v1/system/network/ipv4', { method: 'POST', body: { connection, ...cfg } }),

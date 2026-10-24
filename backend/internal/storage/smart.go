@@ -38,6 +38,10 @@ type smartJSON struct {
 				String           string `json:"string"`
 				RemainingPercent *int64 `json:"remaining_percent"`
 			} `json:"status"`
+			PollingMinutes *struct {
+				Short    *int64 `json:"short"`
+				Extended *int64 `json:"extended"`
+			} `json:"polling_minutes"`
 		} `json:"self_test"`
 	} `json:"ata_smart_data"`
 	ATAAttributes *struct {
@@ -153,10 +157,17 @@ func ParseSmart(out []byte) (*SmartReport, error) {
 		}
 	}
 	if d := j.ATASmartData; d != nil && d.SelfTest != nil {
-		// Status values 0xF0-0xFF mean a test is running.
+		// Status values 0xF0-0xFF mean a test is running; the low nibble is
+		// tenths left (0xF9 = 90% to go), which old smartctl doesn't decode.
 		if v := d.SelfTest.Status.Value; v >= 240 && v <= 255 {
 			s.TestRunning = true
 			s.TestRemaining = d.SelfTest.Status.RemainingPercent
+			if s.TestRemaining == nil {
+				s.TestRemaining = i64((v & 0x0f) * 10)
+			}
+		}
+		if p := d.SelfTest.PollingMinutes; p != nil {
+			s.ShortTestMin, s.LongTestMin = p.Short, p.Extended
 		}
 	}
 	if l := j.ATASelfTestLog; l != nil && l.Standard != nil {

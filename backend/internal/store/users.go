@@ -175,3 +175,16 @@ func (s *Store) updateUser(ctx context.Context, q string, args ...any) error {
 	}
 	return nil
 }
+
+// UseTOTPStep records that the authenticator code for step was accepted.
+// It reports false when that step (or a later one) was already used, so
+// each code works once.
+func (s *Store) UseTOTPStep(ctx context.Context, userID string, step int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET totp_last_step = ? WHERE id = ? AND totp_last_step < ?`, step, userID, step)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n == 1, nil
+}

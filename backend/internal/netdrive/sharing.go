@@ -63,7 +63,29 @@ type Share struct {
 	Root     string `json:"root"`
 	Path     string `json:"path"`
 	ReadOnly bool   `json:"read_only"`
+	Guest    string `json:"guest,omitempty"`   // open without a password: ro | rw
 	Missing  bool   `json:"missing,omitempty"` // the folder or its location is gone
+}
+
+// guestMode is what a guest may do in a folder: "" (no entry), read only,
+// or read and write (never in a folder that's read only for everyone).
+func guestMode(f store.SharedFolder) string {
+	switch {
+	case f.Guest == "":
+		return ""
+	case f.Guest == store.GuestRW && !f.ReadOnly:
+		return store.GuestRW
+	}
+	return store.GuestRO
+}
+
+// SetShareGuest turns guest access (no password) on ("ro" / "rw") or off ("").
+func (m *Manager) SetShareGuest(ctx context.Context, id int64, guest string) error {
+	if m.spaces == nil {
+		return store.ErrNotFound
+	}
+	_, err := m.spaces.UpdateFolder(ctx, id, spaces.FolderInput{Guest: &guest})
+	return err
 }
 
 // Sharing is the sharing setup as the UI sees it.
@@ -94,7 +116,7 @@ func (m *Manager) Sharing(ctx context.Context) (Sharing, error) {
 	if m.spaces != nil {
 		out.PerUser = m.spaces.PerUserSharing()
 		for _, f := range m.spaces.Folders() {
-			out.Shares = append(out.Shares, Share{ID: f.ID, Name: f.Name, Root: f.Root, Path: f.Path, ReadOnly: f.ReadOnly, Missing: f.Missing})
+			out.Shares = append(out.Shares, Share{ID: f.ID, Name: f.Name, Root: f.Root, Path: f.Path, ReadOnly: f.ReadOnly, Guest: guestMode(f.SharedFolder), Missing: f.Missing})
 		}
 	}
 	return out, nil
@@ -208,6 +230,8 @@ type SambaShare struct {
 	Name, Comment, Path string
 	Valid, Read, Write  []string // user names
 	Browseable, Recycle bool
+	// Guest lets anyone in without a password: store.GuestRO or GuestRW.
+	Guest string
 }
 
 // SambaConfig is everything NoCapOS's Samba include file holds.
@@ -233,6 +257,14 @@ func RenderSamba(c SambaConfig) string {
 	for _, note := range c.Skipped {
 		fmt.Fprintf(&b, "# %s\n", oneLine(note))
 	}
+	for _, sh := range c.Shares {
+		if sh.Guest != "" {
+			// Unknown or empty user names become the guest, an unprivileged
+			// account; only shares marked "guest ok" let the guest in.
+			b.WriteString("\n[global]\n   map to guest = Bad User\n   guest account = nobody\n")
+			break
+		}
+	}
 	if c.Homes {
 		b.WriteString("\n[homes]\n")
 		b.WriteString("   comment = Home\n")
@@ -243,6 +275,8 @@ func RenderSamba(c SambaConfig) string {
 		// Linux homes: Samba serves each person's own home directory as
 		// that person, so files they make are theirs.
 		b.WriteString("   valid users = %S\n")
+		// Never root's home (/root), whoever asks.
+		b.WriteString("   invalid users = root\n")
 		b.WriteString("   browseable = no\n   read only = no\n")
 		b.WriteString("   create mask = 0640\n   directory mask = 0750\n")
 		b.WriteString("   veto files = /.recycle/.upload-*.part/\n   delete veto files = no\n")
@@ -254,14 +288,22 @@ func RenderSamba(c SambaConfig) string {
 			fmt.Fprintf(&b, "   comment = %s\n", oneLine(sh.Comment))
 		}
 		fmt.Fprintf(&b, "   path = %s\n", filepath.ToSlash(sh.Path))
-		fmt.Fprintf(&b, "   valid users = %s\n", strings.Join(sh.Valid, " "))
+		if sh.Guest != "" {
+			// Open to anyone: no valid users list, so no named account (root
+			// included) to bar — the guest account itself is never root.
+			// People keep what they were given through the read/write lists.
+			b.WriteString("   guest ok = yes\n")
+		} else {
+			fmt.Fprintf(&b, "   valid users = %s\n", strings.Join(sh.Valid, " "))
+			b.WriteString("   invalid users = root\n")
+		}
 		if len(sh.Read) > 0 {
 			fmt.Fprintf(&b, "   read list = %s\n", strings.Join(sh.Read, " "))
 		}
 		if len(sh.Write) > 0 {
 			fmt.Fprintf(&b, "   write list = %s\n", strings.Join(sh.Write, " "))
 		}
-		b.WriteString("   read only = yes\n")
+		fmt.Fprintf(&b, "   read only = %s\n", yesNo(sh.Guest != store.GuestRW))
 		fmt.Fprintf(&b, "   browseable = %s\n", yesNo(sh.Browseable))
 		b.WriteString("   force user = root\n   force group = root\n")
 		b.WriteString("   create mask = 0664\n   directory mask = 0775\n")
@@ -320,19 +362,26 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 			c.Skipped = append(c.Skipped, f.Name+": its path can't be written in a Samba configuration")
 			continue
 		}
-		sh := SambaShare{Name: f.Name, Comment: f.Description, Path: f.FullPath, Browseable: f.Network, Recycle: f.Recycle}
+		sh := SambaShare{Name: f.Name, Comment: f.Description, Path: f.FullPath, Browseable: f.Network, Recycle: f.Recycle, Guest: guestMode(f.SharedFolder)}
 		names := make([]string, 0, len(f.Perms))
 		for name := range f.Perms {
 			names = append(names, name)
 		}
 		sort.Slice(names, func(i, j int) bool { return strings.ToLower(names[i]) < strings.ToLower(names[j]) })
 		for _, name := range names {
+			if strings.EqualFold(name, "root") {
+				continue // the superuser never signs in over SMB
+			}
 			sh.Valid = append(sh.Valid, name)
 			if f.Perms[name] == spaces.ReadWrite {
 				sh.Write = append(sh.Write, name)
 			} else {
 				sh.Read = append(sh.Read, name)
 			}
+		}
+		if sh.Guest == store.GuestRW {
+			// Anyone may change it, so nobody signed in gets less.
+			sh.Write, sh.Read = append(sh.Write, sh.Read...), nil
 		}
 		if legacy {
 			sh.Valid = append(sh.Valid, ShareUser)
@@ -342,7 +391,7 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 				sh.Write = append(sh.Write, ShareUser)
 			}
 		}
-		if len(sh.Valid) == 0 {
+		if len(sh.Valid) == 0 && sh.Guest == "" {
 			// An empty list would let any Samba user in.
 			c.Skipped = append(c.Skipped, f.Name+": nobody has access yet")
 			continue
@@ -425,20 +474,81 @@ func (m *Manager) ensureInclude() error {
 
 // ---------- per-person Samba accounts ----------
 
+// Files in the data folder listing the accounts NoCapOS itself made, one
+// name per line, so uninstalling removes exactly those and no others.
+const (
+	sambaUsersFile  = "sharing/samba-users"  // Samba accounts NoCapOS added
+	systemUsersFile = "sharing/system-users" // login-less Linux accounts NoCapOS created
+)
+
 // SyncUser gives a person a Samba account with this password, so they sign
-// in over SMB with their NoCapOS password. Samba needs a Linux account of
-// the same name: Linux users already have one; for NoCapOS's own accounts a
-// login-less system account is made. A no-op where Samba can't run.
+// in over SMB with their NoCapOS password, when an administrator sets it up
+// (a new account, a password reset) or the person changes it. Samba needs a
+// Linux account of the same name: Linux users already have one; for
+// NoCapOS's own accounts a login-less system account is made. Nothing
+// happens where Samba can't run, for root, for disabled people, or for
+// anyone with nothing to reach over SMB.
 func (m *Manager) SyncUser(ctx context.Context, username, pw string) error {
-	if !m.sambaReady() || strings.EqualFold(username, ShareUser) {
+	if !m.sambaEligible(ctx, username, true) {
 		return nil
 	}
 	return m.sambaUser(ctx, username, pw, false)
 }
 
+// KeepUser is SyncUser after a sign-in: the same, except that an
+// administrator only gets a Samba account by opting in (being given a
+// shared folder explicitly, or one made for them by another administrator);
+// an existing one keeps its password in step.
+func (m *Manager) KeepUser(ctx context.Context, username, pw string) error {
+	if !m.sambaEligible(ctx, username, false) {
+		return nil
+	}
+	return m.sambaUser(ctx, username, pw, false)
+}
+
+// sambaEligible decides whether a person should have a Samba account.
+func (m *Manager) sambaEligible(ctx context.Context, username string, explicit bool) bool {
+	if !m.sambaReady() || strings.EqualFold(username, ShareUser) || m.isRoot(ctx, username) {
+		return false
+	}
+	if m.spaces == nil {
+		return false
+	}
+	people, err := m.spaces.People(ctx)
+	if err != nil {
+		return false
+	}
+	var me *spaces.Person
+	for i := range people {
+		if strings.EqualFold(people[i].Name, username) {
+			me = &people[i]
+		}
+	}
+	if me == nil || me.Disabled {
+		return false
+	}
+	explicitShare := len(m.spaces.PermissionsOf(username)) > 0
+	if me.Admin && !explicit && !explicitShare {
+		return m.listed(sambaUsersFile, username) // opted in before: keep it working
+	}
+	homes := m.spaces.LinuxHomes() || m.spaces.HomesPath() != ""
+	return homes || explicitShare || me.Admin && explicit
+}
+
+// isRoot: the superuser never gets a Samba account, whatever it's called.
+func (m *Manager) isRoot(ctx context.Context, username string) bool {
+	if strings.EqualFold(username, "root") {
+		return true
+	}
+	cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := m.run(cctx, "", "id", "-u", username)
+	return err == nil && strings.TrimSpace(out) == "0"
+}
+
 // SetUserEnabled turns a person's Samba account on or off (disabled accounts).
 func (m *Manager) SetUserEnabled(ctx context.Context, username string, enabled bool) {
-	if !m.sambaReady() {
+	if !m.sambaReady() || enabled && m.isRoot(ctx, username) {
 		return
 	}
 	flag := "-d"
@@ -480,14 +590,48 @@ func (m *Manager) sambaUser(ctx context.Context, username, pw string, system boo
 		if out, err := m.run(cctx, "", "useradd", "--system", "--no-create-home", "--shell", nologin, username); err != nil {
 			return fmt.Errorf("create %s: %s", what, lastLine(out))
 		}
+		m.remember(systemUsersFile, username)
 	}
 	if out, err := m.run(cctx, pw+"\n"+pw+"\n", "smbpasswd", "-a", "-s", username); err != nil {
 		return fmt.Errorf("set the Samba password: %s", lastLine(out))
 	}
+	m.remember(sambaUsersFile, username)
 	if out, err := m.run(cctx, "", "smbpasswd", "-e", username); err != nil {
 		return fmt.Errorf("enable the Samba account: %s", lastLine(out))
 	}
 	return nil
+}
+
+// remember adds a name to one of the lists of accounts NoCapOS made.
+func (m *Manager) remember(list, name string) {
+	if m.listed(list, name) {
+		return
+	}
+	p := filepath.Join(m.dataDir, filepath.FromSlash(list))
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		m.log.Warn("sharing: remember account", "err", err)
+		return
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		m.log.Warn("sharing: remember account", "err", err)
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(name + "\n")
+}
+
+func (m *Manager) listed(list, name string) bool {
+	b, err := os.ReadFile(filepath.Join(m.dataDir, filepath.FromSlash(list)))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == name {
+			return true
+		}
+	}
+	return false
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {

@@ -51,6 +51,9 @@ interface WM {
 
 let layoutKey: string | null = null;
 
+/** Where a person's window layout is saved in this browser. */
+export const layoutKeyFor = (userId: string) => `alfa.layout.${userId}`;
+
 // Moves and resizes call this on every pointermove, so the write is batched.
 function persist(windows: WinState[]) {
   if (!layoutKey) return;
@@ -143,14 +146,18 @@ export const useWM = create<WM>((set, get) => {
 
     restoreLayout: (userId) => {
       flushSaves();
-      layoutKey = `alfa.layout.${userId}`;
+      layoutKey = layoutKeyFor(userId);
       let saved: WinState[] = [];
       try {
         saved = JSON.parse(localStorage.getItem(layoutKey) ?? '[]') as WinState[];
       } catch {
         saved = [];
       }
-      const windows = Array.isArray(saved) ? saved.map((w) => ({ ...w, ...clampRect(w) })) : [];
+      // One window per id: a layout saved twice over (two tabs, an old bug) must not show a window twice.
+      const ids = new Set<string>();
+      const windows = (Array.isArray(saved) ? saved : [])
+        .filter((w) => w && typeof w.id === 'string' && !ids.has(w.id) && !!ids.add(w.id))
+        .map((w) => ({ ...w, ...clampRect(w) }));
       const topZ = windows.reduce((m, w) => Math.max(m, w.z), 1);
       set({ windows, topZ, focused: topVisible(windows) });
     },

@@ -58,13 +58,15 @@ func (s *Server) photosList(w http.ResponseWriter, r *http.Request) {
 		}
 		items, scanning, err = s.Photos.List(r.Context(), userFrom(r.Context()).ID)
 	} else {
-		home, herr := s.Spaces.EnsureHome(v.Name)
-		if herr != nil {
+		if _, herr := s.Spaces.EnsureHome(v.Name); herr != nil {
 			s.internalError(w, r, herr)
 			return
 		}
 		root = spaces.HomeRootID(v.Name)
-		_ = os.MkdirAll(filepath.Join(home, photos.Folder), 0o750)
+		// Inside the person's own home: never follow a link they put there.
+		if perr := s.Spaces.EnsureHomeFolder(v.Name, photos.Folder); perr != nil {
+			s.Log.Debug("photos: no Photos folder in home", "user", v.Name, "err", perr)
+		}
 		items, scanning, err = s.Photos.ListHits(r.Context(), userFrom(r.Context()).ID, s.photoHits(v))
 	}
 	if err != nil {
@@ -121,7 +123,7 @@ func (s *Server) photosThumb(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}
-	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
+	if u, err := s.Store.UserByID(r.Context(), userID); err != nil || u.Disabled || !s.ticketHolderCan(r.Context(), u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired photo link")
 		return
 	}

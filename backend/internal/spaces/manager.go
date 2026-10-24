@@ -501,6 +501,17 @@ type FolderInput struct {
 	Recycle     *bool   `json:"recycle"`
 	Network     *bool   `json:"network"`
 	ReadOnly    *bool   `json:"read_only"`
+	// Guest: anyone on the network may open it without a password, read
+	// only ("ro") or read and write ("rw"); "" turns it off.
+	Guest *string `json:"guest"`
+}
+
+func validGuest(g string) error {
+	switch g {
+	case "", store.GuestRO, store.GuestRW:
+		return nil
+	}
+	return errors.New("guest access must be off, read only (ro) or read and write (rw)")
 }
 
 func cleanDescription(s string) string {
@@ -591,6 +602,12 @@ func (m *Manager) CreateFolder(ctx context.Context, in FolderInput) (Folder, err
 	if in.ReadOnly != nil {
 		f.ReadOnly = *in.ReadOnly
 	}
+	if in.Guest != nil {
+		if err := validGuest(*in.Guest); err != nil {
+			return Folder{}, err
+		}
+		f.Guest = *in.Guest
+	}
 	err = m.st.CreateSharedFolder(ctx, f)
 	if errors.Is(err, store.ErrExists) {
 		return Folder{}, fmt.Errorf("there's already a shared folder called %q", name)
@@ -629,6 +646,12 @@ func (m *Manager) UpdateFolder(ctx context.Context, id int64, in FolderInput) (F
 	}
 	if in.ReadOnly != nil {
 		f.ReadOnly = *in.ReadOnly
+	}
+	if in.Guest != nil {
+		if err := validGuest(*in.Guest); err != nil {
+			return Folder{}, err
+		}
+		f.Guest = *in.Guest
 	}
 	err := m.st.UpdateSharedFolder(ctx, f)
 	if errors.Is(err, store.ErrExists) {

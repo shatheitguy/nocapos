@@ -68,8 +68,10 @@ var (
 		"smb":   {"apt": {"cifs-utils"}, "dnf": {"cifs-utils"}, "pacman": {"cifs-utils"}, "zypper": {"cifs-utils"}, "apk": {"cifs-utils"}},
 		"nfs":   {"apt": {"nfs-common"}, "dnf": {"nfs-utils"}, "pacman": {"nfs-utils"}, "zypper": {"nfs-client"}, "apk": {"nfs-utils"}},
 		"samba": {"apt": {"samba"}, "dnf": {"samba"}, "pacman": {"samba"}, "zypper": {"samba"}, "apk": {"samba"}},
+		// smbclient and nmblookup: finding servers and their shares.
+		"smbclient": {"apt": {"smbclient", "samba-common-bin"}, "dnf": {"samba-client"}, "pacman": {"smbclient"}, "zypper": {"samba-client"}, "apk": {"samba-client"}},
 	}
-	toolBinary = map[string]string{"smb": "mount.cifs", "nfs": "mount.nfs", "samba": "smbd"}
+	toolBinary = map[string]string{"smb": "mount.cifs", "nfs": "mount.nfs", "samba": "smbd", "smbclient": "smbclient"}
 )
 
 type Manager struct {
@@ -122,6 +124,7 @@ type Support struct {
 	SMB        bool `json:"smb"`         // mount.cifs present
 	NFS        bool `json:"nfs"`         // mount.nfs present
 	Samba      bool `json:"samba"`       // smbd present
+	SMBClient  bool `json:"smbclient"`   // smbclient present (finding servers and shares)
 }
 
 func (m *Manager) has(tool string) bool {
@@ -130,7 +133,7 @@ func (m *Manager) has(tool string) bool {
 }
 
 func (m *Manager) Support() Support {
-	return Support{Native: m.native(), CanInstall: m.native() && syspkg.Manager() != "", SMB: m.has("smb"), NFS: m.has("nfs"), Samba: m.has("samba")}
+	return Support{Native: m.native(), CanInstall: m.native() && syspkg.Manager() != "", SMB: m.has("smb"), NFS: m.has("nfs"), Samba: m.has("samba"), SMBClient: m.has("smbclient")}
 }
 
 // Install installs a missing tool ("smb", "nfs" or "samba").
@@ -224,7 +227,9 @@ type NewDrive struct {
 	Auto     bool   `json:"auto"`
 }
 
-var hostRe = regexp.MustCompile(`^[A-Za-z0-9._:\[\]-]{1,253}$`)
+// hostRe: a host name or address. It never starts with '-', so mount and
+// showmount can't read it as an option.
+var hostRe = regexp.MustCompile(`^[A-Za-z0-9._:\[\]][A-Za-z0-9._:\[\]-]{0,252}$`)
 
 func validate(in *NewDrive) error {
 	in.Name, in.Host, in.Share, in.Username = strings.TrimSpace(in.Name), strings.TrimSpace(in.Host), strings.TrimSpace(in.Share), strings.TrimSpace(in.Username)
@@ -346,9 +351,10 @@ func (m *Manager) mount(ctx context.Context, d *store.NetMount) (err error) {
 				}
 				opts += ",credentials=" + m.credFile(d.ID)
 			}
-			args = []string{"-t", "cifs", "//" + d.Host + "/" + d.Share, mp, "-o", opts}
+			args = []string{"-t", "cifs", "-o", opts, "--", "//" + d.Host + "/" + d.Share, mp}
 		case "nfs":
-			args = []string{"-t", "nfs", d.Host + ":" + d.Share, mp, "-o", "soft,timeo=150,retrans=2"}
+			// "--": nothing after it is an option, whatever the host says.
+			args = []string{"-t", "nfs", "-o", "soft,timeo=150,retrans=2", "--", d.Host + ":" + d.Share, mp}
 		}
 		cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
@@ -493,7 +499,7 @@ func (m *Manager) Exports(ctx context.Context, host string) ([]string, error) {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := m.run(cctx, "", "showmount", "-e", "--no-headers", host)
+	out, err := m.run(cctx, "", "showmount", "-e", "--no-headers", "--", host)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't ask %s for its shares: %s", host, lastLine(out))
 	}

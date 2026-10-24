@@ -590,7 +590,7 @@ func (s *Server) filesRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := s.Store.UserByID(r.Context(), userID)
-	if err != nil || u.Disabled || !s.ticketHolderCan(u, root, rel) {
+	if err != nil || u.Disabled || !s.ticketHolderCan(r.Context(), u, root, rel) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired file link")
 		return
 	}
@@ -666,8 +666,15 @@ func (s *Server) scopeHits(r *http.Request, query func(limit int) []files.Hit, l
 }
 
 // ticketHolderCan re-checks, when a file link is used, that the person it
-// was issued to may still read the file.
-func (s *Server) ticketHolderCan(u *store.User, root, rel string) bool {
+// was issued to may still use the desktop (not disabled, not switched to
+// file sharing only) and may still read the file.
+func (s *Server) ticketHolderCan(ctx context.Context, u *store.User, root, rel string) bool {
+	if s.Auth != nil && s.Auth.DesktopAllowed(ctx, u) != nil {
+		return false
+	}
+	if s.Auth == nil && u.Disabled {
+		return false
+	}
 	if s.Spaces == nil {
 		return u.Role == store.RoleAdmin
 	}
@@ -767,8 +774,12 @@ type externalView struct {
 	Root   string `json:"root"`
 	Path   string `json:"path"`
 	Device string `json:"device"`
+	FSType string `json:"fs_type"`
 	Total  uint64 `json:"total"`
 	Free   uint64 `json:"free"`
+	// Removable: a USB drive or card (it can be powered off after ejecting).
+	Removable bool `json:"removable"`
+	Ejectable bool `json:"ejectable"` // NoCapOS can unmount it
 }
 
 // filesExternal lists USB and other disks the OS has mounted. They open
@@ -783,18 +794,30 @@ func (s *Server) filesExternal(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	skip := os.Getenv("ALFA_MOUNT_DIR")
-	if skip == "" {
-		skip = "/mnt/nocapos"
+	removable := map[string]bool{}
+	if s.Removable != nil {
+		for _, d := range s.Removable.Drives() {
+			removable[d.Device] = true
+		}
 	}
-	for _, m := range files.ExternalMounts(skip) {
-		v := externalView{Name: m.Name, Root: "system", Path: m.Path, Device: m.Device}
+	for _, m := range externalMounts() {
+		v := externalView{Name: m.Name, Root: "system", Path: m.Path, Device: m.Device, FSType: m.FSType,
+			Removable: removable[m.Device], Ejectable: s.Removable != nil}
 		if total, _, free, err := hardware.DiskUsage(m.Path); err == nil {
 			v.Total, v.Free = total, free
 		}
 		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// externalMounts lists external disks, leaving out network drives.
+func externalMounts() []files.ExternalMount {
+	skip := os.Getenv("ALFA_MOUNT_DIR")
+	if skip == "" {
+		skip = "/mnt/nocapos"
+	}
+	return files.ExternalMounts(skip)
 }
 
 // ---------- compress / extract ----------

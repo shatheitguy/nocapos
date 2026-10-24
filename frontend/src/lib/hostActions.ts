@@ -1,7 +1,7 @@
 // Host actions shared by the Control Center and Settings: restart / shut down
 // and the network switches. Each risky action asks first.
 import { create } from 'zustand';
-import { hostApi, type IPv4Config, type NetworkState } from '../api/hostctl';
+import { hostApi, type IPv4Config, type NetworkState, type WiFiJoin } from '../api/hostctl';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 
@@ -110,12 +110,14 @@ export async function applyIPv4(iface: string, connection: string, cfg: IPv4Conf
   return false;
 }
 
-export async function joinWiFi(ssid: string, password?: string): Promise<NetworkState | null> {
-  const r = await hostApi.wifiConnect(ssid, password);
+/** Join a network; on failure the error says why (NetworkManager's own words included). */
+export async function joinWiFi(j: WiFiJoin): Promise<{ state: NetworkState | null; error?: string }> {
+  const r = await hostApi.wifiConnect(j);
   if (!r.ok) {
-    toast('error', `Couldn't join ${ssid}`, r.error);
-    return null;
+    const error = r.error ?? 'Could not join the network';
+    toast('error', `Couldn't join ${j.ssid}`, error);
+    return { state: null, error };
   }
-  toast('success', `Connected to ${ssid}`);
-  return r.data;
+  toast('success', `Connected to ${j.ssid}`);
+  return { state: r.data };
 }

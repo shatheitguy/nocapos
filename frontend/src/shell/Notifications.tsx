@@ -45,6 +45,7 @@ const SETTING: Partial<Record<Notice['kind'], keyof NotifySettings>> = {
   app_error: 'app_errors',
   storage: 'storage',
   backup: 'backups',
+  device: 'devices',
 };
 
 async function turnOff(n: Notice) {

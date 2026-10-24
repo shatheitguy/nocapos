@@ -2,14 +2,20 @@ import { api } from './client';
 
 export interface TerminalInfo {
   host_available: boolean;
+  /** The Linux account a host shell runs as: your own, never root unless you signed in as root. */
   host_user: string;
-  host_root: boolean; // host shells run as root
+  host_root: boolean; // that account is root
+  /** Why there's no host shell for you (e.g. your account isn't a Linux user). */
+  host_error?: string;
+  /** An administrator may open a root shell by confirming their password. */
+  root_available?: boolean;
 }
 
 export const terminalApi = {
   info: () => api<TerminalInfo>('/api/v1/terminal/info'),
-  ticket: (target: string, cols: number, rows: number) =>
-    api<{ ticket: string }>('/api/v1/terminal/ticket', { method: 'POST', body: { target, cols, rows } }),
+  /** target: "host", "host-root" (needs password) or "container:<id>". */
+  ticket: (target: string, cols: number, rows: number, password?: string) =>
+    api<{ ticket: string }>('/api/v1/terminal/ticket', { method: 'POST', body: { target, cols, rows, password } }),
 };
 
 export interface TerminalSocket {
