@@ -159,6 +159,16 @@ export const APPS: Record<string, AppMeta> = {
     single: true,
     adminOnly: true,
   },
+  packages: {
+    id: 'packages',
+    title: 'Packages',
+    icon: 'archiveBox',
+    tile: ['#a78bfa', '#6d28d9'],
+    size: { w: 1040, h: 680 },
+    description: 'Install, update and remove this server’s system packages',
+    single: true,
+    adminOnly: true,
+  },
   viewer: {
     id: 'viewer',
     title: 'Viewer',

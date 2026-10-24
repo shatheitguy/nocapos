@@ -14,6 +14,12 @@ const (
 	AccessFiles   = "files"   // file sharing only (SMB / WebDAV)
 )
 
+// Guest access to a shared folder (no password).
+const (
+	GuestRO = "ro"
+	GuestRW = "rw"
+)
+
 // Shared-folder permissions. "none" is the absence of a row.
 const (
 	PermRW   = "rw"
@@ -97,10 +103,11 @@ type SharedFolder struct {
 	Recycle     bool      `json:"recycle"`   // deletes go to the folder's recycle bin
 	Network     bool      `json:"network"`   // visible when browsing the network
 	ReadOnly    bool      `json:"read_only"` // nobody can change it, whatever their permission
+	Guest       string    `json:"guest"`     // anyone, no password: "" (off), GuestRO or GuestRW
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-const folderCols = `id, name, root, path, description, recycle, network, read_only, created_at`
+const folderCols = `id, name, root, path, description, recycle, network, read_only, guest, created_at`
 
 func scanFolder(row scanner) (*SharedFolder, error) {
 	var (
@@ -108,7 +115,7 @@ func scanFolder(row scanner) (*SharedFolder, error) {
 		recycle, network, ro int
 		created              int64
 	)
-	if err := row.Scan(&f.ID, &f.Name, &f.Root, &f.Path, &f.Description, &recycle, &network, &ro, &created); err != nil {
+	if err := row.Scan(&f.ID, &f.Name, &f.Root, &f.Path, &f.Description, &recycle, &network, &ro, &f.Guest, &created); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -142,8 +149,8 @@ func (s *Store) SharedFolder(ctx context.Context, id int64) (*SharedFolder, erro
 // CreateSharedFolder inserts f and sets its id. ErrExists if the name is taken.
 func (s *Store) CreateSharedFolder(ctx context.Context, f *SharedFolder) error {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO shared_folders (name, root, path, description, recycle, network, read_only, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		f.Name, f.Root, f.Path, f.Description, boolInt(f.Recycle), boolInt(f.Network), boolInt(f.ReadOnly), time.Now().Unix())
+		`INSERT INTO shared_folders (name, root, path, description, recycle, network, read_only, guest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.Name, f.Root, f.Path, f.Description, boolInt(f.Recycle), boolInt(f.Network), boolInt(f.ReadOnly), f.Guest, time.Now().Unix())
 	if isUniqueViolation(err) {
 		return ErrExists
 	}
@@ -157,8 +164,8 @@ func (s *Store) CreateSharedFolder(ctx context.Context, f *SharedFolder) error {
 // UpdateSharedFolder saves the editable fields of f (name, description, flags).
 func (s *Store) UpdateSharedFolder(ctx context.Context, f *SharedFolder) error {
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE shared_folders SET name = ?, description = ?, recycle = ?, network = ?, read_only = ? WHERE id = ?`,
-		f.Name, f.Description, boolInt(f.Recycle), boolInt(f.Network), boolInt(f.ReadOnly), f.ID)
+		`UPDATE shared_folders SET name = ?, description = ?, recycle = ?, network = ?, read_only = ?, guest = ? WHERE id = ?`,
+		f.Name, f.Description, boolInt(f.Recycle), boolInt(f.Network), boolInt(f.ReadOnly), f.Guest, f.ID)
 	if isUniqueViolation(err) {
 		return ErrExists
 	}

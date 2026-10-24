@@ -23,6 +23,7 @@ import { ContextMenu, Dialog, type DialogSpec, type MenuEntry } from '../compone
 import { Bar } from '../components/Charts';
 import { Icon } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
+import { usePoll } from '../lib/hooks';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
@@ -145,10 +146,34 @@ export function Files({ win }: { win: WinState }) {
     setRoots(r.data);
   }, []);
   useEffect(() => void loadRoots(), [loadRoots]);
+  // USB drives come and go: a light poll keeps External storage current.
+  const loadExternal = useCallback(async () => {
+    const r = await fileApi.external();
+    if (!r.ok) return;
+    setExternal((cur) => (JSON.stringify(cur) === JSON.stringify(r.data) ? cur : r.data));
+  }, []);
   useEffect(() => {
     void fileApi.favorites().then((r) => r.ok && setFavs(r.data.favorites));
-    if (isAdminUser()) void fileApi.external().then((r) => r.ok && setExternal(r.data));
-  }, []);
+    if (isAdminUser()) void loadExternal();
+  }, [loadExternal]);
+  usePoll(loadExternal, 4000, isAdminUser());
+  const eject = async (d: ExternalDrive) => {
+    const r = await fileApi.eject(d.path);
+    if (!r.ok) return toast('error', `Couldn't eject ${d.name}`, r.error);
+    toast('success', `${d.name} ejected`, r.data.powered_off ? 'You can unplug it now.' : 'It is safe to unplug once its light stops blinking.');
+    // Leave a folder on the drive before it disappears.
+    [0, 1].forEach((s) => {
+      const st = states[s];
+      if (st && st.root === d.root && (st.path === d.path || st.path.startsWith(d.path + '/')) && home) {
+        setNav((n) => {
+          const next: [NavReq | null, NavReq | null] = [n[0], n[1]];
+          next[s] = { root: home.id, path: '/', n: (n[s]?.n ?? 0) + 1 };
+          return next;
+        });
+      }
+    });
+    void loadExternal();
+  };
 
   // Network drives and shared folders.
   const net = useNetwork(isAdminUser());
@@ -282,6 +307,7 @@ export function Files({ win }: { win: WinState }) {
         current={cur ? { root: cur.root, path: cur.path, special: cur.special } : undefined}
         favs={favs}
         external={external}
+        onEject={(d) => void eject(d)}
         net={net}
         rootLabel={rootLabel}
         onGo={go}

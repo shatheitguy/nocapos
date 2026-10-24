@@ -11,4 +11,4 @@ const (
 
 func detectHostShell() []string { return nil }
 
-func openHostPTY([]string, int, int) (Session, error) { return nil, ErrHostUnsupported }
+func openHostPTY([]string, *Account, int, int) (Session, error) { return nil, ErrHostUnsupported }

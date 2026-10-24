@@ -506,6 +506,10 @@ func orient(src *image.RGBA, o int) image.Image {
 	return dst
 }
 
+// ffmpegFormats are the demuxers ffmpeg may use on people's files: "mov" covers
+// MP4, MOV, M4V and HEIC/HEIF, "matroska" covers WebM.
+const ffmpegFormats = "mov,matroska,webm"
+
 // ffmpegThumb grabs a frame from a video (or converts a HEIC picture) with ffmpeg.
 // On Linux ffmpeg reads the already-opened file (so it can't be pointed outside
 // the storage location); elsewhere it gets the file's path.
@@ -529,6 +533,10 @@ func (l *Library) ffmpegThumb(ctx context.Context, f *os.File, root, rel, out st
 			args = append(args, "-ss", seek)
 		}
 		scale := fmt.Sprintf("scale='min(%d,iw)':'min(%d,ih)':force_original_aspect_ratio=decrease", px, px)
+		// The file is untrusted and ffmpeg runs as root: read only local files
+		// (no network, no playlists pulling in other paths) and only the
+		// container formats we make thumbnails for (MP4/MOV/HEIC, MKV/WebM).
+		args = append(args, "-protocol_whitelist", "file,pipe", "-format_whitelist", ffmpegFormats)
 		args = append(args, "-i", in, "-frames:v", "1", "-vf", scale, "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", out)
 		cmd := exec.CommandContext(ctx, l.ffmpeg, args...)
 		cmd.ExtraFiles = []*os.File{f}

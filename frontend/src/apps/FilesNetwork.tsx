@@ -1,5 +1,5 @@
 import { useEffect, useState, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
-import { netApi, type NetDrive, type NetShare, type NetSupport, type Sharing } from '../api/netdrive';
+import { netApi, type GuestMode, type NetDrive, type NetShare, type NetSupport, type Sharing } from '../api/netdrive';
 import type { MenuEntry } from '../components/Dialog';
 import { FileGlyph } from './FilesParts';
 import { Icon } from '../components/Icon';
@@ -8,7 +8,7 @@ import { toast } from '../state/toasts';
 import type { FileRoot } from '../api/files';
 import { CloudImportsPanel } from './CloudImports';
 import { ConnectServerPanel } from './NetworkDrives';
-import { SharingSettings } from './SharingSettings';
+import { GuestFields, SharingSettings } from './SharingSettings';
 import { Toggle } from './Personalize';
 
 // Network drives and sharing, inside Files: the sidebar's Network section,
@@ -244,6 +244,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
   const [state, setState] = useState<{ support: NetSupport; sharing: Sharing } | null>(null);
   const [shareName, setShareName] = useState(shareSafe(name));
   const [readOnly, setReadOnly] = useState(false);
+  const [guest, setGuest] = useState<GuestMode>('');
   const [smb, setSmb] = useState(false);
   const [dav, setDav] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -279,7 +280,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
         const r = await netApi.setProtocols({ smb: smb || sharing.smb, webdav: dav || sharing.webdav });
         if (!r.ok) return setError(r.error ?? 'Could not turn sharing on');
       }
-      const r = await netApi.addShare({ name: shareName.trim(), root, path, read_only: readOnly });
+      const r = await netApi.addShare({ name: shareName.trim(), root, path, read_only: readOnly, guest: guest && readOnly ? 'ro' : guest });
       if (!r.ok) return setError(r.error ?? 'Could not share the folder');
       setDone(r.data.name);
       onShared();
@@ -303,6 +304,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
           </span>
           <p>
             Shared. People sign in with their own NoCapOS user name and password; choose who may use it in Files → File Sharing (until then, only administrators can).
+            {guest && ' Guests on your network can also open it without a password.'}
           </p>
           {addrs.map((a) => (
             <button key={a} type="button" className="ghost fn-addr" onClick={() => copy(a)}>
@@ -325,6 +327,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
           <input value={shareName} maxLength={40} onChange={(e) => setShareName(e.target.value)} />
         </label>
         <Toggle label="Read only for everyone" hint="People can open and copy files, but nobody can change or delete them" checked={readOnly} onChange={setReadOnly} />
+        <GuestFields guest={guest} readOnly={readOnly} onChange={setGuest} />
         {(!sharing.smb || !sharing.webdav) && (
           <>
             {canSmb && !sharing.smb && <Toggle label="Share with Windows, Mac and Linux (SMB)" checked={smb} onChange={setSmb} />}

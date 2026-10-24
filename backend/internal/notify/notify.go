@@ -20,6 +20,7 @@ const (
 	KindAppError   = "app_error"
 	KindStorage    = "storage"
 	KindBackup     = "backup"
+	KindDevice     = "device" // USB drives plugged in and out
 	KindTest       = "test"
 	keepNewest     = 500
 	settingsKey    = "notify.settings"
@@ -41,8 +42,10 @@ type Notification struct {
 	Body  string `json:"body,omitempty"`
 	// Icon names the app whose icon is shown: a NoCapOS app id, or
 	// "store:<id>" for an App Store app.
-	Icon      string     `json:"icon,omitempty"`
-	Action    *Action    `json:"action,omitempty"`
+	Icon   string  `json:"icon,omitempty"`
+	Action *Action `json:"action,omitempty"`
+	// Quiet ones go straight to the Notification Center: no banner, no sound.
+	Quiet     bool       `json:"quiet,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
@@ -54,9 +57,10 @@ type Settings struct {
 	AppErrors  bool `json:"app_errors"`
 	Storage    bool `json:"storage"`
 	Backups    bool `json:"backups"`
+	Devices    bool `json:"devices"`
 }
 
-func DefaultSettings() Settings { return Settings{true, true, true, true, true} }
+func DefaultSettings() Settings { return Settings{true, true, true, true, true, true} }
 
 func (s Settings) allows(kind string) bool {
 	switch kind {
@@ -70,6 +74,8 @@ func (s Settings) allows(kind string) bool {
 		return s.Storage
 	case KindBackup:
 		return s.Backups
+	case KindDevice:
+		return s.Devices
 	}
 	return true
 }
@@ -110,6 +116,7 @@ func New(db DB, log *slog.Logger) *Service {
 type stored struct {
 	Icon   string  `json:"icon,omitempty"`
 	Action *Action `json:"action,omitempty"`
+	Quiet  bool    `json:"quiet,omitempty"`
 }
 
 // Add stores n unless its key was seen before or its kind is switched off,
@@ -122,8 +129,8 @@ func (s *Service) Add(ctx context.Context, n Notification) (added bool, err erro
 		n.Level = "info"
 	}
 	raw := ""
-	if n.Icon != "" || n.Action != nil {
-		b, _ := json.Marshal(stored{Icon: n.Icon, Action: n.Action})
+	if n.Icon != "" || n.Action != nil || n.Quiet {
+		b, _ := json.Marshal(stored{Icon: n.Icon, Action: n.Action, Quiet: n.Quiet})
 		raw = string(b)
 	}
 	row := &store.Notification{Key: n.Key, Kind: n.Kind, Level: n.Level, Title: n.Title, Body: n.Body, Action: raw, CreatedAt: n.CreatedAt}
@@ -142,7 +149,7 @@ func fromRow(r store.Notification) Notification {
 	if r.Action != "" {
 		var st stored
 		if json.Unmarshal([]byte(r.Action), &st) == nil {
-			n.Icon, n.Action = st.Icon, st.Action
+			n.Icon, n.Action, n.Quiet = st.Icon, st.Action, st.Quiet
 		}
 	}
 	if !r.ReadAt.IsZero() {

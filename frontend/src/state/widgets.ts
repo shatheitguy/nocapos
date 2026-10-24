@@ -34,24 +34,26 @@ export interface WidgetDef {
   adminOnly?: boolean;
 }
 
+// Every widget reflows to its size (container queries in styles.css), so the
+// minimums are small: a small widget shows just its key number.
 export const WIDGETS: WidgetDef[] = [
-  { type: 'clock', name: 'Clock & greeting', icon: 'auto', min: { w: 240, h: 110 }, max: { w: 560, h: 260 }, default: { w: 320, h: 150 } },
-  { type: 'analog', name: 'Analog clock', icon: 'auto', min: { w: 140, h: 140 }, max: { w: 320, h: 320 }, default: { w: 180, h: 180 } },
-  { type: 'calendar', name: 'Calendar', icon: 'calendar', min: { w: 240, h: 230 }, max: { w: 420, h: 360 }, default: { w: 280, h: 250 } },
-  { type: 'notes', name: 'Notes', icon: 'pencil', min: { w: 220, h: 150 }, max: { w: 480, h: 400 }, default: { w: 280, h: 220 } },
-  { type: 'system', name: 'System monitor', icon: 'monitor', min: { w: 260, h: 180 }, max: { w: 520, h: 420 }, default: { w: 320, h: 250 } },
-  { type: 'storage', name: 'Storage', icon: 'disk', min: { w: 240, h: 130 }, max: { w: 520, h: 320 }, default: { w: 320, h: 170 } },
-  { type: 'network', name: 'Network', icon: 'network', min: { w: 240, h: 120 }, max: { w: 520, h: 260 }, default: { w: 320, h: 150 } },
-  { type: 'uptime', name: 'Uptime & load', icon: 'power', min: { w: 200, h: 120 }, max: { w: 420, h: 240 }, default: { w: 260, h: 150 } },
-  { type: 'containers', name: 'Containers', icon: 'containers', min: { w: 200, h: 120 }, max: { w: 420, h: 220 }, default: { w: 240, h: 150 } },
-  { type: 'cores', name: 'CPU core heatmap', icon: 'cpu', min: { w: 260, h: 170 }, max: { w: 640, h: 420 }, default: { w: 340, h: 210 } },
-  { type: 'memrings', name: 'Memory & swap rings', icon: 'memory', min: { w: 260, h: 170 }, max: { w: 480, h: 300 }, default: { w: 320, h: 190 } },
-  { type: 'netwave', name: 'Network waveform', icon: 'network', min: { w: 260, h: 160 }, max: { w: 640, h: 360 }, default: { w: 340, h: 190 } },
-  { type: 'gauges', name: 'Storage gauges', icon: 'disk', min: { w: 220, h: 150 }, max: { w: 640, h: 420 }, default: { w: 320, h: 180 } },
-  { type: 'containerGrid', name: 'Container cards', icon: 'containers', min: { w: 280, h: 170 }, max: { w: 860, h: 640 }, default: { w: 420, h: 280 }, adminOnly: true },
-  { type: 'scripts', name: 'Quick scripts', icon: 'fileCode', min: { w: 240, h: 130 }, max: { w: 640, h: 560 }, default: { w: 320, h: 230 }, adminOnly: true },
-  { type: 'transfers', name: 'Transfers', icon: 'swap', min: { w: 260, h: 140 }, max: { w: 560, h: 560 }, default: { w: 320, h: 220 }, adminOnly: true },
-  { type: 'accelerators', name: 'AI accelerators', icon: 'gpu', min: { w: 240, h: 120 }, max: { w: 520, h: 320 }, default: { w: 320, h: 180 } },
+  { type: 'clock', name: 'Clock & greeting', icon: 'auto', min: { w: 150, h: 80 }, max: { w: 560, h: 260 }, default: { w: 320, h: 150 } },
+  { type: 'analog', name: 'Analog clock', icon: 'auto', min: { w: 100, h: 100 }, max: { w: 320, h: 320 }, default: { w: 180, h: 180 } },
+  { type: 'calendar', name: 'Calendar', icon: 'calendar', min: { w: 200, h: 200 }, max: { w: 420, h: 360 }, default: { w: 280, h: 250 } },
+  { type: 'notes', name: 'Notes', icon: 'pencil', min: { w: 150, h: 100 }, max: { w: 480, h: 400 }, default: { w: 280, h: 220 } },
+  { type: 'system', name: 'System monitor', icon: 'monitor', min: { w: 160, h: 120 }, max: { w: 520, h: 420 }, default: { w: 320, h: 250 } },
+  { type: 'storage', name: 'Storage', icon: 'disk', min: { w: 160, h: 100 }, max: { w: 520, h: 320 }, default: { w: 320, h: 170 } },
+  { type: 'network', name: 'Network', icon: 'network', min: { w: 160, h: 90 }, max: { w: 520, h: 260 }, default: { w: 320, h: 150 } },
+  { type: 'uptime', name: 'Uptime & load', icon: 'power', min: { w: 140, h: 90 }, max: { w: 420, h: 240 }, default: { w: 260, h: 150 } },
+  { type: 'containers', name: 'Containers', icon: 'containers', min: { w: 140, h: 90 }, max: { w: 420, h: 220 }, default: { w: 240, h: 150 } },
+  { type: 'cores', name: 'CPU core heatmap', icon: 'cpu', min: { w: 160, h: 90 }, max: { w: 640, h: 420 }, default: { w: 340, h: 210 } },
+  { type: 'memrings', name: 'Memory & swap rings', icon: 'memory', min: { w: 150, h: 90 }, max: { w: 480, h: 300 }, default: { w: 320, h: 190 } },
+  { type: 'netwave', name: 'Network waveform', icon: 'network', min: { w: 160, h: 90 }, max: { w: 640, h: 360 }, default: { w: 340, h: 190 } },
+  { type: 'gauges', name: 'Storage gauges', icon: 'disk', min: { w: 150, h: 110 }, max: { w: 640, h: 420 }, default: { w: 320, h: 180 } },
+  { type: 'containerGrid', name: 'Container cards', icon: 'containers', min: { w: 200, h: 130 }, max: { w: 860, h: 640 }, default: { w: 420, h: 280 }, adminOnly: true },
+  { type: 'scripts', name: 'Quick scripts', icon: 'fileCode', min: { w: 180, h: 110 }, max: { w: 640, h: 560 }, default: { w: 320, h: 230 }, adminOnly: true },
+  { type: 'transfers', name: 'Transfers', icon: 'swap', min: { w: 200, h: 110 }, max: { w: 560, h: 560 }, default: { w: 320, h: 220 }, adminOnly: true },
+  { type: 'accelerators', name: 'AI accelerators', icon: 'gpu', min: { w: 160, h: 100 }, max: { w: 520, h: 320 }, default: { w: 320, h: 180 } },
 ];
 
 export const widgetDef = (t: WidgetType) => WIDGETS.find((w) => w.type === t)!;

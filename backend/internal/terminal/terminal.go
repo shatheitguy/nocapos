@@ -37,8 +37,8 @@ func NewService(dc *docker.Client, allowHost bool) *Service {
 // HostAvailable reports whether a host terminal can be opened on this platform.
 func (s *Service) HostAvailable() bool { return s.allowHost && hostSupported }
 
-// HostUser is the account a host shell runs as (alfad's own), and whether
-// that is root — the Terminal shows a warning badge for root host shells.
+// HostUser is NoCapOS's own account (what a root shell, or any host shell
+// when NoCapOS isn't root, runs as), and whether that is root.
 func (s *Service) HostUser() (name string, root bool) {
 	if u, err := user.Current(); err == nil {
 		name = u.Username
@@ -60,12 +60,18 @@ func (s *Service) OpenContainer(ctx context.Context, container string, cols, row
 	return &containerSession{conn: conn, docker: s.docker}, nil
 }
 
-// OpenHost starts a shell on the host (Linux only).
-func (s *Service) OpenHost(ctx context.Context, cols, rows int) (Session, error) {
+// RunsAsRoot reports whether NoCapOS runs as root, so host shells must
+// switch to the person's own account.
+func (s *Service) RunsAsRoot() bool { return os.Geteuid() == 0 }
+
+// OpenHost starts a shell on the host (Linux only): a login shell as acct,
+// or with acct nil as NoCapOS's own account (root on a native install, so
+// callers only do that for an administrator who confirmed their password).
+func (s *Service) OpenHost(ctx context.Context, acct *Account, cols, rows int) (Session, error) {
 	if !s.HostAvailable() {
 		return nil, ErrHostUnsupported
 	}
-	return openHostPTY(s.hostShell, cols, rows)
+	return openHostPTY(s.hostShell, acct, cols, rows)
 }
 
 // containerSession bridges a docker exec stream and resize endpoint.

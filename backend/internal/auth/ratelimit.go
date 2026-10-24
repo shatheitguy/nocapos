@@ -49,10 +49,22 @@ func (l *Limiter) Allow(key string) bool {
 }
 
 // sweep drops buckets that have refilled completely; they carry no state.
+// If that isn't enough (a flood of fresh keys), the least recently used go,
+// so the table never grows past maxBuckets.
 func (l *Limiter) sweep(now time.Time) {
 	for k, b := range l.buckets {
 		if b.tokens+now.Sub(b.last).Seconds()*l.rate >= l.burst {
 			delete(l.buckets, k)
 		}
+	}
+	for len(l.buckets) >= maxBuckets {
+		var oldest string
+		var at time.Time
+		for k, b := range l.buckets {
+			if oldest == "" || b.last.Before(at) {
+				oldest, at = k, b.last
+			}
+		}
+		delete(l.buckets, oldest)
 	}
 }

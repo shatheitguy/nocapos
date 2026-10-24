@@ -7,6 +7,11 @@
 #   sudo bash uninstall.sh --purge                            also delete accounts, settings and TLS keys
 #   sudo bash uninstall.sh --purge --remove-apps --yes        ... and App Store apps (their data volumes too)
 #
+# Piping from curl runs whatever the download contains, with no checksum.
+# To check it first, use the release bundle: download
+# nocapos-linux-<arch>.tar.gz and SHA256SUMS, run sha256sum -c SHA256SUMS
+# --ignore-missing, extract it and run: sudo bash install.sh --uninstall
+#
 # Options:
 #   --purge         delete NoCapOS's accounts, settings, database and TLS keys (/etc/nocapos, /var/lib/nocapos)
 #   --remove-apps   also remove App Store apps (their containers, networks and volumes)
@@ -36,7 +41,7 @@ for a in "$@"; do
     --remove-apps) REMOVE_APPS=1 ;;
     --yes|-y) ASSUME_YES=1 ;;
     --uninstall) ;; # accepted when called from install.sh --uninstall
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $a (see --help)" ;;
   esac
 done
@@ -47,6 +52,7 @@ done
 echo "This removes $NAME from this server:"
 echo "  - the nocapos service and program"
 echo "  - its Samba sharing settings and network-drive mounts"
+echo "  - its console banner, MOTD and nocap.local announcement (the originals are put back)"
 [ "$PURGE" -eq 1 ] && echo "  - its accounts, settings, database and TLS keys ($ETC, $DATA)"
 [ "$REMOVE_APPS" -eq 1 ] && echo "  - App Store apps, including their data volumes"
 echo "Your files (NoCap Drive, shared folders, people's homes) are NOT deleted."
@@ -111,6 +117,39 @@ if [ "$PURGE" -eq 1 ] && id "$SHARE_USER" >/dev/null 2>&1; then
   case "$shell" in */nologin|*/false) userdel "$SHARE_USER" 2>/dev/null || true ;; esac
 fi
 
+# Per-person Samba accounts and login-less file-sharing accounts: NoCapOS
+# lists the ones it made in its data folder, and only those are touched.
+# Real Linux users are never deleted; their Samba passwords made by NoCapOS
+# are removed (the shares they opened are gone anyway).
+data_dir="$DATA"
+if [ -f "$ETC/nocapos.env" ]; then
+  d="$(sed -n 's/^ALFA_DATA_DIR=//p' "$ETC/nocapos.env" | tail -n1 | tr -d '"'"'"'')"
+  [ -n "$d" ] && data_dir="$d"
+fi
+uid_min="$(awk '$1=="UID_MIN"{print $2}' /etc/login.defs 2>/dev/null)"
+uid_min="${uid_min:-1000}"
+valid_name() { case "$1" in ''|-*|*[!a-zA-Z0-9._-]*) return 1 ;; esac; [ "$1" != root ]; }
+if [ -f "$data_dir/sharing/samba-users" ] && has pdbedit; then
+  info "Removing the Samba accounts NoCapOS made"
+  while IFS= read -r u; do
+    valid_name "$u" || continue
+    pdbedit -L 2>/dev/null | grep -q "^$u:" && { pdbedit -x "$u" >/dev/null 2>&1 || warn "could not remove the Samba account $u"; }
+  done <"$data_dir/sharing/samba-users"
+fi
+if [ "$PURGE" -eq 1 ] && [ -f "$data_dir/sharing/system-users" ]; then
+  info "Deleting the login-less file-sharing accounts NoCapOS made"
+  while IFS= read -r u; do
+    valid_name "$u" || continue
+    ent="$(getent passwd "$u" 2>/dev/null)" || continue
+    uid="$(printf '%s' "$ent" | cut -d: -f3)"
+    shell="$(printf '%s' "$ent" | cut -d: -f7)"
+    # Only system accounts that still can't log in: never a real person.
+    if [ "$uid" -gt 0 ] && [ "$uid" -lt "$uid_min" ]; then
+      case "$shell" in */nologin|*/false) userdel "$u" 2>/dev/null || warn "could not delete $u" ;; esac
+    fi
+  done <"$data_dir/sharing/system-users"
+fi
+
 # ---------------------------------------------------------------- apps
 if has docker; then
   apps="$(docker ps -a --filter label=nocapos.app --format '{{.Label "nocapos.app"}}' 2>/dev/null | sort -u | tr '\n' ' ')"
@@ -129,15 +168,46 @@ if has docker; then
   fi
 fi
 
+# ---------------------------------------------------------------- console and mDNS
+# Put back the login banner, the MOTD scripts and Avahi's settings exactly as
+# they were before NoCapOS (install.sh kept the originals in $BRAND_DIR).
+BRAND_DIR="$DATA/console-backup"
+restore_file() { # $1 = file, $2 = backup name
+  if [ -f "$BRAND_DIR/$2" ]; then cp -p "$BRAND_DIR/$2" "$1"
+  elif [ -f "$BRAND_DIR/$2.absent" ]; then rm -f "$1"; fi
+}
+if [ -d "$BRAND_DIR" ] || [ -f /etc/update-motd.d/05-nocapos ] || [ -f /etc/avahi/services/nocapos.service ]; then
+  info "Restoring the console banner, MOTD and Avahi settings"
+  restore_file /etc/issue issue
+  restore_file /etc/motd motd
+  rm -f /etc/update-motd.d/05-nocapos
+  if [ -f "$BRAND_DIR/motd-disabled.list" ]; then
+    while IFS= read -r f; do
+      case "$f" in */* | '') continue ;; esac
+      if [ -f "/etc/update-motd.d/$f" ]; then chmod +x "/etc/update-motd.d/$f"; fi
+    done <"$BRAND_DIR/motd-disabled.list"
+  fi
+  rm -f /etc/avahi/services/nocapos.service
+  if [ -f "$BRAND_DIR/avahi-daemon.conf" ] || [ -f "$BRAND_DIR/avahi-daemon.conf.absent" ]; then
+    restore_file /etc/avahi/avahi-daemon.conf avahi-daemon.conf
+    systemctl restart avahi-daemon 2>/dev/null || true
+  elif has systemctl; then
+    systemctl reload avahi-daemon 2>/dev/null || true
+  fi
+  rm -rf "$BRAND_DIR"
+fi
+
 # ---------------------------------------------------------------- data
 if [ "$PURGE" -eq 1 ]; then
   info "Deleting accounts, settings and keys"
-  rm -rf "$ETC" "$DATA" /etc/alfaos /var/lib/alfaos
+  rm -rf "$ETC" "$DATA" "$data_dir" /etc/alfaos /var/lib/alfaos
   id alfa >/dev/null 2>&1 && userdel alfa 2>/dev/null || true
 fi
 
 info "$NAME removed."
 [ "$PURGE" -eq 1 ] || echo "   Accounts and settings were kept in $DATA (use --purge to delete them)."
-echo "   Linux user accounts, their homes and Samba passwords were left as they are."
+echo "   Linux user accounts and their homes were left as they are."
 echo "   Virtual machines (if any) are still defined in libvirt."
+echo "   Host packages the installer added (QEMU/libvirt, Samba, guacd, Brave, Avahi, ...) stay installed;"
+echo "   remove them with your package manager if you don't need them."
 echo "   Your files were NOT touched."

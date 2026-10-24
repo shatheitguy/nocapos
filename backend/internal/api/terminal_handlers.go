@@ -14,17 +14,19 @@ import (
 
 	"github.com/coder/websocket"
 
+	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 )
 
 const terminalTicketTTL = 30 * time.Second
 
 type terminalTicket struct {
-	userID string
-	target string // "host" or "container:<id>"
-	cols   int
-	rows   int
-	exp    time.Time
+	userID  string
+	session string
+	target  string // "host" or "container:<id>"
+	cols    int
+	rows    int
+	exp     time.Time
 }
 
 type terminalTicketStore struct {
@@ -68,9 +70,12 @@ func (t *terminalTicketStore) redeem(id string) (terminalTicket, bool) {
 }
 
 type terminalTicketRequest struct {
-	Target string `json:"target"` // "host" or "container:<id>"
-	Cols   int    `json:"cols"`
-	Rows   int    `json:"rows"`
+	// "host" (a shell as your own Linux account), "host-root" (a root shell:
+	// needs your password) or "container:<id>".
+	Target   string `json:"target"`
+	Cols     int    `json:"cols"`
+	Rows     int    `json:"rows"`
+	Password string `json:"password,omitempty"` // host-root only
 }
 
 func (s *Server) terminalTicket(w http.ResponseWriter, r *http.Request) {
@@ -78,11 +83,30 @@ func (s *Server) terminalTicket(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	u := userFrom(r.Context())
 	kind, arg, _ := strings.Cut(req.Target, ":")
 	switch kind {
-	case "host":
+	case "host", "host-root":
 		if !s.Terminal.HostAvailable() {
 			writeError(w, http.StatusBadRequest, "host_unsupported", "host terminal is only available on Linux")
+			return
+		}
+		if arg != "" {
+			writeError(w, http.StatusBadRequest, "bad_request", "invalid target")
+			return
+		}
+		if kind == "host-root" {
+			if s.sensitiveLimited(w, r) {
+				return
+			}
+			// A root shell is the keys to the machine: confirm it's really them.
+			if err := s.Auth.ConfirmPassword(r.Context(), u.ID, req.Password); err != nil {
+				s.audit(r, u.ID, "terminal.open", req.Target, false, "password not confirmed")
+				s.totpAuthError(w, r, err)
+				return
+			}
+		} else if _, err := s.hostAccount(u); err != nil {
+			writeError(w, http.StatusBadRequest, "no_account", err.Error())
 			return
 		}
 	case "container":
@@ -91,19 +115,48 @@ func (s *Server) terminalTicket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
-		writeError(w, http.StatusBadRequest, "bad_request", "target must be host or container:<id>")
+		writeError(w, http.StatusBadRequest, "bad_request", "target must be host, host-root or container:<id>")
 		return
 	}
 	cols, rows := clampSize(req.Cols, req.Rows)
-	id := s.terminalTickets.issue(terminalTicket{userID: userFrom(r.Context()).ID, target: req.Target, cols: cols, rows: rows})
-	s.audit(r, userFrom(r.Context()).ID, "terminal.open", req.Target, true, "")
+	id := s.terminalTickets.issue(terminalTicket{userID: u.ID, session: sessionFrom(r.Context()), target: req.Target, cols: cols, rows: rows})
+	s.audit(r, u.ID, "terminal.open", req.Target, true, "")
 	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(terminalTicketTTL.Seconds())})
 }
 
-// terminalInfo tells the UI whether a host shell is offered on this platform.
+// hostAccount is the Linux account a person's host shell runs as. When
+// NoCapOS isn't root it can't switch accounts, so (nil) the shell is
+// NoCapOS's own unprivileged one. As root it is always the person's own
+// account, never root unless they signed in as root; NoCapOS's own
+// accounts (not Linux users) get no host shell this way.
+func (s *Server) hostAccount(u *store.User) (*terminal.Account, error) {
+	if !s.Terminal.RunsAsRoot() {
+		return nil, nil
+	}
+	if !s.Auth.SystemAccountsEnabled() {
+		return nil, terminal.ErrNoLinuxAccount
+	}
+	return terminal.LookupAccount(u.Username)
+}
+
+// terminalInfo tells the UI whether a host shell is offered, who it runs as,
+// and whether a root shell can be opened (with the password).
 func (s *Server) terminalInfo(w http.ResponseWriter, r *http.Request) {
-	name, root := s.Terminal.HostUser()
-	writeJSON(w, http.StatusOK, map[string]any{"host_available": s.Terminal.HostAvailable(), "host_user": name, "host_root": root})
+	u := userFrom(r.Context())
+	own, ownRoot := s.Terminal.HostUser()
+	out := map[string]any{
+		"host_available": s.Terminal.HostAvailable(),
+		"host_user":      own,
+		"host_root":      ownRoot,
+		// A root shell only means something when NoCapOS itself is root.
+		"root_available": s.Terminal.HostAvailable() && ownRoot,
+	}
+	if acct, err := s.hostAccount(u); err != nil {
+		out["host_user"], out["host_root"], out["host_error"] = "", false, err.Error()
+	} else if acct != nil {
+		out["host_user"], out["host_root"] = acct.Username, acct.Root()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func clampSize(cols, rows int) (int, int) {
@@ -122,8 +175,8 @@ func (s *Server) terminalConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired terminal ticket")
 		return
 	}
-	u, err := s.Store.UserByID(r.Context(), tk.userID)
-	if err != nil || u.Disabled || u.Role != "admin" {
+	u, err := s.currentUser(r.Context(), tk.userID, tk.session, true)
+	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired terminal ticket")
 		return
 	}
@@ -136,12 +189,24 @@ func (s *Server) terminalConnect(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	// A shell is root-equivalent: it ends the moment its owner signs out or
+	// stops being an administrator.
+	defer s.live.add(u.ID, tk.session, func() {
+		cancel()
+		conn.Close(websocket.StatusPolicyViolation, "session changed")
+	})()
 
 	var sess terminal.Session
 	kind, arg, _ := strings.Cut(tk.target, ":")
-	if kind == "host" {
-		sess, err = s.Terminal.OpenHost(ctx, tk.cols, tk.rows)
-	} else {
+	switch kind {
+	case "host-root": // password confirmed when the ticket was issued
+		sess, err = s.Terminal.OpenHost(ctx, nil, tk.cols, tk.rows)
+	case "host":
+		var acct *terminal.Account
+		if acct, err = s.hostAccount(u); err == nil {
+			sess, err = s.Terminal.OpenHost(ctx, acct, tk.cols, tk.rows)
+		}
+	default:
 		sess, err = s.Terminal.OpenContainer(ctx, arg, tk.cols, tk.rows)
 	}
 	if err != nil {

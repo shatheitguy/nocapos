@@ -31,6 +31,7 @@ import {
   ReplaceDisk,
   Sheet,
   SmartBadge,
+  TestProgress,
   TypeConfirm,
   UsageBadge,
   diskIcon,
@@ -53,7 +54,7 @@ type Modal =
   | { kind: 'destroy'; pool: string }
   | null;
 
-export function Storage(_props: { win: WinState }) {
+export function Storage({ win }: { win: WinState }) {
   const [status, setStatus] = useState<StorageStatus | null>(null);
   const [disks, setDisks] = useState<Disk[]>([]);
   const [pools, setPools] = useState<Pool[]>([]);
@@ -61,7 +62,8 @@ export function Storage(_props: { win: WinState }) {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<View>({ tab: 'overview' });
-  const [modal, setModal] = useState<Modal>(null);
+  // Opened from a disk-test notification: show that disk.
+  const [modal, setModal] = useState<Modal>(() => (typeof win.props?.disk === 'string' ? { kind: 'disk', name: win.props.disk } : null));
   const [installing, setInstalling] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -99,7 +101,7 @@ export function Storage(_props: { win: WinState }) {
   }, [load]);
 
   // Refresh: quickly while a scrub/resilver runs, slowly otherwise.
-  const scanning = pools.some((p) => p.scan.state === 'scanning');
+  const scanning = pools.some((p) => p.scan.state === 'scanning') || disks.some((d) => d.smart?.test_running);
   usePoll(load, scanning ? 4000 : 20000, !!status?.supported);
 
   const install = async (tool: 'zfs' | 'smart') => {
@@ -470,6 +472,7 @@ function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n
                 {d.smart && <SmartBadge disk={d} />}
               </span>
               {!d.available && d.reason && <span className="st-disk-reason">{d.reason}</span>}
+              <TestProgress s={d.smart} compact />
             </span>
           </button>
         ))}

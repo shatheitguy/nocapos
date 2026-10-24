@@ -108,6 +108,10 @@ type Installed struct {
 	Containers      []ContainerState `json:"containers"`
 	Credentials     *Credentials     `json:"credentials,omitempty"`
 	InstalledAt     time.Time        `json:"installed_at"`
+	// Filled in by the API: where "Open" goes when it isn't this server's
+	// address + WebPort (an admin's own address, or a macvlan/ipvlan IP).
+	WebURL     string `json:"web_url,omitempty"`
+	WebAddress string `json:"web_address,omitempty"`
 }
 
 // Status returns every installed app's state, keyed by app id.

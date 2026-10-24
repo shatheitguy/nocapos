@@ -21,7 +21,7 @@ for target in amd64 arm64 armv7; do
   echo "==> Building $target"
   (cd "$ROOT/backend" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=$arm \
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$stage/alfad" ./cmd/alfad)
-  cp "$ROOT/deploy/install.sh" "$ROOT/deploy/nocapos.service" "$ROOT/deploy/docker-compose.yml" \
+  cp "$ROOT/deploy/install.sh" "$ROOT/deploy/uninstall.sh" "$ROOT/deploy/nocapos.service" "$ROOT/deploy/docker-compose.yml" \
      "$ROOT/deploy/docker-compose.nvidia.yml" "$ROOT/deploy/Dockerfile.bundle" "$stage/"
   printf '%s' "$VERSION" >"$stage/VERSION"
   printf '%s' "$target" >"$stage/ARCH"
@@ -30,7 +30,7 @@ for target in amd64 arm64 armv7; do
 NoCapOS $VERSION for Linux ($target)
 
 Install (recommended): NoCapOS runs as root and manages this server -
-Linux users, network, power, storage, a root terminal and one-click
+Linux users, network, power, storage, a host terminal and one-click
 Docker apps (Docker is installed if missing):
     sudo bash install.sh
 

@@ -49,7 +49,7 @@ func (h *fakeHost) run(_ context.Context, stdin, name string, args ...string) (s
 			h.failNext = ""
 			return out, errors.New("exit status 32")
 		}
-		h.mounts[args[3]] = true
+		h.mounts[args[len(args)-1]] = true
 	case "umount":
 		delete(h.mounts, args[len(args)-1])
 	case "id":
@@ -172,7 +172,7 @@ func TestDrives(t *testing.T) {
 	}
 	mounts := h.called("mount ")
 	last := mounts[len(mounts)-1]
-	if !strings.Contains(last, "-t cifs //nas/Media ") || !strings.Contains(last, "credentials=") || strings.Contains(last, "s3cret") {
+	if !strings.Contains(last, "-t cifs -o ") || !strings.Contains(last, " -- //nas/Media ") || !strings.Contains(last, "credentials=") || strings.Contains(last, "s3cret") {
 		t.Fatalf("mount command %q (the password must not be on the command line)", last)
 	}
 	cred, err := os.ReadFile(m.credFile(d.ID))
@@ -202,7 +202,7 @@ func TestDrives(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c := h.called("mount -t nfs nas:/volume1/archive "); len(c) != 1 {
+	if c := h.called("mount -t nfs -o soft,timeo=150,retrans=2 -- nas:/volume1/archive "); len(c) != 1 {
 		t.Errorf("nfs mount: %v", h.called("mount"))
 	}
 

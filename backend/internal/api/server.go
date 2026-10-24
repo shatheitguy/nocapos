@@ -22,13 +22,16 @@ import (
 	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
+	"alfaos/alfad/internal/removable"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
+	"alfaos/alfad/internal/syspkg"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/vm"
+	"alfaos/alfad/internal/webaddr"
 	"alfaos/alfad/internal/webapps"
 	"alfaos/alfad/internal/ws"
 	"alfaos/alfad/web"
@@ -59,6 +62,7 @@ type Deps struct {
 	Stacks    *stacks.Manager
 	Storage   *storage.Manager
 	VMs       *vm.Manager
+	Removable *removable.Watcher // USB drives (nil where they can't be followed)
 	Version   string
 }
 
@@ -70,10 +74,17 @@ type Server struct {
 	terminalTickets terminalTicketStore
 	rdpTickets      rdpTicketStore
 	loginLimiter    *auth.Limiter
-	brave           *webapps.Brave
-	braveKey        []byte
-	notify          *notify.Service
-	crashes         *notify.CrashWatch
+	// sensitiveLimiter: password checks by signed-in people, per account.
+	sensitiveLimiter *auth.Limiter
+	live             liveConns
+	brave            *webapps.Brave
+	braveKey         []byte
+	notify           *notify.Service
+	crashes          *notify.CrashWatch
+	ctStats          *docker.StatsSampler // Containers app's live cards
+	webBook          *webaddr.Book        // admins' own web addresses for apps/containers
+	pkgJobs          *syspkg.Jobs         // Packages app's background jobs
+	pkgAdmin         *syspkg.Admin
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -82,18 +93,27 @@ func New(ctx context.Context, d Deps) *Server {
 		Deps:    d,
 		tickets: auth.NewTicketStore(30 * time.Second),
 		// 5 attempts burst, then one every 12s per client IP.
-		loginLimiter: auth.NewLimiter(12*time.Second, 5),
-		brave:        d.Brave,
-		braveKey:     randomKey(32),
+		loginLimiter:     auth.NewLimiter(12*time.Second, 5),
+		sensitiveLimiter: auth.NewLimiter(12*time.Second, 5),
+		brave:            d.Brave,
+		braveKey:         randomKey(32),
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
 	s.notify = notify.New(d.Store, d.Log)
 	s.crashes = notify.NewCrashWatch()
+	s.ctStats = docker.NewStatsSampler(d.Docker)
+	s.webBook = webaddr.NewBook(d.Store)
+	s.pkgJobs = syspkg.NewJobs()
+	s.pkgAdmin = syspkg.NewAdmin()
 	if d.AppStore != nil {
 		s.crashes.Busy = d.AppStore.Busy
 	}
 	if d.Storage != nil {
 		d.Storage.InUse = s.storageInUse
+		d.Storage.OnTestDone = s.notifyTestDone
+	}
+	if d.Removable != nil {
+		d.Removable.SetOnChange(s.notifyDrives)
 	}
 	return s
 }
@@ -107,10 +127,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	mux.HandleFunc("POST /api/v1/auth/setup", s.authSetup)
 	mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
+	mux.HandleFunc("POST /api/v1/auth/login/totp", s.authLoginTOTP)
 	mux.HandleFunc("POST /api/v1/auth/refresh", s.authRefresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.authLogout)
 	mux.Handle("GET /api/v1/auth/me", s.authed(s.authMe))
-	mux.HandleFunc("POST /api/v1/auth/reset", s.authReset)
+	mux.HandleFunc("POST /api/v1/auth/reset", s.authReset) // removed: answers 410
 	mux.Handle("POST /api/v1/auth/password", s.authed(s.changePassword))
 	mux.Handle("GET /api/v1/auth/totp", s.authed(s.totpStatus))
 	mux.Handle("POST /api/v1/auth/totp/setup", s.authed(s.totpSetup))
@@ -140,6 +161,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/system/network/ipv4/keep", s.admin(s.ipv4Keep))
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))
 	mux.Handle("GET /api/v1/system/power", s.authed(s.powerInfo))
+	mux.Handle("PUT /api/v1/system/hostname", s.admin(s.hostnameSet))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))
@@ -157,6 +179,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Containers (admin only: controlling containers is root-equivalent)
 	mux.Handle("GET /api/v1/containers", s.admin(s.listContainers))
+	mux.Handle("GET /api/v1/containers/stats", s.admin(s.containerStats))
+	mux.Handle("PUT /api/v1/containers/{id}/web-address", s.admin(s.containerWebAddress))
+	mux.Handle("PUT /api/v1/appstore/{id}/web-address", s.admin(s.appWebAddress))
 	mux.Handle("GET /api/v1/containers/{id}", s.admin(s.inspectContainer))
 	mux.Handle("POST /api/v1/containers/{id}/{action}", s.admin(s.containerAction))
 	mux.Handle("POST /api/v1/containers", s.admin(s.containerCreate))
@@ -182,7 +207,7 @@ func (s *Server) Handler() http.Handler {
 	// Everyone may list the installed apps they're allowed to use (filtered).
 	mux.Handle("GET /api/v1/appstore", s.authed(s.appstoreList))
 	mux.Handle("GET /api/v1/appstore/access", s.admin(s.appAccessList))
-	mux.Handle("PUT /api/v1/appstore/access/{id}", s.admin(s.appAccessSet))
+	mux.Handle("PUT /api/v1/appstore/{id}/access", s.admin(s.appAccessSet))
 	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
 	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
 
@@ -237,6 +262,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/files/favorites", s.authed(s.filesFavorites))
 	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))
 	mux.Handle("GET /api/v1/files/external", s.authed(s.filesExternal))
+	mux.Handle("POST /api/v1/files/external/eject", s.admin(s.filesEject))
 	mux.Handle("POST /api/v1/files/compress", s.authed(s.filesCompress))
 	mux.Handle("POST /api/v1/files/extract", s.authed(s.filesExtract))
 	mux.HandleFunc("GET /api/v1/files/raw", s.filesRaw) // authorized by a scoped ticket
@@ -259,6 +285,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))
 	mux.Handle("POST /api/v1/netdrives/install", s.admin(s.netInstall))
 	mux.Handle("GET /api/v1/netdrives/exports", s.admin(s.netExports))
+	mux.Handle("GET /api/v1/netdrives/discover", s.admin(s.netDiscover))
+	mux.Handle("GET /api/v1/netdrives/shares", s.admin(s.netServerShares))
 	mux.Handle("POST /api/v1/netdrives/{id}/{action}", s.admin(s.netConnect))
 	mux.Handle("PATCH /api/v1/netdrives/{id}", s.admin(s.netUpdate))
 	mux.Handle("DELETE /api/v1/netdrives/{id}", s.admin(s.netDelete))
@@ -319,8 +347,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("DELETE /api/v1/ai/providers/{id}", s.admin(s.aiDeleteProvider))
 	mux.Handle("GET /api/v1/ai/models", s.authed(s.aiModels))
 	mux.Handle("GET /api/v1/ai/running", s.authed(s.aiRunning))
-	mux.Handle("POST /api/v1/ai/load", s.authed(s.aiLoadModel))
-	mux.Handle("POST /api/v1/ai/unload", s.authed(s.aiUnloadModel))
+	mux.Handle("POST /api/v1/ai/load", s.admin(s.aiLoadModel))
+	mux.Handle("POST /api/v1/ai/unload", s.admin(s.aiUnloadModel))
 
 	mux.Handle("GET /api/v1/ai/conversations", s.authed(s.aiListConversations))
 	mux.Handle("POST /api/v1/ai/conversations", s.authed(s.aiCreateConversation))
@@ -343,6 +371,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Notification Center (admin).
 	s.notifyRoutes(mux)
+
+	// Packages: the host's system packages (admin, audited).
+	s.packageRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.

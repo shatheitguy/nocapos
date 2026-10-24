@@ -25,6 +25,12 @@ export interface SmartSummary {
   media_errors?: number;
   test_running?: boolean;
   test_remaining?: number;
+  /** short | long, when NoCapOS started the test. */
+  test_kind?: string;
+  /** Estimated seconds left. */
+  test_eta_sec?: number;
+  short_test_min?: number;
+  long_test_min?: number;
   asleep?: boolean;
 }
 

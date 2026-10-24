@@ -122,3 +122,13 @@ func (s *Store) PurgeExpiredTokens(ctx context.Context, now time.Time) (int64, e
 	}
 	return res.RowsAffected()
 }
+
+// RevokeAllSessions ends every login session (all refresh token families).
+func (s *Store) RevokeAllSessions(ctx context.Context, now time.Time) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE refresh_tokens SET revoked_at = ? WHERE revoked_at IS NULL`, now.Unix())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

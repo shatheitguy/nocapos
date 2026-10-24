@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { iconCell, useDesktopIcons } from './desktopIcons';
 import { useDock } from './dock';
 import { folderKey, folderOf, isFolderKey, suggestName, takeOut, useFolders } from './folders';
+import { isStoreKey } from './storeApps';
 
 // One drag-and-drop system for app icons in the dock, Launchpad and desktop.
 //
@@ -16,7 +17,8 @@ import { folderKey, folderOf, isFolderKey, suggestName, takeOut, useFolders } fr
 //   data-drop="folder"   a folder tile or icon (data-folder, data-scope): drop to add to it
 //   data-drop="launchpad" the Launchpad grid: an app dragged out of a folder leaves it
 //
-// The dragged id is an app id, or "folder:<id>" for a whole folder.
+// The dragged id is an app id, "folder:<id>" for a whole folder, or
+// "store:<id>" for an installed app (desktop shortcuts only: no Dock, no folders).
 
 export type DragSource = 'dock' | 'launchpad' | 'desktop' | 'folder';
 
@@ -77,6 +79,11 @@ function swallowNextClick() {
 function effective(appId: string, over: DropTarget, folderId?: string): DropTarget {
   if (!over) return null;
   const folder = isFolderKey(appId);
+  if (isStoreKey(appId)) {
+    if (over.kind === 'app' || over.kind === 'folder') return over.scope === 'desktop' ? { kind: 'desktop' } : { kind: 'launchpad' };
+    if (over.kind === 'dock') return null;
+    return over;
+  }
   if (over.kind === 'app' && (folder || over.appId === appId)) return over.scope === 'desktop' ? { kind: 'desktop' } : { kind: 'launchpad' };
   if (over.kind === 'folder' && folder) return over.scope === 'desktop' ? { kind: 'desktop' } : { kind: 'launchpad' };
   if (over.kind === 'folder' && over.folderId === folderId) return null; // back into its own folder
@@ -166,11 +173,14 @@ export function pressApp(
   e: RPointerEvent<HTMLElement>,
   appId: string,
   source: DragSource,
-  opts: { onStart?: () => void; folderId?: string } = {},
+  opts: { onStart?: () => void; folderId?: string; touchHold?: number } = {},
 ) {
   if (e.button !== 0 || !e.isPrimary) return;
   const startX = e.clientX;
   const startY = e.clientY;
+  // On touch screens a quick swipe should scroll (e.g. Launchpad pages), so
+  // the icon only lifts once the finger has rested on it for a moment.
+  const holdUntil = opts.touchHold && e.pointerType !== 'mouse' ? e.timeStamp + opts.touchHold : 0;
   // Where inside the icon it was grabbed — desktop icons keep that offset.
   const r = e.currentTarget.getBoundingClientRect();
   const grab = source === 'desktop' && !opts.folderId ? { x: startX - r.left, y: startY - r.top } : { x: iconCell().w / 2, y: iconCell().icon / 2 + 8 };
@@ -179,6 +189,10 @@ export function pressApp(
   const onMove = (ev: PointerEvent) => {
     if (!started) {
       if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESHOLD) return;
+      if (holdUntil && ev.timeStamp < holdUntil) {
+        finish(ev, false);
+        return;
+      }
       started = true;
       document.body.classList.add('app-dragging');
       opts.onStart?.();

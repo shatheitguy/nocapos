@@ -21,18 +21,18 @@ var (
 )
 
 func (s *Server) wsTicket(w http.ResponseWriter, r *http.Request) {
-	tok, exp := s.tickets.Issue(userFrom(r.Context()).ID)
+	tok, exp := s.tickets.IssueSession(userFrom(r.Context()).ID, sessionFrom(r.Context()))
 	writeJSON(w, http.StatusOK, map[string]any{"ticket": tok, "expires_at": exp.UTC()})
 }
 
 func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
-	userID, ok := s.tickets.Redeem(r.URL.Query().Get("ticket"))
+	userID, sid, ok := s.tickets.RedeemSession(r.URL.Query().Get("ticket"))
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired ticket")
 		return
 	}
-	u, err := s.Store.UserByID(r.Context(), userID)
-	if err != nil || u.Disabled {
+	u, err := s.currentUser(r.Context(), userID, sid, false)
+	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_ticket", "invalid or expired ticket")
 		return
 	}
@@ -42,6 +42,9 @@ func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return // Accept has already written the HTTP error
 	}
+	// Signing out, or losing rights, closes it; the desktop reconnects with
+	// whatever it may still have.
+	defer s.live.add(u.ID, sid, func() { conn.Close(websocket.StatusPolicyViolation, "session changed") })()
 	s.hub.Serve(conn, u)
 }
 
@@ -54,6 +57,12 @@ func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
 //	storage.alerts           admin      disk and pool health alerts, on change
 //	notifications            admin      new notifications and the unread count
 func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, error) {
+	// Re-read the person: a connection outlives role changes.
+	cur, err := s.currentUser(context.Background(), u.ID, "", false)
+	if err != nil {
+		return ws.Subscription{}, errForbidden
+	}
+	u = cur
 	name, arg, _ := strings.Cut(topic, "/")
 	if name == "system.metrics" && arg == "" {
 		return ws.Subscription{Shared: true, Source: s.metricsSource}, nil

@@ -1,8 +1,8 @@
-import { logout } from '../api/client';
 import type { User } from '../api/types';
 import { openApp } from '../apps/meta';
 import type { MenuItem } from '../components/ContextMenu';
 import { powerHost } from '../lib/hostActions';
+import { logOutClean } from '../lib/signOut';
 import { confirmDialog } from '../state/confirm';
 import { useWM } from '../state/windows';
 
@@ -34,7 +34,18 @@ export function accountMenuItems(user: User, onLock: () => void): MenuItem[] {
           { label: 'Shut Down…', icon: 'power' as const, onClick: () => void powerHost('shutdown') },
         ]
       : []),
-    { label: 'Lock Screen', icon: 'lock', divider: true, onClick: onLock },
-    { label: `Log Out ${user.username}…`, icon: 'logout', onClick: () => void logout() },
+    {
+      label: 'Lock Screen',
+      hint: 'Keeps your apps and windows open; your password unlocks it',
+      icon: 'lock',
+      divider: true,
+      onClick: onLock,
+    },
+    {
+      label: `Log Out ${user.username}`,
+      hint: 'Closes all your windows and ends your session',
+      icon: 'logout',
+      onClick: () => void logOutClean(),
+    },
   ];
 }
