@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -216,17 +217,12 @@ func validDevice(d string) bool {
 	return d != "" && len(d) <= 15 && !strings.ContainsAny(d, " /\x00\n:")
 }
 
-// wifiConnectArgs builds `nmcli device wifi connect`. NetworkManager works
+// wifiConnectArgs builds `nmcli device wifi connect` for an open network, or
+// to rejoin one NetworkManager already has secrets for. NetworkManager works
 // out WPA/WPA2/WPA3 (SAE) or WEP from the scan; the SSID is one argument, so
-// spaces and quotes in it need no escaping. The password itself never
-// appears here: it goes to nmcli through passwdFile (a private temp file),
-// never on the command line, where `ps` or /proc/<pid>/cmdline would show it
-// to any other local user for as long as the connect attempt runs.
-func wifiConnectArgs(j WiFiJoin, passwdFile string) []string {
+// spaces and quotes in it need no escaping.
+func wifiConnectArgs(j WiFiJoin) []string {
 	args := []string{"--wait", strconv.Itoa(int(wifiConnectTimeout/time.Second) - 5), "device", "wifi", "connect", j.SSID}
-	if passwdFile != "" {
-		args = append(args, "passwd-file", passwdFile)
-	}
 	if j.Device != "" {
 		args = append(args, "ifname", j.Device)
 	}
@@ -236,23 +232,59 @@ func wifiConnectArgs(j WiFiJoin, passwdFile string) []string {
 	return args
 }
 
-// writeWifiSecret writes a private, single-use nmcli secrets file for
-// WiFiConnect's passwd-file. The caller removes it once nmcli is done.
-func writeWifiSecret(password string) (path string, err error) {
-	f, err := os.CreateTemp("", "nocap-wifi-*")
-	if err != nil {
-		return "", err
+// NetworkManager's own folder for connection profiles; a profile placed here
+// (owner root, mode 0600, which NM insists on) is picked up by `connection
+// reload` the same as one nmcli itself would have written. A var, not a
+// const, so tests can point it at a temp dir instead of needing root.
+var nmConnectionsDir = "/etc/NetworkManager/system-connections"
+
+// writeWifiProfile saves a WPA/WPA2/WPA3-personal profile as a NetworkManager
+// keyfile. This is how the password reaches NetworkManager instead of a
+// command-line argument (`nmcli device wifi connect ... password ...`, where
+// any other local user could read it from `ps` or /proc/<pid>/cmdline for as
+// long as the connect attempt runs): it only ever lives in this one
+// root-only file, which NetworkManager itself reads.
+func writeWifiProfile(j WiFiJoin) (path string, cleanup func(), err error) {
+	id := make([]byte, 8)
+	if _, err := rand.Read(id); err != nil {
+		return "", nil, err
 	}
-	defer f.Close()
-	if err := f.Chmod(0o600); err != nil {
-		os.Remove(f.Name())
-		return "", err
+	uuidBytes := make([]byte, 16)
+	if _, err := rand.Read(uuidBytes); err != nil {
+		return "", nil, err
 	}
-	if _, err := f.WriteString("802-11-wireless-security.psk:" + password + "\n"); err != nil {
-		os.Remove(f.Name())
-		return "", err
+	uuidBytes[6] = uuidBytes[6]&0x0f | 0x40 // version 4
+	uuidBytes[8] = uuidBytes[8]&0x3f | 0x80 // RFC 4122 variant
+	uuid := fmt.Sprintf("%x-%x-%x-%x-%x", uuidBytes[0:4], uuidBytes[4:6], uuidBytes[6:8], uuidBytes[8:10], uuidBytes[10:16])
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "[connection]\nid=%s\nuuid=%s\ntype=wifi\n", iniEscape(j.SSID), uuid)
+	if j.Device != "" {
+		fmt.Fprintf(&b, "interface-name=%s\n", j.Device)
 	}
-	return f.Name(), nil
+	b.WriteString("\n[wifi]\nmode=infrastructure\n")
+	fmt.Fprintf(&b, "ssid=%s\n", iniEscape(j.SSID))
+	if j.Hidden {
+		b.WriteString("hidden=true\n")
+	}
+	b.WriteString("\n[wifi-security]\nkey-mgmt=wpa-psk\n")
+	fmt.Fprintf(&b, "psk=%s\n", iniEscape(j.Password))
+	b.WriteString("\n[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n")
+
+	path = filepath.Join(nmConnectionsDir, "nocap-"+hex.EncodeToString(id)+".nmconnection")
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		return "", nil, err
+	}
+	return path, func() { os.Remove(path) }, nil
+}
+
+// iniEscape keeps a value that may contain NetworkManager keyfile special
+// characters (notably a leading '#' or trailing whitespace) literal.
+func iniEscape(v string) string {
+	if v == "" || strings.HasPrefix(v, "#") || v != strings.TrimRight(v, " \t") {
+		return "\"" + strings.ReplaceAll(v, "\"", "\\\"") + "\""
+	}
+	return v
 }
 
 // wifiProfiles returns the UUIDs of saved Wi-Fi profiles for an SSID: named
@@ -322,20 +354,33 @@ func WiFiConnect(ctx context.Context, j WiFiJoin) error {
 	if j.Password != "" || j.Hidden {
 		deleteProfiles(ctx, wifiProfiles(ctx, j.SSID))
 	}
-	var passwdFile string
-	if j.Password != "" {
-		f, err := writeWifiSecret(j.Password)
-		if err != nil {
-			return err
-		}
-		passwdFile = f
-		defer os.Remove(passwdFile)
-	}
 	cctx, cancel := context.WithTimeout(ctx, wifiConnectTimeout)
 	defer cancel()
-	out, err := runCmd(cctx, "nmcli", wifiConnectArgs(j, passwdFile)...)
+
+	var out string
+	var err error
+	var profileCleanup func()
+	if j.Password != "" {
+		path, cleanup, werr := writeWifiProfile(j)
+		if werr != nil {
+			return werr
+		}
+		profileCleanup = cleanup
+		if _, err = runCmd(cctx, "nmcli", "connection", "reload", path); err != nil {
+			cleanup()
+			return fmt.Errorf("couldn't load the connection: %w", err)
+		}
+		out, err = runCmd(cctx, "nmcli", "--wait", strconv.Itoa(int(wifiConnectTimeout/time.Second)-5), "connection", "up", "id", j.SSID)
+	} else {
+		out, err = runCmd(cctx, "nmcli", wifiConnectArgs(j)...)
+	}
 	if err == nil {
+		// Success: leave the profile in place so NetworkManager can
+		// reconnect on its own (e.g. after a reboot or coming back in range).
 		return nil
+	}
+	if profileCleanup != nil {
+		profileCleanup()
 	}
 	if j.Password != "" || j.Hidden {
 		deleteProfiles(context.Background(), wifiProfiles(context.Background(), j.SSID))

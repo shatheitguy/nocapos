@@ -1155,13 +1155,13 @@ function FilePane({
 
         <div className="crumbs fx-crumbs">
           {special ? (
-            <span className="fx-crumb current">
+            <span className="crumb fx-crumb current">
               <Icon name={special === 'recents' ? 'clock' : 'search'} size={13} />
               {special === 'recents' ? 'Recents' : `Search: “${query}”`}
             </span>
           ) : (
             <>
-              <button type="button" className={`fx-crumb ${crumbs.length ? '' : 'current'}`} onClick={() => navigate('/')} {...folderDrop('crumb:/', root, '/')}>
+              <button type="button" className={`crumb fx-crumb ${crumbs.length ? '' : 'current'}`} onClick={() => navigate('/')} {...folderDrop('crumb:/', root, '/')}>
                 <Icon name={crumbIcon} size={13} />
                 {rootLabel(root)}
               </button>
@@ -1169,9 +1169,9 @@ function FilePane({
                 const p = '/' + crumbs.slice(0, i + 1).join('/');
                 const last = i === crumbs.length - 1;
                 return (
-                  <span key={p} className="fx-crumb-wrap">
+                  <span key={p} className="crumb-wrap fx-crumb-wrap">
                     <Icon name="chevronRight" size={12} />
-                    <button type="button" className={`fx-crumb ${last ? 'current' : ''} ${dropKey === 'crumb:' + p ? 'drop' : ''}`} onClick={() => navigate(p)} {...(last ? {} : folderDrop('crumb:' + p, root, p))}>
+                    <button type="button" className={`crumb fx-crumb ${last ? 'current' : ''} ${dropKey === 'crumb:' + p ? 'drop' : ''}`} onClick={() => navigate(p)} {...(last ? {} : folderDrop('crumb:' + p, root, p))}>
                       <Icon name={i === 0 && c === '.recycle' ? 'trash' : 'folder'} size={13} />
                       {i === 0 && c === '.recycle' ? 'Trash' : c}
                     </button>
