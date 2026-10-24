@@ -99,12 +99,38 @@ export interface Container {
   project?: string;
   system: boolean;
   labels: Record<string, string> | null;
+  networks?: NetworkAttachment[] | null;
+  /** Set while running. */
+  started_at?: string;
+  restart_count?: number;
+  health?: string;
+  /** Where "Open" goes when it isn't this server + a published port. */
+  web_url?: string;
+  /** The admin's own web address for it. */
+  web_address?: string;
+}
+
+export interface NetworkAttachment {
+  name: string;
+  ip?: string;
+  gateway?: string;
+  mac?: string;
+  driver?: string;
 }
 
 export interface ContainerDetail {
   id: string;
   name: string;
   image: string;
+  image_id?: string;
+  /** Variable names only: values never leave the server. */
+  env_names?: string[];
+  exposed_ports?: string[];
+  web_url?: string;
+  web_address?: string;
+  labels?: Record<string, string> | null;
+  finished_at?: string;
+  runtime?: string;
   created: string;
   state: string;
   running: boolean;
@@ -117,8 +143,8 @@ export interface ContainerDetail {
   privileged: boolean;
   network_mode: string;
   system: boolean;
-  mounts: { type: string; source: string; destination: string; rw: boolean }[];
-  networks: { name: string; ip?: string }[];
+  mounts: { type: string; name?: string; source: string; destination: string; rw: boolean }[];
+  networks: NetworkAttachment[];
 }
 
 export interface ContainerStats {
@@ -127,10 +153,14 @@ export interface ContainerStats {
   mem_usage: number;
   mem_limit: number;
   mem_percent: number;
+  net_rx?: number;
+  net_tx?: number;
   net_rx_rate: number;
   net_tx_rate: number;
   block_read: number;
   block_write: number;
+  block_read_rate?: number;
+  block_write_rate?: number;
   pids: number;
 }
 

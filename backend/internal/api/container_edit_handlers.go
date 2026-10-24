@@ -19,7 +19,7 @@ import (
 	"alfaos/alfad/internal/files"
 )
 
-// Editing containers like Portainer, in NoCapOS: change a container's image,
+// Editing containers in NoCapOS: change a container's image,
 // ports, storage, networks (incl. macvlan/ipvlan), environment and limits;
 // add new containers; manage networks. Admin only; changes are audited.
 

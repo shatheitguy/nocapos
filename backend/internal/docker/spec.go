@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Spec is the part of a container people edit (Portainer-style): image,
+// Spec is the part of a container people edit: image,
 // ports, storage, networks, environment, restart policy and resources.
 // Everything else about the container (entrypoint, user, health check,
 // capabilities, log settings…) is kept as it was when it is recreated.
