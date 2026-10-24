@@ -1,0 +1,140 @@
+/* ==========================================================================
+   Containers app (live cards, container page) and the Packages app.
+   Tokens only, so Glass, Classic and Cyber-Deck all work.
+   ========================================================================== */
+.ct-app { position: relative; min-height: 0; }
+.ct-side, .pk-side { width: 200px; gap: 2px; }
+.ct-side-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 14px; }
+.ct-side button, .pk-side button { gap: 10px; }
+.ct-nav-label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ct-main { gap: 12px; }
+
+/* links that look like buttons */
+a.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm);
+  font-weight: 600; text-decoration: none; background: var(--btn-bg, var(--accent)); color: var(--btn-ink, var(--accent-ink));
+}
+a.button:hover { filter: brightness(1.08); }
+a.button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+a.button.ghost:hover { background: var(--surface-3); filter: none; }
+a.button.icon-btn { padding: 6px; width: 30px; height: 30px; }
+
+/* toolbar, filters */
+.ct-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ct-search { flex: 1; min-width: 180px; }
+.ct-select { padding: 7px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font: inherit; font-size: 13px; }
+.ct-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.ct-seg button { background: transparent; color: var(--muted); border-radius: 0; padding: 6px 9px; }
+.ct-seg button.on { background: var(--accent-soft); color: var(--accent); }
+.ct-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ct-filter { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 99px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; }
+.ct-filter span { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.ct-filter.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.ct-filter.on span { color: inherit; }
+
+/* cards */
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.ct-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; cursor: pointer; min-width: 0; transition: background 0.15s, border-color 0.15s; }
+.ct-card:hover { background: var(--surface-3); }
+.ct-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ct-card.off { opacity: 0.8; }
+.ct-card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ct-card-name { flex: 1; min-width: 0; font-size: 15px; }
+.ct-card-image { font-size: 11.5px; color: var(--muted); }
+.ct-badges { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.ct-badges .chip.tiny { margin-left: 0; }
+.chip.accent { background: var(--accent-soft); color: var(--accent); }
+.ct-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
+.ct-dot.good { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.ct-dot.warn { background: var(--warn); }
+.ct-dot.bad { background: var(--bad); }
+.ct-quick { flex: none; gap: 2px; }
+.ct-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; min-height: 62px; }
+.ct-metrics.idle { display: flex; align-items: center; }
+.ct-metric { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: var(--accent); }
+.ct-metric-head { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+.ct-metric-head b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ct-metric .st-meter { margin: 8px 0 2px; }
+.ct-sub { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ct-io { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ct-io span { display: inline-flex; align-items: center; gap: 4px; }
+.ct-card-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 8px; font-size: 12px; }
+.ct-card-foot .muted { display: inline-flex; align-items: center; gap: 4px; }
+.ct-ports { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ct-port { font-size: 11.5px; font-family: var(--mono); padding: 1px 7px; border-radius: 99px; background: var(--surface-3); color: var(--accent); text-decoration: none; }
+.ct-port:hover { background: var(--accent-soft); }
+.ct-port.udp { color: var(--muted); }
+
+/* list */
+.ct-table-wrap { overflow: auto; padding: 0; }
+.ct-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ct-table td.num .st-meter { width: 80px; }
+.ct-name-cell { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; }
+.ct-name-cell .chip.tiny { margin-left: 0; }
+.ct-img-cell { max-width: 280px; }
+
+/* container page */
+.ct-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ct-back { align-self: flex-start; }
+.ct-page-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ct-hero { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); flex: none; }
+.ct-hero.good { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.ct-hero.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.ct-hero.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.ct-page-title { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.ct-page-title h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+.ct-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ct-actionbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 8px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.ct-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.ct-tabs button { background: transparent; color: var(--muted); border-radius: 8px 8px 0 0; border-bottom: 2px solid transparent; padding: 8px 14px; font-weight: 500; }
+.ct-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.ct-overview, .ct-inspect { display: flex; flex-direction: column; gap: 12px; }
+.ct-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.ct-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; color: var(--accent); min-width: 0; }
+.ct-tile-head { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.ct-tile-value { font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ct-tile .spark { margin-top: 4px; width: 100%; }
+.ct-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.ct-two .chip.tiny { margin-left: 6px; }
+.ct-hint { margin: 10px 0 0; line-height: 1.45; }
+.ct-logs { padding: 0; overflow: hidden; height: min(60vh, 520px); display: flex; flex-direction: column; }
+.ct-logs .logs { height: 100%; }
+.ct-mini th, .ct-mini td { padding: 6px 8px; font-size: 12.5px; }
+.ct-mini td.ellipsis { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-env { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ct-env code { font-size: 11.5px; padding: 2px 8px; border-radius: 6px; background: var(--surface-3); }
+.ct-labels summary { cursor: pointer; }
+.ct-labels .kv { margin-top: 8px; }
+.ct-check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; cursor: pointer; }
+
+/* web address field (App Store and Containers) */
+.web-address { display: flex; flex-direction: column; gap: 8px; }
+.web-address label { display: flex; flex-direction: column; gap: 6px; }
+.web-address input { width: 100%; font-family: var(--mono); font-size: 13px; }
+.web-address input[aria-invalid='true'] { border-color: var(--bad); }
+.web-address-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.web-address-row .error { color: var(--bad); }
+
+/* Packages */
+.pk-app { position: relative; min-height: 0; }
+.pk-main { gap: 12px; }
+.pk-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pk-head h2 { margin: 0; font-size: 20px; flex: 1; }
+.pk-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pk-table td.desc { color: var(--muted); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-table td.name { font-weight: 600; }
+.pk-pager { display: flex; align-items: center; gap: 8px; justify-content: flex-end; font-size: 12.5px; color: var(--muted); }
+.pk-job { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.pk-job-head { display: flex; align-items: center; gap: 8px; }
+.pk-job-head b { flex: 1; }
+.pk-output { margin: 0; max-height: 280px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: #0c1018; color: #d7dde8; font-family: var(--mono); font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pk-features .urow-control .chip { margin: 0; }
+.pk-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.pk-drop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pk-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: pk-spin 0.8s linear infinite; }
+@keyframes pk-spin { to { transform: rotate(360deg); } }
+@media (max-width: 720px) {
+  .ct-side, .pk-side { width: 64px; }
+  .ct-side-head, .ct-nav-label, .ct-count, .pk-side .ct-nav-label { display: none; }
+}

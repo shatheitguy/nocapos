@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { ContainerStats } from './types';
 
 export interface EnvVar {
   key: string;
@@ -84,7 +85,16 @@ export interface NewNetwork {
 
 const c = (id: string) => `/api/v1/containers/${encodeURIComponent(id)}`;
 
+export type ContainerAction = 'start' | 'stop' | 'restart' | 'pause' | 'unpause' | 'kill';
+
 export const dockerApi = {
+  /** One-shot usage of the given (or every running) container. */
+  stats: (ids?: string[]) => api<{ stats: Record<string, ContainerStats> }>(`/api/v1/containers/stats${ids?.length ? `?ids=${ids.map(encodeURIComponent).join(',')}` : ''}`),
+  action: (id: string, action: ContainerAction) => api<void>(`${c(id)}/${action}`, { method: 'POST' }),
+  /** Download the image again and recreate the container if it changed. */
+  update: (id: string) => api<{ id: string; updated: boolean; warning?: string }>(`${c(id)}/update`, { method: 'POST' }),
+  removeWithVolumes: (id: string) => api<{ volumes: string[] }>(`${c(id)}?volumes=1`, { method: 'DELETE' }),
+  setWebAddress: (id: string, url: string) => api<{ url: string }>(`${c(id)}/web-address`, { method: 'PUT', body: { url } }),
   spec: (id: string) => api<SpecInfo>(`${c(id)}/spec`),
   edit: (id: string, spec: ContainerSpec) => api<{ id: string; warning?: string }>(`${c(id)}/spec`, { method: 'PUT', body: spec }),
   create: (spec: ContainerSpec) => api<{ id: string }>('/api/v1/containers', { method: 'POST', body: spec }),

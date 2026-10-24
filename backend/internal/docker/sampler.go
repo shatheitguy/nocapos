@@ -25,6 +25,7 @@ type sample struct {
 	cpuTotal uint64
 	sysTotal uint64
 	online   uint32
+	seen     time.Time
 }
 
 func NewStatsSampler(c *Client) *StatsSampler {
@@ -35,7 +36,8 @@ func NewStatsSampler(c *Client) *StatsSampler {
 const statsConcurrency = 8
 
 // Sample returns current usage for each container id (missing on failure).
-// Containers not asked for are forgotten, so the cache follows the list.
+// Several windows may ask for different containers; each container's last
+// sample is kept for a minute as the next call's baseline.
 func (s *StatsSampler) Sample(ctx context.Context, ids []string) map[string]Stats {
 	type result struct {
 		id string
@@ -62,22 +64,31 @@ func (s *StatsSampler) Sample(ctx context.Context, ids []string) map[string]Stat
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
 	out := make(map[string]Stats, len(ids))
-	next := make(map[string]sample, len(ids))
 	for r := range results {
 		if !r.ok {
 			continue
 		}
 		cur := r.sm
+		cur.seen = now
 		if p, ok := s.prev[r.id]; ok {
 			cur.stats = merge(cur, p)
 		}
-		next[r.id] = cur
+		s.prev[r.id] = cur
 		out[r.id] = cur.stats
 	}
-	s.prev = next
+	// Forget containers nobody has asked about for a while (removed ones).
+	for id, p := range s.prev {
+		if now.Sub(p.seen) > sampleTTL {
+			delete(s.prev, id)
+		}
+	}
 	return out
 }
+
+// sampleTTL is how long a container's last sample is kept as the baseline.
+const sampleTTL = time.Minute
 
 // merge works out CPU % and rates for cur against the previous sample p. A
 // CPU figure the engine already computed (non one-shot) is kept.
