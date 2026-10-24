@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/screenshots/logo.png" width="190" alt="NoCapOS"></p>
+
 # NoCapOS
 
 [![Website](https://img.shields.io/badge/website-nocapos-ff2d3d)](https://shatheitguy.github.io/nocapos/)
