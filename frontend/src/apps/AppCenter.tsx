@@ -10,6 +10,7 @@ import { ContainerEditor } from './ContainerEditor';
 import { openApp } from './meta';
 import { Empty } from './Monitor';
 import { WhoCanUse } from './AppAccess';
+import { WebAddressField } from './WebAddress';
 
 // App Store: discover, install, open, update and remove self-hosted apps.
 // Each app runs as Docker containers with its own data volumes.
@@ -827,6 +828,20 @@ function AppPage({
           </section>
 
           {i && <WhoCanUse app={app} onChanged={onChanged} />}
+
+          {i && app.web && (
+            <section>
+              <h3 className="as-h3">Web address</h3>
+              <div className="ucard pad">
+                <WebAddressField
+                  value={i.web_address ?? ''}
+                  automatic={i.web_address ? (i.web_port ? `http://${window.location.hostname}:${i.web_port}${app.web.path ?? '/'}` : null) : url}
+                  onSave={(u) => storeApi.setWebAddress(app.id, u)}
+                  onSaved={onChanged}
+                />
+              </div>
+            </section>
+          )}
 
           {app.services.length > 1 && (
             <section>
