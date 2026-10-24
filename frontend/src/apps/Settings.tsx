@@ -431,9 +431,19 @@ function plainNotes(md: string) {
     .trim();
 }
 
+interface UpdateRunStatus {
+  running: boolean;
+  supported: boolean;
+  version: string;
+  log?: string;
+}
+
 function SoftwareUpdate() {
   const [u, setU] = useState<UpdateInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  const [run, setRun] = useState<UpdateRunStatus | null>(null);
+  const [starting, setStarting] = useState(false);
+  const logRef = useRef<HTMLPreElement>(null);
   const check = (refresh: boolean) => {
     setBusy(true);
     void api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`).then((r) => {
@@ -442,8 +452,29 @@ function SoftwareUpdate() {
       else toast('error', 'Could not check for updates', r.error);
     });
   };
-  useEffect(() => check(false), []);
+  const pollRun = () => void api<UpdateRunStatus>('/api/v1/system/update/run').then((r) => { if (r.ok) setRun(r.data); });
+  useEffect(() => {
+    check(false);
+    pollRun(); // in case this page reopened mid-update
+  }, []);
+  useEffect(() => {
+    if (!run?.running) return;
+    const t = window.setInterval(pollRun, 2000);
+    return () => window.clearInterval(t);
+  }, [run?.running]);
+  useEffect(() => {
+    logRef.current?.scrollTo(0, logRef.current.scrollHeight);
+  }, [run?.log]);
   const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', 'Command copied'));
+  const updateNow = () => {
+    setStarting(true);
+    void api<{ started: boolean }>('/api/v1/system/update/run', { method: 'POST' }).then((r) => {
+      setStarting(false);
+      if (r.ok || r.status === 409) { pollRun(); return; }
+      toast('error', 'Could not start the update', r.error);
+    });
+  };
+  const finished = run && !run.running && run.log;
   return (
     <div className="stack settings-page">
       <div className="ucard set-update">
@@ -474,12 +505,43 @@ function SoftwareUpdate() {
           )}
           {u && <small>Last checked {new Date(u.checked).toLocaleTimeString()}</small>}
         </div>
-        <button type="button" className="pill ghost small" disabled={busy} onClick={() => check(true)}>
-          {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} Check now
-        </button>
+        {u && (u.available || u.dev) && !u.error && run?.supported && !run.running ? (
+          <button type="button" className="pill small" disabled={starting} onClick={updateNow}>
+            {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} Update now
+          </button>
+        ) : (
+          <button type="button" className="pill ghost small" disabled={busy} onClick={() => check(true)}>
+            {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} Check now
+          </button>
+        )}
       </div>
-      {u && (u.available || u.dev) && !u.error && (
-        <Group title="How to update" hint="Run this on the server. It installs the latest release over this one and keeps your settings, apps and files.">
+      {run?.running && (
+        <Group title="Updating NoCapOS" hint="This can take a few minutes. Keep this window open; NoCapOS will restart on its own partway through.">
+          <div className="settings-row full">
+            <span className="spinner sm" /> <b>Installing…</b>
+            <pre ref={logRef} className="set-logs">{run.log || 'Starting…'}</pre>
+          </div>
+        </Group>
+      )}
+      {finished && (
+        <Group title="Update finished">
+          <div className="settings-row full">
+            <pre ref={logRef} className="set-logs">{run.log}</pre>
+            <button type="button" className="pill small" onClick={() => window.location.reload()}>
+              <Icon name="restart" size={13} /> Reload NoCapOS
+            </button>
+          </div>
+        </Group>
+      )}
+      {u && (u.available || u.dev) && !u.error && !run?.running && (
+        <Group
+          title="How to update"
+          hint={
+            run?.supported
+              ? "Update now installs the latest release over this one and keeps your settings, apps and files. You can also run this on the server yourself."
+              : "Updating from here needs NoCapOS installed directly on a Linux server, running as root. Run this on the server instead."
+          }
+        >
           <div className="settings-row full">
             <pre className="set-logs set-cmd">{u.command}</pre>
             <div className="btn-group set-logs-actions">
