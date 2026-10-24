@@ -24,7 +24,7 @@ func TestRenderSambaGuest(t *testing.T) {
 		"[global]\n   map to guest = Bad User\n   guest account = nobody\n",
 		"[Public]\n   path = /srv/Public\n   guest ok = yes\n   write list = admin\n   read only = yes\n",
 		"[Dropbox]\n   path = /srv/Dropbox\n   guest ok = yes\n   write list = admin sam\n   read only = no\n",
-		"[Private]\n   path = /srv/Private\n   valid users = admin\n   write list = admin\n   read only = yes\n",
+		"[Private]\n   path = /srv/Private\n   valid users = admin\n   invalid users = root\n   write list = admin\n   read only = yes\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

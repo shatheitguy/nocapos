@@ -289,14 +289,14 @@ func RenderSamba(c SambaConfig) string {
 		}
 		fmt.Fprintf(&b, "   path = %s\n", filepath.ToSlash(sh.Path))
 		if sh.Guest != "" {
-			// Open to anyone: no valid users list. People keep what they
-			// were given through the read and write lists.
+			// Open to anyone: no valid users list, so no named account (root
+			// included) to bar — the guest account itself is never root.
+			// People keep what they were given through the read/write lists.
 			b.WriteString("   guest ok = yes\n")
 		} else {
 			fmt.Fprintf(&b, "   valid users = %s\n", strings.Join(sh.Valid, " "))
+			b.WriteString("   invalid users = root\n")
 		}
-		// Never root, whoever asks — guest or named.
-		b.WriteString("   invalid users = root\n")
 		if len(sh.Read) > 0 {
 			fmt.Fprintf(&b, "   read list = %s\n", strings.Join(sh.Read, " "))
 		}
