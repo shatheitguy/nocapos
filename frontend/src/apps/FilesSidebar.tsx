@@ -39,6 +39,7 @@ export function FilesSidebar({
   current,
   favs,
   external,
+  onEject,
   net,
   rootLabel,
   onGo,
@@ -55,6 +56,7 @@ export function FilesSidebar({
   current?: { root: string; path: string; special: Special };
   favs: Favorite[];
   external: ExternalDrive[];
+  onEject: (d: ExternalDrive) => void;
   net: ReturnType<typeof useNetwork>;
   rootLabel: (id: string) => string;
   onGo: (root: string, path: string, special?: Special) => void;
@@ -188,19 +190,31 @@ export function FilesSidebar({
       {external.length > 0 && (
         <SideSection title="External storage">
           {external.map((d) => (
-            <button
-              key={d.path}
-              type="button"
-              className={`fs-item fs-ext ${at(d.root, d.path) ? 'on' : ''}`}
-              title={`${d.device} — to eject it, unmount it on the server or unplug it once nothing is copying`}
-              onClick={() => onGo(d.root, d.path)}
-            >
-              <Icon name="drive" size={17} />
-              <span className="fs-ext-text">
-                <span className="fs-name">{d.name}</span>
-                {d.total > 0 && <span className="fs-sub">{fmtBytes(d.free, 0)} free of {fmtBytes(d.total, 0)}</span>}
-              </span>
-            </button>
+            <div key={d.path} className={`fn-drive ${at(d.root, d.path) ? 'on' : ''}`}>
+              <button
+                type="button"
+                className={`fs-item fs-ext fn-drive-main ${at(d.root, d.path) ? 'on' : ''}`}
+                title={d.ejectable ? `${d.device}${d.fs_type ? ` · ${d.fs_type}` : ''}` : `${d.device} — to eject it, unmount it on the server or unplug it once nothing is copying`}
+                onClick={() => onGo(d.root, d.path)}
+                onContextMenu={(e) =>
+                  openMenu(e, [
+                    { label: 'Open', icon: 'folder', onClick: () => onGo(d.root, d.path) },
+                    ...(d.ejectable ? [{ label: `Eject “${d.name}”`, icon: 'eject' as const, onClick: () => onEject(d) }] : []),
+                  ])
+                }
+              >
+                <Icon name="drive" size={17} />
+                <span className="fs-ext-text">
+                  <span className="fs-name">{d.name}</span>
+                  {d.total > 0 && <span className="fs-sub">{fmtBytes(d.free, 0)} free of {fmtBytes(d.total, 0)}</span>}
+                </span>
+              </button>
+              {d.ejectable && (
+                <button type="button" className="fn-eject" aria-label={`Eject ${d.name}`} title="Eject" onClick={() => onEject(d)}>
+                  <Icon name="eject" size={14} />
+                </button>
+              )}
+            </div>
           ))}
         </SideSection>
       )}

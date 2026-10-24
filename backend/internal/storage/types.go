@@ -70,7 +70,12 @@ type SmartSummary struct {
 	MediaErrors   *int64 `json:"media_errors,omitempty"`
 	TestRunning   bool   `json:"test_running,omitempty"`
 	TestRemaining *int64 `json:"test_remaining,omitempty"` // percent left
-	Asleep        bool   `json:"asleep,omitempty"`         // in standby; not woken to read SMART
+	TestKind      string `json:"test_kind,omitempty"`      // short | long, when NoCapOS started it
+	TestETASec    *int64 `json:"test_eta_sec,omitempty"`   // estimated seconds left
+	// The disk's own estimate of how long each test takes (ATA polling time).
+	ShortTestMin *int64 `json:"short_test_min,omitempty"`
+	LongTestMin  *int64 `json:"long_test_min,omitempty"`
+	Asleep       bool   `json:"asleep,omitempty"` // in standby; not woken to read SMART
 }
 
 type SmartAttribute struct {

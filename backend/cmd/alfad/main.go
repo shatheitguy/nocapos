@@ -35,6 +35,7 @@ import (
 	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
+	"alfaos/alfad/internal/removable"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/stacks"
@@ -279,6 +280,13 @@ func serve() error {
 		return out
 	}})
 
+	// USB drives: opened under /media/nocapos when plugged in (they show in
+	// Files through the System location, so only when that's on).
+	var drives *removable.Watcher
+	if cfg.SystemRoot && removable.Supported() {
+		drives = removable.New(log)
+	}
+
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
 		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
@@ -291,10 +299,14 @@ func serve() error {
 		Cloud:     cloud,
 		Storage:   storageMgr,
 		VMs:       vms,
+		Removable: drives,
 		Stacks:    stacks.NewManager(cfg.DataDir, cfg.DockerHost, log),
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	srv.RunNotifications(ctx)
+	if drives != nil {
+		go drives.Run(ctx) // after api.New, which subscribes to its changes
+	}
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),

@@ -99,14 +99,11 @@ func (s *Server) wifiList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) wifiConnect(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		SSID     string `json:"ssid"`
-		Password string `json:"password"`
-	}
+	var req hostctl.WiFiJoin
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	err := hostctl.WiFiConnect(r.Context(), req.SSID, req.Password)
+	err := hostctl.WiFiConnect(r.Context(), req)
 	s.audit(r, userFrom(r.Context()).ID, "wifi.connect", req.SSID, err == nil, errText(err)) // never the password
 	if err != nil {
 		s.hostError(w, err)
@@ -179,6 +176,28 @@ func (s *Server) ipv4Revert(w http.ResponseWriter, r *http.Request) {
 	ok := hostctl.RevertIPv4(req.Token)
 	s.audit(r, userFrom(r.Context()).ID, "network.ipv4.revert", "", ok, "")
 	writeJSON(w, http.StatusOK, map[string]bool{"reverted": ok})
+}
+
+// hostnameSet renames the machine live (admin only, audited).
+func (s *Server) hostnameSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Hostname string `json:"hostname"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	old := s.Sampler.HostInfo().Hostname
+	name, err := hostctl.SetHostname(r.Context(), req.Hostname)
+	s.audit(r, userFrom(r.Context()).ID, "system.hostname", old+" → "+req.Hostname, err == nil, errText(err))
+	if err != nil {
+		if errors.Is(err, hostctl.ErrUnsupported) {
+			writeError(w, http.StatusNotImplemented, "unsupported", "Renaming needs NoCapOS installed directly on Linux.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"hostname": name})
 }
 
 func (s *Server) hostError(w http.ResponseWriter, err error) {

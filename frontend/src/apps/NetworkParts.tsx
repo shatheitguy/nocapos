@@ -25,6 +25,9 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
   const [askFor, setAskFor] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [joining, setJoining] = useState<string | null>(null);
+  // Why the last join failed, under that network's row.
+  const [failed, setFailed] = useState<{ ssid: string; error: string } | null>(null);
+  const [other, setOther] = useState(false);
 
   const scan = async (rescan: boolean) => {
     setScanning(true);
@@ -39,20 +42,28 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
     void scan(true);
   }, []);
 
-  const join = async (n: WiFiNetwork, pw?: string) => {
+  const join = async (n: Pick<WiFiNetwork, 'ssid' | 'secure'>, pw?: string, hidden?: boolean) => {
     setJoining(n.ssid);
-    const ok = await joinWiFi(n.ssid, pw);
+    setFailed(null);
+    const r = await joinWiFi({ ssid: n.ssid, password: pw || undefined, hidden, device });
     setJoining(null);
-    if (ok) {
+    if (r.state) {
       setAskFor(null);
+      setOther(false);
       setPassword('');
       await scan(false);
       onChanged?.();
+      return true;
     }
+    setFailed({ ssid: n.ssid, error: r.error ?? 'Could not join' });
+    // A saved network whose stored password no longer works: ask for it.
+    if (n.secure && !hidden) setAskFor(n.ssid);
+    return false;
   };
 
   const pick = (n: WiFiNetwork) => {
     if (n.in_use || joining) return;
+    setFailed(null);
     if (n.secure && !n.saved) {
       setAskFor(askFor === n.ssid ? null : n.ssid);
       setPassword('');
@@ -103,12 +114,54 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
               </button>
             </form>
           )}
+          {failed?.ssid === n.ssid && <p className="wifi-error">{failed.error}</p>}
         </div>
       ))}
-      <button type="button" className="ghost small wifi-rescan" onClick={() => void scan(true)} disabled={scanning}>
-        <Icon name="restart" size={12} /> {scanning ? 'Scanning…' : 'Scan again'}
-      </button>
+      {other ? (
+        <OtherNetwork busy={!!joining} error={failed && !list.some((n) => n.ssid === failed.ssid) ? failed.error : undefined} onJoin={(ssid, pw, hidden) => void join({ ssid, secure: !!pw }, pw, hidden)} onCancel={() => setOther(false)} />
+      ) : null}
+      <div className="btn-group">
+        <button type="button" className="ghost small wifi-rescan" onClick={() => void scan(true)} disabled={scanning}>
+          <Icon name="restart" size={12} /> {scanning ? 'Scanning…' : 'Scan again'}
+        </button>
+        {!other && (
+          <button type="button" className="ghost small wifi-rescan" onClick={() => setOther(true)}>
+            <Icon name="plus" size={12} /> Other network…
+          </button>
+        )}
+      </div>
     </div>
+  );
+}
+
+/** Join a network by name: hidden networks, or ones out of the list. */
+function OtherNetwork({ busy, error, onJoin, onCancel }: { busy: boolean; error?: string; onJoin: (ssid: string, pw: string, hidden: boolean) => void; onCancel: () => void }) {
+  const [ssid, setSsid] = useState('');
+  const [pw, setPw] = useState('');
+  const [hidden, setHidden] = useState(true);
+  return (
+    <form
+      className="wifi-other"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ssid) onJoin(ssid, pw, hidden);
+      }}
+    >
+      <input type="text" autoFocus spellCheck={false} maxLength={32} placeholder="Network name (SSID)" value={ssid} onChange={(e) => setSsid(e.target.value)} />
+      <input type="password" autoComplete="off" placeholder="Password (leave empty for an open network)" value={pw} onChange={(e) => setPw(e.target.value)} />
+      <label className="check">
+        <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Hidden network (doesn’t broadcast its name)
+      </label>
+      {error && <p className="wifi-error">{error}</p>}
+      <div className="btn-group">
+        <button type="submit" className="small" disabled={!ssid || busy}>
+          {busy ? 'Joining…' : 'Join'}
+        </button>
+        <button type="button" className="ghost small" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 
