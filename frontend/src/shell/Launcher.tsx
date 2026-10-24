@@ -95,7 +95,11 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
   }, []);
 
   useEffect(() => setPage(0), [needle]);
@@ -164,6 +168,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const onSwipeDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (needle || e.button !== 0 || !e.isPrimary) return;
     // A mouse on an icon drags the icon; a finger, or the empty space between icons, swipes.
+    if ((e.target as Element).closest('input, .search, .launcher-dots, .context-menu, .folder-backdrop')) return;
     const onIcon = !!(e.target as Element).closest('.launcher-app, .store-tile');
     if (e.pointerType === 'mouse' && onIcon) return;
     swipe.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp, on: false, empty: !onIcon };
@@ -354,6 +359,12 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         className="launcher-panel"
         ref={panel}
         onPointerDownCapture={(e) => jiggle && !(e.target as Element).closest('.store-tile, .dialog, .dialog-backdrop') && setJiggle(false)}
+        // Swipes start anywhere on the sheet: between icons, around the grid, by the dots.
+        onPointerDown={onSwipeDown}
+        onPointerMove={onSwipeMove}
+        onPointerUp={onSwipeEnd}
+        onPointerCancel={onSwipeEnd}
+        onWheel={onWheel}
       >
         <label className="search">
           <Icon name="search" size={18} />
@@ -376,11 +387,6 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           ref={pagesRef}
           className={`launcher-pages ${needle ? 'searching' : ''}`}
           data-drop="launchpad"
-          onPointerDown={onSwipeDown}
-          onPointerMove={onSwipeMove}
-          onPointerUp={onSwipeEnd}
-          onPointerCancel={onSwipeEnd}
-          onWheel={onWheel}
           onScroll={(e) => {
             // Focus moving to an icon on another page must not scroll the strip itself.
             if (!needle) e.currentTarget.scrollLeft = 0;
