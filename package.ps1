@@ -35,7 +35,7 @@ foreach ($t in $Targets) {
 NoCapOS $Version for Linux ($label)
 
 Install (recommended): NoCapOS runs as root and manages this server -
-Linux users, network, power, storage, a root terminal and one-click
+Linux users, network, power, storage, a host terminal and one-click
 Docker apps (Docker is installed if missing):
     sudo bash install.sh
 

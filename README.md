@@ -43,7 +43,11 @@ curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/unins
 ```
 
 Add `-s -- --purge` to also delete accounts, settings and keys, and `--remove-apps` to remove App Store
-apps with their data. It also removes NoCapOS's Samba shares and network-drive mounts.
+apps with their data. It also removes NoCapOS's Samba shares, network-drive mounts and the Samba
+accounts it made (with `--purge`, also the login-less file-sharing accounts it created; real Linux
+users are never deleted). Piping from curl runs the download unchecked: to verify it first, download
+`nocapos-linux-<arch>.tar.gz` and `SHA256SUMS`, run `sha256sum -c SHA256SUMS --ignore-missing`,
+extract it and run `sudo bash install.sh --uninstall`.
 Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash nocapos-*/install.sh`.
 
 ## What you get
@@ -153,6 +157,24 @@ deploy/             installer, systemd unit, Docker Compose files
   to delete it.
 - File links are short-lived tickets; files that could run script (HTML, SVG) always download instead
   of rendering.
+- Signing in with two-factor authentication on takes the password, then a code from the
+  authenticator app; each code works once. After 10 wrong passwords or codes in a row an account
+  waits 15 minutes, whichever address the attempts come from.
+- There is no password reset from the sign-in screen. An administrator resets passwords in
+  Settings → Users & Groups. If you are the only administrator and are locked out, run on the
+  server itself:
+
+  ```
+  sudo nocapos reset-password <user>
+  ```
+
+  It prints a temporary password, turns two-factor authentication off for that account and ends its
+  sessions. Restart the service (`systemctl restart nocapos`) to lift a lockout right away.
+- Everyone is signed out when the machine restarts.
+- The Terminal's host shell runs as your own Linux account (use `sudo` for administration);
+  administrators can open a root shell from the Terminal after re-entering their password.
+- Choosing who can use an App Store app controls who sees it in NoCapOS, not network access to the
+  app's own port.
 
 ## About the developer
 
