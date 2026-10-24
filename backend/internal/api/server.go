@@ -207,7 +207,7 @@ func (s *Server) Handler() http.Handler {
 	// Everyone may list the installed apps they're allowed to use (filtered).
 	mux.Handle("GET /api/v1/appstore", s.authed(s.appstoreList))
 	mux.Handle("GET /api/v1/appstore/access", s.admin(s.appAccessList))
-	mux.Handle("PUT /api/v1/appstore/access/{id}", s.admin(s.appAccessSet))
+	mux.Handle("PUT /api/v1/appstore/{id}/access", s.admin(s.appAccessSet))
 	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
 	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
 
