@@ -151,6 +151,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/backup", s.admin(s.systemBackup))
 	mux.Handle("GET /api/v1/system/logs", s.admin(s.systemLogs))
 	mux.Handle("GET /api/v1/system/update", s.admin(s.systemUpdate))
+	mux.Handle("GET /api/v1/system/update/run", s.admin(s.systemUpdateRunStatus))
+	mux.Handle("POST /api/v1/system/update/run", s.admin(s.systemUpdateRun))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))
