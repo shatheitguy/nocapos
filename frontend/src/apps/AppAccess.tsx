@@ -26,6 +26,10 @@ export function WhoCanUse({ app, onChanged }: { app: StoreApp; onChanged: () => 
   return (
     <section>
       <h3 className="as-h3">Who can use it</h3>
+      <p className="muted small">
+        This decides who sees and opens {app.name} in NoCapOS. It doesn’t block network access: anyone who can reach this
+        machine can still open the app’s own port directly, so use the app’s own sign-in for anything private.
+      </p>
       <div className="ucard ulist">
         <label className="urow">
           <span className="urow-text">

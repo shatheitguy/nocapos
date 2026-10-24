@@ -4,6 +4,8 @@ import { Icon, type IconName } from './Icon';
 
 export interface MenuItem {
   label: string;
+  /** A one-line explanation under the label (where the menu has room). */
+  hint?: string;
   icon?: IconName;
   danger?: boolean;
   disabled?: boolean;
@@ -63,6 +65,7 @@ export function ContextMenu({ x, y, items, onClose, above = false }: { x: number
           type="button"
           role="menuitem"
           className={`context-item ${it.danger ? 'danger' : ''}`}
+          title={it.hint}
           disabled={it.disabled}
           onClick={() => {
             if (it.disabled) return;

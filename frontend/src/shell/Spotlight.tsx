@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { openStoreApp, storeApi, type StoreApp } from '../api/appstore';
-import { api, logout } from '../api/client';
+import { api } from '../api/client';
+import { logOutClean } from '../lib/signOut';
 import { fileKind } from '../api/files';
 import { openApp, visibleApps } from '../apps/meta';
 import { SETTINGS_PAGES } from '../apps/settingsPages';
@@ -149,7 +150,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
     const prefs = usePrefs.getState();
     const actions: { id: string; title: string; words: string; icon: IconName; admin?: boolean; run: () => void }[] = [
       { id: 'lock', title: 'Lock Screen', words: 'lock away', icon: 'lock', run: onLock },
-      { id: 'logout', title: 'Sign Out', words: 'log out logout sign out exit', icon: 'logout', run: () => void logout() },
+      { id: 'logout', title: 'Log Out', words: 'log out logout sign out exit close all windows', icon: 'logout', run: () => void logOutClean() },
       {
         id: 'theme',
         title: prefs.theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode',

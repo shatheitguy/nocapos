@@ -51,6 +51,9 @@ interface WM {
 
 let layoutKey: string | null = null;
 
+/** Where a person's window layout is saved in this browser. */
+export const layoutKeyFor = (userId: string) => `alfa.layout.${userId}`;
+
 // Moves and resizes call this on every pointermove, so the write is batched.
 function persist(windows: WinState[]) {
   if (!layoutKey) return;
@@ -143,7 +146,7 @@ export const useWM = create<WM>((set, get) => {
 
     restoreLayout: (userId) => {
       flushSaves();
-      layoutKey = `alfa.layout.${userId}`;
+      layoutKey = layoutKeyFor(userId);
       let saved: WinState[] = [];
       try {
         saved = JSON.parse(localStorage.getItem(layoutKey) ?? '[]') as WinState[];

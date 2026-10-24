@@ -153,11 +153,41 @@ export async function setupRequired(): Promise<boolean> {
   return r.ok && r.data.setup_required;
 }
 
-export async function login(username: string, password: string): Promise<string | null> {
-  const r = await raw<Session>('/api/v1/auth/login', { method: 'POST', auth: false, body: { username, password } });
-  if (!r.ok) return r.error ?? 'Sign-in failed';
+/** What the password step returns: signed in, an error, or (2FA) a code is needed. */
+export type LoginResult = { ok: true } | { ok: false; error: string } | { ok: false; mfaToken: string };
+
+interface MFAChallenge {
+  mfa_required: true;
+  mfa_token: string;
+  expires_at: string;
+}
+
+/**
+ * Step one: the password. On an account with two-factor authentication a
+ * right password doesn't sign in yet; it returns a short-lived token to send
+ * back with the code (loginCode).
+ */
+export async function login(username: string, password: string): Promise<LoginResult> {
+  const r = await raw<Session | MFAChallenge>('/api/v1/auth/login', { method: 'POST', auth: false, body: { username, password } });
+  if (!r.ok) return { ok: false, error: r.error ?? 'Sign-in failed' };
+  if ('mfa_required' in r.data && r.data.mfa_required) return { ok: false, mfaToken: r.data.mfa_token };
+  setSession(r.data as Session);
+  return { ok: true };
+}
+
+/**
+ * Step two on a 2FA account: the code from the authenticator app. expired
+ * means start again from the password (the sign-in timed out or the account
+ * is locked for a while).
+ */
+export async function loginCode(mfaToken: string, code: string): Promise<{ error?: string; expired?: boolean }> {
+  const r = await raw<Session>('/api/v1/auth/login/totp', { method: 'POST', auth: false, body: { mfa_token: mfaToken, code } });
+  if (!r.ok) {
+    const kind = (r.data as unknown as { error?: { code?: string } } | null)?.error?.code;
+    return { error: r.error ?? 'Sign-in failed', expired: kind === 'mfa_expired' || kind === 'locked' };
+  }
   setSession(r.data);
-  return null;
+  return {};
 }
 
 export async function setup(setupToken: string, username: string, password: string): Promise<string | null> {
@@ -171,6 +201,10 @@ export async function setup(setupToken: string, username: string, password: stri
   return null;
 }
 
+/**
+ * Ends the session on the server (both Lock Screen and Log Out do; Log Out
+ * also clears the windows, see lib/signOut).
+ */
 export async function logout(): Promise<void> {
   await raw('/api/v1/auth/logout', { method: 'POST', headers: { 'X-Alfa-Request': '1' } });
   clearSession();

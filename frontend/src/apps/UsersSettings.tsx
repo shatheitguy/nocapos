@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { removeAvatar, uploadAvatar, useAvatar } from '../lib/avatar';
 import { UserAvatar } from '../components/UserAvatar';
-import { getUser, logout } from '../api/client';
+import { getUser } from '../api/client';
+import { logOutClean } from '../lib/signOut';
 import { usersApi, type PeopleList, type Person } from '../api/users';
 import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
@@ -75,9 +76,9 @@ export function YourAccount() {
           Close windows
         </button>
       </Row>
-      <Row label="Sign out" hint="Sessions last up to 30 days; signing out ends this one on the server right away">
-        <button type="button" className="ghost small danger" onClick={() => void logout()}>
-          <Icon name="logout" size={13} /> Sign out
+      <Row label="Log out" hint="Closes all your windows and ends your session on the server right away">
+        <button type="button" className="ghost small danger" onClick={() => void logOutClean()}>
+          <Icon name="logout" size={13} /> Log out
         </button>
       </Row>
     </Section>
