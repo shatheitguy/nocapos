@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fmtGiB,
   fmtMiB,
@@ -34,8 +34,23 @@ type Modal = { kind: 'new' } | { kind: 'delete'; vm: VM } | { kind: 'clone'; vm:
 
 const NET_LABEL: Record<NetMode, string> = { nat: 'Private (NAT)', bridge: 'Bridge', direct: 'Direct', none: 'No network' };
 
+/** A machine's identity: its UUID, or its name if libvirt didn't report one. */
+const vmId = (v: VM) => v.uuid || `name:${v.name}`;
+
+/** One entry per machine, whatever the list from the server looks like. */
+function uniqueVms(list: VM[]): VM[] {
+  const seen = new Set<string>();
+  return list.filter((v) => {
+    const id = vmId(v);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** One screen window per machine: opening it again brings the same window forward. */
 export function openScreen(v: VM) {
-  openApp('vmscreen', { title: `${v.name} — Virtual Desk`, props: { vm: v.name }, key: `vmscreen:${v.uuid}` });
+  openApp('vmscreen', { title: `${v.name} — Virtual Desk`, props: { vm: v.name }, key: `vmscreen:${vmId(v)}` });
 }
 
 const diskTotal = (v: VM) => v.disks.reduce((a, d) => a + d.size, 0);
@@ -51,8 +66,12 @@ export function VirtualDesk({ win }: { win: WinState }) {
   const [installing, setInstalling] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
 
+  // Polls can overlap on a slow host; only the newest answer is used.
+  const seq = useRef(0);
   const load = useCallback(async () => {
+    const n = ++seq.current;
     const st = await vmApi.status();
+    if (n !== seq.current) return;
     if (!st.ok) {
       setError(st.error ?? 'Couldn’t reach NoCapOS');
       setLoaded(true);
@@ -64,8 +83,9 @@ export function VirtualDesk({ win }: { win: WinState }) {
       return;
     }
     const l = await vmApi.list();
+    if (n !== seq.current) return;
     if (l.ok) {
-      setVms(l.data.vms);
+      setVms(uniqueVms(l.data.vms ?? []));
       setError(null);
     } else setError(l.error ?? 'Couldn’t list the machines');
     setLoaded(true);
@@ -157,7 +177,7 @@ export function VirtualDesk({ win }: { win: WinState }) {
         </button>
         {vms.length > 0 && <span className="section-label st-side-label">Machines</span>}
         {vms.map((v) => (
-          <button key={v.uuid} type="button" className={`vd-side-vm ${current?.uuid === v.uuid ? 'on' : ''}`} onClick={() => setSelected(v.name)} title={v.name}>
+          <button key={vmId(v)} type="button" className={`vd-side-vm ${current && vmId(current) === vmId(v) ? 'on' : ''}`} onClick={() => setSelected(v.name)} title={v.name}>
             <span className={`vd-dot ${v.state}`} />
             <span className="st-nav-label">{v.name}</span>
           </button>
@@ -175,7 +195,7 @@ export function VirtualDesk({ win }: { win: WinState }) {
           </div>
         )}
         {current ? (
-          <VmPage key={current.uuid} vm={current} status={status!} usage={stats[current.name]} acting={acting} onPower={(a) => void power(current, a)}
+          <VmPage key={vmId(current)} vm={current} status={status!} usage={stats[current.name]} acting={acting} onPower={(a) => void power(current, a)}
             onBack={() => setSelected(null)} onChanged={() => void load()}
             onDelete={() => setModal({ kind: 'delete', vm: current })} onClone={() => setModal({ kind: 'clone', vm: current })}
             onRename={() => setModal({ kind: 'rename', vm: current })} />
@@ -325,7 +345,7 @@ function AllMachines({ vms, stats, status, acting, onOpen, onPower, onNew, insta
           {vms.map((v) => {
             const u = stats[v.name];
             return (
-              <div key={v.uuid} className="ucard vd-card" role="button" tabIndex={0} onClick={() => onOpen(v)}
+              <div key={vmId(v)} className="ucard vd-card" role="button" tabIndex={0} onClick={() => onOpen(v)}
                 onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onOpen(v)}>
                 <div className="vd-card-head">
                   <OsBadge os={v.os} size={44} />
