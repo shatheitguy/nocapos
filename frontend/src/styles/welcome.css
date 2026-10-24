@@ -1,0 +1,173 @@
+/* ==========================================================================
+   First-start welcome: a frosted full-screen sheet over the desktop, in the
+   current theme's colors. Loaded with the welcome itself.
+   ========================================================================== */
+
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 100004;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: color-mix(in srgb, var(--bg) 35%, transparent);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  animation: fade 0.25s ease-out;
+}
+.welcome-card {
+  width: min(760px, 100%);
+  max-height: min(720px, calc(100dvh - 48px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 28px;
+  color: var(--text);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-win);
+  backdrop-filter: blur(40px) saturate(1.6);
+  -webkit-backdrop-filter: blur(40px) saturate(1.6);
+  overflow: hidden;
+  animation: welcome-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes welcome-in { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
+:root[data-ui='glass'] .welcome-card { background: rgba(24, 25, 30, 0.72); border-color: rgba(255, 255, 255, 0.12); }
+:root[data-ui='cyberdeck'] .welcome-card { border-radius: 6px; }
+:root[data-solid] .welcome { background: var(--bg); }
+
+/* ---- progress ---- */
+.welcome-top { display: flex; align-items: center; gap: 12px; padding: 18px 22px 0; }
+.welcome-steps { flex: 1; min-width: 0; display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.welcome-steps li { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--muted); }
+.welcome-step-dot { height: 4px; border-radius: 4px; background: var(--track); transition: background 0.3s; }
+.welcome-steps li.done .welcome-step-dot { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+.welcome-steps li.on .welcome-step-dot { background: var(--accent); }
+.welcome-steps li.on { color: var(--text); font-weight: 600; }
+.welcome-step-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-skip { flex: none; }
+
+/* ---- body ---- */
+.welcome-body { flex: 1; min-height: 0; overflow: auto; padding: 22px 28px; animation: welcome-step 0.3s ease-out; }
+@keyframes welcome-step { from { opacity: 0; transform: translateX(12px); } }
+.welcome-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 24px 8px 8px; }
+.welcome-hero h1 { margin: 6px 0 0; font-size: clamp(26px, 4.4vw, 38px); font-weight: 700; letter-spacing: -0.03em; }
+.welcome-hero p { margin: 0; max-width: 480px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.welcome-logo { filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.35)); animation: welcome-logo 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes welcome-logo { from { opacity: 0; transform: scale(0.7) rotate(-8deg); } }
+.welcome-check { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--ok); box-shadow: 0 10px 34px color-mix(in srgb, var(--ok) 45%, transparent); animation: welcome-logo 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+.welcome-step { display: flex; flex-direction: column; gap: 14px; }
+.welcome-step h2 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.welcome-step-icon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.welcome-text { margin: -6px 0 0; color: var(--muted); line-height: 1.5; max-width: 560px; }
+.welcome-note { margin: 0; }
+.welcome-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.welcome-label { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.welcome-field.settings-card { padding: 0; }
+.welcome-field .wp-strip { max-width: 100%; }
+.welcome-rows { display: flex; flex-direction: column; border-radius: 16px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 1px solid var(--border); }
+.welcome-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-width: 0; flex-wrap: wrap; }
+.welcome-row + .welcome-row { border-top: 1px solid var(--border); }
+.welcome-row .welcome-label { min-width: 110px; }
+.welcome-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-grow, .welcome-host { flex: 1; }
+.welcome-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.welcome-actions button { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---- footer ---- */
+.welcome-foot { display: flex; align-items: center; gap: 10px; padding: 14px 22px 20px; border-top: 1px solid var(--border); }
+.welcome-next { min-width: 140px; }
+
+/* ---- stepped aside: a pill to come back ---- */
+.welcome-resume {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--res-top, 0px) + 14px);
+  transform: translateX(-50%);
+  z-index: 100004;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  font-size: 13px;
+  white-space: nowrap;
+  animation: fade 0.2s ease-out;
+}
+
+/* ---- firewall illustration ---- */
+.fw {
+  position: relative;
+  height: 130px;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--bad) 8%, transparent), transparent 45%, transparent 55%, color-mix(in srgb, var(--ok) 8%, transparent)),
+    color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px solid var(--border);
+}
+.fw-side { position: absolute; bottom: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.fw-out { left: 12px; }
+.fw-in { right: 12px; }
+.fw-wall {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 9px);
+  width: 18px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 11px, rgba(0, 0, 0, 0.25) 11px 13px),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 85%, #fff), var(--accent));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.fw-wall svg { background: var(--accent); border-radius: 50%; padding: 3px; box-sizing: content-box; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.fw-packet { position: absolute; left: 4%; width: 12px; height: 12px; margin-top: -6px; border-radius: 4px; animation: 2.8s linear var(--d, 0s) infinite both; }
+.fw-packet.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation-name: fw-pass; }
+.fw-packet.bad { background: var(--bad); box-shadow: 0 0 10px var(--bad); animation-name: fw-block; }
+@keyframes fw-pass {
+  0% { left: 4%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: 92%; opacity: 0; }
+}
+@keyframes fw-block {
+  0% { left: 4%; opacity: 0; transform: none; }
+  10% { opacity: 1; }
+  44% { left: calc(50% - 22px); transform: none; opacity: 1; }
+  50% { left: calc(50% - 30px); transform: rotate(45deg) scale(1.15); }
+  70% { left: calc(50% - 34px); transform: rotate(45deg) scale(0.6); opacity: 0; }
+  100% { left: calc(50% - 34px); opacity: 0; }
+}
+/* Reduced motion: a still picture of the same thing. */
+:root[data-reduce-motion] .fw-packet { animation: none; opacity: 1; }
+:root[data-reduce-motion] .fw-packet.ok { left: 78%; }
+:root[data-reduce-motion] .fw-packet.bad { left: calc(50% - 28px); transform: rotate(45deg); }
+:root[data-reduce-motion] :is(.welcome, .welcome-card, .welcome-body, .welcome-logo, .welcome-check) { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .fw-packet { animation: none; opacity: 1; }
+  .fw-packet.ok { left: 78%; }
+  .fw-packet.bad { left: calc(50% - 28px); transform: rotate(45deg); }
+  .welcome, .welcome-card, .welcome-body, .welcome-logo, .welcome-check { animation: none; }
+}
+
+/* ---- phones: the sheet fills the screen ---- */
+@media (max-width: 640px) {
+  .welcome { padding: 0; }
+  .welcome-card { width: 100%; height: 100dvh; max-height: none; border-radius: 0; border: 0; }
+  .welcome-top { padding: 14px 16px 0; }
+  .welcome-step-label { display: none; }
+  .welcome-body { padding: 18px 16px; }
+  .welcome-foot { padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .welcome-next { min-width: 0; }
+  .welcome-row .welcome-label { min-width: 0; width: 100%; }
+  .welcome-resume { top: 10px; }
+}
