@@ -71,20 +71,21 @@ func TestWiFiNetworks(t *testing.T) {
 
 func TestWiFiConnectArgs(t *testing.T) {
 	cases := []struct {
-		j    WiFiJoin
-		want []string
+		j          WiFiJoin
+		passwdFile string
+		want       []string
 	}{
-		{WiFiJoin{SSID: "Office", Password: "s3cret-pass", Device: "wlan0"},
-			[]string{"--wait", "45", "device", "wifi", "connect", "Office", "password", "s3cret-pass", "ifname", "wlan0"}},
+		{WiFiJoin{SSID: "Office", Password: "s3cret-pass", Device: "wlan0"}, "/tmp/nocap-wifi-1",
+			[]string{"--wait", "45", "device", "wifi", "connect", "Office", "passwd-file", "/tmp/nocap-wifi-1", "ifname", "wlan0"}},
 		// Spaces and quotes stay inside one argument: no shell, no escaping.
-		{WiFiJoin{SSID: `Joe's "Fast" Wi-Fi`, Password: `p@ss word"`},
-			[]string{"--wait", "45", "device", "wifi", "connect", `Joe's "Fast" Wi-Fi`, "password", `p@ss word"`}},
-		{WiFiJoin{SSID: "Hidden Lab", Password: "abcdefgh", Hidden: true, Device: "wlp2s0"},
-			[]string{"--wait", "45", "device", "wifi", "connect", "Hidden Lab", "password", "abcdefgh", "ifname", "wlp2s0", "hidden", "yes"}},
-		{WiFiJoin{SSID: "Cafe Free"}, []string{"--wait", "45", "device", "wifi", "connect", "Cafe Free"}},
+		{WiFiJoin{SSID: `Joe's "Fast" Wi-Fi`, Password: `p@ss word"`}, "/tmp/nocap-wifi-2",
+			[]string{"--wait", "45", "device", "wifi", "connect", `Joe's "Fast" Wi-Fi`, "passwd-file", "/tmp/nocap-wifi-2"}},
+		{WiFiJoin{SSID: "Hidden Lab", Password: "abcdefgh", Hidden: true, Device: "wlp2s0"}, "/tmp/nocap-wifi-3",
+			[]string{"--wait", "45", "device", "wifi", "connect", "Hidden Lab", "passwd-file", "/tmp/nocap-wifi-3", "ifname", "wlp2s0", "hidden", "yes"}},
+		{WiFiJoin{SSID: "Cafe Free"}, "", []string{"--wait", "45", "device", "wifi", "connect", "Cafe Free"}},
 	}
 	for _, c := range cases {
-		if got := wifiConnectArgs(c.j); strings.Join(got, "|") != strings.Join(c.want, "|") {
+		if got := wifiConnectArgs(c.j, c.passwdFile); strings.Join(got, "|") != strings.Join(c.want, "|") {
 			t.Errorf("%+v:\n got %q\nwant %q", c.j, got, c.want)
 		}
 	}
@@ -92,6 +93,43 @@ func TestWiFiConnectArgs(t *testing.T) {
 		if bad.Validate() == nil {
 			t.Errorf("%+v accepted", bad)
 		}
+	}
+}
+
+// The password must never show up as a command argument, where `ps` or
+// /proc/<pid>/cmdline would expose it to any other local user.
+func TestWiFiConnectKeepsPasswordOffCommandLine(t *testing.T) {
+	s := &scriptNM{out: map[string]string{
+		"nmcli -t -f DEVICE,TYPE device":             "wlan0:wifi",
+		"nmcli -t -f NAME,UUID,TYPE connection show": "",
+	}}
+	old, oldCan := runCmd, canControl
+	runCmd, canControl = s.run, func() error { return nil }
+	t.Cleanup(func() { runCmd, canControl = old, oldCan })
+
+	const secret = "s3cret-pass-off-argv"
+	if err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office", Password: secret}); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range s.calls {
+		if strings.Contains(call, secret) {
+			t.Fatalf("password appeared in a command line: %q", call)
+		}
+	}
+	var sawPasswdFile bool
+	for _, call := range s.calls {
+		if !strings.Contains(call, "passwd-file") {
+			continue
+		}
+		sawPasswdFile = true
+		i := strings.Index(call, "passwd-file ") + len("passwd-file ")
+		path := strings.Fields(call[i:])[0]
+		if _, err := os.Stat(path); err == nil {
+			t.Fatalf("passwd-file %s was not cleaned up", path)
+		}
+	}
+	if !sawPasswdFile {
+		t.Fatal("expected a passwd-file argument")
 	}
 }
 
@@ -132,10 +170,13 @@ func TestWiFiConnectReplacesStaleProfile(t *testing.T) {
 	}
 	joined := strings.Join(s.calls, "\n")
 	for _, want := range []string{"nmcli connection delete uuid u-1", "nmcli connection delete uuid u-2",
-		"nmcli --wait 45 device wifi connect Office password new-pass-1 ifname wlan0"} {
+		"nmcli --wait 45 device wifi connect Office passwd-file", "ifname wlan0"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}
+	}
+	if strings.Contains(joined, "new-pass-1") {
+		t.Errorf("password appeared in a command line:\n%s", joined)
 	}
 	if strings.Contains(joined, "u-3") || strings.Contains(joined, "u-4") {
 		t.Errorf("deleted another network's profile:\n%s", joined)
