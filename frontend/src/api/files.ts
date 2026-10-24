@@ -74,6 +74,7 @@ export const fileApi = {
   favorites: () => api<{ favorites: Favorite[] }>('/api/v1/files/favorites'),
   setFavorites: (favorites: Favorite[]) => api<{ favorites: Favorite[] }>('/api/v1/files/favorites', { method: 'PUT', body: { favorites } }),
   external: () => api<ExternalDrive[]>('/api/v1/files/external'),
+  eject: (path: string) => api<{ name: string; powered_off: boolean }>('/api/v1/files/external/eject', { method: 'POST', body: { path } }),
   compress: (root: string, paths: string[], dest: string, name: string) =>
     api<TransferJob>('/api/v1/files/compress', { method: 'POST', body: { root, paths, dest, name } }),
   extract: (root: string, path: string, dest: string) => api<TransferJob>('/api/v1/files/extract', { method: 'POST', body: { root, paths: [path], dest } }),
@@ -101,8 +102,13 @@ export interface ExternalDrive {
   root: string;
   path: string;
   device: string;
+  fs_type?: string;
   total: number;
   free: number;
+  /** A USB drive or card: it's powered off after ejecting. */
+  removable?: boolean;
+  /** NoCapOS can unmount it (native Linux). */
+  ejectable?: boolean;
 }
 
 /** Archives Files can extract. */

@@ -18,6 +18,8 @@ export interface SharedFolder {
   recycle: boolean;
   network: boolean;
   read_only: boolean;
+  /** Anyone on the network, no password: '' off, 'ro' read only, 'rw' read & write. */
+  guest: '' | 'ro' | 'rw';
   missing?: boolean;
   holds_homes?: boolean;
   /** user name → rw | ro (people not listed have no access). */
@@ -53,6 +55,7 @@ export interface FolderInput {
   recycle?: boolean;
   network?: boolean;
   read_only?: boolean;
+  guest?: '' | 'ro' | 'rw';
 }
 
 export interface PersonSpaces {

@@ -131,6 +131,21 @@ func (s *Server) netExports(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"exports": exports})
 }
 
+// netDiscover looks for SMB servers on the local network (≤ 5 seconds).
+func (s *Server) netDiscover(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.NetDrives.Discover(r.Context()))
+}
+
+// netServerShares lists one SMB server's shared folders, as a guest.
+func (s *Server) netServerShares(w http.ResponseWriter, r *http.Request) {
+	shares, err := s.NetDrives.Shares(r.Context(), r.URL.Query().Get("host"))
+	if err != nil {
+		s.netError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
 func (s *Server) sharePassword(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Password string `json:"password"`
@@ -177,6 +192,7 @@ func (s *Server) shareAdd(w http.ResponseWriter, r *http.Request) {
 		Root     string `json:"root"`
 		Path     string `json:"path"`
 		ReadOnly bool   `json:"read_only"`
+		Guest    string `json:"guest"` // "" | ro | rw
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -186,6 +202,15 @@ func (s *Server) shareAdd(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.netError(w, err)
 		return
+	}
+	if req.Guest != "" {
+		err := s.NetDrives.SetShareGuest(r.Context(), sh.ID, req.Guest)
+		s.audit(r, userFrom(r.Context()).ID, "sharing.guest", sh.Name, err == nil, "guest="+req.Guest+" "+errText(err))
+		if err != nil {
+			s.netError(w, err)
+			return
+		}
+		sh.Guest = req.Guest
 	}
 	writeJSON(w, http.StatusCreated, sh)
 }

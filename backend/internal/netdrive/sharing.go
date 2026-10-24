@@ -63,7 +63,29 @@ type Share struct {
 	Root     string `json:"root"`
 	Path     string `json:"path"`
 	ReadOnly bool   `json:"read_only"`
+	Guest    string `json:"guest,omitempty"`   // open without a password: ro | rw
 	Missing  bool   `json:"missing,omitempty"` // the folder or its location is gone
+}
+
+// guestMode is what a guest may do in a folder: "" (no entry), read only,
+// or read and write (never in a folder that's read only for everyone).
+func guestMode(f store.SharedFolder) string {
+	switch {
+	case f.Guest == "":
+		return ""
+	case f.Guest == store.GuestRW && !f.ReadOnly:
+		return store.GuestRW
+	}
+	return store.GuestRO
+}
+
+// SetShareGuest turns guest access (no password) on ("ro" / "rw") or off ("").
+func (m *Manager) SetShareGuest(ctx context.Context, id int64, guest string) error {
+	if m.spaces == nil {
+		return store.ErrNotFound
+	}
+	_, err := m.spaces.UpdateFolder(ctx, id, spaces.FolderInput{Guest: &guest})
+	return err
 }
 
 // Sharing is the sharing setup as the UI sees it.
@@ -94,7 +116,7 @@ func (m *Manager) Sharing(ctx context.Context) (Sharing, error) {
 	if m.spaces != nil {
 		out.PerUser = m.spaces.PerUserSharing()
 		for _, f := range m.spaces.Folders() {
-			out.Shares = append(out.Shares, Share{ID: f.ID, Name: f.Name, Root: f.Root, Path: f.Path, ReadOnly: f.ReadOnly, Missing: f.Missing})
+			out.Shares = append(out.Shares, Share{ID: f.ID, Name: f.Name, Root: f.Root, Path: f.Path, ReadOnly: f.ReadOnly, Guest: guestMode(f.SharedFolder), Missing: f.Missing})
 		}
 	}
 	return out, nil
@@ -208,6 +230,8 @@ type SambaShare struct {
 	Name, Comment, Path string
 	Valid, Read, Write  []string // user names
 	Browseable, Recycle bool
+	// Guest lets anyone in without a password: store.GuestRO or GuestRW.
+	Guest string
 }
 
 // SambaConfig is everything NoCapOS's Samba include file holds.
@@ -233,6 +257,14 @@ func RenderSamba(c SambaConfig) string {
 	for _, note := range c.Skipped {
 		fmt.Fprintf(&b, "# %s\n", oneLine(note))
 	}
+	for _, sh := range c.Shares {
+		if sh.Guest != "" {
+			// Unknown or empty user names become the guest, an unprivileged
+			// account; only shares marked "guest ok" let the guest in.
+			b.WriteString("\n[global]\n   map to guest = Bad User\n   guest account = nobody\n")
+			break
+		}
+	}
 	if c.Homes {
 		b.WriteString("\n[homes]\n")
 		b.WriteString("   comment = Home\n")
@@ -256,7 +288,14 @@ func RenderSamba(c SambaConfig) string {
 			fmt.Fprintf(&b, "   comment = %s\n", oneLine(sh.Comment))
 		}
 		fmt.Fprintf(&b, "   path = %s\n", filepath.ToSlash(sh.Path))
-		fmt.Fprintf(&b, "   valid users = %s\n", strings.Join(sh.Valid, " "))
+		if sh.Guest != "" {
+			// Open to anyone: no valid users list. People keep what they
+			// were given through the read and write lists.
+			b.WriteString("   guest ok = yes\n")
+		} else {
+			fmt.Fprintf(&b, "   valid users = %s\n", strings.Join(sh.Valid, " "))
+		}
+		// Never root, whoever asks — guest or named.
 		b.WriteString("   invalid users = root\n")
 		if len(sh.Read) > 0 {
 			fmt.Fprintf(&b, "   read list = %s\n", strings.Join(sh.Read, " "))
@@ -264,7 +303,7 @@ func RenderSamba(c SambaConfig) string {
 		if len(sh.Write) > 0 {
 			fmt.Fprintf(&b, "   write list = %s\n", strings.Join(sh.Write, " "))
 		}
-		b.WriteString("   read only = yes\n")
+		fmt.Fprintf(&b, "   read only = %s\n", yesNo(sh.Guest != store.GuestRW))
 		fmt.Fprintf(&b, "   browseable = %s\n", yesNo(sh.Browseable))
 		b.WriteString("   force user = root\n   force group = root\n")
 		b.WriteString("   create mask = 0664\n   directory mask = 0775\n")
@@ -323,7 +362,7 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 			c.Skipped = append(c.Skipped, f.Name+": its path can't be written in a Samba configuration")
 			continue
 		}
-		sh := SambaShare{Name: f.Name, Comment: f.Description, Path: f.FullPath, Browseable: f.Network, Recycle: f.Recycle}
+		sh := SambaShare{Name: f.Name, Comment: f.Description, Path: f.FullPath, Browseable: f.Network, Recycle: f.Recycle, Guest: guestMode(f.SharedFolder)}
 		names := make([]string, 0, len(f.Perms))
 		for name := range f.Perms {
 			names = append(names, name)
@@ -340,6 +379,10 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 				sh.Read = append(sh.Read, name)
 			}
 		}
+		if sh.Guest == store.GuestRW {
+			// Anyone may change it, so nobody signed in gets less.
+			sh.Write, sh.Read = append(sh.Write, sh.Read...), nil
+		}
 		if legacy {
 			sh.Valid = append(sh.Valid, ShareUser)
 			if f.ReadOnly {
@@ -348,7 +391,7 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 				sh.Write = append(sh.Write, ShareUser)
 			}
 		}
-		if len(sh.Valid) == 0 {
+		if len(sh.Valid) == 0 && sh.Guest == "" {
 			// An empty list would let any Samba user in.
 			c.Skipped = append(c.Skipped, f.Name+": nobody has access yet")
 			continue
