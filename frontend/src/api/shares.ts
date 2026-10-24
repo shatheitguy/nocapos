@@ -90,7 +90,7 @@ export const sharesApi = {
     api<void>(`${user(name)}/apps/${encodeURIComponent(app)}`, { method: 'PUT', body: { allowed } }),
 
   appRules: () => api<{ rules: Record<string, AppAccess> }>('/api/v1/appstore/access'),
-  setAppAccess: (app: string, a: AppAccess) => api<void>(`/api/v1/appstore/access/${encodeURIComponent(app)}`, { method: 'PUT', body: a }),
+  setAppAccess: (app: string, a: AppAccess) => api<void>(`/api/v1/appstore/${encodeURIComponent(app)}/access`, { method: 'PUT', body: a }),
 };
 
 export const PERM_LABEL: Record<Perm, string> = { rw: 'Read & write', ro: 'Read only', none: 'No access' };
