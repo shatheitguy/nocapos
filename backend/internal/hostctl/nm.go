@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -217,11 +218,14 @@ func validDevice(d string) bool {
 
 // wifiConnectArgs builds `nmcli device wifi connect`. NetworkManager works
 // out WPA/WPA2/WPA3 (SAE) or WEP from the scan; the SSID is one argument, so
-// spaces and quotes in it need no escaping.
-func wifiConnectArgs(j WiFiJoin) []string {
+// spaces and quotes in it need no escaping. The password itself never
+// appears here: it goes to nmcli through passwdFile (a private temp file),
+// never on the command line, where `ps` or /proc/<pid>/cmdline would show it
+// to any other local user for as long as the connect attempt runs.
+func wifiConnectArgs(j WiFiJoin, passwdFile string) []string {
 	args := []string{"--wait", strconv.Itoa(int(wifiConnectTimeout/time.Second) - 5), "device", "wifi", "connect", j.SSID}
-	if j.Password != "" {
-		args = append(args, "password", j.Password)
+	if passwdFile != "" {
+		args = append(args, "passwd-file", passwdFile)
 	}
 	if j.Device != "" {
 		args = append(args, "ifname", j.Device)
@@ -230,6 +234,25 @@ func wifiConnectArgs(j WiFiJoin) []string {
 		args = append(args, "hidden", "yes")
 	}
 	return args
+}
+
+// writeWifiSecret writes a private, single-use nmcli secrets file for
+// WiFiConnect's passwd-file. The caller removes it once nmcli is done.
+func writeWifiSecret(password string) (path string, err error) {
+	f, err := os.CreateTemp("", "nocap-wifi-*")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if err := f.Chmod(0o600); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	if _, err := f.WriteString("802-11-wireless-security.psk:" + password + "\n"); err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // wifiProfiles returns the UUIDs of saved Wi-Fi profiles for an SSID: named
@@ -299,9 +322,18 @@ func WiFiConnect(ctx context.Context, j WiFiJoin) error {
 	if j.Password != "" || j.Hidden {
 		deleteProfiles(ctx, wifiProfiles(ctx, j.SSID))
 	}
+	var passwdFile string
+	if j.Password != "" {
+		f, err := writeWifiSecret(j.Password)
+		if err != nil {
+			return err
+		}
+		passwdFile = f
+		defer os.Remove(passwdFile)
+	}
 	cctx, cancel := context.WithTimeout(ctx, wifiConnectTimeout)
 	defer cancel()
-	out, err := runCmd(cctx, "nmcli", wifiConnectArgs(j)...)
+	out, err := runCmd(cctx, "nmcli", wifiConnectArgs(j, passwdFile)...)
 	if err == nil {
 		return nil
 	}
