@@ -239,10 +239,7 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-ui='glass'] .sl-row.on .sl-row-text span { color: rgba(255, 255, 255, 0.6); }
 :root[data-ui='glass'] .sl-body, :root[data-ui='glass'] .sl-preview { border-color: rgba(255, 255, 255, 0.07); }
 
-/* ---------- installed apps: home grid, Launchpad section, wiggle mode ---------- */
-.home-apps { pointer-events: auto; margin-top: 4vh; position: relative; display: flex; flex-direction: column; align-items: center; text-shadow: none; }
-.home-done { position: absolute; top: -40px; right: 0; padding: 5px 16px; background: rgba(255, 255, 255, 0.92); color: #111; }
-.store-grid { display: grid; grid-template-columns: repeat(auto-fill, 96px); justify-content: center; gap: 18px 10px; width: min(640px, max(320px, 100vw - 780px)); }
+/* ---------- installed apps in Launchpad, wiggle mode ---------- */
 .store-tile { position: relative; display: flex; justify-content: center; }
 .store-tile-btn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; width: 96px; padding: 6px 2px; border-radius: 16px;
   color: #fff; font-size: 12.5px; font-weight: 500; text-align: center; -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
@@ -295,8 +292,11 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-solid] .nc-peek { background: color-mix(in srgb, var(--glass-strong) 85%, #000) !important; }
 
 /* ---------- Transparency slider ----------
-   Between full glass and solid, each panel's background moves from its own
-   glass opacity (--b) towards fully opaque as --clear goes from 1 to 0. */
+   The same scale in every theme: 100% is each panel's most see-through look
+   (its glass opacity, --b), and lower values move it towards fully opaque as
+   --clear goes from 1 to 0. 0% is [data-solid] above. Themes only choose the
+   tint; Classic's own panels are opaque by design, so without this 100% was
+   more solid than 95%. */
 :root { --tint: var(--surface); }
 :root[data-ui='glass'] { --tint: rgb(24, 25, 30); }
 :root[data-tuned] .window { --b: 0.66; }
@@ -305,8 +305,16 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root[data-tuned] :is(.toast, .update-ready, .nc-pill, .nc-round, .nb-x) { --b: 0.7; }
 :root[data-tuned] :is(.spotlight, .context-menu, .popover, .dialog, .nb.windows, .nc.windows) { --b: 0.8; }
 :root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
-  background: color-mix(in srgb, var(--tint) calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%), transparent) !important;
+  --a: calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%);
+  background: color-mix(in srgb, var(--tint) var(--a), transparent) !important;
 }
+/* Classic draws solid windows and dialogs: give the see-through ones a frosted
+   backdrop, and let the title bar follow the window. */
+:root[data-tuned][data-ui='classic'] :is(.window, .dialog) {
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+}
+:root[data-tuned][data-ui='classic'] .window .titlebar { background: color-mix(in srgb, var(--titlebar) var(--a), transparent); }
 
 /* Search fields are a pill with an icon and a bare input: the input inside
    must not draw its own glass box. */

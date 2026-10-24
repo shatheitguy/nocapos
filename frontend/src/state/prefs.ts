@@ -119,6 +119,9 @@ export interface PrefValues {
   screensaver: Screensaver;
   saverDelay: number; // minutes
   language: LanguageId;
+
+  welcomeDone: boolean; // the first-start welcome was finished or skipped
+  welcomeStep: number; // where the welcome was left, to pick up there
 }
 
 export const DEFAULT_PREFS: PrefValues = {
@@ -169,6 +172,9 @@ export const DEFAULT_PREFS: PrefValues = {
   screensaver: 'off',
   saverDelay: 5,
   language: 'en',
+
+  welcomeDone: false,
+  welcomeStep: 0,
 };
 
 /** The look-and-feel subset that "Reset personalization" restores. */
@@ -227,6 +233,9 @@ function claimLegacy(id: string) {
 
 let serverTimer = 0;
 
+/** Whether the signed-in person's prefs have come back from the server (or failed to). */
+export const usePrefsSynced = create<{ synced: boolean }>(() => ({ synced: false }));
+
 /** Send the person's prefs to the server, so they follow them to other browsers. */
 function syncLater() {
   if (!userId) return;
@@ -247,9 +256,12 @@ export function restorePrefs(id: string, isAdmin: boolean) {
   if (isAdmin) claimLegacy(id);
   userId = id;
   customWall = undefined;
+  usePrefsSynced.setState({ synced: false });
   usePrefs.setState({ ...DEFAULT_PREFS, ...load(userKey(KEY)) });
   void api<{ prefs: Record<string, unknown> | null }>('/api/v1/me/prefs').then((r) => {
-    if (!r.ok || userId !== id) return;
+    if (userId !== id) return;
+    usePrefsSynced.setState({ synced: true });
+    if (!r.ok) return;
     if (r.data.prefs) {
       usePrefs.setState({ ...DEFAULT_PREFS, ...sanitize(r.data.prefs) });
       writeStore(userKey(KEY), JSON.stringify(snapshot()));
@@ -265,6 +277,7 @@ export function resetPrefs() {
   flushSaves();
   window.clearTimeout(serverTimer);
   userId = null;
+  usePrefsSynced.setState({ synced: false });
   customWall = undefined;
   usePrefs.setState({ ...DEFAULT_PREFS, ...load(KEY) });
 }
@@ -272,7 +285,7 @@ export function resetPrefs() {
 function snapshot() {
   const s = usePrefs.getState();
   const values = Object.fromEntries((Object.keys(DEFAULT_PREFS) as (keyof PrefValues)[]).map((k) => [k, s[k]]));
-  return { ...values, brand1: true, glass1: true, look2: true };
+  return { ...values, brand1: true, glass1: true, look2: true, welcome1: true };
 }
 
 // Browser storage is a per-viewer convenience; it may be unavailable.
@@ -305,6 +318,8 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
       delete out.iconStyle;
       if (out.transparency === 100) delete out.transparency;
     }
+    // People who were using NoCapOS before the first-start welcome existed don't get it now.
+    if (!raw.welcome1 && Object.keys(raw).length > 0) out.welcomeDone = true;
     // Icon styles that no longer exist (older looks) fall back to the default.
     if (out.iconStyle && !ICON_STYLES.some((x) => x.id === out.iconStyle)) delete out.iconStyle;
     // Themes that no longer exist fall back to the default.
@@ -441,7 +456,7 @@ export function applyPrefs(p: PrefValues) {
   const clear = Math.min(100, Math.max(0, p.transparency));
   root.toggleAttribute('data-solid', clear === 0);
   root.dataset.icons = p.iconStyle;
-  root.toggleAttribute('data-tuned', clear > 0 && clear < 100);
+  root.toggleAttribute('data-tuned', clear > 0);
   root.style.setProperty('--clear', String(clear / 100));
   root.toggleAttribute('data-reduce-motion', p.reduceMotion);
   root.toggleAttribute('data-square', p.squareCorners);

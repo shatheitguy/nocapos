@@ -44,7 +44,7 @@ export const useDock = create<DockStore>((set, get) => {
   return {
     userId: null,
     pins: [...PINNED],
-    restore: (userId) => set({ userId, pins: load(userId) }),
+    restore: (userId) => set({ userId, pins: [...new Set(load(userId))] }),
     _reset: () => set({ userId: null, pins: [...PINNED] }),
     has: (id) => get().pins.includes(id),
     add: (id) => {

@@ -1,10 +1,9 @@
-import { useEffect, useRef, type PointerEvent as RPointerEvent } from 'react';
-import { appURL, openStoreApp, type StoreApp } from '../api/appstore';
-import { openApp } from '../apps/meta';
-import { getUser } from '../api/client';
+import { useEffect, useRef, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react';
+import type { StoreApp } from '../api/appstore';
 import { AppIcon } from '../components/AppTile';
 import { Icon } from '../components/Icon';
-import { uninstallStoreApp } from '../state/storeApps';
+import { pressApp } from '../state/appDrag';
+import { launchStoreApp, storeKey, uninstallStoreApp } from '../state/storeApps';
 
 const HOLD_MS = 500;
 
@@ -24,24 +23,27 @@ export function useWiggleEscape(jiggle: boolean, setJiggle: (on: boolean) => voi
 }
 
 /**
- * One installed App Store app. Click opens it; click and hold starts "wiggle"
- * mode, where installed apps show an ✕ to uninstall them.
+ * One installed App Store app in Launchpad. Click opens it; click and hold
+ * starts "wiggle" mode, where installed apps show an ✕ to uninstall them.
+ * Dragging it out puts a shortcut on the desktop.
  */
-export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, buttonClass = 'store-tile-btn' }: {
+export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, onMenu, buttonClass = 'store-tile-btn' }: {
   app: StoreApp;
   index: number;
   jiggle: boolean;
   setJiggle: (on: boolean) => void;
   size?: number;
   onOpened?: () => void;
+  onMenu?: (e: RMouseEvent, app: StoreApp) => void;
   buttonClass?: string;
 }) {
   const hold = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null);
   const job = app.job && !app.job.done ? app.job : null;
   const stopped = app.installed && app.installed.status !== 'running';
 
-  const down = (e: RPointerEvent) => {
+  const down = (e: RPointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return;
+    if (!jiggle && app.installed) pressApp(e, storeKey(app.id), 'launchpad', { touchHold: 350 });
     const h = { x: e.clientX, y: e.clientY, fired: false, timer: 0 };
     h.timer = window.setTimeout(() => {
       h.fired = true;
@@ -65,8 +67,7 @@ export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, 
     const held = hold.current?.fired;
     hold.current = null;
     if (held || jiggle) return;
-    if (app.installed && appURL(app)) openStoreApp(app);
-    else if (getUser()?.role === 'admin') openApp('appcenter', { props: { app: app.id } });
+    launchStoreApp(app);
     onOpened?.();
   };
 
@@ -81,7 +82,10 @@ export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, 
         onPointerUp={up}
         onPointerCancel={up}
         onClick={open}
-        onContextMenu={(e) => e.preventDefault()}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (!jiggle) onMenu?.(e, app);
+        }}
       >
         <span className="store-tile-icon">
           <AppIcon app={app} size={size} />
@@ -99,24 +103,6 @@ export function StoreTile({ app, index, jiggle, setJiggle, size = 64, onOpened, 
           <Icon name="close" size={11} />
         </button>
       )}
-    </div>
-  );
-}
-
-/** Installed apps as a phone-style grid (the Glass home screen). */
-export function StoreAppGrid({ apps, jiggle, setJiggle, size = 64, onOpened }: {
-  apps: StoreApp[];
-  jiggle: boolean;
-  setJiggle: (on: boolean) => void;
-  size?: number;
-  onOpened?: () => void;
-}) {
-  useWiggleEscape(jiggle, setJiggle);
-  return (
-    <div className="store-grid">
-      {apps.map((a, i) => (
-        <StoreTile key={a.id} app={a} index={i} jiggle={jiggle} setJiggle={setJiggle} size={size} onOpened={onOpened} />
-      ))}
     </div>
   );
 }
