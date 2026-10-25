@@ -21,6 +21,8 @@ for target in amd64 arm64 armv7; do
   echo "==> Building $target"
   (cd "$ROOT/backend" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=$arm \
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$stage/alfad" ./cmd/alfad)
+  (cd "$ROOT/backend" && CGO_ENABLED=0 GOOS=linux GOARCH=$arch GOARM=$arm \
+    go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$stage/cap" ./cmd/cap)
   cp "$ROOT/deploy/install.sh" "$ROOT/deploy/uninstall.sh" "$ROOT/deploy/nocapos.service" "$ROOT/deploy/docker-compose.yml" \
      "$ROOT/deploy/docker-compose.nvidia.yml" "$ROOT/deploy/Dockerfile.bundle" "$stage/"
   printf '%s' "$VERSION" >"$stage/VERSION"
