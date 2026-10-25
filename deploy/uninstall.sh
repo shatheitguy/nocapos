@@ -75,7 +75,7 @@ for unit in nocapos alfad; do
   fi
 done
 systemctl daemon-reload 2>/dev/null || true
-rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad
+rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad /usr/local/bin/cap
 
 # Docker mode: NoCapOS itself ran as a Compose stack.
 if [ -f "$PREFIX/docker-compose.yml" ] && has docker; then

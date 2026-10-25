@@ -140,7 +140,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
     fi
   done
   systemctl daemon-reload 2>/dev/null || true
-  rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad
+  rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad /usr/local/bin/cap
   if [ -f "$PREFIX/docker-compose.yml" ] && has docker; then
     info "Stopping the Docker stack"
     (cd "$PREFIX" && if [ "$PURGE" -eq 1 ]; then docker compose down -v; else docker compose down; fi) || warn "docker compose down failed"
@@ -595,6 +595,7 @@ install_native_mode() {
     info "Kept the previous version and a copy of the database for rollback"
   fi
   install -m 0755 "$BUNDLE_DIR/alfad" "$BIN"
+  [ -f "$BUNDLE_DIR/cap" ] && install -m 0755 "$BUNDLE_DIR/cap" /usr/local/bin/cap
 
   mkdir -p "$ETC" "$DATA"
   chmod 700 "$DATA"
@@ -635,7 +636,7 @@ EOF
   echo "   $NAME runs as root and can manage this server: Linux users (sign in with them), network, power,"
   echo "   storage and a host terminal — all admin-only and recorded in the audit log."
   echo "   Turn on two-factor sign-in under Settings → Security."
-  echo "   Manage:  systemctl status|restart nocapos · journalctl -u nocapos -f · settings in $ETC/nocapos.env"
+  echo "   Manage:  systemctl status|restart nocapos · cap update · cap logs -f · settings in $ETC/nocapos.env"
 }
 
 if [ "$MODE" = docker ]; then install_docker_mode; else install_native_mode; fi

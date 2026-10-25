@@ -25,6 +25,7 @@ foreach ($t in $Targets) {
     New-Item -ItemType Directory -Force "$stage\rootfs\data" | Out-Null
 
     Copy-Item "$root\backend\bin\alfad-$os-$label" "$stage\alfad"
+    Copy-Item "$root\backend\bin\cap-$os-$label" "$stage\cap"
     foreach ($f in "install.sh", "uninstall.sh", "nocapos.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
         Copy-Item "$root\deploy\$f" "$stage\$f"
     }
