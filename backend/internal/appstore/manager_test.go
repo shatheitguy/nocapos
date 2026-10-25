@@ -215,7 +215,10 @@ func TestCatalogLoads(t *testing.T) {
 		t.Fatalf("only %d apps", len(apps))
 	}
 	for _, a := range apps {
-		if a.Web == nil || a.Name == "" || a.Category == "" || len(a.Releases) == 0 {
+		// Web is nil for a deliberately headless app (e.g. a log watcher or a
+		// bouncer with no browser UI) — AppCenter.tsx already renders that
+		// case ("Runs in the background"), so it isn't an incomplete entry.
+		if a.Name == "" || a.Category == "" || len(a.Releases) == 0 {
 			t.Errorf("%s: incomplete entry", a.ID)
 		}
 	}
