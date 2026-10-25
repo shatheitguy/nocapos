@@ -811,6 +811,121 @@
         { "name": "app", "image": "privatebin/nginx-fpm-alpine:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "data", "path": "/srv/data" }] }
       ],
       "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "adguard-home",
+      "name": "AdGuard Home",
+      "tagline": "Network-wide ad and tracker blocking",
+      "description": "Block ads and trackers for every device on your network at the DNS level — no per-device apps or browser extensions needed.",
+      "category": "Network",
+      "developer": "AdGuard",
+      "website": "https://adguard.com/adguard-home",
+      "source": "https://github.com/AdguardTeam/AdGuardHome",
+      "icon": "shield",
+      "tile": ["#68bc71", "#2e6e37"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "app", "port": 3000 },
+      "first_run": "Finish the setup wizard on the first visit, then point your router's DNS at this server's IP address (DNS is published on port 53).",
+      "services": [
+        {
+          "name": "app",
+          "image": "adguard/adguardhome:latest",
+          "ports": [{ "container": 53, "host": 53 }, { "container": 53, "host": 53, "protocol": "udp" }, { "container": 3000 }],
+          "volumes": [{ "name": "work", "path": "/opt/adguardhome/work" }, { "name": "conf", "path": "/opt/adguardhome/conf" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "mariadb",
+      "name": "MariaDB",
+      "tagline": "A MySQL-compatible database server, with Adminer",
+      "description": "Run a standalone MariaDB server for your own apps and scripts, with Adminer's web interface to browse and query it.",
+      "category": "Developer",
+      "developer": "MariaDB Foundation",
+      "website": "https://mariadb.org",
+      "source": "https://github.com/MariaDB/server",
+      "icon": "database",
+      "tile": ["#003545", "#00273a"],
+      "version": "11.4",
+      "web": { "service": "adminer", "port": 8080 },
+      "first_run": "Open Adminer and sign in with server \"db\", username \"root\", and the password below.",
+      "credentials": { "username": "root", "password": "{{secret:root_password}}" },
+      "services": [
+        {
+          "name": "db",
+          "image": "mariadb:11.4",
+          "env": { "MARIADB_ROOT_PASSWORD": "{{secret:root_password}}" },
+          "volumes": [{ "name": "data", "path": "/var/lib/mysql" }]
+        },
+        { "name": "adminer", "image": "adminer:latest", "env": { "ADMINER_DEFAULT_SERVER": "db" }, "ports": [{ "container": 8080 }] }
+      ],
+      "releases": [{ "version": "11.4", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "crowdsec",
+      "name": "CrowdSec",
+      "tagline": "Detect and block malicious IPs automatically",
+      "description": "Watches your logs for brute-force attempts, scans and known attack patterns, and blocks the offending IPs — sharing (and benefiting from) threat intelligence across the whole CrowdSec community. It needs your own log files and a bouncer (like the MikroTik one below) to actually act on what it finds.",
+      "category": "Security",
+      "developer": "CrowdSec",
+      "website": "https://www.crowdsec.net",
+      "source": "https://github.com/crowdsecurity/crowdsec",
+      "icon": "shield",
+      "tile": ["#ff6d4d", "#b33d26"],
+      "version": "1",
+      "first_run": "CrowdSec has no browser dashboard. Open a Terminal and run \"docker exec -it <container> cscli bouncers add my-bouncer\" to get an API key for a bouncer, and \"cscli decisions list\" to see what it has blocked.",
+      "services": [
+        {
+          "name": "app",
+          "image": "crowdsecurity/crowdsec:latest",
+          "env": { "COLLECTIONS": "crowdsecurity/linux" },
+          "ports": [{ "container": 8080 }],
+          "volumes": [{ "name": "config", "path": "/etc/crowdsec" }, { "name": "data", "path": "/var/lib/crowdsec/data" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "crowdsec-mikrotik-bouncer",
+      "name": "CrowdSec MikroTik Bouncer",
+      "tagline": "Enforce CrowdSec bans on a MikroTik router",
+      "description": "Applies CrowdSec's ban decisions directly to a MikroTik RouterOS router's address lists and firewall rules, blocking malicious IPs at the network edge.",
+      "category": "Security",
+      "developer": "jmrplens",
+      "website": "https://github.com/jmrplens/cs-routeros-bouncer",
+      "source": "https://github.com/jmrplens/cs-routeros-bouncer",
+      "icon": "shield",
+      "tile": ["#d9534f", "#8a2f2c"],
+      "version": "1",
+      "first_run": "This does nothing until you edit its environment in Containers and fill in CROWDSEC_URL, CROWDSEC_BOUNCER_API_KEY (from \"cscli bouncers add\" on the CrowdSec app), MIKROTIK_HOST, MIKROTIK_USER and MIKROTIK_PASS, then restart it. It has no browser dashboard.",
+      "services": [
+        {
+          "name": "app",
+          "image": "ghcr.io/jmrplens/cs-routeros-bouncer:latest",
+          "env": { "CROWDSEC_URL": "", "CROWDSEC_BOUNCER_API_KEY": "", "MIKROTIK_HOST": "", "MIKROTIK_USER": "", "MIKROTIK_PASS": "" }
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "fail2ban",
+      "name": "Fail2ban",
+      "tagline": "Ban IPs after repeated failed logins",
+      "description": "Watches logs for repeated failed sign-in attempts — SSH, web logins and more — and bans the offending IPs with the host firewall. In container form it needs your own log files and host-level network access to actually enforce bans; expect to edit its volumes and capabilities by hand after install.",
+      "category": "Security",
+      "developer": "Fail2ban",
+      "website": "https://github.com/fail2ban/fail2ban",
+      "source": "https://github.com/fail2ban/fail2ban",
+      "icon": "shield",
+      "tile": ["#c0392b", "#7b241c"],
+      "version": "1",
+      "first_run": "This needs your log files bind-mounted in and NET_ADMIN plus host networking added under its container settings before bans actually take effect. It has no browser dashboard.",
+      "services": [
+        { "name": "app", "image": "crazymax/fail2ban:latest", "env": { "TZ": "Etc/UTC", "F2B_LOG_TARGET": "STDOUT" }, "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
     }
   ]
 }
