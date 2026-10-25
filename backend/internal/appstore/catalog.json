@@ -611,6 +611,206 @@
         }
       ],
       "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "immich",
+      "name": "Immich",
+      "tagline": "Back up and browse your photos and videos",
+      "description": "Automatic photo and video backup from your phone, with face recognition, maps and search — a private, self-hosted alternative to the big cloud photo services.",
+      "category": "Media",
+      "developer": "Immich",
+      "website": "https://immich.app",
+      "source": "https://github.com/immich-app/immich",
+      "icon": "image",
+      "tile": ["#4250af", "#1f2a66"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "server", "port": 2283 },
+      "first_run": "Create the admin account on the first visit, then install the mobile app and point it at this server to start backing up.",
+      "services": [
+        { "name": "redis", "image": "redis:6.2-alpine" },
+        {
+          "name": "database",
+          "image": "ghcr.io/immich-app/postgres:14-vectorchord0.3.0",
+          "env": { "POSTGRES_PASSWORD": "{{secret:db_password}}", "POSTGRES_USER": "postgres", "POSTGRES_DB": "immich" },
+          "volumes": [{ "name": "pgdata", "path": "/var/lib/postgresql/data" }]
+        },
+        {
+          "name": "server",
+          "image": "ghcr.io/immich-app/immich-server:release",
+          "env": {
+            "DB_HOSTNAME": "database",
+            "DB_USERNAME": "postgres",
+            "DB_PASSWORD": "{{secret:db_password}}",
+            "DB_DATABASE_NAME": "immich",
+            "REDIS_HOSTNAME": "redis"
+          },
+          "ports": [{ "container": 2283 }],
+          "volumes": [{ "name": "upload", "path": "/usr/src/app/upload" }]
+        },
+        { "name": "machine-learning", "image": "ghcr.io/immich-app/immich-machine-learning:release", "volumes": [{ "name": "model-cache", "path": "/cache" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "tagline": "A fast, open source torrent client",
+      "description": "Download and manage torrents from a clean web interface, reachable from any device on your network.",
+      "category": "Network",
+      "developer": "qBittorrent project",
+      "website": "https://www.qbittorrent.org",
+      "source": "https://github.com/qbittorrent/qBittorrent",
+      "icon": "download",
+      "tile": ["#2f67d8", "#1b3d85"],
+      "version": "4",
+      "web": { "service": "app", "port": 8080 },
+      "first_run": "The temporary admin password is printed in the app's log on first start — open Logs below and look for \"temporary password\".",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/qbittorrent:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC", "WEBUI_PORT": "8080" },
+          "ports": [{ "container": 8080 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "downloads", "path": "/downloads" }]
+        }
+      ],
+      "releases": [{ "version": "4", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "vikunja",
+      "name": "Vikunja",
+      "tagline": "To-dos and projects, organized your way",
+      "description": "Plan projects with lists, Kanban boards, Gantt charts and reminders — a self-hosted, open source alternative to the usual to-do apps.",
+      "category": "Productivity",
+      "developer": "Vikunja",
+      "website": "https://vikunja.io",
+      "source": "https://github.com/go-vikunja/vikunja",
+      "icon": "list",
+      "tile": ["#1973ff", "#0d3f99"],
+      "version": "1",
+      "web": { "service": "app", "port": 3456 },
+      "first_run": "Create your account on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "vikunja/vikunja:latest",
+          "env": { "VIKUNJA_SERVICE_JWTSECRET": "{{secret:jwt_secret}}", "VIKUNJA_DATABASE_TYPE": "sqlite", "VIKUNJA_DATABASE_PATH": "/db/vikunja.db" },
+          "ports": [{ "container": 3456 }],
+          "volumes": [{ "name": "files", "path": "/app/vikunja/files" }, { "name": "db", "path": "/db" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "jellyseerr",
+      "name": "Jellyseerr",
+      "tagline": "Let others request what to watch next",
+      "description": "A request manager for Jellyfin — friends and family browse what's missing and request it, you approve with one click.",
+      "category": "Media",
+      "developer": "Fallenbagel",
+      "website": "https://github.com/Fallenbagel/jellyseerr",
+      "source": "https://github.com/Fallenbagel/jellyseerr",
+      "icon": "play",
+      "tile": ["#6366f1", "#3730a3"],
+      "version": "1",
+      "web": { "service": "app", "port": 5055 },
+      "first_run": "Sign in with your Jellyfin account to connect it on the first visit.",
+      "services": [
+        { "name": "app", "image": "fallenbagel/jellyseerr:latest", "ports": [{ "container": 5055 }], "volumes": [{ "name": "config", "path": "/app/config" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "duplicati",
+      "name": "Duplicati",
+      "tagline": "Encrypted backups to anywhere",
+      "description": "Scheduled, encrypted, incremental backups of your files to local storage, network shares or cloud storage, with easy restores from a web interface.",
+      "category": "Productivity",
+      "developer": "Duplicati",
+      "website": "https://duplicati.com",
+      "source": "https://github.com/duplicati/duplicati",
+      "icon": "save",
+      "tile": ["#2f8f5b", "#17502f"],
+      "version": "2",
+      "web": { "service": "app", "port": 8200 },
+      "first_run": "Set a password for the web interface under Settings on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "duplicati/duplicati:latest",
+          "ports": [{ "container": 8200 }],
+          "volumes": [{ "name": "config", "path": "/data" }, { "name": "backups", "path": "/backups" }, { "name": "source", "path": "/source" }]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "wallabag",
+      "name": "Wallabag",
+      "tagline": "Save articles to read later, ad-free",
+      "description": "Clip articles from the web and read them later, offline, without ads or trackers — on any device.",
+      "category": "Productivity",
+      "developer": "Wallabag",
+      "website": "https://www.wallabag.org",
+      "source": "https://github.com/wallabag/wallabag",
+      "icon": "fileText",
+      "tile": ["#3d8b37", "#1f4d1c"],
+      "version": "2",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Sign in with wallabag / wallabag on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "wallabag/wallabag:latest",
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "data", "path": "/var/www/wallabag/data" }, { "name": "images", "path": "/var/www/wallabag/web/assets/images" }]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "kavita",
+      "name": "Kavita",
+      "tagline": "Read comics, manga and ebooks",
+      "description": "A fast, modern reader for comics, manga and ebooks with collections, reading progress sync and an app for your phone.",
+      "category": "Media",
+      "developer": "Kavita",
+      "website": "https://www.kavitareader.com",
+      "source": "https://github.com/Kareadita/Kavita",
+      "icon": "fileImage",
+      "tile": ["#4527a0", "#2a1660"],
+      "version": "1",
+      "web": { "service": "app", "port": 5000 },
+      "first_run": "Create the admin account on the first visit, then point it at your library folder.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/kavita:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 5000 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "library", "path": "/manga" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "privatebin",
+      "name": "PrivateBin",
+      "tagline": "Share encrypted text that self-destructs",
+      "description": "Paste text or code and get a link that decrypts only in the browser, and can expire or self-destruct after one read — nothing readable is stored on the server.",
+      "category": "Productivity",
+      "developer": "PrivateBin",
+      "website": "https://privatebin.info",
+      "source": "https://github.com/PrivateBin/PrivateBin",
+      "icon": "lock",
+      "tile": ["#4a90d9", "#215a94"],
+      "version": "1",
+      "web": { "service": "app", "port": 8080 },
+      "services": [
+        { "name": "app", "image": "privatebin/nginx-fpm-alpine:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "data", "path": "/srv/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
     }
   ]
 }
