@@ -926,6 +926,58 @@
         { "name": "app", "image": "crazymax/fail2ban:latest", "env": { "TZ": "Etc/UTC", "F2B_LOG_TARGET": "STDOUT" }, "volumes": [{ "name": "data", "path": "/data" }] }
       ],
       "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "it-vault",
+      "name": "IT Vault",
+      "tagline": "IT asset and helpdesk manager",
+      "description": "Track assets, employees, checkouts and maintenance history, run a support desk with a public portal and a live wallboard, and watch uptime with alerts to email, Slack, Telegram or a webhook — with LDAP/AD sync, network scanning and QR asset labels.",
+      "category": "IT",
+      "developer": "Sha The IT Guy",
+      "website": "https://github.com/shatheitguy/it-vault",
+      "source": "https://github.com/shatheitguy/it-vault",
+      "icon": "archiveBox",
+      "tile": ["#1f6fb2", "#123f66"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "app", "port": 5000 },
+      "first_run": "Finish the setup wizard on the first visit — the database connection above is already filled in, so you can go straight to creating the admin account.",
+      "services": [
+        {
+          "name": "db",
+          "image": "mariadb:latest",
+          "env": { "MARIADB_ROOT_PASSWORD": "{{secret:db_root_password}}", "MARIADB_DATABASE": "itvault", "MARIADB_USER": "itvault", "MARIADB_PASSWORD": "{{secret:db_password}}" },
+          "volumes": [{ "name": "db", "path": "/var/lib/mysql" }]
+        },
+        {
+          "name": "app",
+          "image": "ghcr.io/shatheitguy/itvault:latest",
+          "env": { "DB_HOST": "db", "DB_PORT": "3306", "DB_NAME": "itvault", "DB_USER": "itvault", "DB_PASS": "{{secret:db_password}}", "ITVAULT_DATA_DIR": "/app/data" },
+          "ports": [{ "container": 5000 }],
+          "volumes": [{ "name": "data", "path": "/app/data" }, { "name": "invoices", "path": "/app/invoices" }, { "name": "backups", "path": "/app/backups" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "formcraft",
+      "name": "FormCraft",
+      "tagline": "The developer-first, self-hosted form builder",
+      "description": "Build drag-and-drop forms and quizzes, view submissions with charts, and export to CSV — with user roles, email and Telegram alerts, multilingual forms (including right-to-left) and dark mode.",
+      "category": "Productivity",
+      "developer": "Sha The IT Guy",
+      "website": "https://github.com/shatheitguy/formcraft",
+      "source": "https://github.com/shatheitguy/formcraft",
+      "icon": "clipboard",
+      "tile": ["#0ea5a0", "#0b6b66"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "app", "port": 3000 },
+      "first_run": "Open the dashboard and create the admin account on the first visit. A few demo forms are preloaded — delete them once you've made your own.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/shatheitguy/formcraft:latest", "env": { "FC_SEED_DEMO": "true" }, "ports": [{ "container": 3000 }], "volumes": [{ "name": "data", "path": "/app/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
     }
   ]
 }
