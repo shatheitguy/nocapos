@@ -24,16 +24,26 @@ if (-not $SkipUI) {
 Push-Location "$PSScriptRoot\backend"
 try {
     $env:CGO_ENABLED = "0"
+    $os = "windows"
     $out = "bin\alfad.exe"
+    $capOut = "bin\cap.exe"
     if ($Target) {
         $os, $arch, $variant = $Target -split "/"
         $env:GOOS = $os; $env:GOARCH = $arch
         if ($variant) { $env:GOARM = $variant.TrimStart("v") }
         $out = "bin\alfad-$os-$arch$variant" + $(if ($os -eq "windows") { ".exe" } else { "" })
+        $capOut = "bin\cap-$os-$arch$variant"
     }
     go build -trimpath -ldflags "-s -w -X main.version=$Version" -o $out .\cmd\alfad
     if ($LASTEXITCODE -ne 0) { throw "go build failed" }
     Write-Host "built $((Resolve-Path $out).Path)"
+
+    # cap (the admin CLI) only makes sense on the Linux hosts NoCapOS installs on.
+    if ($os -eq "linux") {
+        go build -trimpath -ldflags "-s -w -X main.version=$Version" -o $capOut .\cmd\cap
+        if ($LASTEXITCODE -ne 0) { throw "go build failed (cap)" }
+        Write-Host "built $((Resolve-Path $capOut).Path)"
+    }
 }
 finally {
     Remove-Item Env:GOOS, Env:GOARCH, Env:GOARM -ErrorAction SilentlyContinue
