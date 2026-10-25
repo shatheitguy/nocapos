@@ -367,6 +367,565 @@
       "web": { "service": "app", "port": 80 },
       "services": [{ "name": "app", "image": "excalidraw/excalidraw:latest", "ports": [{ "container": 80 }] }],
       "releases": [{ "version": "1", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "paperless-ngx",
+      "name": "Paperless-ngx",
+      "tagline": "Scan, OCR and archive your documents",
+      "description": "Turn paper documents and PDFs into a searchable, tagged digital archive with automatic OCR, correspondents and dates — the originals stay on your own server.",
+      "category": "Productivity",
+      "developer": "Paperless-ngx",
+      "website": "https://docs.paperless-ngx.com",
+      "source": "https://github.com/paperless-ngx/paperless-ngx",
+      "icon": "fileText",
+      "tile": ["#2f7a3a", "#163d1c"],
+      "version": "2",
+      "web": { "service": "webserver", "port": 8000 },
+      "first_run": "Sign in with the admin account below, then drop a scan into the consume folder to try OCR.",
+      "credentials": { "username": "admin", "password": "{{secret:password}}" },
+      "services": [
+        { "name": "broker", "image": "redis:7", "volumes": [{ "name": "redis", "path": "/data" }] },
+        {
+          "name": "webserver",
+          "image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+          "env": {
+            "PAPERLESS_REDIS": "redis://broker:6379",
+            "PAPERLESS_ADMIN_USER": "admin",
+            "PAPERLESS_ADMIN_PASSWORD": "{{secret:password}}",
+            "PAPERLESS_SECRET_KEY": "{{secret:secret_key}}",
+            "PAPERLESS_TIME_ZONE": "Etc/UTC"
+          },
+          "ports": [{ "container": 8000 }],
+          "volumes": [
+            { "name": "data", "path": "/usr/src/paperless/data" },
+            { "name": "media", "path": "/usr/src/paperless/media" },
+            { "name": "export", "path": "/usr/src/paperless/export" },
+            { "name": "consume", "path": "/usr/src/paperless/consume" }
+          ]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "freshrss",
+      "name": "FreshRSS",
+      "tagline": "A fast, free RSS feed reader",
+      "description": "Follow blogs, news and podcasts from one place — as many feeds as you like, with apps that support the Fever and Google Reader APIs.",
+      "category": "Productivity",
+      "developer": "FreshRSS",
+      "website": "https://freshrss.org",
+      "source": "https://github.com/FreshRSS/FreshRSS",
+      "icon": "globe",
+      "tile": ["#ff7f27", "#b34c00"],
+      "version": "1",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Finish the setup wizard on the first visit to create your account.",
+      "services": [
+        {
+          "name": "app",
+          "image": "freshrss/freshrss:latest",
+          "env": { "TZ": "Etc/UTC" },
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "data", "path": "/var/www/FreshRSS/data" }, { "name": "extensions", "path": "/var/www/FreshRSS/extensions" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "linkding",
+      "name": "Linkding",
+      "tagline": "A simple, fast bookmark manager",
+      "description": "Save, tag and search your bookmarks from a clean web app, with a browser extension and automatic snapshots so a link never really dies.",
+      "category": "Productivity",
+      "developer": "sissbruecker",
+      "website": "https://github.com/sissbruecker/linkding",
+      "source": "https://github.com/sissbruecker/linkding",
+      "icon": "share",
+      "tile": ["#4c6ef5", "#28358f"],
+      "version": "1",
+      "web": { "service": "app", "port": 9090 },
+      "first_run": "Sign in with the admin account below.",
+      "credentials": { "username": "admin", "password": "{{secret:password}}" },
+      "services": [
+        {
+          "name": "app",
+          "image": "sissbruecker/linkding:latest",
+          "env": { "LD_SUPERUSER_NAME": "admin", "LD_SUPERUSER_PASSWORD": "{{secret:password}}" },
+          "ports": [{ "container": 9090 }],
+          "volumes": [{ "name": "data", "path": "/etc/linkding/data" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "mealie",
+      "name": "Mealie",
+      "tagline": "Recipes, meal plans and shopping lists",
+      "description": "Collect recipes by pasting a link, plan your week, and generate a shopping list — a tidy self-hosted recipe book for the whole family.",
+      "category": "Productivity",
+      "developer": "Mealie",
+      "website": "https://mealie.io",
+      "source": "https://github.com/mealie-recipes/mealie",
+      "icon": "heart",
+      "tile": ["#e9762b", "#a84f12"],
+      "version": "1",
+      "web": { "service": "app", "port": 9000 },
+      "first_run": "Sign in with changeme@example.com / MyPassword on the first visit, then change it under your profile.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/mealie-recipes/mealie:latest", "env": { "TZ": "Etc/UTC" }, "ports": [{ "container": 9000 }], "volumes": [{ "name": "data", "path": "/app/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "trilium",
+      "name": "Trilium Notes",
+      "tagline": "A hierarchical notebook for big ideas",
+      "description": "Build a personal knowledge base with notes nested as deep as you like, rich text, code blocks, attachments and full-text search.",
+      "category": "Productivity",
+      "developer": "zadam",
+      "website": "https://github.com/zadam/trilium",
+      "source": "https://github.com/zadam/trilium",
+      "icon": "fileText",
+      "tile": ["#4c8bf5", "#1f4ea8"],
+      "version": "1",
+      "web": { "service": "app", "port": 8080 },
+      "first_run": "Set your password on the first visit.",
+      "services": [
+        { "name": "app", "image": "zadam/trilium:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "data", "path": "/home/node/trilium-data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "homebox",
+      "name": "Homebox",
+      "tagline": "Track what you own and where it is",
+      "description": "An inventory and asset tracker for a household or small IT setup — items, locations, warranties and labels, searchable from anywhere.",
+      "category": "Productivity",
+      "developer": "Homebox",
+      "website": "https://homebox.software",
+      "source": "https://github.com/sysadminsmedia/homebox",
+      "icon": "archiveBox",
+      "tile": ["#6c5ce7", "#3d2d99"],
+      "version": "1",
+      "web": { "service": "app", "port": 7745 },
+      "first_run": "Create your account on the first visit.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/sysadminsmedia/homebox:latest", "ports": [{ "container": 7745 }], "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "changedetection",
+      "name": "Changedetection.io",
+      "tagline": "Get notified when a web page changes",
+      "description": "Watch any web page — a price, a restock, a job posting — and get an alert the moment it changes, with visual diffs and dozens of notification services.",
+      "category": "Network",
+      "developer": "dgtlmoon",
+      "website": "https://changedetection.io",
+      "source": "https://github.com/dgtlmoon/changedetection.io",
+      "icon": "eye",
+      "tile": ["#2fb380", "#176b47"],
+      "version": "1",
+      "web": { "service": "app", "port": 5000 },
+      "first_run": "Open the app and add your first watch.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/dgtlmoon/changedetection.io:latest", "ports": [{ "container": 5000 }], "volumes": [{ "name": "data", "path": "/datastore" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "calibre-web",
+      "name": "Calibre-Web",
+      "tagline": "Browse and read your ebook library",
+      "description": "A web app for your ebook collection — browse, search, send to Kindle, read in the browser and manage metadata, backed by a Calibre library.",
+      "category": "Media",
+      "developer": "janeczku",
+      "website": "https://github.com/janeczku/calibre-web",
+      "source": "https://github.com/janeczku/calibre-web",
+      "icon": "fileText",
+      "tile": ["#6a994e", "#386641"],
+      "version": "1",
+      "web": { "service": "app", "port": 8083 },
+      "first_run": "Sign in with admin / admin123 on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/calibre-web:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 8083 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "books", "path": "/books" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "audiobookshelf",
+      "name": "Audiobookshelf",
+      "tagline": "Your audiobooks and podcasts, organized",
+      "description": "A self-hosted server for audiobooks and podcasts with apps for phones and tablets — library management, progress sync and metadata fetching.",
+      "category": "Media",
+      "developer": "advplyr",
+      "website": "https://www.audiobookshelf.org",
+      "source": "https://github.com/advplyr/audiobookshelf",
+      "icon": "fileAudio",
+      "tile": ["#b5533c", "#7a2f1e"],
+      "version": "2",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Create the admin account on the first visit, then add your audiobooks and podcasts folders.",
+      "services": [
+        {
+          "name": "app",
+          "image": "ghcr.io/advplyr/audiobookshelf:latest",
+          "ports": [{ "container": 80 }],
+          "volumes": [
+            { "name": "audiobooks", "path": "/audiobooks" },
+            { "name": "podcasts", "path": "/podcasts" },
+            { "name": "metadata", "path": "/metadata" },
+            { "name": "config", "path": "/config" }
+          ]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "grocy",
+      "name": "Grocy",
+      "tagline": "Groceries, chores and household ERP",
+      "description": "Track groceries and their expiry, plan meals, manage a shopping list, and keep up with household chores and recurring tasks.",
+      "category": "Productivity",
+      "developer": "Bernd Bestel",
+      "website": "https://grocy.info",
+      "source": "https://github.com/grocy/grocy",
+      "icon": "grid",
+      "tile": ["#4d8c57", "#2c5230"],
+      "version": "1",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Sign in with admin / admin on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/grocy:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "config", "path": "/config" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "immich",
+      "name": "Immich",
+      "tagline": "Back up and browse your photos and videos",
+      "description": "Automatic photo and video backup from your phone, with face recognition, maps and search — a private, self-hosted alternative to the big cloud photo services.",
+      "category": "Media",
+      "developer": "Immich",
+      "website": "https://immich.app",
+      "source": "https://github.com/immich-app/immich",
+      "icon": "image",
+      "tile": ["#4250af", "#1f2a66"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "server", "port": 2283 },
+      "first_run": "Create the admin account on the first visit, then install the mobile app and point it at this server to start backing up.",
+      "services": [
+        { "name": "redis", "image": "redis:6.2-alpine" },
+        {
+          "name": "database",
+          "image": "ghcr.io/immich-app/postgres:14-vectorchord0.3.0",
+          "env": { "POSTGRES_PASSWORD": "{{secret:db_password}}", "POSTGRES_USER": "postgres", "POSTGRES_DB": "immich" },
+          "volumes": [{ "name": "pgdata", "path": "/var/lib/postgresql/data" }]
+        },
+        {
+          "name": "server",
+          "image": "ghcr.io/immich-app/immich-server:release",
+          "env": {
+            "DB_HOSTNAME": "database",
+            "DB_USERNAME": "postgres",
+            "DB_PASSWORD": "{{secret:db_password}}",
+            "DB_DATABASE_NAME": "immich",
+            "REDIS_HOSTNAME": "redis"
+          },
+          "ports": [{ "container": 2283 }],
+          "volumes": [{ "name": "upload", "path": "/usr/src/app/upload" }]
+        },
+        { "name": "machine-learning", "image": "ghcr.io/immich-app/immich-machine-learning:release", "volumes": [{ "name": "model-cache", "path": "/cache" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "qbittorrent",
+      "name": "qBittorrent",
+      "tagline": "A fast, open source torrent client",
+      "description": "Download and manage torrents from a clean web interface, reachable from any device on your network.",
+      "category": "Network",
+      "developer": "qBittorrent project",
+      "website": "https://www.qbittorrent.org",
+      "source": "https://github.com/qbittorrent/qBittorrent",
+      "icon": "download",
+      "tile": ["#2f67d8", "#1b3d85"],
+      "version": "4",
+      "web": { "service": "app", "port": 8080 },
+      "first_run": "The temporary admin password is printed in the app's log on first start — open Logs below and look for \"temporary password\".",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/qbittorrent:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC", "WEBUI_PORT": "8080" },
+          "ports": [{ "container": 8080 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "downloads", "path": "/downloads" }]
+        }
+      ],
+      "releases": [{ "version": "4", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "vikunja",
+      "name": "Vikunja",
+      "tagline": "To-dos and projects, organized your way",
+      "description": "Plan projects with lists, Kanban boards, Gantt charts and reminders — a self-hosted, open source alternative to the usual to-do apps.",
+      "category": "Productivity",
+      "developer": "Vikunja",
+      "website": "https://vikunja.io",
+      "source": "https://github.com/go-vikunja/vikunja",
+      "icon": "list",
+      "tile": ["#1973ff", "#0d3f99"],
+      "version": "1",
+      "web": { "service": "app", "port": 3456 },
+      "first_run": "Create your account on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "vikunja/vikunja:latest",
+          "env": { "VIKUNJA_SERVICE_JWTSECRET": "{{secret:jwt_secret}}", "VIKUNJA_DATABASE_TYPE": "sqlite", "VIKUNJA_DATABASE_PATH": "/db/vikunja.db" },
+          "ports": [{ "container": 3456 }],
+          "volumes": [{ "name": "files", "path": "/app/vikunja/files" }, { "name": "db", "path": "/db" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "jellyseerr",
+      "name": "Jellyseerr",
+      "tagline": "Let others request what to watch next",
+      "description": "A request manager for Jellyfin — friends and family browse what's missing and request it, you approve with one click.",
+      "category": "Media",
+      "developer": "Fallenbagel",
+      "website": "https://github.com/Fallenbagel/jellyseerr",
+      "source": "https://github.com/Fallenbagel/jellyseerr",
+      "icon": "play",
+      "tile": ["#6366f1", "#3730a3"],
+      "version": "1",
+      "web": { "service": "app", "port": 5055 },
+      "first_run": "Sign in with your Jellyfin account to connect it on the first visit.",
+      "services": [
+        { "name": "app", "image": "fallenbagel/jellyseerr:latest", "ports": [{ "container": 5055 }], "volumes": [{ "name": "config", "path": "/app/config" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "duplicati",
+      "name": "Duplicati",
+      "tagline": "Encrypted backups to anywhere",
+      "description": "Scheduled, encrypted, incremental backups of your files to local storage, network shares or cloud storage, with easy restores from a web interface.",
+      "category": "Productivity",
+      "developer": "Duplicati",
+      "website": "https://duplicati.com",
+      "source": "https://github.com/duplicati/duplicati",
+      "icon": "save",
+      "tile": ["#2f8f5b", "#17502f"],
+      "version": "2",
+      "web": { "service": "app", "port": 8200 },
+      "first_run": "Set a password for the web interface under Settings on the first visit.",
+      "services": [
+        {
+          "name": "app",
+          "image": "duplicati/duplicati:latest",
+          "ports": [{ "container": 8200 }],
+          "volumes": [{ "name": "config", "path": "/data" }, { "name": "backups", "path": "/backups" }, { "name": "source", "path": "/source" }]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "wallabag",
+      "name": "Wallabag",
+      "tagline": "Save articles to read later, ad-free",
+      "description": "Clip articles from the web and read them later, offline, without ads or trackers — on any device.",
+      "category": "Productivity",
+      "developer": "Wallabag",
+      "website": "https://www.wallabag.org",
+      "source": "https://github.com/wallabag/wallabag",
+      "icon": "fileText",
+      "tile": ["#3d8b37", "#1f4d1c"],
+      "version": "2",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Sign in with wallabag / wallabag on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "wallabag/wallabag:latest",
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "data", "path": "/var/www/wallabag/data" }, { "name": "images", "path": "/var/www/wallabag/web/assets/images" }]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "kavita",
+      "name": "Kavita",
+      "tagline": "Read comics, manga and ebooks",
+      "description": "A fast, modern reader for comics, manga and ebooks with collections, reading progress sync and an app for your phone.",
+      "category": "Media",
+      "developer": "Kavita",
+      "website": "https://www.kavitareader.com",
+      "source": "https://github.com/Kareadita/Kavita",
+      "icon": "fileImage",
+      "tile": ["#4527a0", "#2a1660"],
+      "version": "1",
+      "web": { "service": "app", "port": 5000 },
+      "first_run": "Create the admin account on the first visit, then point it at your library folder.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/kavita:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 5000 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "library", "path": "/manga" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "privatebin",
+      "name": "PrivateBin",
+      "tagline": "Share encrypted text that self-destructs",
+      "description": "Paste text or code and get a link that decrypts only in the browser, and can expire or self-destruct after one read — nothing readable is stored on the server.",
+      "category": "Productivity",
+      "developer": "PrivateBin",
+      "website": "https://privatebin.info",
+      "source": "https://github.com/PrivateBin/PrivateBin",
+      "icon": "lock",
+      "tile": ["#4a90d9", "#215a94"],
+      "version": "1",
+      "web": { "service": "app", "port": 8080 },
+      "services": [
+        { "name": "app", "image": "privatebin/nginx-fpm-alpine:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "data", "path": "/srv/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "adguard-home",
+      "name": "AdGuard Home",
+      "tagline": "Network-wide ad and tracker blocking",
+      "description": "Block ads and trackers for every device on your network at the DNS level — no per-device apps or browser extensions needed.",
+      "category": "Network",
+      "developer": "AdGuard",
+      "website": "https://adguard.com/adguard-home",
+      "source": "https://github.com/AdguardTeam/AdGuardHome",
+      "icon": "shield",
+      "tile": ["#68bc71", "#2e6e37"],
+      "featured": true,
+      "version": "1",
+      "web": { "service": "app", "port": 3000 },
+      "first_run": "Finish the setup wizard on the first visit, then point your router's DNS at this server's IP address (DNS is published on port 53).",
+      "services": [
+        {
+          "name": "app",
+          "image": "adguard/adguardhome:latest",
+          "ports": [{ "container": 53, "host": 53 }, { "container": 53, "host": 53, "protocol": "udp" }, { "container": 3000 }],
+          "volumes": [{ "name": "work", "path": "/opt/adguardhome/work" }, { "name": "conf", "path": "/opt/adguardhome/conf" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "mariadb",
+      "name": "MariaDB",
+      "tagline": "A MySQL-compatible database server, with Adminer",
+      "description": "Run a standalone MariaDB server for your own apps and scripts, with Adminer's web interface to browse and query it.",
+      "category": "Developer",
+      "developer": "MariaDB Foundation",
+      "website": "https://mariadb.org",
+      "source": "https://github.com/MariaDB/server",
+      "icon": "database",
+      "tile": ["#003545", "#00273a"],
+      "version": "11.4",
+      "web": { "service": "adminer", "port": 8080 },
+      "first_run": "Open Adminer and sign in with server \"db\", username \"root\", and the password below.",
+      "credentials": { "username": "root", "password": "{{secret:root_password}}" },
+      "services": [
+        {
+          "name": "db",
+          "image": "mariadb:11.4",
+          "env": { "MARIADB_ROOT_PASSWORD": "{{secret:root_password}}" },
+          "volumes": [{ "name": "data", "path": "/var/lib/mysql" }]
+        },
+        { "name": "adminer", "image": "adminer:latest", "env": { "ADMINER_DEFAULT_SERVER": "db" }, "ports": [{ "container": 8080 }] }
+      ],
+      "releases": [{ "version": "11.4", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "crowdsec",
+      "name": "CrowdSec",
+      "tagline": "Detect and block malicious IPs automatically",
+      "description": "Watches your logs for brute-force attempts, scans and known attack patterns, and blocks the offending IPs — sharing (and benefiting from) threat intelligence across the whole CrowdSec community. It needs your own log files and a bouncer (like the MikroTik one below) to actually act on what it finds.",
+      "category": "Security",
+      "developer": "CrowdSec",
+      "website": "https://www.crowdsec.net",
+      "source": "https://github.com/crowdsecurity/crowdsec",
+      "icon": "shield",
+      "tile": ["#ff6d4d", "#b33d26"],
+      "version": "1",
+      "first_run": "CrowdSec has no browser dashboard. Open a Terminal and run \"docker exec -it <container> cscli bouncers add my-bouncer\" to get an API key for a bouncer, and \"cscli decisions list\" to see what it has blocked.",
+      "services": [
+        {
+          "name": "app",
+          "image": "crowdsecurity/crowdsec:latest",
+          "env": { "COLLECTIONS": "crowdsecurity/linux" },
+          "ports": [{ "container": 8080 }],
+          "volumes": [{ "name": "config", "path": "/etc/crowdsec" }, { "name": "data", "path": "/var/lib/crowdsec/data" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "crowdsec-mikrotik-bouncer",
+      "name": "CrowdSec MikroTik Bouncer",
+      "tagline": "Enforce CrowdSec bans on a MikroTik router",
+      "description": "Applies CrowdSec's ban decisions directly to a MikroTik RouterOS router's address lists and firewall rules, blocking malicious IPs at the network edge.",
+      "category": "Security",
+      "developer": "jmrplens",
+      "website": "https://github.com/jmrplens/cs-routeros-bouncer",
+      "source": "https://github.com/jmrplens/cs-routeros-bouncer",
+      "icon": "shield",
+      "tile": ["#d9534f", "#8a2f2c"],
+      "version": "1",
+      "first_run": "This does nothing until you edit its environment in Containers and fill in CROWDSEC_URL, CROWDSEC_BOUNCER_API_KEY (from \"cscli bouncers add\" on the CrowdSec app), MIKROTIK_HOST, MIKROTIK_USER and MIKROTIK_PASS, then restart it. It has no browser dashboard.",
+      "services": [
+        {
+          "name": "app",
+          "image": "ghcr.io/jmrplens/cs-routeros-bouncer:latest",
+          "env": { "CROWDSEC_URL": "", "CROWDSEC_BOUNCER_API_KEY": "", "MIKROTIK_HOST": "", "MIKROTIK_USER": "", "MIKROTIK_PASS": "" }
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "fail2ban",
+      "name": "Fail2ban",
+      "tagline": "Ban IPs after repeated failed logins",
+      "description": "Watches logs for repeated failed sign-in attempts — SSH, web logins and more — and bans the offending IPs with the host firewall. In container form it needs your own log files and host-level network access to actually enforce bans; expect to edit its volumes and capabilities by hand after install.",
+      "category": "Security",
+      "developer": "Fail2ban",
+      "website": "https://github.com/fail2ban/fail2ban",
+      "source": "https://github.com/fail2ban/fail2ban",
+      "icon": "shield",
+      "tile": ["#c0392b", "#7b241c"],
+      "version": "1",
+      "first_run": "This needs your log files bind-mounted in and NET_ADMIN plus host networking added under its container settings before bans actually take effect. It has no browser dashboard.",
+      "services": [
+        { "name": "app", "image": "crazymax/fail2ban:latest", "env": { "TZ": "Etc/UTC", "F2B_LOG_TARGET": "STDOUT" }, "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
     }
   ]
 }
