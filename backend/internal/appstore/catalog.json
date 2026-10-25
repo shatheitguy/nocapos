@@ -367,6 +367,250 @@
       "web": { "service": "app", "port": 80 },
       "services": [{ "name": "app", "image": "excalidraw/excalidraw:latest", "ports": [{ "container": 80 }] }],
       "releases": [{ "version": "1", "date": "2026-10-08", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "paperless-ngx",
+      "name": "Paperless-ngx",
+      "tagline": "Scan, OCR and archive your documents",
+      "description": "Turn paper documents and PDFs into a searchable, tagged digital archive with automatic OCR, correspondents and dates — the originals stay on your own server.",
+      "category": "Productivity",
+      "developer": "Paperless-ngx",
+      "website": "https://docs.paperless-ngx.com",
+      "source": "https://github.com/paperless-ngx/paperless-ngx",
+      "icon": "fileText",
+      "tile": ["#2f7a3a", "#163d1c"],
+      "version": "2",
+      "web": { "service": "webserver", "port": 8000 },
+      "first_run": "Sign in with the admin account below, then drop a scan into the consume folder to try OCR.",
+      "credentials": { "username": "admin", "password": "{{secret:password}}" },
+      "services": [
+        { "name": "broker", "image": "redis:7", "volumes": [{ "name": "redis", "path": "/data" }] },
+        {
+          "name": "webserver",
+          "image": "ghcr.io/paperless-ngx/paperless-ngx:latest",
+          "env": {
+            "PAPERLESS_REDIS": "redis://broker:6379",
+            "PAPERLESS_ADMIN_USER": "admin",
+            "PAPERLESS_ADMIN_PASSWORD": "{{secret:password}}",
+            "PAPERLESS_SECRET_KEY": "{{secret:secret_key}}",
+            "PAPERLESS_TIME_ZONE": "Etc/UTC"
+          },
+          "ports": [{ "container": 8000 }],
+          "volumes": [
+            { "name": "data", "path": "/usr/src/paperless/data" },
+            { "name": "media", "path": "/usr/src/paperless/media" },
+            { "name": "export", "path": "/usr/src/paperless/export" },
+            { "name": "consume", "path": "/usr/src/paperless/consume" }
+          ]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "freshrss",
+      "name": "FreshRSS",
+      "tagline": "A fast, free RSS feed reader",
+      "description": "Follow blogs, news and podcasts from one place — as many feeds as you like, with apps that support the Fever and Google Reader APIs.",
+      "category": "Productivity",
+      "developer": "FreshRSS",
+      "website": "https://freshrss.org",
+      "source": "https://github.com/FreshRSS/FreshRSS",
+      "icon": "globe",
+      "tile": ["#ff7f27", "#b34c00"],
+      "version": "1",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Finish the setup wizard on the first visit to create your account.",
+      "services": [
+        {
+          "name": "app",
+          "image": "freshrss/freshrss:latest",
+          "env": { "TZ": "Etc/UTC" },
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "data", "path": "/var/www/FreshRSS/data" }, { "name": "extensions", "path": "/var/www/FreshRSS/extensions" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "linkding",
+      "name": "Linkding",
+      "tagline": "A simple, fast bookmark manager",
+      "description": "Save, tag and search your bookmarks from a clean web app, with a browser extension and automatic snapshots so a link never really dies.",
+      "category": "Productivity",
+      "developer": "sissbruecker",
+      "website": "https://github.com/sissbruecker/linkding",
+      "source": "https://github.com/sissbruecker/linkding",
+      "icon": "share",
+      "tile": ["#4c6ef5", "#28358f"],
+      "version": "1",
+      "web": { "service": "app", "port": 9090 },
+      "first_run": "Sign in with the admin account below.",
+      "credentials": { "username": "admin", "password": "{{secret:password}}" },
+      "services": [
+        {
+          "name": "app",
+          "image": "sissbruecker/linkding:latest",
+          "env": { "LD_SUPERUSER_NAME": "admin", "LD_SUPERUSER_PASSWORD": "{{secret:password}}" },
+          "ports": [{ "container": 9090 }],
+          "volumes": [{ "name": "data", "path": "/etc/linkding/data" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "mealie",
+      "name": "Mealie",
+      "tagline": "Recipes, meal plans and shopping lists",
+      "description": "Collect recipes by pasting a link, plan your week, and generate a shopping list — a tidy self-hosted recipe book for the whole family.",
+      "category": "Productivity",
+      "developer": "Mealie",
+      "website": "https://mealie.io",
+      "source": "https://github.com/mealie-recipes/mealie",
+      "icon": "heart",
+      "tile": ["#e9762b", "#a84f12"],
+      "version": "1",
+      "web": { "service": "app", "port": 9000 },
+      "first_run": "Sign in with changeme@example.com / MyPassword on the first visit, then change it under your profile.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/mealie-recipes/mealie:latest", "env": { "TZ": "Etc/UTC" }, "ports": [{ "container": 9000 }], "volumes": [{ "name": "data", "path": "/app/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "trilium",
+      "name": "Trilium Notes",
+      "tagline": "A hierarchical notebook for big ideas",
+      "description": "Build a personal knowledge base with notes nested as deep as you like, rich text, code blocks, attachments and full-text search.",
+      "category": "Productivity",
+      "developer": "zadam",
+      "website": "https://github.com/zadam/trilium",
+      "source": "https://github.com/zadam/trilium",
+      "icon": "fileText",
+      "tile": ["#4c8bf5", "#1f4ea8"],
+      "version": "1",
+      "web": { "service": "app", "port": 8080 },
+      "first_run": "Set your password on the first visit.",
+      "services": [
+        { "name": "app", "image": "zadam/trilium:latest", "ports": [{ "container": 8080 }], "volumes": [{ "name": "data", "path": "/home/node/trilium-data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "homebox",
+      "name": "Homebox",
+      "tagline": "Track what you own and where it is",
+      "description": "An inventory and asset tracker for a household or small IT setup — items, locations, warranties and labels, searchable from anywhere.",
+      "category": "Productivity",
+      "developer": "Homebox",
+      "website": "https://homebox.software",
+      "source": "https://github.com/sysadminsmedia/homebox",
+      "icon": "archiveBox",
+      "tile": ["#6c5ce7", "#3d2d99"],
+      "version": "1",
+      "web": { "service": "app", "port": 7745 },
+      "first_run": "Create your account on the first visit.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/sysadminsmedia/homebox:latest", "ports": [{ "container": 7745 }], "volumes": [{ "name": "data", "path": "/data" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "changedetection",
+      "name": "Changedetection.io",
+      "tagline": "Get notified when a web page changes",
+      "description": "Watch any web page — a price, a restock, a job posting — and get an alert the moment it changes, with visual diffs and dozens of notification services.",
+      "category": "Network",
+      "developer": "dgtlmoon",
+      "website": "https://changedetection.io",
+      "source": "https://github.com/dgtlmoon/changedetection.io",
+      "icon": "eye",
+      "tile": ["#2fb380", "#176b47"],
+      "version": "1",
+      "web": { "service": "app", "port": 5000 },
+      "first_run": "Open the app and add your first watch.",
+      "services": [
+        { "name": "app", "image": "ghcr.io/dgtlmoon/changedetection.io:latest", "ports": [{ "container": 5000 }], "volumes": [{ "name": "data", "path": "/datastore" }] }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "calibre-web",
+      "name": "Calibre-Web",
+      "tagline": "Browse and read your ebook library",
+      "description": "A web app for your ebook collection — browse, search, send to Kindle, read in the browser and manage metadata, backed by a Calibre library.",
+      "category": "Media",
+      "developer": "janeczku",
+      "website": "https://github.com/janeczku/calibre-web",
+      "source": "https://github.com/janeczku/calibre-web",
+      "icon": "fileText",
+      "tile": ["#6a994e", "#386641"],
+      "version": "1",
+      "web": { "service": "app", "port": 8083 },
+      "first_run": "Sign in with admin / admin123 on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/calibre-web:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 8083 }],
+          "volumes": [{ "name": "config", "path": "/config" }, { "name": "books", "path": "/books" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "audiobookshelf",
+      "name": "Audiobookshelf",
+      "tagline": "Your audiobooks and podcasts, organized",
+      "description": "A self-hosted server for audiobooks and podcasts with apps for phones and tablets — library management, progress sync and metadata fetching.",
+      "category": "Media",
+      "developer": "advplyr",
+      "website": "https://www.audiobookshelf.org",
+      "source": "https://github.com/advplyr/audiobookshelf",
+      "icon": "fileAudio",
+      "tile": ["#b5533c", "#7a2f1e"],
+      "version": "2",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Create the admin account on the first visit, then add your audiobooks and podcasts folders.",
+      "services": [
+        {
+          "name": "app",
+          "image": "ghcr.io/advplyr/audiobookshelf:latest",
+          "ports": [{ "container": 80 }],
+          "volumes": [
+            { "name": "audiobooks", "path": "/audiobooks" },
+            { "name": "podcasts", "path": "/podcasts" },
+            { "name": "metadata", "path": "/metadata" },
+            { "name": "config", "path": "/config" }
+          ]
+        }
+      ],
+      "releases": [{ "version": "2", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
+    },
+    {
+      "id": "grocy",
+      "name": "Grocy",
+      "tagline": "Groceries, chores and household ERP",
+      "description": "Track groceries and their expiry, plan meals, manage a shopping list, and keep up with household chores and recurring tasks.",
+      "category": "Productivity",
+      "developer": "Bernd Bestel",
+      "website": "https://grocy.info",
+      "source": "https://github.com/grocy/grocy",
+      "icon": "grid",
+      "tile": ["#4d8c57", "#2c5230"],
+      "version": "1",
+      "web": { "service": "app", "port": 80 },
+      "first_run": "Sign in with admin / admin on the first visit, then change the password.",
+      "services": [
+        {
+          "name": "app",
+          "image": "lscr.io/linuxserver/grocy:latest",
+          "env": { "PUID": "1000", "PGID": "1000", "TZ": "Etc/UTC" },
+          "ports": [{ "container": 80 }],
+          "volumes": [{ "name": "config", "path": "/config" }]
+        }
+      ],
+      "releases": [{ "version": "1", "date": "2026-10-25", "notes": "Added to the NoCapOS App Store." }]
     }
   ]
 }
