@@ -32,18 +32,28 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
+      - name: Web UI (build, so backend/web/dist exists for go:embed)
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
       - name: Test
         working-directory: backend
         run: go test ./...
 
+      - name: Read version
+        id: version
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
       - name: Build bundles
-        run: bash scripts/package.sh "0.3.${{ github.run_number }}"
+        run: bash scripts/package.sh "${{ steps.version.outputs.version }}"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.${{ github.run_number }}
-          name: NoCapOS 0.3.${{ github.run_number }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: NoCapOS ${{ steps.version.outputs.version }}
           make_latest: true
           body: |
             Install or update on Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch (amd64, arm64, armv7):
