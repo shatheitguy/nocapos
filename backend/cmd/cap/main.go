@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"text/tabwriter"
 
+	"alfaos/alfad/internal/release"
 	"alfaos/alfad/internal/syspkg"
 )
 
@@ -51,24 +52,49 @@ func usage() {
 	fmt.Print(`cap — NoCapOS's command-line admin tool
 
 Usage:
-  cap update          Refresh and list available Linux package updates
+  cap update          Check for a new NoCapOS release, then Linux package updates
   cap logs [-f] [N]   Show NoCapOS's own service logs (-f follows, N = line count)
   cap version         Print the cap version
 
-cap update needs root: sudo cap update
+cap update needs root to refresh the Linux package lists: sudo cap update
 `)
 }
 
-// cmdUpdate refreshes the package lists (apt-get update or the equivalent
-// for this system's package manager) and reports what has a newer version —
-// the same check the Packages app runs, from the terminal.
+// cmdUpdate checks for a new NoCapOS release first (the same check Settings
+// → Software Update runs), then for Linux package updates.
 func cmdUpdate(ctx context.Context) error {
+	checkNoCapOSRelease(ctx)
+	fmt.Println()
+	return checkPackages(ctx)
+}
+
+func checkNoCapOSRelease(ctx context.Context) {
+	fmt.Println("Checking for a new NoCapOS release…")
+	info := release.Check(ctx, version)
+	switch {
+	case info.Error != "":
+		fmt.Fprintln(os.Stderr, "cap:", info.Error)
+	case info.Dev:
+		fmt.Printf("Running a development build (%s); skipping the version check.\n", info.Current)
+	case !info.Available:
+		fmt.Printf("NoCapOS is up to date (%s).\n", info.Current)
+	default:
+		fmt.Printf("A new NoCapOS release is available: %s (you're on %s)\n", info.Latest, info.Current)
+		fmt.Println("Update with:  " + release.UpdateCommand)
+		fmt.Println("(or from Settings → General → Software Update)")
+	}
+}
+
+// checkPackages refreshes the package lists (apt-get update or the
+// equivalent for this system's package manager) and reports what has a
+// newer version — the same check the Packages app runs, from the terminal.
+func checkPackages(ctx context.Context) error {
 	mgr := syspkg.Manager()
 	if mgr == "" {
 		return errors.New("no supported package manager found on this system (apt, dnf, pacman or zypper)")
 	}
 	if os.Geteuid() != 0 {
-		return errors.New("run as root: sudo cap update")
+		return errors.New("run as root to check Linux package updates: sudo cap update")
 	}
 
 	admin := syspkg.NewAdmin()

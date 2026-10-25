@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -91,11 +92,18 @@ func (g *Guacd) Ensure() {
 
 	go func() {
 		defer func() {
+			// A bug here must not crash alfad: that would restart the whole
+			// process (under systemd) and look, from the Remote Desktop
+			// window, like it never leaves "Preparing" at all.
+			if r := recover(); r != nil {
+				g.set(PhaseError, "The remote desktop engine failed to start (internal error).")
+				g.log.Error("guacd panic", "recover", r, "stack", string(debug.Stack()))
+			}
 			g.mu.Lock()
 			g.working = false
 			g.mu.Unlock()
 		}()
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 		addr, err := g.provision(ctx)
 		if err != nil {
