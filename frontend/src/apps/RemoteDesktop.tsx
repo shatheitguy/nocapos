@@ -285,7 +285,7 @@ function RdpSession({ host, password, onClose }: { host: Host; password: string;
         if (cancelled) return;
         if (!s.ok) {
           setPhase('error');
-          setMessage(s.error || 'Could not reach NoCapOS');
+          setMessage(s.error || 'Couldn’t reach NoCapOS');
           return;
         }
         if (s.data.ready) break;
@@ -318,7 +318,7 @@ function RdpSession({ host, password, onClose }: { host: Host; password: string;
       if (cancelled) return;
       if (!t.ok) {
         setPhase('error');
-        setMessage(t.error || 'Could not start the session');
+        setMessage(t.error || 'Couldn’t start the session');
         return;
       }
 
@@ -431,7 +431,7 @@ function RdpSession({ host, password, onClose }: { host: Host; password: string;
         {phase !== 'connected' && (
           <div className="rdp-overlay">
             {busy ? <div className="spinner" /> : <Icon name="desktop" size={30} />}
-            <b>{busy ? message : phase === 'closed' ? 'Disconnected' : 'Could not connect'}</b>
+            <b>{busy ? message : phase === 'closed' ? 'Disconnected' : 'Couldn’t connect'}</b>
             {!busy && <p className="muted small">{message}</p>}
             {!busy && (
               <div className="rdp-actions">

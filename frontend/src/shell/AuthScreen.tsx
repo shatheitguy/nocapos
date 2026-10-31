@@ -180,7 +180,7 @@ function LoginForm({ mode, lockedUser, lockedUserId }: { mode: AuthMode; lockedU
     (mfaToken
       ? 'Enter the 6-digit code from your authenticator app'
       : mode === 'locked'
-        ? 'Locked: your apps and windows are still open'
+        ? 'Locked — your apps and windows are right where you left them'
         : linux && !known
           ? "Use this computer's Linux account"
           : '');
@@ -302,10 +302,10 @@ function SetupForm() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!token.trim()) return setError('Enter the setup token printed in the NoCapOS console.');
+    if (!token.trim()) return setError('First up: enter the setup token printed in the NoCapOS console.');
     if (password.length < 10) {
       setShake((n) => n + 1);
-      return setError('Use a password of at least 10 characters.');
+      return setError('Too short — use a password of at least 10 characters.');
     }
     setBusy(true);
     const err = await setup(token.trim(), username.trim(), password);
@@ -319,7 +319,7 @@ function SetupForm() {
   return (
     <form className="mac-login setup" onSubmit={submit}>
       <Logo size={64} />
-      <p className="mac-sub">Create the administrator account. The one-time setup token is printed in the NoCapOS console / log.</p>
+      <p className="mac-sub">Welcome in. Create the administrator account — the one-time setup token is printed in the NoCapOS console / log.</p>
       <div className="mac-pill user">
         <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Setup token" aria-label="Setup token" autoComplete="off" spellCheck={false} autoFocus />
       </div>

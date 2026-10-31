@@ -522,7 +522,7 @@ func friendlyMountError(d Drive, out string) error {
 	case strings.Contains(low, "unknown filesystem type") || strings.Contains(low, "no such device"):
 		return fmt.Errorf("this machine can't read %s drives yet (install support for %s)", strings.ToUpper(d.FSType), d.FSType)
 	case strings.Contains(low, "dirty") || strings.Contains(low, "unclean") || strings.Contains(low, "hibernat"):
-		return errors.New("the drive wasn't ejected properly last time; check it on the computer it came from")
+		return errors.New("the drive wasn't ejected properly last time — check it on the computer it came from")
 	case strings.Contains(low, "wrong fs type") || strings.Contains(low, "bad superblock"):
 		return errors.New("the drive's filesystem looks damaged")
 	}

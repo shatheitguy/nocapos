@@ -50,7 +50,7 @@ export function Stacks() {
 
   const load = useCallback(async () => {
     const r = await stacksApi.list();
-    if (!r.ok) return setError(r.error ?? 'Could not load stacks');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load stacks');
     setError('');
     setData(r.data);
   }, []);
@@ -63,7 +63,7 @@ export function Stacks() {
 
   const run = async (st: StackSummary, action: StackAction) => {
     const r = await stacksApi.run(st.name, action);
-    if (!r.ok) return toast('error', `Could not ${ACTION_LABEL[action].toLowerCase()} ${st.name}`, r.error);
+    if (!r.ok) return toast('error', `Couldn’t ${ACTION_LABEL[action].toLowerCase()} ${st.name}`, r.error);
     void load();
   };
   const remove = async (st: StackSummary) => {
@@ -78,7 +78,7 @@ export function Stacks() {
       st.containers.length > 0 &&
       (await confirmDialog({ title: 'Also delete its named volumes?', message: 'Data kept in the stack’s Docker volumes is erased for good. Choose Keep to leave them.', confirmLabel: 'Delete volumes', cancelLabel: 'Keep', danger: true }));
     const r = await stacksApi.remove(st.name, volumes);
-    if (!r.ok) return toast('error', `Could not delete ${st.name}`, r.error);
+    if (!r.ok) return toast('error', `Couldn’t delete ${st.name}`, r.error);
     toast('success', `Stack ${st.name} deleted`);
     void load();
   };
@@ -86,7 +86,7 @@ export function Stacks() {
     setInstalling(true);
     const r = await stacksApi.installCompose();
     setInstalling(false);
-    if (!r.ok) return toast('error', 'Could not install Docker Compose', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t install Docker Compose', r.error);
     toast('success', 'Docker Compose installed');
     void load();
   };
@@ -131,7 +131,7 @@ export function Stacks() {
         </div>
       )}
       {stacks.length === 0 ? (
-        <div className="st-empty muted">No stacks yet. Create one from a compose file, or paste one you already use.</div>
+        <div className="st-empty muted">No stacks yet — create one from a compose file, or paste one you already use.</div>
       ) : (
         <div className="st-list">
           {stacks.map((st) => (
@@ -238,7 +238,7 @@ function StackEditor({ name, compose, onClose }: { name: string | null; compose?
 
   const load = useCallback(async (n: string, files: boolean) => {
     const r = await stacksApi.get(n);
-    if (!r.ok) return setError(r.error ?? 'Could not load the stack');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load the stack');
     setDetail(r.data);
     if (files) {
       setYaml(r.data.compose);
@@ -252,7 +252,7 @@ function StackEditor({ name, compose, onClose }: { name: string | null; compose?
   usePoll(() => saved && load(saved, false), 1200, running && !!saved);
   const getLogs = useCallback(async (n: string, live: () => boolean = () => true) => {
     const r = await stacksApi.logs(n);
-    if (live()) setLogs(r.ok ? r.data.logs || 'No log lines yet.' : (r.error ?? 'Could not read the logs'));
+    if (live()) setLogs(r.ok ? r.data.logs || 'No log lines yet.' : (r.error ?? 'Couldn’t read the logs'));
   }, []);
   useEffect(() => {
     if (view !== 'logs' || !saved) return;
@@ -270,7 +270,7 @@ function StackEditor({ name, compose, onClose }: { name: string | null; compose?
     const n = saved ?? stackName.trim();
     const r = saved ? await stacksApi.update(n, yaml, env, deploy) : await stacksApi.create(n, yaml, env, deploy);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not save');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t save');
     toast('success', deploy ? `Deploying ${n}…` : `${n} saved`);
     setSaved(n);
     await load(n, false);
@@ -283,7 +283,7 @@ function StackEditor({ name, compose, onClose }: { name: string | null; compose?
       if (!ok) return;
     }
     const r = await stacksApi.run(saved, action);
-    if (!r.ok) return toast('error', `Could not ${ACTION_LABEL[action].toLowerCase()}`, r.error);
+    if (!r.ok) return toast('error', `Couldn’t ${ACTION_LABEL[action].toLowerCase()}`, r.error);
     void load(saved, false);
   };
   const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, value: string, set: (v: string) => void) => {

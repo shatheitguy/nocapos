@@ -139,7 +139,7 @@ export function VirtualDesk({ win }: { win: WinState }) {
     const r = await vmApi.power(v.name, action);
     setActing(null);
     if (!r.ok) return toast('error', `Couldn’t ${ACTION_VERB[action]} ${v.name}`, r.error);
-    if (action === 'shutdown') toast('info', `Asked ${v.name} to shut down`, 'The system inside decides when; use Force off if it doesn’t respond.');
+    if (action === 'shutdown') toast('info', `Asked ${v.name} to shut down`, 'The system inside decides when. If it ghosts you, use Force off.');
     void load();
   };
 
@@ -148,7 +148,7 @@ export function VirtualDesk({ win }: { win: WinState }) {
     const r = await vmApi.install();
     setInstalling(false);
     if (!r.ok) return toast('error', 'Couldn’t install the virtualization packages', r.error);
-    toast('success', 'Virtualization is installed');
+    toast('success', 'Virtualization is installed — let’s build a desk');
     void load();
   };
 
@@ -533,7 +533,7 @@ function Settings({ vm, status, onChanged, onDelete, onClone, onRename }: {
     const r = await vmApi.update(vm.name, body);
     setSaving(false);
     if (!r.ok) return setError(r.error ?? 'Couldn’t save');
-    toast('success', 'Settings saved');
+    toast('success', 'Bet — settings saved');
     setGrow({});
     setAddDisk(0);
     onChanged();
@@ -713,7 +713,7 @@ function Snapshots({ vm, onChanged }: { vm: VM; onChanged: () => void }) {
     const r = await vmApi.revert(vm.name, s.name);
     setBusy(false);
     if (!r.ok) return toast('error', 'Couldn’t go back to the snapshot', r.error);
-    toast('success', `${vm.name} is back at ${s.name}`);
+    toast('success', `Time travel complete: ${vm.name} is back at ${s.name}`);
     void load();
     onChanged();
   };
@@ -741,7 +741,7 @@ function Snapshots({ vm, onChanged }: { vm: VM; onChanged: () => void }) {
         {snaps === null ? (
           <div className="st-pad"><span className="st-spinner" /></div>
         ) : !snaps.length ? (
-          <p className="muted st-pad">No snapshots yet.</p>
+          <p className="muted st-pad">No snapshots yet — take one to get a save point.</p>
         ) : (
           snaps.map((s) => (
             <div key={s.name} className="urow">

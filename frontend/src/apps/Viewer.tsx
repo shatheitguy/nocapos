@@ -28,7 +28,7 @@ export function Viewer({ win }: { win: WinState }) {
     };
   }, [root, path, kind]);
 
-  const download = () => void downloadFile(root, path).then((ok) => !ok && toast('error', `Could not download ${name}`));
+  const download = () => void downloadFile(root, path).then((ok) => !ok && toast('error', `Couldn’t download ${name}`));
 
   if (kind === 'text' || kind === 'code') return <TextEditor win={win} root={root} path={path} onDownload={download} />;
   if (linkError) return <Unsupported name={name} text="The file could not be opened." onDownload={download} />;
@@ -125,7 +125,7 @@ function TextEditor({ win, root, path, onDownload }: { win: WinState; root: stri
     void fileApi.readText(root, path).then((r) => {
       if (!live) return;
       if (!r.ok) {
-        setError(r.error ?? 'Could not open file');
+        setError(r.error ?? 'Couldn’t open file');
         return;
       }
       setContent(r.data.content);
@@ -150,13 +150,13 @@ function TextEditor({ win, root, path, onDownload }: { win: WinState; root: stri
     const r = await fileApi.writeText(root, path, content, modTime);
     setSaving(false);
     if (!r.ok) {
-      toast('error', 'Save failed', r.error);
+      toast('error', 'That didn’t save', r.error);
       return;
     }
     setSaved(content);
     setModTime(r.data.mod_time);
     setSize(r.data.size);
-    toast('success', `Saved ${baseName(path)}`);
+    toast('success', `Bet — saved ${baseName(path)}`);
   }, [content, modTime, path, root, saving]);
 
   if (error) return <Unsupported name={baseName(path)} text={error} onDownload={onDownload} />;
@@ -225,7 +225,7 @@ export function FileLightbox({ items, index, onIndex, onClose }: { items: { root
     let live = true;
     if (kind === 'text' || kind === 'code') {
       if (item.size > LIGHTBOX_TEXT_MAX) setText({ content: '', error: `Too large to preview (${fmtBytes(item.size)}). Open it in a window instead.` });
-      else void fileApi.readText(root, item.path).then((r) => live && setText(r.ok ? { content: r.data.content } : { content: '', error: r.error ?? 'Could not read the file' }));
+      else void fileApi.readText(root, item.path).then((r) => live && setText(r.ok ? { content: r.data.content } : { content: '', error: r.error ?? 'Couldn’t read the file' }));
     } else {
       void fileTicket(root, item.path).then((t) => live && t && setUrl(rawUrl(root, item.path, t)));
     }
@@ -252,7 +252,7 @@ export function FileLightbox({ items, index, onIndex, onClose }: { items: { root
     onClose();
     openApp('viewer', { title: item.name, props: { root, path: item.path }, key: `viewer:${root}:${item.path}` });
   };
-  const download = () => void downloadFile(root, item.path).then((ok) => !ok && toast('error', `Could not download ${item.name}`));
+  const download = () => void downloadFile(root, item.path).then((ok) => !ok && toast('error', `Couldn’t download ${item.name}`));
 
   return (
     <div className="flb" role="dialog" aria-label={item.name} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>

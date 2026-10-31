@@ -25,7 +25,7 @@ export function ContainerGridWidget() {
       setError(null);
       // Running first, then by name.
       setList(r.data.sort((a, b) => Number(b.state === 'running') - Number(a.state === 'running') || a.name.localeCompare(b.name)));
-    } else setError(r.status === 503 || r.status === 0 ? 'Docker is not running.' : (r.error ?? 'Could not load containers'));
+    } else setError(r.status === 503 || r.status === 0 ? 'Docker is not running.' : (r.error ?? 'Couldn’t load containers'));
   }, []);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export function ContainerGridWidget() {
     setBusy(c.id);
     const r = await api(`/api/v1/containers/${encodeURIComponent(c.id)}/${action}`, { method: 'POST' });
     setBusy(null);
-    if (!r.ok) toast('error', `Could not ${action} ${c.name}`, r.error);
+    if (!r.ok) toast('error', `Couldn’t ${action} ${c.name}`, r.error);
     void load();
   };
 
@@ -71,7 +71,7 @@ export function ContainerGridWidget() {
       ) : !list ? (
         <p className="muted small">Loading…</p>
       ) : list.length === 0 ? (
-        <p className="muted small">No containers yet.</p>
+        <p className="muted small">No containers yet — install an app and it’ll show up.</p>
       ) : (
         <div className="cgrid">
           {list.map((c) => {
@@ -130,7 +130,7 @@ export function ScriptLauncherWidget() {
     if (r.ok) {
       setScripts(r.data.scripts);
       setError(r.data.host.enabled ? null : 'Running scripts is turned off on this server.');
-    } else setError(r.error ?? 'Could not load scripts');
+    } else setError(r.error ?? 'Couldn’t load scripts');
   }, []);
   const { run, start, stop, clear } = useScriptRun(() => void load());
 

@@ -43,7 +43,7 @@ type Act = 'install' | 'update' | 'start' | 'stop' | 'restart';
 
 async function runAction(app: StoreApp, action: Act, after: () => void) {
   const r = await storeApi.act(app.id, action);
-  if (!r.ok) toast('error', `Could not ${action} ${app.name}`, r.error);
+  if (!r.ok) toast('error', `Couldn’t ${action} ${app.name}`, r.error);
   after();
 }
 
@@ -59,7 +59,7 @@ async function uninstallApp(app: StoreApp, after: () => void) {
   });
   if (!pick) return;
   const r = await storeApi.uninstall(app.id, pick === 'delete');
-  if (!r.ok) toast('error', `Could not uninstall ${app.name}`, r.error);
+  if (!r.ok) toast('error', `Couldn’t uninstall ${app.name}`, r.error);
   after();
 }
 
@@ -88,7 +88,7 @@ export function AppCenter({ win }: { win?: WinState }) {
   const load = useCallback(async () => {
     const r = await storeApi.list();
     if (!r.ok) {
-      setError(r.status === 403 ? 'Only administrators can manage apps.' : (r.error ?? 'Could not load the App Store'));
+      setError(r.status === 403 ? 'Only administrators can manage apps.' : (r.error ?? 'Couldn’t load the App Store'));
       return;
     }
     setError(null);
@@ -116,8 +116,8 @@ export function AppCenter({ win }: { win?: WinState }) {
       if (!j) continue;
       if (!j.done) watching.current.add(j.id);
       else if (watching.current.delete(j.id)) {
-        if (j.error) toast('error', `${a.name}: ${j.action} failed`, j.error);
-        else toast('success', `${a.name} ${j.action === 'install' ? 'installed' : j.action === 'update' ? 'updated' : 'removed'}`);
+        if (j.error) toast('error', `${a.name}: ${j.action} flopped`, j.error);
+        else toast('success', j.action === 'install' ? `${a.name} installed — no cap, it's ready` : j.action === 'update' ? `Big moves: ${a.name} updated` : `${a.name} removed`);
       }
     }
   }, [apps]);
@@ -194,7 +194,7 @@ export function AppCenter({ win }: { win?: WinState }) {
         </div>
       </section>
     ) : (
-      <Empty icon="store" text="No apps installed yet. Find one under Discover.">
+      <Empty icon="store" text="Nothing here yet — find an app under Discover and it’ll show up.">
         <button type="button" className="pill" onClick={() => goTab('discover')}>
           Browse apps
         </button>
@@ -204,7 +204,7 @@ export function AppCenter({ win }: { win?: WinState }) {
     body = updates.length ? (
       <Updates updates={updates} docker={docker} onOpen={open} onChanged={reload} />
     ) : (
-      <Empty icon="check" text="All your apps are up to date." />
+      <Empty icon="check" text="All your apps are up to date. No cap." />
     );
   }
 
@@ -667,7 +667,7 @@ function Updates({ updates, docker, onOpen, onChanged }: { updates: StoreApp[]; 
     setRunning(true);
     for (const a of updates) {
       const r = await storeApi.act(a.id, 'update');
-      if (!r.ok) toast('error', `Could not update ${a.name}`, r.error);
+      if (!r.ok) toast('error', `Couldn’t update ${a.name}`, r.error);
     }
     setRunning(false);
     onChanged();

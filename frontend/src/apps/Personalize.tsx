@@ -124,7 +124,7 @@ export function TransparencySlider() {
   const transparency = usePrefs((s) => s.transparency);
   const set = usePrefs((s) => s.set);
   return (
-    <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is sharper and faster; 0% is fully solid." value={transparency}
+    <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is crisper and faster; 0% is fully solid." value={transparency}
       min={0} max={100} step={5} format={(v) => (v === 0 ? 'Solid' : `${v}%`)} onChange={(v) => set({ transparency: v, reduceTransparency: v === 0 })} />
   );
 }
@@ -206,7 +206,7 @@ export function WallpaperStrip({ strip = false, only }: { strip?: boolean; only?
       setCustom(await saveCustomWallpaper(file));
       set({ wallpaper: 'custom' });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not use that image');
+      setError(e instanceof Error ? e.message : 'That image didn’t work. Try another one?');
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -296,7 +296,7 @@ export function DockSettings() {
         <Toggle label="Show dots for open apps" hint="A dot under each app that has a window open" checked={prefs.dockIndicators} onChange={(dockIndicators) => set({ dockIndicators })} />
       </Section>
 
-      <p className="settings-tip">Tip: drag icons to reorder the Dock, or right-click the Dock to reset it.</p>
+      <p className="settings-tip">Pro tip: drag icons to reorder the Dock, or right-click the Dock to reset it.</p>
     </div>
   );
 }
@@ -322,7 +322,7 @@ export function DesktopSettings() {
           ]} />
         </Row>
         <Toggle label="Show icon names" checked={prefs.iconLabels} onChange={(iconLabels) => set({ iconLabels })} />
-        <Toggle label="Snap icons to grid" hint="Dropped icons line up neatly" checked={prefs.iconSnap} onChange={(iconSnap) => set({ iconSnap })} />
+        <Toggle label="Snap icons to grid" hint="Dropped icons line up clean" checked={prefs.iconSnap} onChange={(iconSnap) => set({ iconSnap })} />
         <Row label="Clean Up" hint="Line up every desktop icon on the grid">
           <button type="button" className="ghost small" disabled={!iconCount} onClick={cleanUp}>
             Clean Up
@@ -343,7 +343,7 @@ export function WindowSettings() {
       <Section title="Title bar">
         <Row label="Window buttons" hint="Close, minimize and maximize">
           <Choice value={prefs.titleButtons} onChange={(titleButtons) => set({ titleButtons })} options={[
-            { id: 'right', label: 'Right' }, { id: 'left', label: 'Left (macOS)' },
+            { id: 'right', label: 'Right' }, { id: 'left', label: 'Left' },
           ]} />
         </Row>
         <Row label="Double-click a title bar to">
@@ -352,7 +352,7 @@ export function WindowSettings() {
           ]} />
         </Row>
       </Section>
-      <p className="settings-tip">Tip: right-click a title bar or an app icon for New window; drag a window to a screen edge to snap it.</p>
+      <p className="settings-tip">Pro tip: right-click a title bar or an app icon for New window; drag a window to a screen edge to snap it.</p>
     </div>
   );
 }
@@ -365,7 +365,7 @@ function ResetSection() {
   };
   return (
     <Section title="Reset">
-      <Row label="Reset personalization" hint="Theme, colors, wallpaper, Dock, desktop and window settings go back to defaults">
+      <Row label="Reset personalization" hint="Fresh start: theme, colors, wallpaper, Dock, desktop and window settings go back to defaults">
         <button type="button" className="ghost small" onClick={reset}>
           Reset
         </button>

@@ -199,7 +199,7 @@ export function Containers() {
   if (error) {
     const offline = error.status === 503 || error.status === 0;
     return (
-      <Empty icon="containers" text={offline ? 'Docker is not running on this machine. Start Docker — NoCapOS connects automatically.' : error.message}>
+      <Empty icon="containers" text={offline ? 'Docker isn’t running on this machine. Start Docker and NoCapOS connects on its own.' : error.message}>
         <button type="button" onClick={() => void load()}>
           <Icon name="restart" size={15} /> Retry
         </button>
@@ -331,7 +331,7 @@ export function Containers() {
               ))}
             </div>
             {shown.length === 0 ? (
-              <Empty icon="containers" text={list.length ? 'No containers match.' : 'No containers yet. Apps from the App Store appear here.'} />
+              <Empty icon="containers" text={list.length ? 'No containers match that.' : 'Nothing here yet — install an app from the App Store and it’ll show up.'} />
             ) : layout === 'grid' ? (
               <div className="ct-grid">
                 {shown.map((c) => (

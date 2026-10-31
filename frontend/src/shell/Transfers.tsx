@@ -63,7 +63,7 @@ function Row({ t }: { t: Transfer }) {
 
 export function TransferList({ compact = false }: { compact?: boolean }) {
   const list = useTransfers((s) => s.list);
-  if (!list.length) return <p className="muted small xfer-empty">No transfers. Uploads, copies and moves show up here.</p>;
+  if (!list.length) return <p className="muted small xfer-empty">All quiet. Uploads, copies and moves show up here.</p>;
   const finished = list.some((t) => t.status !== 'running');
   return (
     <div className={`xfer-list ${compact ? 'compact' : ''}`}>

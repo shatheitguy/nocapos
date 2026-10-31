@@ -61,7 +61,7 @@ export function VmScreen({ win }: { win: WinState }) {
         if (cancelled) return;
         if (!s.ok) {
           setPhase('error');
-          setMessage(s.error || 'Could not reach NoCapOS');
+          setMessage(s.error || 'Couldn’t reach NoCapOS');
           return;
         }
         if (s.data.ready) break;

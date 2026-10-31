@@ -170,7 +170,7 @@ function Results({ query, isAdmin, go }: { query: string; isAdmin: boolean; go: 
       return head || opts.length ? { e, desc: opts.length ? `Has: ${opts.join(', ')}` : e.desc } : null;
     })
     .filter((x) => x !== null);
-  if (!hits.length) return <p className="muted set-empty">No settings match “{query.trim()}”.</p>;
+  if (!hits.length) return <p className="muted set-empty">Nothing in Settings matches “{query.trim()}”. Try another word?</p>;
   return (
     <div className="ucard ulist">
       {hits.map(({ e, desc }) => (
@@ -366,11 +366,11 @@ function Meter({ pct }: { pct: number }) {
 // ---------------- Notifications ----------------
 
 const NOTIFY_TOPICS: { key: keyof NotifySettings; label: string; hint: string }[] = [
-  { key: 'update', label: 'NoCapOS updates', hint: 'When a new version of NoCapOS is out' },
-  { key: 'app_updates', label: 'App updates', hint: 'When an App Store app you installed has a new version' },
-  { key: 'app_errors', label: 'App problems', hint: 'An app stops unexpectedly, or an install or update fails' },
-  { key: 'storage', label: 'Disk and pool health', hint: 'A disk is failing or a RAID pool is degraded' },
-  { key: 'backups', label: 'Backups', hint: 'A backup plan fails to run' },
+  { key: 'update', label: 'NoCapOS updates', hint: 'A fresh NoCapOS version just dropped' },
+  { key: 'app_updates', label: 'App updates', hint: 'An App Store app you installed has a new version' },
+  { key: 'app_errors', label: 'App problems', hint: 'An app crashes, or an install or update fails' },
+  { key: 'storage', label: 'Disk and pool health', hint: 'A disk is failing or a RAID pool is degraded — heads up' },
+  { key: 'backups', label: 'Backups', hint: 'A backup plan didn’t run' },
   { key: 'devices', label: 'USB drives', hint: 'A USB drive or memory card is plugged in or removed' },
 ];
 
@@ -388,14 +388,14 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
       if (r.ok) setTopics(r.data);
       else {
         setTopics(topics);
-        toast('error', 'Could not save', r.error);
+        toast('error', 'That didn’t save. Try again?', r.error);
       }
     });
   };
   return (
     <div className="stack settings-page">
       {isAdmin && (
-        <Group title="Notify me about" hint="Applies to every admin. Turned-off topics aren't kept in the Notification Center either.">
+        <Group title="Notify me about" hint="Applies to every admin. Anything you turn off skips the Notification Center too.">
           {NOTIFY_TOPICS.map((t) => (
             <Toggle key={t.key} label={t.label} hint={t.hint} checked={topics?.[t.key] ?? true} disabled={!topics} onChange={(on) => setTopic(t.key, on)} />
           ))}
@@ -403,7 +403,7 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
       )}
       <FocusSettings />
       <Group title="Alerts">
-        <Toggle label="Play a sound for notifications" hint={prefs.uiSounds ? 'Uses the volume in Sound' : 'Turn on sound effects in Sound first'}
+        <Toggle label="Play a sound for notifications" hint={prefs.uiSounds ? 'Uses the volume in Sound' : 'Turn on sound effects in Sound first — then this unlocks'}
           checked={prefs.soundAlerts} disabled={!prefs.uiSounds} onChange={(soundAlerts) => prefs.set({ soundAlerts })} />
       </Group>
     </div>
@@ -449,7 +449,7 @@ function SoftwareUpdate() {
     void api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`).then((r) => {
       setBusy(false);
       if (r.ok) setU(r.data);
-      else toast('error', 'Could not check for updates', r.error);
+      else toast('error', 'Couldn’t check for updates right now', r.error);
     });
   };
   const loadRun = () =>
@@ -465,7 +465,7 @@ function SoftwareUpdate() {
   useEffect(() => {
     if (!updating) loadRun();
   }, [updating]);
-  const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', 'Command copied'));
+  const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', 'Bet — command copied'));
   const updateNow = () => {
     if (!u?.latest) return;
     setStarting(true);
@@ -484,7 +484,7 @@ function SoftwareUpdate() {
         return;
       }
       if (code === 'release_changed') check(true);
-      toast('error', 'Could not start the update', r.error);
+      toast('error', 'The update didn’t start', r.error);
     });
   };
   const last = run && !run.running ? run.result : null;
@@ -495,7 +495,7 @@ function SoftwareUpdate() {
         <Logo size={40} />
         <div className="set-update-text">
           {!u ? (
-            <b>Checking for updates…</b>
+            <b>Checking for the latest drop…</b>
           ) : u.error ? (
             <>
               <b>Couldn't check for updates</b>
@@ -512,12 +512,12 @@ function SoftwareUpdate() {
             </>
           ) : u.dev ? (
             <>
-              <b>Development build</b>
+              <b>Development build (living on the edge)</b>
               <span>This is {u.current}; the latest release is {u.latest ? vtag(u.latest) : 'unknown'}.</span>
             </>
           ) : (
             <>
-              <b>You're up to date</b>
+              <b>You're all caught up</b>
               <span>NoCapOS {vtag(u.current)} is the latest. No cap.</span>
             </>
           )}
@@ -617,7 +617,7 @@ function About({ isAdmin }: { isAdmin: boolean }) {
       : []),
   ];
   const copy = () =>
-    void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', 'Device info copied'));
+    void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', 'Device info copied — ready to paste'));
   return (
     <div className="stack settings-page">
       <div className="set-about-hero">
@@ -655,10 +655,10 @@ function HostnameEdit({ name }: { name: string }) {
     setBusy(true);
     const r = await hostApi.setHostname(next);
     setBusy(false);
-    if (!r.ok) return toast('error', 'Couldn’t rename this device', r.error);
+    if (!r.ok) return toast('error', 'Rename didn’t go through', r.error);
     const info = await api<SystemInfo>('/api/v1/system/info');
     if (info.ok) useSystem.getState().setInfo(info.data);
-    toast('success', `This device is now “${r.data.hostname}”`, `On your network it answers as ${r.data.hostname.split('.')[0]}.local.`);
+    toast('success', `New name, who dis? It’s “${r.data.hostname}” now`, `On your network it answers as ${r.data.hostname.split('.')[0]}.local.`);
     setEditing(false);
   };
   if (!editing) {
@@ -696,7 +696,7 @@ function HostnameEdit({ name }: { name: string }) {
         Cancel
       </button>
       <span className="muted small" style={{ flexBasis: '100%', textAlign: 'center' }}>
-        {valid || !value ? 'Letters, digits and hyphens, e.g. living-room-nas. It takes effect right away.' : 'Use only letters, digits and hyphens (not at the start or end).'}
+        {valid || !value ? 'Letters, digits and hyphens, e.g. living-room-nas. It takes effect right away.' : 'That name’s not it — letters, digits and hyphens only (no hyphen at the start or end).'}
       </span>
     </form>
   );
@@ -731,7 +731,7 @@ function StoragePage() {
             </div>
           ))
         ) : (
-          <Row label="No disks reported yet">
+          <Row label="No disks showing up yet">
             <span />
           </Row>
         )}
@@ -750,7 +750,7 @@ function Troubleshoot() {
     setError(null);
     void api<{ supported: boolean; reason?: string; lines: string[] }>('/api/v1/system/logs?lines=400').then((r) => {
       if (r.ok) setLogs(r.data);
-      else setError(r.error ?? 'Could not read the logs');
+      else setError(r.error ?? 'Couldn’t pull the logs. Hit Refresh to try again.');
     });
   };
   useEffect(load, []);
@@ -760,14 +760,14 @@ function Troubleshoot() {
   const copy = () => void navigator.clipboard?.writeText(logs?.lines.join('\n') ?? '').then(() => toast('success', 'Logs copied'));
   return (
     <div className="stack settings-page">
-      <Group title="NoCapOS logs" hint="The most recent lines from the NoCapOS service. Include them when you report a problem.">
+      <Group title="NoCapOS logs" hint="The latest lines from the NoCapOS service. Something off? Include these when you report it.">
         <div className="settings-row full">
           {error ? (
             <p className="error">{error}</p>
           ) : !logs ? (
             <p className="muted small">Loading…</p>
           ) : logs.supported ? (
-            <pre ref={box} className="set-logs">{logs.lines.length ? logs.lines.join('\n') : 'No log lines yet.'}</pre>
+            <pre ref={box} className="set-logs">{logs.lines.length ? logs.lines.join('\n') : 'Nothing logged yet — it’s quiet in here.'}</pre>
           ) : (
             <p className="muted small">{logs.reason}</p>
           )}

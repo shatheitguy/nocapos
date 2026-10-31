@@ -87,7 +87,7 @@ export function NewVmWizard({ status, vms, onClose, onDone }: { status: VmStatus
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Couldn’t create the machine');
     if (r.data.warning) toast('error', `${name} was created with a problem`, r.data.warning);
-    else toast('success', `${name} is ready`, start ? 'It’s starting now. Open its screen to install.' : undefined);
+    else toast('success', `${name} is ready to roll`, start ? 'It’s starting now. Open its screen to install.' : undefined);
     onDone(name);
     onClose();
   };

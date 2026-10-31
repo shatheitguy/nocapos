@@ -8,7 +8,7 @@ import (
 )
 
 // ErrLocked: too many wrong passwords or codes for this account in a row.
-var ErrLocked = errors.New("too many failed attempts for this account; try again in 15 minutes")
+var ErrLocked = errors.New("too many wrong tries on this account — take a breather and try again in 15 minutes")
 
 const (
 	lockoutThreshold = 10

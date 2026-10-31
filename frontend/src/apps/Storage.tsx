@@ -866,7 +866,7 @@ function Snapshots({ dataset }: { dataset: string }) {
     const n = name.trim() || `manual-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`;
     const r = await storageApi.createSnapshot(dataset, n);
     if (!r.ok) return toast('error', 'Couldn’t take a snapshot', r.error);
-    toast('success', 'Snapshot taken');
+    toast('success', 'Snapshot taken — you’ve got a save point');
     setName('');
     load();
   };

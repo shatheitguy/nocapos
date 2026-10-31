@@ -73,7 +73,7 @@ func TestAppUpdateNotifiesOncePerVersion(t *testing.T) {
 	s.checkAppUpdates(ctx)
 	s.checkAppUpdates(ctx) // the 6-hourly check again, or after a restart
 	got := titles(t, s)
-	if len(got) != 1 || got[0] != "Jellyfin 10.11.0 is available" {
+	if len(got) != 1 || got[0] != "Jellyfin 10.11.0 just dropped" {
 		t.Fatalf("notifications = %q", got)
 	}
 	items, _, _ := s.notify.List(ctx, 0)
@@ -104,7 +104,7 @@ func TestReleaseStorageBackupAndJobNotifications(t *testing.T) {
 	s.notifyAppJob("immich", "install", nil)
 	s.notifyAppJob("immich", "start", errors.New("nope"))
 
-	want := []string{"Couldn't install Immich", "Backup “Photos” failed", "Pool tank is degraded", "NoCapOS 0.3.1 is available"}
+	want := []string{"Couldn't install Immich", "Backup “Photos” didn't finish", "Pool tank is degraded", "NoCapOS 0.3.1 just dropped"}
 	got := titles(t, s)
 	if len(got) != len(want) {
 		t.Fatalf("notifications = %q, want %q", got, want)
