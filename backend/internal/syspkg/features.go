@@ -16,8 +16,6 @@ type Feature struct {
 	Bins []string `json:"-"`
 	// Packages per package manager; a manager without an entry can't install it.
 	Packages Names `json:"-"`
-	// UbuntuOnly: on other apt systems the packages need extra repositories.
-	UbuntuOnly bool `json:"-"`
 }
 
 // Features lists the host packages NoCapOS installs, in install order.
@@ -61,7 +59,10 @@ var Features = []Feature{
 		Packages: Names{"apt": {"smartmontools"}, "dnf": {"smartmontools"}, "pacman": {"smartmontools"}, "zypper": {"smartmontools"}},
 	},
 	{
-		ID: "zfs", Title: "ZFS pools (OpenZFS)", Bins: []string{"zfs"}, UbuntuOnly: true,
+		// Ubuntu's kernels carry the module; on Debian and Raspberry Pi OS it's
+		// built with DKMS from contrib (ZFSDebianSteps, install.sh's
+		// install_zfs_debian).
+		ID: "zfs", Title: "ZFS pools (OpenZFS)", Bins: []string{"zfs"},
 		Packages: Names{"apt": {"zfsutils-linux"}},
 	},
 	{
@@ -84,7 +85,6 @@ type FeatureState struct {
 // FeatureStates reports which features are installed on this host.
 func FeatureStates() []FeatureState {
 	mgr := Manager()
-	ubuntu := isUbuntu()
 	out := make([]FeatureState, 0, len(Features))
 	for _, f := range Features {
 		st := FeatureState{Feature: f, Installed: true}
@@ -93,7 +93,7 @@ func FeatureStates() []FeatureState {
 				st.Installed = false
 			}
 		}
-		st.CanInstall = Native() && len(f.Packages[mgr]) > 0 && (!f.UbuntuOnly || ubuntu)
+		st.CanInstall = Native() && len(f.Packages[mgr]) > 0
 		out = append(out, st)
 	}
 	return out

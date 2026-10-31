@@ -16,6 +16,7 @@ import type { WinState } from '../state/windows';
 import type { Snapshot, SystemInfo } from '../api/types';
 import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
+import { HostAccessPage } from './SettingsHostAccess';
 import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
@@ -258,6 +259,8 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <About isAdmin={isAdmin} />;
     case 'update':
       return <SoftwareUpdate />;
+    case 'access':
+      return isAdmin ? <HostAccessPage /> : null;
     case 'storage':
       return <StoragePage />;
     case 'datetime':

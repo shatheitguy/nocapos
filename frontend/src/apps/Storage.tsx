@@ -267,7 +267,11 @@ function ToolsCard({ status, installing, onInstall }: { status: StorageStatus; i
     items.push({
       tool: 'zfs',
       title: status.zfs.installed ? 'ZFS isn’t loaded' : 'Install ZFS for RAID pools',
-      desc: status.zfs.can_install ? 'OpenZFS combines disks into pools that survive disk failures.' : 'Install OpenZFS with your distribution’s instructions, then reopen this app.',
+      desc:
+        status.zfs.hint ??
+        (status.zfs.can_install
+          ? 'OpenZFS combines disks into pools that survive disk failures. On Debian and Raspberry Pi OS it’s built for your kernel, so give it a few minutes.'
+          : 'Install OpenZFS with your distribution’s instructions, then reopen this app.'),
       can: status.zfs.can_install,
     });
   if (!status.smart.installed)

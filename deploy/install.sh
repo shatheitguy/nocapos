@@ -17,6 +17,10 @@
 #   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
 #                       engine, Brave, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
 #                       to install each one later, from its app or from Packages
+#   --desktop           NoCap Desktop: NoCapOS full screen on this machine's own monitor
+#                       (a small Wayland compositor + browser on tty1, still behind the sign-in).
+#                       On by default when a monitor is plugged in.
+#   --no-desktop        don't set up NoCap Desktop (and turn it off if it was on)
 #   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
 #   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
 #                       If Avahi already has a host-name set (by you), that one is kept.
@@ -43,6 +47,7 @@ PURGE=0
 MINIMAL=0
 BRANDING=1
 MDNS_NAME=nocap
+DESKTOP=auto
 ARGS=("$@")
 
 info() { printf '\033[1;31m==>\033[0m %s\n' "$*"; }
@@ -67,11 +72,13 @@ while [ $# -gt 0 ]; do
     --install-docker) INSTALL_DOCKER=yes ;;
     --minimal) MINIMAL=1 ;;
     --no-branding) BRANDING=0 ;;
+    --desktop) DESKTOP=yes ;;
+    --no-desktop) DESKTOP=no ;;
     --mdns-name) MDNS_NAME="${2:?--mdns-name needs a name}"; shift ;;
     --yes | -y) ASSUME_YES=1 ;;
     --uninstall) UNINSTALL=1 ;;
     --purge) PURGE=1 ;;
-    -h | --help) sed -n '2,27p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
+    -h | --help) sed -n '2,31p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -256,6 +263,136 @@ pkg_install() { # $1 = manager, rest = packages
 
 is_ubuntu() { grep -qE '^ID="?ubuntu"?$' /etc/os-release 2>/dev/null; }
 
+# ---------------------------------------------------------------- ZFS on Debian
+# Ubuntu's kernels carry ZFS; Debian and Raspberry Pi OS build it for the
+# running kernel with DKMS, from Debian's "contrib" component. Same steps as
+# backend/internal/syspkg/zfs.go (the Storage app's Install button).
+# Anything going wrong here is a warning: the install always carries on.
+
+# awk helpers: is this source Debian's own archive (a mirror, security, or
+# Raspbian), not Raspberry Pi's or a third party's repository?
+CONTRIB_FUNCS='
+function debian(u,   l) {
+  l = tolower(u)
+  if (l ~ /^cdrom:/ || l ~ /raspberrypi\.com/ || l ~ /raspberrypi\.org\/debian/) return 0
+  return (l ~ /debian/ || l ~ /raspbian/)
+}'
+# One-line sources (sources.list, *.list): add contrib after "main".
+CONTRIB_LIST='
+{
+  t = $0; sub(/^[ \t]+/, "", t)
+  if (t !~ /^deb(-src)?[ \t]/) { print; next }
+  b = t; sub(/[ \t]*#.*$/, "", b)
+  n = split(b, f, /[ \t]+/)
+  k = 2
+  if (f[k] ~ /^\[/) { while (k <= n && f[k] !~ /\]$/) k++; k++ }
+  if (k + 2 > n || !debian(f[k])) { print; next }
+  hm = 0; hc = 0
+  for (i = k + 2; i <= n; i++) { if (f[i] == "main") hm = 1; if (f[i] == "contrib") hc = 1 }
+  line = $0
+  if (hm && !hc && match(line, /[ \t]main([ \t#\r]|$)/)) {
+    line = substr(line, 1, RSTART + 4) " contrib" substr(line, RSTART + 5); changed = 1
+  }
+  print line
+}
+END { exit changed ? 0 : 3 }'
+# deb822 sources (*.sources): add contrib to the Components of enabled
+# Debian stanzas.
+CONTRIB_DEB822='
+function val(s) { sub(/\r$/, "", s); sub(/^[^:]*:[ \t]*/, "", s); return s }
+function flush(   i, en, deb, ci, n, k, u, c, hm, hc, line, cr, low) {
+  en = 1; deb = 0; ci = 0
+  for (i = 1; i <= cnt; i++) {
+    low = tolower(buf[i])
+    if (low ~ /^enabled:/ && tolower(val(buf[i])) == "no") en = 0
+    if (low ~ /^uris:/) { n = split(val(buf[i]), u, /[ \t]+/); for (k = 1; k <= n; k++) if (debian(u[k])) deb = 1 }
+    if (low ~ /^components:/) ci = i
+  }
+  if (en && deb && ci) {
+    n = split(val(buf[ci]), c, /[ \t]+/); hm = 0; hc = 0
+    for (k = 1; k <= n; k++) { if (c[k] == "main") hm = 1; if (c[k] == "contrib") hc = 1 }
+    if (hm && !hc) {
+      line = buf[ci]; cr = (line ~ /\r$/); sub(/[ \t\r]+$/, "", line)
+      buf[ci] = line " contrib" (cr ? "\r" : ""); changed = 1
+    }
+  }
+  for (i = 1; i <= cnt; i++) print buf[i]
+  cnt = 0
+}
+/^[ \t\r]*$/ { flush(); print; next }
+{ buf[++cnt] = $0 }
+END { flush(); exit changed ? 0 : 3 }'
+
+# Turns on contrib where it's missing. The original of each changed file is
+# kept beside it as <file>.nocapos.bak (apt quietly ignores *.bak).
+enable_contrib() {
+  local f tmp prog
+  for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+    [ -f "$f" ] || continue
+    case "$f" in *.sources) prog="$CONTRIB_DEB822" ;; *) prog="$CONTRIB_LIST" ;; esac
+    tmp="$(mktemp)"
+    if awk "$CONTRIB_FUNCS $prog" "$f" >"$tmp" 2>/dev/null; then
+      [ -e "$f.nocapos.bak" ] || cp -p "$f" "$f.nocapos.bak"
+      cat "$tmp" >"$f" # keeps the file's owner and mode
+      printf '    zfs: turned on contrib in %s\n' "$f"
+    fi
+    rm -f "$tmp"
+  done
+}
+
+# Prints the kernel headers package for the running kernel: the exact
+# version first, then Raspberry Pi's flavour packages, then Debian's
+# per-architecture one.
+zfs_headers() {
+  local rel cands c pi=0
+  rel="$(uname -r)"
+  grep -qs 'Raspberry Pi' /proc/device-tree/model && pi=1
+  cands="linux-headers-$rel"
+  if [ "$pi" -eq 1 ] || [[ "$rel" == *rpi* || "$rel" == *+rpt* || "$rel" == *-v8+ || "$rel" == *-v7l+ ]]; then
+    case "$rel" in
+      *2712*) cands="$cands linux-headers-rpi-2712 linux-headers-rpi-v8" ;;
+      *v7l*) cands="$cands linux-headers-rpi-v7l linux-headers-rpi-v7" ;;
+      *v7*) cands="$cands linux-headers-rpi-v7" ;;
+      *) cands="$cands linux-headers-rpi-v8 linux-headers-rpi-2712" ;;
+    esac
+    cands="$cands raspberrypi-kernel-headers"
+  else
+    case "$ARCH" in
+      amd64) cands="$cands linux-headers-amd64" ;;
+      arm64) cands="$cands linux-headers-arm64" ;;
+      armv7) cands="$cands linux-headers-armmp" ;;
+    esac
+  fi
+  for c in $cands; do
+    if pkg_available apt "$c"; then echo "$c"; return 0; fi
+  done
+  return 1
+}
+
+install_zfs_debian() {
+  if has zfs && [ -e /sys/module/zfs ]; then printf '    zfs: already installed\n'; return 0; fi
+  printf '    zfs: building OpenZFS for kernel %s with DKMS (a few minutes; longer on small boards)\n' "$(uname -r)"
+  enable_contrib
+  pkg_refresh apt || warn "zfs: couldn't refresh the package lists; trying with what's cached"
+  local hdr
+  if hdr="$(zfs_headers)"; then
+    printf '    zfs: %s\n' "$hdr"
+    pkg_install apt "$hdr" || warn "zfs: couldn't install $hdr; trying the build anyway"
+  else
+    warn "zfs: no kernel headers for kernel $(uname -r) in your apt sources; trying the build anyway"
+  fi
+  if ! pkg_available apt zfs-dkms; then
+    warn "zfs: zfs-dkms isn't in your apt sources (contrib missing?); skipped. Install it later from the Storage app"
+    return 0
+  fi
+  printf '    zfs: zfs-dkms zfsutils-linux\n'
+  if ! pkg_install apt zfs-dkms zfsutils-linux; then
+    warn "zfs: the ZFS build failed, usually no kernel headers for $(uname -r); update, reboot, then hit Install in the Storage app"
+    return 0
+  fi
+  modprobe zfs 2>/dev/null || warn "zfs: installed, but the kernel module didn't load; reboot, then open the Storage app"
+}
+
 install_host_packages() {
   local mgr col line feature list p avail skipped
   mgr="$(pkg_manager)"
@@ -270,8 +407,8 @@ install_host_packages() {
     feature="${line%%|*}"
     list="$(cut -d'|' -f"$col" <<<"$line")"
     [ "$list" = "-" ] && { warn "$feature: no packages for this distribution; skipped"; continue; }
-    if [ "$feature" = zfs ] && ! is_ubuntu; then
-      warn "zfs: NoCapOS installs ZFS on Ubuntu; on this system follow OpenZFS's instructions for your distribution"
+    if [ "$feature" = zfs ] && [ "$mgr" = apt ] && ! is_ubuntu; then
+      install_zfs_debian # Debian, Raspberry Pi OS: built with DKMS; never fails the install
       continue
     fi
     avail=() skipped=()
@@ -308,6 +445,216 @@ install_brave() {
   case "$(pkg_manager)" in apt | dnf) ;; *) warn "Brave: NoCapOS installs it on apt and dnf systems; skipped"; return 0 ;; esac
   info "Installing Brave and its stream tools (from Brave's repository)"
   "$BIN" install-brave >/dev/null 2>&1 || warn "Brave didn't install now; the Brave app installs it on first launch."
+}
+
+# ---------------------------------------------------------------- NoCap Desktop
+# NoCapOS full screen on this machine's own monitor: a small Wayland
+# compositor (labwc, or cage) on tty1 as the login-less system user
+# nocap-desktop, running a browser in kiosk mode at NoCapOS's own sign-in.
+# The browser opens http://127.0.0.1:8780, a plain-HTTP listener alfad binds
+# to loopback only (ALFA_DESKTOP_ADDR), so there's no certificate warning and
+# TLS stays as it is for every other device. Turned on and off from
+# Settings → General → This Screen & Access. uninstall.sh removes it all.
+DESKTOP_UNIT=/etc/systemd/system/nocapos-desktop.service
+DESKTOP_USER=nocap-desktop
+DESKTOP_HOME=/var/lib/nocap-desktop
+DESKTOP_LIB=/usr/local/lib/nocapos
+
+display_connected() { grep -qsx connected /sys/class/drm/*/status; }
+
+desktop_browser() {
+  local b
+  for b in brave-browser brave-browser-stable brave chromium chromium-browser firefox-esr firefox; do
+    if has "$b"; then echo "$b"; return 0; fi
+  done
+  return 1
+}
+
+# Someone logged in on tty1 right now (maybe running this installer there):
+# starting the desktop would take that console away from them.
+tty1_in_use() { has who && who 2>/dev/null | awk '$2 == "tty1" {found=1} END {exit !found}'; }
+
+disable_desktop() {
+  [ -f "$DESKTOP_UNIT" ] || return 0
+  info "Turning NoCap Desktop off"
+  systemctl disable --now nocapos-desktop >/dev/null 2>&1 || true
+  systemctl --no-block start getty@tty1.service >/dev/null 2>&1 || true
+}
+
+install_desktop() {
+  local mgr comp="" p g browser
+  mgr="$(pkg_manager)"
+  if [ "$mgr" = none ]; then warn "NoCap Desktop: no supported package manager here; skipped"; return 0; fi
+  info "Setting up NoCap Desktop (NoCapOS on this machine's own screen)"
+  [ "$MINIMAL" -eq 0 ] || pkg_refresh "$mgr" || true
+  for p in labwc cage; do
+    if has "$p" || { pkg_available "$mgr" "$p" && pkg_install "$mgr" "$p"; }; then comp="$p"; break; fi
+  done
+  if [ -z "$comp" ]; then
+    warn "NoCap Desktop: neither labwc nor cage is available for this system; skipped"
+    return 0
+  fi
+  printf '    desktop: %s\n' "$comp"
+  # Xwayland (for X11 apps opened on this screen later) and a font set.
+  for p in xwayland xorg-xwayland xorg-x11-server-Xwayland fonts-dejavu-core; do
+    if pkg_available "$mgr" "$p"; then pkg_install "$mgr" "$p" || true; fi
+  done
+  # The compositor gets the screen through logind; seatd only where there's no logind.
+  if ! has loginctl && pkg_available "$mgr" seatd && pkg_install "$mgr" seatd; then
+    systemctl enable --now seatd >/dev/null 2>&1 || warn "NoCap Desktop: seatd didn't start"
+  fi
+  # The browser: the Brave NoCapOS already uses, else Chromium or Firefox.
+  if ! desktop_browser >/dev/null; then
+    "$BIN" install-brave >/dev/null 2>&1 || true
+  fi
+  if ! desktop_browser >/dev/null; then
+    for p in chromium firefox-esr firefox; do
+      if pkg_available "$mgr" "$p" && pkg_install "$mgr" "$p"; then break; fi
+    done
+  fi
+  if ! browser="$(desktop_browser)"; then
+    warn "NoCap Desktop: couldn't install a browser (Brave, Chromium or Firefox); skipped"
+    return 0
+  fi
+  printf '    desktop browser: %s\n' "$browser"
+
+  if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
+    useradd --system --create-home --home-dir "$DESKTOP_HOME" --shell /usr/sbin/nologin \
+      --user-group --comment "NoCap Desktop" "$DESKTOP_USER" ||
+      { warn "NoCap Desktop: couldn't create the $DESKTOP_USER user; skipped"; return 0; }
+  fi
+  mkdir -p "$DESKTOP_HOME"
+  chown "$DESKTOP_USER:$DESKTOP_USER" "$DESKTOP_HOME"
+  chmod 700 "$DESKTOP_HOME"
+  for g in video render input audio seat _seatd; do
+    if getent group "$g" >/dev/null; then usermod -aG "$g" "$DESKTOP_USER" 2>/dev/null || true; fi
+  done
+
+  mkdir -p "$DESKTOP_LIB"
+  # The session: starts the compositor, which runs nocap-desktop-session.
+  cat >"$DESKTOP_LIB/nocap-desktop" <<'EOF'
+#!/bin/bash
+# NoCap Desktop session (written by NoCapOS's install.sh, removed by uninstall.sh).
+export XDG_SESSION_TYPE=wayland
+# logind's runtime folder; systemd's own (RuntimeDirectory=) if logind gave none.
+if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -w "${XDG_RUNTIME_DIR:-/nonexistent}" ]; then
+  export XDG_RUNTIME_DIR=/run/nocap-desktop
+fi
+session=/usr/local/lib/nocapos/nocap-desktop-session
+if command -v labwc >/dev/null 2>&1; then exec labwc -s "$session"; fi
+if command -v cage >/dev/null 2>&1; then exec cage -- "$session"; fi
+echo "NoCap Desktop: no compositor (labwc or cage) found" >&2
+exit 1
+EOF
+  # Runs inside the compositor: tells NoCapOS where this screen is, then
+  # keeps the browser open at NoCapOS's sign-in (reopened if it closes).
+  cat >"$DESKTOP_LIB/nocap-desktop-session" <<'EOF'
+#!/bin/bash
+# NoCap Desktop browser (written by NoCapOS's install.sh, removed by uninstall.sh).
+url="${NOCAP_DESKTOP_URL:-http://127.0.0.1:8780/}"
+# Where NoCapOS can open native apps on this screen (simple KEY=VALUE lines).
+env_file=/run/nocapos/desktop.env
+if [ -w "$env_file" ]; then
+  {
+    echo "USER=$(id -un)"
+    echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}"
+    echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}"
+    if [ -n "${DISPLAY:-}" ]; then echo "DISPLAY=$DISPLAY"; fi
+  } >"$env_file"
+fi
+pick() {
+  local b
+  for b in brave-browser brave-browser-stable brave chromium chromium-browser firefox-esr firefox; do
+    if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
+  done
+  return 1
+}
+profile="$HOME/.config/nocap-desktop-browser"
+mkdir -p "$profile"
+while :; do
+  # Wait (up to 2 minutes) for NoCapOS's local listener.
+  for _ in $(seq 1 120); do
+    (exec 3<>/dev/tcp/127.0.0.1/8780) 2>/dev/null && break
+    sleep 1
+  done
+  b="$(pick)" || { echo "NoCap Desktop: no browser found" >&2; sleep 10; continue; }
+  case "$b" in
+    firefox*) MOZ_ENABLE_WAYLAND=1 "$b" --kiosk --profile "$profile" "$url" ;;
+    *) "$b" --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars \
+      --password-store=basic --ozone-platform=wayland --user-data-dir="$profile" "$url" ;;
+  esac
+  sleep 2
+done
+EOF
+  chmod 755 "$DESKTOP_LIB/nocap-desktop" "$DESKTOP_LIB/nocap-desktop-session"
+
+  cat >"$DESKTOP_UNIT" <<EOF
+# NoCap Desktop: NoCapOS full screen on this machine's own monitor.
+# Written by NoCapOS's install.sh; switch it in Settings → General → This Screen & Access.
+[Unit]
+Description=NoCap Desktop (NoCapOS on this screen)
+After=nocapos.service systemd-user-sessions.service plymouth-quit-wait.service getty@tty1.service
+Wants=nocapos.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=$DESKTOP_USER
+# A real login session on seat0/tty1 (logind hands the compositor the screen and input).
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=XDG_SESSION_TYPE=wayland XDG_SESSION_CLASS=user
+RuntimeDirectory=nocap-desktop
+RuntimeDirectoryMode=0700
+# The session writes its display details to /run/nocapos/desktop.env.
+ExecStartPre=+/bin/sh -c 'install -d -m 0755 /run/nocapos && install -m 0644 -o $DESKTOP_USER -g $DESKTOP_USER /dev/null /run/nocapos/desktop.env'
+ExecStart=$DESKTOP_LIB/nocap-desktop
+ExecStopPost=+/bin/rm -f /run/nocapos/desktop.env
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  if [ "${1:-1}" -eq 0 ]; then
+    # Update of a machine where it was switched off in Settings: keep it off.
+    if systemctl is-active --quiet nocapos-desktop; then systemctl restart nocapos-desktop >/dev/null 2>&1 || true; fi
+    return 0
+  fi
+  systemctl enable nocapos-desktop >/dev/null 2>&1 || warn "NoCap Desktop: couldn't enable its service"
+  if tty1_in_use; then
+    echo "   NoCap Desktop starts on the next boot (someone is signed in on tty1 right now)."
+  else
+    systemctl restart nocapos-desktop >/dev/null 2>&1 || warn "NoCap Desktop didn't start; check: journalctl -u nocapos-desktop -e"
+  fi
+}
+
+setup_desktop() {
+  local want=0
+  case "$DESKTOP" in
+    yes) want=1 ;;
+    no) disable_desktop; return 0 ;;
+    auto) if display_connected; then want=1; fi ;;
+  esac
+  if [ "$want" -eq 0 ]; then
+    [ -f "$DESKTOP_UNIT" ] || echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: sudo bash install.sh --desktop)."
+    return 0
+  fi
+  # On an update, "auto" keeps whatever Settings last chose.
+  if [ "$DESKTOP" = auto ] && [ -f "$DESKTOP_UNIT" ] && ! systemctl is-enabled --quiet nocapos-desktop 2>/dev/null; then
+    install_desktop 0
+    return 0
+  fi
+  install_desktop 1
 }
 
 # ---------------------------------------------------------------- console
@@ -627,6 +974,7 @@ EOF
     die "$NAME did not start; check: journalctl -u nocapos -e"
   fi
   [ "$MINIMAL" -eq 1 ] || install_brave
+  setup_desktop
   setup_mdns
   if [ "$BRANDING" -eq 1 ]; then brand_console; fi
   local url="https://HOST/"
