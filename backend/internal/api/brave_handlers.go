@@ -77,6 +77,12 @@ func (s *Server) braveProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "not_ready", "Brave is still starting")
 		return
 	}
+	s.proxyStream(w, r, bravePrefix, port, scheme, "Brave")
+}
+
+// proxyStream reverse-proxies a loopback noVNC bridge under prefix (Brave
+// and streamed Linux apps). Callers have checked who may reach it.
+func (s *Server) proxyStream(w http.ResponseWriter, r *http.Request, prefix string, port int, scheme, label string) {
 	target := &url.URL{Scheme: scheme, Host: "127.0.0.1:" + strconv.Itoa(port)}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
@@ -85,7 +91,7 @@ func (s *Server) braveProxy(w http.ResponseWriter, r *http.Request) {
 	base := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		base(req)
-		req.URL.Path = strings.TrimPrefix(req.URL.Path, bravePrefix)
+		req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
 		if req.URL.Path == "" {
 			req.URL.Path = "/"
 		}
@@ -100,13 +106,13 @@ func (s *Server) braveProxy(w http.ResponseWriter, r *http.Request) {
 		resp.Header.Del("Content-Security-Policy")
 		resp.Header.Del("Content-Security-Policy-Report-Only")
 		// Keep redirects inside the proxied path.
-		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, bravePrefix) {
-			resp.Header.Set("Location", bravePrefix+loc)
+		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, prefix) {
+			resp.Header.Set("Location", prefix+loc)
 		}
 		return nil
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		writeError(w, http.StatusBadGateway, "proxy_error", "Brave stream error: "+err.Error())
+		writeError(w, http.StatusBadGateway, "proxy_error", label+" stream error: "+err.Error())
 	}
 	proxy.ServeHTTP(w, r)
 }
@@ -127,7 +133,13 @@ func (s *Server) signBrave(userID, session string, exp time.Time) string {
 }
 
 func (s *Server) braveCookie(r *http.Request) (userID, session string, ok bool) {
-	c, err := r.Cookie(braveCookie)
+	return s.streamCookie(r, braveCookie)
+}
+
+// streamCookie checks a signed, path-scoped stream cookie (Brave's or the
+// Linux apps'): who, from which login session, not expired.
+func (s *Server) streamCookie(r *http.Request, name string) (userID, session string, ok bool) {
+	c, err := r.Cookie(name)
 	if err != nil {
 		return "", "", false
 	}

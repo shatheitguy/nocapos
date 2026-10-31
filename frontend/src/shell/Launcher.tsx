@@ -11,6 +11,9 @@ import { folderKey, ungroup, useFolders, type AppFolder } from '../state/folders
 import { FolderView } from './FolderView';
 import { StoreTile, useWiggleEscape } from './StoreAppGrid';
 import { launchStoreApp, shownOnHome, storeKey, useStoreApps } from '../state/storeApps';
+import type { NativeApp } from '../api/nativeApps';
+import { launchNativeApp, nativeKey, useNativeApps } from '../state/nativeApps';
+import { NativeTile } from './NativeTile';
 import { appMenuItems } from './Shelf';
 
 const OPENS_WINDOW = new Set(['Open', 'Show', 'New window']);
@@ -23,9 +26,14 @@ const EDGE_MS = 600;
 /** Touch: a finger has to rest this long on an icon before it lifts (a quick move swipes pages). */
 const TOUCH_HOLD = 350;
 
-type Entry = { kind: 'folder'; folder: AppFolder } | { kind: 'app'; app: AppMeta } | { kind: 'store'; app: StoreApp };
+type Entry =
+  | { kind: 'folder'; folder: AppFolder }
+  | { kind: 'app'; app: AppMeta }
+  | { kind: 'store'; app: StoreApp }
+  | { kind: 'native'; app: NativeApp };
 
-const entryKey = (e: Entry) => (e.kind === 'folder' ? folderKey(e.folder.id) : e.kind === 'store' ? storeKey(e.app.id) : e.app.id);
+const entryKey = (e: Entry) =>
+  e.kind === 'folder' ? folderKey(e.folder.id) : e.kind === 'store' ? storeKey(e.app.id) : e.kind === 'native' ? nativeKey(e.app.id) : e.app.id;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** Rows × columns that fit the page area, like a phone's home screen. */
@@ -64,11 +72,14 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const inFolder = new Set(folders.flatMap((f) => f.apps));
   const apps = needle ? matches : all.filter((a) => !inFolder.has(a.id));
   const storeApps = useStoreApps((s) => s.apps).filter((a) => shownOnHome(a) && (!needle || `${a.name} ${a.tagline}`.toLowerCase().includes(needle)));
+  // Installed Linux apps join Launchpad by themselves (never the desktop).
+  const nativeApps = useNativeApps((s) => s.apps).filter((a) => !needle || `${a.name} ${a.id}`.toLowerCase().includes(needle));
 
   const entries: Entry[] = [
     ...shownFolders.map((folder) => ({ kind: 'folder' as const, folder })),
     ...apps.map((app) => ({ kind: 'app' as const, app })),
     ...storeApps.map((app) => ({ kind: 'store' as const, app })),
+    ...nativeApps.map((app) => ({ kind: 'native' as const, app })),
   ];
 
   // Fixed pages sized to the screen; a new page only when the last one is full.
@@ -328,6 +339,12 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           onOpened={onClose} onMenu={storeMenu} buttonClass="launcher-app" />
       );
     }
+    if (en.kind === 'native') {
+      return (
+        <NativeTile key={entryKey(en)} app={en.app} isAdmin={isAdmin} onOpened={onClose}
+          onMenu={(e, items) => setMenu({ x: e.clientX, y: e.clientY, items })} />
+      );
+    }
     const a = en.app;
     return (
       <button
@@ -378,6 +395,9 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
               if (e.key !== 'Enter' || !firstApp) return;
               if (firstApp.kind === 'store') {
                 launchStoreApp(firstApp.app);
+                onClose();
+              } else if (firstApp.kind === 'native') {
+                void launchNativeApp(firstApp.app);
                 onClose();
               } else if (firstApp.kind === 'app') launch(firstApp.app.id, e.shiftKey);
             }}

@@ -64,6 +64,14 @@
 .set-update-text b { font-size: 16px; }
 .set-update-text span { font-size: 13px; color: var(--muted); }
 .set-update-text small { font-size: 11.5px; color: var(--muted); opacity: 0.8; }
+.set-update > .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-update-last { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.set-update-result { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.set-update-result.ok svg { color: var(--ok); }
+.set-update-result.bad svg { color: var(--bad); }
+.set-update-err { margin: 0; font-size: 13px; color: var(--bad); }
+.set-update-log summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.set-update-log .set-logs { margin-top: 8px; max-height: 240px; }
 .set-cmd { max-height: none; white-space: pre-wrap; word-break: break-all; }
 .set-notes { margin: 0; max-height: 320px; overflow: auto; font: 13px/1.55 var(--font); white-space: pre-wrap; color: var(--text); }
 .set-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
@@ -171,3 +179,33 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 :root[data-ui='cyberdeck'] .set-hero-title { font-family: var(--display); font-size: 26px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
 :root[data-ui='cyberdeck'] .set2 button.urow .urow-desc, :root[data-ui='cyberdeck'] .set2 button.urow .set-row-value { text-transform: none; letter-spacing: 0.01em; }
 .set2-heading { margin: 0 0 4px; padding: 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+
+/* ---------- Devices ---------- */
+.dev-hero { display: flex; align-items: center; gap: 16px; padding: 18px 20px; flex-wrap: wrap; }
+.dev-hero-icon { width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center; flex: none; color: var(--accent); background: var(--accent-soft); }
+.dev-hero-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 3px; }
+.dev-hero-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.dev-hero-id { display: flex; align-items: center; gap: 6px; }
+.dev-hero-id code { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: 0.08em; color: var(--text); }
+.dev-hero-hint { font-size: 12.5px; color: var(--muted); }
+.dev-hero > .pill { border-radius: 999px; }
+.dev-row { gap: 12px; }
+.dev-row-icon { width: 34px; height: 34px; }
+.dev-empty { margin: 0; }
+.dev-link { width: min(420px, 100%); }
+.dev-link-code { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.dev-link-qr { width: 180px; height: 180px; border-radius: 12px; background: #fff; padding: 6px; box-sizing: border-box; }
+.dev-link-digits { display: flex; gap: 14px; font-family: var(--mono); font-size: 38px; font-weight: 700; letter-spacing: 0.18em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); user-select: all; }
+.dev-link-code.expired .dev-link-qr, .dev-link-code.expired .dev-link-digits { opacity: 0.28; filter: blur(1.5px); }
+.dev-link-timer { width: 100%; box-sizing: border-box; }
+.dev-link-expired { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.dev-link-expired b { font-size: 14px; color: var(--warn); }
+.dev-link-server { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dev-link-server code { font-family: var(--mono); font-size: 13px; padding: 4px 9px; border-radius: 8px; background: var(--surface-3); color: var(--text); word-break: break-all; }
+.dev-link .set-link { margin-top: 0; }
+.dev-link-wait { display: grid; place-items: center; min-height: 160px; }
+.dev-link-done { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 0 6px; text-align: center; }
+.dev-link-done b { font-size: 17px; }
+.dev-link-check { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--ok); animation: dev-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
+@keyframes dev-pop { from { transform: scale(0.4); opacity: 0; } }
+:root[data-reduce-motion] .dev-link-check { animation: none; }

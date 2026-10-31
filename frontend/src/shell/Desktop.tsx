@@ -20,6 +20,7 @@ import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
+import { watchNativeApps } from '../state/nativeApps';
 import { watchNotifications } from '../state/notifications';
 import { NotificationLayer } from './Notifications';
 import { UpdateReady } from './UpdateReady';
@@ -97,6 +98,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   // Installed App Store apps for the home screen and Launchpad (the server
   // lists only the apps this person may use).
   useEffect(() => watchStoreApps(), [user.id]);
+  // Installed Linux apps, for everyone (Launchpad; desktop only when asked).
+  useEffect(() => watchNativeApps(), [user.id]);
 
   // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);

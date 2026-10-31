@@ -2,13 +2,13 @@
 // search can list the pages without loading the whole app.
 import type { IconName } from '../components/Icon';
 
-export type Cat = 'network' | 'general' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
+export type Cat = 'network' | 'general' | 'devices' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 export type Sub =
   | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
   | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
-  | 'account' | 'users'
+  | 'account' | 'users' | 'devices'
   | 'wifi' | `iface:${string}`;
 
 export interface CatInfo {
@@ -25,6 +25,7 @@ export const CATS: CatInfo[] = [
   { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
     groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
+  { id: 'devices', label: 'Devices', icon: 'phone', color: '#30d158', groups: [] },
   { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'wallpaper', label: 'Wallpaper', icon: 'image', color: '#32ade6', groups: [] },
   { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
@@ -58,6 +59,7 @@ export const SUBS: Record<string, { label: string; icon: IconName; color: string
   account: { label: 'Your Account', icon: 'user', color: '#007aff', desc: 'Photo, name and sign out' },
   users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add people and choose who is an administrator' },
   wifi: { label: 'Wi-Fi', icon: 'wifi', color: '#0a84ff' },
+  devices: { label: 'Devices', icon: 'phone', color: '#30d158', desc: 'Link your phone with the NoCap OS app' },
 };
 
 /** Everything searchable: deep-link ids (also used by universal search and older links). */
@@ -90,6 +92,8 @@ export const ENTRIES: Entry[] = [
   { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
   { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
   { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
+  { id: 'devices', cat: 'devices', label: 'Devices', icon: 'phone', desc: 'Link your phone and see your linked devices', keywords: 'phone android tablet pair pairing link launcher app nocap id qr code mobile',
+    options: ['Your NoCap ID', 'Link a device', 'Unlink'] },
   { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
   { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },
