@@ -4,7 +4,7 @@ import type { IconName } from '../components/Icon';
 
 export type Cat = 'network' | 'general' | 'devices' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 export type Sub =
-  | 'about' | 'update' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
+  | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
   | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
@@ -24,7 +24,7 @@ export interface CatInfo {
 export const CATS: CatInfo[] = [
   { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
-    groups: [['about', 'update'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
+    groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
   { id: 'devices', label: 'Devices', icon: 'phone', color: '#30d158', groups: [] },
   { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'wallpaper', label: 'Wallpaper', icon: 'image', color: '#32ade6', groups: [] },
@@ -41,6 +41,7 @@ export const CATS: CatInfo[] = [
 export const SUBS: Record<string, { label: string; icon: IconName; color: string; admin?: boolean; desc?: string }> = {
   about: { label: 'About', icon: 'info', color: '#8e8e93' },
   update: { label: 'Software Update', icon: 'download', color: '#8e8e93', admin: true },
+  access: { label: 'This Screen & Access', icon: 'monitor', color: '#30d158', admin: true, desc: 'NoCap Desktop on this screen, and who can open NoCapOS' },
   storage: { label: 'Storage', icon: 'disk', color: '#8e8e93' },
   datetime: { label: 'Date & Time', icon: 'clock', color: '#0a84ff' },
   language: { label: 'Language & Region', icon: 'globe', color: '#0a84ff' },
@@ -81,6 +82,9 @@ export const ENTRIES: Entry[] = [
   { id: 'general', cat: 'general', label: 'General', icon: 'settings', desc: 'Device, storage, updates, date and language' },
   { id: 'about', cat: 'general', sub: 'about', label: 'About', icon: 'info', desc: 'Device name, hardware, Docker and versions', keywords: 'version device hardware docker gpu npu model processor memory serial ip' },
   { id: 'update', cat: 'general', sub: 'update', admin: true, label: 'Software Update', icon: 'download', desc: 'Check for a newer NoCapOS', keywords: 'upgrade version release new' },
+  { id: 'access', cat: 'general', sub: 'access', admin: true, label: 'This Screen & Access', icon: 'monitor', desc: 'NoCap Desktop on this screen, and who can open NoCapOS',
+    keywords: 'monitor display kiosk local screen hdmi remote access lan other devices phone local-only lock',
+    options: ['NoCap Desktop on this screen', 'Let other devices open NoCapOS'] },
   { id: 'storage', cat: 'general', sub: 'storage', label: 'Storage', icon: 'disk', desc: 'Disks and how full they are', keywords: 'disk drive space capacity usage' },
   { id: 'datetime', cat: 'general', sub: 'datetime', label: 'Date & Time', icon: 'clock', desc: 'Time zone, 24-hour clock and calendar', keywords: 'clock time zone calendar week',
     options: ['24-hour time', 'Show seconds', 'Show the date in the Dock', 'Set time zone automatically', 'Time zone', 'First day of the week'] },

@@ -8,11 +8,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"text/tabwriter"
 
+	"alfaos/alfad/internal/hostaccess"
 	"alfaos/alfad/internal/release"
 	"alfaos/alfad/internal/syspkg"
 )
@@ -31,6 +33,8 @@ func main() {
 		err = cmdUpdate(context.Background())
 	case "logs":
 		err = cmdLogs(os.Args[2:])
+	case "web":
+		err = cmdWeb(os.Stdout, hostaccess.DataDir(envFile), os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Println("cap " + version)
 		return
@@ -54,10 +58,53 @@ func usage() {
 Usage:
   cap update          Check for a new NoCapOS release, then Linux package updates
   cap logs [-f] [N]   Show NoCapOS's own service logs (-f follows, N = line count)
+  cap web on|off|status
+                      Let other devices open NoCapOS (on), keep it to this
+                      machine's own screen (off), or show which it is
   cap version         Print the cap version
 
-cap update needs root to refresh the Linux package lists: sudo cap update
+cap update and cap web on/off need root: sudo cap update, sudo cap web on
 `)
+}
+
+// envFile is the installed service's settings (deploy/install.sh writes it).
+const envFile = "/etc/nocapos/nocapos.env"
+
+// cmdWeb flips "Let other devices open NoCapOS" (Settings → General) from
+// the console: the way back in when every other device is locked out.
+// NoCapOS notices within a couple of seconds; no restart needed.
+func cmdWeb(out io.Writer, dataDir string, args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: cap web on|off|status")
+	}
+	switch args[0] {
+	case "status":
+		if hostaccess.RemoteEnabled(dataDir) {
+			fmt.Fprintln(out, "on: other devices can open NoCapOS")
+		} else {
+			fmt.Fprintln(out, "off: NoCapOS only opens on this machine (turn it back on with: sudo cap web on)")
+		}
+		return nil
+	case "on", "off":
+		on := args[0] == "on"
+		if _, err := os.Stat(dataDir); err != nil {
+			return fmt.Errorf("NoCapOS's data folder %s isn't here; is NoCapOS installed on this machine?", dataDir)
+		}
+		if err := hostaccess.SetRemote(dataDir, on); err != nil {
+			if errors.Is(err, os.ErrPermission) {
+				return errors.New("permission denied; run it as root: sudo cap web " + args[0])
+			}
+			return err
+		}
+		if on {
+			fmt.Fprintln(out, "on: other devices can open NoCapOS again (give it a couple of seconds)")
+		} else {
+			fmt.Fprintln(out, "off: NoCapOS now only opens on this machine; linked phones and other devices can't reach it.")
+			fmt.Fprintln(out, "Undo any time with: sudo cap web on")
+		}
+		return nil
+	}
+	return fmt.Errorf("unknown option %q; usage: cap web on|off|status", args[0])
 }
 
 // cmdUpdate checks for a new NoCapOS release first (the same check Settings

@@ -132,12 +132,13 @@ var packages = map[string]syspkg.Names{
 	"zfs":   {"apt": {"zfsutils-linux"}},
 }
 
-func isDebian(read func(string) ([]byte, error)) bool {
-	b, err := read("/etc/os-release")
-	return err == nil && regexp.MustCompile(`(?m)^ID=("?)debian("?)$`).Match(b)
-}
+// zfsBuildHelp explains the usual reason ZFS doesn't come up on Debian and
+// Raspberry Pi OS, where the module is built for the running kernel.
+const zfsBuildHelp = "Usually that means there are no kernel headers for the kernel you're running, so ZFS couldn't be built for it. " +
+	"Update the system and reboot (so the newest kernel and its headers match), then hit Install again."
 
-const debianZFSHelp = "On Debian, ZFS comes from the contrib repository and is built for your kernel: add \"contrib\" to your apt sources, then run: apt install linux-headers-amd64 zfs-dkms zfsutils-linux"
+// ZFSUnsupportedHelp: systems NoCapOS can't install ZFS on by itself.
+const ZFSUnsupportedHelp = "NoCapOS installs ZFS on Debian, Ubuntu and Raspberry Pi OS. On this system, add OpenZFS with your distribution's own instructions, then reopen Storage."
 
 func (h *Host) Install(ctx context.Context, tool string) error {
 	names, ok := packages[tool]
@@ -145,26 +146,35 @@ func (h *Host) Install(ctx context.Context, tool string) error {
 		return bad("unknown tool %q", tool)
 	}
 	if tool == "zfs" && syspkg.Manager() != "apt" {
-		return bad("NoCapOS can install ZFS on Ubuntu. On this system, install OpenZFS with your distribution's instructions (see openzfs.github.io/openzfs-docs/Getting Started), then come back")
+		return bad("%s", ZFSUnsupportedHelp)
+	}
+	if tool == "zfs" && syspkg.ZFSNeedsBuild(syspkg.Manager()) {
+		// Debian / Raspberry Pi OS: contrib, headers, DKMS build, modprobe.
+		ctx, cancel := context.WithTimeout(ctx, syspkg.ZFSBuildTimeout)
+		defer cancel()
+		var out bytes.Buffer
+		if err := syspkg.RunSteps(ctx, syspkg.ZFSDebianSteps(), &out); err != nil {
+			return bad("ZFS didn't install (%s). %s", err.Error(), zfsBuildHelp)
+		}
+		h.forgetVersion()
+		return nil
 	}
 	if err := syspkg.Install(ctx, names); err != nil {
-		if tool == "zfs" && isDebian(h.ReadFile) {
-			return bad("%s. %s", err.Error(), debianZFSHelp)
-		}
 		return err
 	}
 	if tool == "zfs" {
 		if err := h.do(ctx, actionTimeout, []string{"modprobe", "zfs"}); err != nil {
-			if isDebian(h.ReadFile) {
-				return bad("the ZFS tools are installed but the kernel module didn't load (%s). %s", err.Error(), debianZFSHelp)
-			}
-			return bad("the ZFS tools are installed but the kernel module didn't load: %s", err.Error())
+			return bad("the ZFS tools are installed but the kernel module didn't load (%s). Restart the server and try again.", err.Error())
 		}
-		h.mu.Lock()
-		h.jsonOK = nil
-		h.mu.Unlock()
+		h.forgetVersion()
 	}
 	return nil
+}
+
+func (h *Host) forgetVersion() {
+	h.mu.Lock()
+	h.jsonOK = nil
+	h.mu.Unlock()
 }
 
 func (h *Host) Facts(ctx context.Context) (*Facts, error) {

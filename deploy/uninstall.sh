@@ -50,7 +50,7 @@ done
 
 # ---------------------------------------------------------------- confirm
 echo "This removes $NAME from this server:"
-echo "  - the nocapos service and program"
+echo "  - the nocapos service and program, and NoCap Desktop (its service and nocap-desktop user)"
 echo "  - its Samba sharing settings and network-drive mounts"
 echo "  - its console banner, MOTD and nocap.local announcement (the originals are put back)"
 [ "$PURGE" -eq 1 ] && echo "  - its accounts, settings, database and TLS keys ($ETC, $DATA)"
@@ -76,6 +76,26 @@ for unit in nocapos alfad; do
 done
 systemctl daemon-reload 2>/dev/null || true
 rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad /usr/local/bin/cap
+
+# ---------------------------------------------------------------- NoCap Desktop
+# The session on this machine's own screen: its unit, scripts, run file and
+# the login-less nocap-desktop user (with its browser profile). The text
+# console gets its login prompt back.
+if [ -f /etc/systemd/system/nocapos-desktop.service ] || id nocap-desktop >/dev/null 2>&1; then
+  info "Removing NoCap Desktop"
+  systemctl disable --now nocapos-desktop 2>/dev/null || true
+  rm -f /etc/systemd/system/nocapos-desktop.service
+  systemctl daemon-reload 2>/dev/null || true
+  rm -rf /usr/local/lib/nocapos
+  rm -f /run/nocapos/desktop.env
+  rmdir /run/nocapos 2>/dev/null || true
+  if id nocap-desktop >/dev/null 2>&1; then
+    shell="$(getent passwd nocap-desktop | cut -d: -f7)"
+    case "$shell" in */nologin|*/false) userdel -r nocap-desktop 2>/dev/null || userdel nocap-desktop 2>/dev/null || warn "could not delete the nocap-desktop user" ;; esac
+  fi
+  rm -rf /var/lib/nocap-desktop
+  systemctl --no-block start getty@tty1.service 2>/dev/null || true
+fi
 
 # Docker mode: NoCapOS itself ran as a Compose stack.
 if [ -f "$PREFIX/docker-compose.yml" ] && has docker; then
