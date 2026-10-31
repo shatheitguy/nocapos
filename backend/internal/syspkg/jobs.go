@@ -200,6 +200,9 @@ func StepsFor(plan [][]string) []Step {
 // FeatureSteps installs a feature's packages one by one, skipping any this
 // distribution doesn't have, after refreshing the package lists.
 func FeatureSteps(f Feature, mgr string) []Step {
+	if f.ID == "zfs" && ZFSNeedsBuild(mgr) {
+		return ZFSDebianSteps()
+	}
 	var steps []Step
 	if refresh, err := Plan(mgr, ActRefresh, ""); err == nil {
 		for _, r := range refresh {

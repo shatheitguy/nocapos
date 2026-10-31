@@ -10,7 +10,7 @@ export interface StorageStatus {
   reason?: string;
   native: boolean;
   demo: boolean;
-  zfs: { installed: boolean; module: boolean; version?: string; can_install: boolean };
+  zfs: { installed: boolean; module: boolean; version?: string; can_install: boolean; hint?: string };
   smart: { installed: boolean; can_install: boolean };
 }
 

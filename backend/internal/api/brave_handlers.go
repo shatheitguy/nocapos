@@ -43,7 +43,7 @@ func (s *Server) braveStart(w http.ResponseWriter, r *http.Request) {
 		Path:     bravePrefix,
 		MaxAge:   int(braveTTL.Seconds()),
 		HttpOnly: true,
-		Secure:   s.Config.CookieSecure,
+		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, http.StatusOK, s.brave.Status())

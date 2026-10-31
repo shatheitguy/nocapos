@@ -115,6 +115,21 @@ type ZFSStatus struct {
 	Module     bool   `json:"module"`
 	Version    string `json:"version,omitempty"`
 	CanInstall bool   `json:"can_install"`
+	// Hint explains, in plain words, why ZFS can't be used yet.
+	Hint string `json:"hint,omitempty"`
+}
+
+// zfsHint is what the Storage app says when ZFS isn't usable yet.
+func zfsHint(z ZFSStatus) string {
+	switch {
+	case z.Installed && z.Module:
+		return ""
+	case z.Installed:
+		return "The ZFS tools are here but its kernel module isn't loaded. " + zfsBuildHelp
+	case !z.CanInstall:
+		return ZFSUnsupportedHelp
+	}
+	return ""
 }
 
 type SmartStatus struct {
@@ -162,6 +177,7 @@ func (m *Manager) Status(ctx context.Context) Status {
 	t := m.be.Tools(ctx)
 	st.ZFS = ZFSStatus{Installed: t.ZFSInstalled, Module: t.ZFSModule, Version: t.ZFSVersion,
 		CanInstall: m.demo || (m.native() && m.pkgMgr() == "apt")}
+	st.ZFS.Hint = zfsHint(st.ZFS)
 	st.Smart = SmartStatus{Installed: t.SmartInstalled, CanInstall: m.demo || m.canInst()}
 	return st
 }
@@ -182,7 +198,7 @@ func (m *Manager) needZFS(ctx context.Context) error {
 		return bad("install ZFS first")
 	}
 	if !t.ZFSModule {
-		return bad("the ZFS kernel module isn't loaded; try installing ZFS again or restart the server")
+		return bad("ZFS's kernel module isn't loaded. %s", zfsBuildHelp)
 	}
 	return nil
 }
