@@ -18,6 +18,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/nativeapps"
 	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/photos"
@@ -50,6 +51,8 @@ type Deps struct {
 	AI        *ai.Service
 	Terminal  *terminal.Service
 	Brave     *webapps.Brave
+	Streams   *webapps.Streams    // native Linux apps streamed into windows
+	Native    *nativeapps.Service // Linux apps from Flathub
 	Guacd     *rdp.Guacd
 	Accounts  accounts.Directory
 	Scripts   *scripts.Runner
@@ -388,6 +391,9 @@ func (s *Server) Handler() http.Handler {
 	// Packages: the host's system packages (admin, audited).
 	s.packageRoutes(mux)
 
+	// Linux apps from Flathub: install (admin, audited), open (everyone).
+	s.nativeRoutes(mux)
+
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
 	ui := staticHandler(web.Assets())
@@ -420,9 +426,14 @@ func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) audit(r *http.Request, userID, action, target string, ok bool, detail string) {
-	err := s.Store.Audit(r.Context(), store.AuditEntry{
+	s.auditCtx(r.Context(), userID, action, target, clientIP(r, s.Config.TrustedProxies), ok, detail)
+}
+
+// auditCtx records an entry outside a request (e.g. when a background job ends).
+func (s *Server) auditCtx(ctx context.Context, userID, action, target, ip string, ok bool, detail string) {
+	err := s.Store.Audit(ctx, store.AuditEntry{
 		UserID: userID, Action: action, Target: target,
-		IP: clientIP(r, s.Config.TrustedProxies), Success: ok, Detail: detail,
+		IP: ip, Success: ok, Detail: detail,
 	})
 	if err != nil {
 		s.Log.Error("audit write failed", "action", action, "err", err)

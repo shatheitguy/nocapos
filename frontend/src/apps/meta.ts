@@ -102,6 +102,15 @@ export const APPS: Record<string, AppMeta> = {
     single: true,
     adminOnly: true,
   },
+  nativeapp: {
+    id: 'nativeapp',
+    title: 'Linux app',
+    icon: 'linux',
+    tile: ['#7c8aa5', '#3b4458'],
+    size: { w: 1200, h: 780 },
+    description: 'A Linux app installed on this server, streamed into a window',
+    hidden: true,
+  },
   remotedesktop: {
     id: 'remotedesktop',
     title: 'Remote Desktop',

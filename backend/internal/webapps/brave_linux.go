@@ -69,22 +69,14 @@ func (b *Brave) provision(ctx context.Context) (int, error) {
 		close(done)
 	}()
 
-	deadline := time.After(45 * time.Second)
-	tick := time.NewTicker(300 * time.Millisecond)
-	defer tick.Stop()
-wait:
-	for {
-		select {
-		case <-tick.C:
-			if portOpen(braveWebPort) {
-				return braveWebPort, nil
-			}
-		case <-done:
-			break wait
-		case <-deadline:
-			stopProcess(run.Process)
-			break wait
-		}
+	wait, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	err = waitForPort(wait, braveWebPort, done)
+	if err == nil {
+		return braveWebPort, nil
+	}
+	if wait.Err() != nil {
+		stopProcess(run.Process)
 	}
 	log, _ := os.ReadFile(filepath.Join(b.dataDir, "brave.log"))
 	return 0, errors.New("Brave did not start: " + tail(log, 3))
@@ -141,4 +133,23 @@ func tail(b []byte, n int) string {
 		s = "no output"
 	}
 	return s
+}
+
+// waitForPort waits until a loopback port answers (nil), the process exits
+// (done closes) or ctx ends. Brave and app streams both use it.
+func waitForPort(ctx context.Context, port int, done <-chan struct{}) error {
+	tick := time.NewTicker(300 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-tick.C:
+			if portOpen(port) {
+				return nil
+			}
+		case <-done:
+			return errors.New("exited")
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 }
