@@ -27,7 +27,7 @@ func (s *Server) meta(r *http.Request) auth.ClientMeta {
 	return auth.ClientMeta{IP: clientIP(r, s.Config.TrustedProxies), UserAgent: r.UserAgent()}
 }
 
-func (s *Server) writeSession(w http.ResponseWriter, status int, sess *auth.Session) {
+func (s *Server) writeSession(w http.ResponseWriter, r *http.Request, status int, sess *auth.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookie,
 		Value:    sess.RefreshToken,
@@ -35,7 +35,7 @@ func (s *Server) writeSession(w http.ResponseWriter, status int, sess *auth.Sess
 		Expires:  sess.RefreshExpires,
 		MaxAge:   int(time.Until(sess.RefreshExpires).Seconds()),
 		HttpOnly: true,
-		Secure:   s.Config.CookieSecure,
+		Secure:   s.secureCookie(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 	writeJSON(w, status, sessionResponse{
@@ -46,10 +46,10 @@ func (s *Server) writeSession(w http.ResponseWriter, status int, sess *auth.Sess
 	})
 }
 
-func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: refreshCookie, Value: "", Path: cookiePath, MaxAge: -1,
-		HttpOnly: true, Secure: s.Config.CookieSecure, SameSite: http.SameSiteStrictMode,
+		HttpOnly: true, Secure: s.secureCookie(r), SameSite: http.SameSiteStrictMode,
 	})
 }
 
@@ -94,7 +94,7 @@ func (s *Server) authSetup(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.setup", sess.User.Username, true, "")
 		s.Log.Info("administrator account created", "username", sess.User.Username)
-		s.writeSession(w, http.StatusCreated, sess)
+		s.writeSession(w, r, http.StatusCreated, sess)
 	case errors.Is(err, auth.ErrSetupDone):
 		writeError(w, http.StatusConflict, "setup_done", err.Error())
 	case errors.Is(err, auth.ErrSetupToken):
@@ -134,7 +134,7 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "")
 		s.keepSharingPassword(sess.User.Username, req.Password)
-		s.writeSession(w, http.StatusOK, sess)
+		s.writeSession(w, r, http.StatusOK, sess)
 	case errors.As(err, &challenge):
 		// The password was right; the session waits for the 2FA code.
 		s.audit(r, "", "auth.login", truncate(req.Username, 64), true, "password ok, waiting for 2FA code")
@@ -175,7 +175,7 @@ func (s *Server) authLoginTOTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "with 2FA code")
-		s.writeSession(w, http.StatusOK, sess)
+		s.writeSession(w, r, http.StatusOK, sess)
 	case errors.Is(err, auth.ErrTOTPBadCode):
 		s.audit(r, "", "auth.login.totp", "", false, "wrong or reused code")
 		writeError(w, http.StatusUnauthorized, "bad_code", err.Error())
@@ -226,14 +226,14 @@ func (s *Server) authRefresh(w http.ResponseWriter, r *http.Request) {
 	sess, err := s.Auth.Refresh(r.Context(), c.Value, s.meta(r))
 	switch {
 	case err == nil:
-		s.writeSession(w, http.StatusOK, sess)
+		s.writeSession(w, r, http.StatusOK, sess)
 	case errors.Is(err, auth.ErrTokenReuse):
 		s.Log.Warn("refresh token reuse detected; session revoked", "ip", clientIP(r, s.Config.TrustedProxies))
 		s.audit(r, "", "auth.refresh", "", false, "token reuse, session revoked")
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 		writeError(w, http.StatusUnauthorized, "invalid_token", "For safety, this session was signed out. Sign in again.")
 	case errors.Is(err, auth.ErrInvalidToken):
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 		writeError(w, http.StatusUnauthorized, "invalid_token", "Your session timed out. Sign in again.")
 	default:
 		s.internalError(w, r, err)
@@ -253,7 +253,7 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 		// Terminals, remote desktops and Brave opened from this session end too.
 		s.live.closeSession(userID, sid)
 	}
-	s.clearSessionCookie(w)
+	s.clearSessionCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)
 }
 
