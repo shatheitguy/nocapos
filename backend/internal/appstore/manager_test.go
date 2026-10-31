@@ -23,6 +23,9 @@ type fakeEngine struct {
 	removedVol []string
 	pullErr    error
 	connected  []string // "network@container"
+	// pullGate, when set, holds pulls of images containing pullGateOn until closed.
+	pullGate   chan struct{}
+	pullGateOn string
 }
 
 func newFake() *fakeEngine {
@@ -32,7 +35,14 @@ func newFake() *fakeEngine {
 func (f *fakeEngine) PullImage(_ context.Context, image, tag string, fn func(docker.PullProgress)) error {
 	f.mu.Lock()
 	f.pulls = append(f.pulls, image+":"+tag)
+	gate := f.pullGate
+	if !strings.Contains(image, f.pullGateOn) {
+		gate = nil
+	}
 	f.mu.Unlock()
+	if gate != nil {
+		<-gate
+	}
 	fn(docker.PullProgress{ID: "l1", Status: "Downloading"})
 	fn(docker.PullProgress{ID: "l1", Status: "Pull complete"})
 	return f.pullErr
@@ -117,6 +127,8 @@ type fakeStore struct {
 	mu        sync.Mutex
 	apps      map[string]*store.InstalledApp
 	overrides map[string]map[string]string
+	// afterRead, when set, runs after InstalledApps has taken its snapshot.
+	afterRead func()
 }
 
 func (s *fakeStore) AppOverrides(_ context.Context, app string) (map[string]string, error) {
@@ -149,7 +161,6 @@ func (s *fakeStore) DeleteAppOverrides(_ context.Context, app string) error {
 
 func (s *fakeStore) InstalledApps(context.Context) (map[string]*store.InstalledApp, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	out := map[string]*store.InstalledApp{}
 	for k, v := range s.apps {
 		c := *v
@@ -158,6 +169,11 @@ func (s *fakeStore) InstalledApps(context.Context) (map[string]*store.InstalledA
 			c.Secrets[a] = b
 		}
 		out[k] = &c
+	}
+	hook := s.afterRead
+	s.mu.Unlock()
+	if hook != nil {
+		hook()
 	}
 	return out, nil
 }
@@ -194,13 +210,31 @@ func setup(t *testing.T) (*Manager, *fakeEngine, *fakeStore) {
 	return m, eng, st
 }
 
+// started fails the test when a job couldn't start (e.g. ErrBusy), instead of
+// letting wait poll an empty job id until it gives up. Use it as
+// started(t)(m.Install(...)).
+func started(t *testing.T) func(string, error) string {
+	return func(jobID string, err error) string {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("job didn't start: %v", err)
+		}
+		return jobID
+	}
+}
+
 func wait(t *testing.T, m *Manager, jobID string) Job {
 	t.Helper()
-	for i := 0; i < 1000; i++ { // up to 10 s on a busy machine
+	if _, ok := m.Job(jobID); !ok {
+		t.Fatalf("unknown job %q", jobID)
+	}
+	// Generous: the fake engine is instant, but CI runners (and -race) can be slow.
+	deadline := time.Now().Add(time.Minute)
+	for time.Now().Before(deadline) {
 		if j, _ := m.Job(jobID); j.Done {
 			return j
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("job never finished")
 	return Job{}
@@ -287,7 +321,7 @@ func TestInstallMultiServiceApp(t *testing.T) {
 
 func TestUpdateKeepsPortSecretsAndData(t *testing.T) {
 	m, eng, st := setup(t)
-	j, _ := m.Install(context.Background(), "code-server", nil)
+	j := started(t)(m.Install(context.Background(), "code-server", nil))
 	wait(t, m, j)
 	before := *st.apps["code-server"]
 	st.apps["code-server"].Version = "old"
@@ -295,7 +329,7 @@ func TestUpdateKeepsPortSecretsAndData(t *testing.T) {
 	if !status["code-server"].UpdateAvailable || status["code-server"].Credentials.Password != before.Secrets["password"] {
 		t.Fatalf("status = %+v", status["code-server"])
 	}
-	j, _ = m.Update(context.Background(), "code-server", nil)
+	j = started(t)(m.Update(context.Background(), "code-server", nil))
 	if r := wait(t, m, j); r.Error != "" {
 		t.Fatal(r.Error)
 	}
@@ -313,16 +347,16 @@ func TestUpdateKeepsPortSecretsAndData(t *testing.T) {
 
 func TestUninstallKeepsOrDeletesData(t *testing.T) {
 	m, eng, st := setup(t)
-	j, _ := m.Install(context.Background(), "uptime-kuma", nil)
+	j := started(t)(m.Install(context.Background(), "uptime-kuma", nil))
 	wait(t, m, j)
-	j, _ = m.Uninstall(context.Background(), "uptime-kuma", false, nil)
+	j = started(t)(m.Uninstall(context.Background(), "uptime-kuma", false, nil))
 	wait(t, m, j)
 	if len(eng.containers) != 0 || st.apps["uptime-kuma"] != nil || len(eng.removedVol) != 0 {
 		t.Fatalf("uninstall (keep data): containers=%d row=%v removed=%v", len(eng.containers), st.apps["uptime-kuma"], eng.removedVol)
 	}
-	j, _ = m.Install(context.Background(), "uptime-kuma", nil)
+	j = started(t)(m.Install(context.Background(), "uptime-kuma", nil))
 	wait(t, m, j)
-	j, _ = m.Uninstall(context.Background(), "uptime-kuma", true, nil)
+	j = started(t)(m.Uninstall(context.Background(), "uptime-kuma", true, nil))
 	wait(t, m, j)
 	if strings.Join(eng.removedVol, ",") != "nocap-uptime-kuma-data" {
 		t.Fatalf("removed volumes = %v", eng.removedVol)
@@ -332,7 +366,7 @@ func TestUninstallKeepsOrDeletesData(t *testing.T) {
 func TestFailedInstallCleansUp(t *testing.T) {
 	m, eng, st := setup(t)
 	eng.pullErr = errors.New("manifest unknown")
-	j, _ := m.Install(context.Background(), "jellyfin", nil)
+	j := started(t)(m.Install(context.Background(), "jellyfin", nil))
 	r := wait(t, m, j)
 	if !strings.Contains(r.Error, "manifest unknown") || st.apps["jellyfin"] != nil || len(eng.containers) != 0 {
 		t.Fatalf("job=%+v rows=%v containers=%d", r, st.apps, len(eng.containers))
@@ -342,7 +376,7 @@ func TestFailedInstallCleansUp(t *testing.T) {
 func TestFixedPortInUse(t *testing.T) {
 	m, _, _ := setup(t)
 	m.portFree = func(p int, _ string) bool { return p != 22000 }
-	j, _ := m.Install(context.Background(), "syncthing", nil)
+	j := started(t)(m.Install(context.Background(), "syncthing", nil))
 	if r := wait(t, m, j); !strings.Contains(r.Error, "22000") {
 		t.Fatalf("want port error, got %+v", r)
 	}
@@ -350,7 +384,7 @@ func TestFixedPortInUse(t *testing.T) {
 
 func TestControlStopStart(t *testing.T) {
 	m, _, _ := setup(t)
-	j, _ := m.Install(context.Background(), "memos", nil)
+	j := started(t)(m.Install(context.Background(), "memos", nil))
 	wait(t, m, j)
 	if err := m.Control(context.Background(), "memos", "stop"); err != nil {
 		t.Fatal(err)
@@ -394,10 +428,93 @@ func TestSimultaneousInstallsGetDifferentPorts(t *testing.T) {
 	}
 }
 
+// A second install that read the installed apps just before the first one
+// saved its row, and reserves just after the first one finished, must still
+// not get the first one's port.
+func TestInstallFinishingMidPickKeepsItsPort(t *testing.T) {
+	m, eng, st := setup(t)
+	gate := make(chan struct{})
+	eng.mu.Lock()
+	eng.pullGate, eng.pullGateOn = gate, "memos"
+	eng.mu.Unlock()
+	first := started(t)(m.Install(context.Background(), "memos", nil))
+	// memos has reserved its port and is now held in its download.
+	for deadline := time.Now().Add(time.Minute); ; {
+		if j, _ := m.Job(first); strings.HasPrefix(j.Phase, "Downloading") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("first install never reached its download")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	var once sync.Once
+	reads := 0
+	st.mu.Lock()
+	st.afterRead = func() {
+		st.mu.Lock()
+		reads++
+		n := reads
+		st.mu.Unlock()
+		if n != 2 { // 1: Install's "already installed?" check; 2: the port pick
+			return
+		}
+		once.Do(func() {
+			// Let memos finish while this pick holds a list without it.
+			close(gate)
+			for deadline := time.Now().Add(300 * time.Millisecond); time.Now().Before(deadline); {
+				if j, _ := m.Job(first); j.Done {
+					return
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
+	}
+	st.mu.Unlock()
+	second := started(t)(m.Install(context.Background(), "it-tools", nil))
+	for _, j := range []string{first, second} {
+		if r := wait(t, m, j); r.Error != "" {
+			t.Fatal(r.Error)
+		}
+	}
+	st.mu.Lock()
+	a, b := st.apps["memos"].WebPort, st.apps["it-tools"].WebPort
+	st.mu.Unlock()
+	if a == b {
+		t.Fatalf("both installs got port %d", a)
+	}
+}
+
+// The completion callback runs while the app is still busy, and once a job
+// is seen done the next job for the app can start without ErrBusy.
+func TestDoneJobFreesApp(t *testing.T) {
+	m, _, _ := setup(t)
+	cb := make(chan string, 1)
+	j := started(t)(m.Install(context.Background(), "memos", func(error) {
+		job := m.Jobs()["memos"]
+		switch {
+		case !m.Busy("memos"):
+			cb <- "app freed before the callback ran"
+		case job.Done:
+			cb <- "job marked done before the callback ran"
+		default:
+			cb <- ""
+		}
+	}))
+	wait(t, m, j)
+	if msg := <-cb; msg != "" {
+		t.Fatal(msg)
+	}
+	if m.Busy("memos") {
+		t.Fatal("app still busy after its job was seen done")
+	}
+	wait(t, m, started(t)(m.Uninstall(context.Background(), "memos", false, nil)))
+}
+
 func TestFailedInstallStaysVisible(t *testing.T) {
 	m, eng, _ := setup(t)
 	eng.pullErr = errors.New("registry unreachable")
-	j, _ := m.Install(context.Background(), "memos", nil)
+	j := started(t)(m.Install(context.Background(), "memos", nil))
 	wait(t, m, j)
 	if got := m.Jobs()["memos"]; !got.Done || !strings.Contains(got.Error, "registry unreachable") {
 		t.Fatalf("job = %+v", got)
@@ -406,7 +523,7 @@ func TestFailedInstallStaysVisible(t *testing.T) {
 
 func TestSavedChangesSurviveUpdates(t *testing.T) {
 	m, eng, st := setup(t)
-	j, _ := m.Install(context.Background(), "code-server", nil)
+	j := started(t)(m.Install(context.Background(), "code-server", nil))
 	wait(t, m, j)
 	orig := eng.created["nocap-code-server-app"]
 
@@ -424,7 +541,7 @@ func TestSavedChangesSurviveUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 	st.apps["code-server"].Version = "old"
-	j, _ = m.Update(context.Background(), "code-server", nil)
+	j = started(t)(m.Update(context.Background(), "code-server", nil))
 	if r := wait(t, m, j); r.Error != "" {
 		t.Fatal(r.Error)
 	}
@@ -453,7 +570,7 @@ func TestSavedChangesSurviveUpdates(t *testing.T) {
 	}
 
 	// Uninstalling and deleting the data forgets the changes too.
-	j, _ = m.Uninstall(context.Background(), "code-server", true, nil)
+	j = started(t)(m.Uninstall(context.Background(), "code-server", true, nil))
 	wait(t, m, j)
 	if ov, _ := st.AppOverrides(context.Background(), "code-server"); len(ov) != 0 {
 		t.Error("saved changes kept after deleting the app's data")
