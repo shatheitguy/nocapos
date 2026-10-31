@@ -146,7 +146,7 @@ export async function startArchiveJob(kind: 'compress' | 'extract', root: string
   if (!paths.length) return null;
   const r = kind === 'compress' ? await fileApi.compress(root, paths, dest, zipName) : await fileApi.extract(root, paths[0], dest);
   if (!r.ok) {
-    toast('error', kind === 'compress' ? 'Could not compress' : 'Could not extract', r.error);
+    toast('error', kind === 'compress' ? 'Couldn’t compress' : 'Couldn’t extract', r.error);
     return null;
   }
   const job = r.data;

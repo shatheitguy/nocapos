@@ -11,7 +11,7 @@ export function PersonSpacesPanel({ person, onChanged }: { person: Person; onCha
   const load = async () => {
     const r = await sharesApi.person(person.username);
     if (r.ok) setData(r.data);
-    else setError(r.error ?? 'Could not load');
+    else setError(r.error ?? 'Couldn’t load');
   };
   useEffect(() => {
     void load();

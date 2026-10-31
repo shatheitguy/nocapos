@@ -18,7 +18,7 @@ function useNetwork() {
         if (r.ok) {
           setNet(r.data);
           setRev((v) => v + 1);
-        } else setError(r.error ?? 'Could not read network status');
+        } else setError(r.error ?? 'Couldn’t check the network right now. Try again in a sec.');
       }),
     [],
   );
@@ -52,7 +52,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
   const { net, setNet, error } = useNetwork();
   const [busy, setBusy] = useState(false);
   if (error) return <p className="error">{error}</p>;
-  if (!net) return <p className="muted">Checking network…</p>;
+  if (!net) return <p className="muted">Checking the vibes on your network…</p>;
   const flip = async (kind: 'wifi' | 'networking', on: boolean) => {
     setBusy(true);
     const next = await setNetwork(kind, on);
@@ -70,7 +70,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
         </span>
         <div className="set-status-text">
           <b>{primary ? `Connected${primary.connection ? ` to ${primary.connection}` : ''}` : 'Not connected'}</b>
-          <span>{primary ? `${ifaceKind(primary)} · ${primary.name} · ${ipOf(primary)}` : 'No adapter has an address'}</span>
+          <span>{primary ? `${ifaceKind(primary)} · ${primary.name} · ${ipOf(primary)}` : 'No adapter has an address — check the cable or Wi-Fi'}</span>
         </div>
       </div>
       <ViewOnly net={net} />
@@ -152,9 +152,9 @@ export function WifiPage() {
 export function InterfacePage({ name }: { name: string }) {
   const { net, error, rev, load } = useNetwork();
   if (error) return <p className="error">{error}</p>;
-  if (!net) return <p className="muted">Checking network…</p>;
+  if (!net) return <p className="muted">Checking the vibes on your network…</p>;
   const iface = net.interfaces.find((i) => i.name === name);
-  if (!iface) return <p className="muted">The adapter “{name}” isn't there any more.</p>;
+  if (!iface) return <p className="muted">Lowkey can’t find the adapter “{name}” anymore. It may have been unplugged.</p>;
   return (
     <div className="stack settings-page">
       <ViewOnly net={net} />

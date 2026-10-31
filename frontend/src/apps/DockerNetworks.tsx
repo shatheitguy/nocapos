@@ -28,7 +28,7 @@ export function DockerNetworks() {
 
   const load = useCallback(async () => {
     const r = await dockerApi.networks();
-    if (!r.ok) return setError(r.error ?? 'Could not load networks');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load networks');
     setError('');
     setNets(r.data.networks);
     setIfaces(r.data.interfaces);
@@ -41,7 +41,7 @@ export function DockerNetworks() {
     const ok = await confirmDialog({ title: `Delete the network “${n.name}”?`, message: 'Containers can’t use it after this.', confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     const r = await dockerApi.removeNetwork(n.name);
-    if (!r.ok) return toast('error', 'Could not delete it', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t delete it', r.error);
     void load();
   };
 
@@ -126,7 +126,7 @@ function NewNetworkForm({ ifaces, onCancel, onCreated }: { ifaces: HostInterface
     const body: NewNetwork = lan ? n : { name: n.name, driver: 'bridge', subnet: n.subnet || undefined, gateway: n.gateway || undefined, internal: n.internal };
     const r = await dockerApi.createNetwork(body);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not create the network');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t create the network');
     toast('success', `Network ${n.name} created`);
     onCreated();
   };

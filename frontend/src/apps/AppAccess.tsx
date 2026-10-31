@@ -18,7 +18,7 @@ export function WhoCanUse({ app, onChanged }: { app: StoreApp; onChanged: () => 
     setBusy(true);
     const r = await sharesApi.setAppAccess(app.id, next);
     setBusy(false);
-    if (!r.ok) return toast('error', 'Could not change who can use it', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t change who can use it', r.error);
     toast('success', next.everyone ? `Everyone can use ${app.name}` : `${app.name} is limited to the people you chose`);
     onChanged();
   };

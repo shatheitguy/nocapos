@@ -58,7 +58,7 @@ func (s *Server) limited(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	w.Header().Set("Retry-After", "12")
-	writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, slow down")
+	writeError(w, http.StatusTooManyRequests, "rate_limited", "Whoa, too many tries. Wait a few seconds and try again.")
 	return true
 }
 
@@ -151,7 +151,7 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "locked", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		s.audit(r, "", "auth.login", truncate(req.Username, 64), false, "invalid credentials")
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "That user name or password’s not it. Try again?")
 	default:
 		s.internalError(w, r, err)
 	}
@@ -188,7 +188,7 @@ func (s *Server) authLoginTOTP(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrFilesOnly):
 		writeError(w, http.StatusForbidden, "files_only", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "That user name or password’s not it. Try again?")
 	default:
 		s.internalError(w, r, err)
 	}
@@ -231,10 +231,10 @@ func (s *Server) authRefresh(w http.ResponseWriter, r *http.Request) {
 		s.Log.Warn("refresh token reuse detected; session revoked", "ip", clientIP(r, s.Config.TrustedProxies))
 		s.audit(r, "", "auth.refresh", "", false, "token reuse, session revoked")
 		s.clearSessionCookie(w)
-		writeError(w, http.StatusUnauthorized, "invalid_token", "session revoked")
+		writeError(w, http.StatusUnauthorized, "invalid_token", "For safety, this session was signed out. Sign in again.")
 	case errors.Is(err, auth.ErrInvalidToken):
 		s.clearSessionCookie(w)
-		writeError(w, http.StatusUnauthorized, "invalid_token", "session expired")
+		writeError(w, http.StatusUnauthorized, "invalid_token", "Your session timed out. Sign in again.")
 	default:
 		s.internalError(w, r, err)
 	}

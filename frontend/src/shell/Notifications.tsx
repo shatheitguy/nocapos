@@ -54,7 +54,7 @@ async function turnOff(n: Notice) {
   const cur = await notifyApi.settings();
   if (!cur.ok) return;
   const r = await notifyApi.saveSettings({ ...cur.data, [key]: false });
-  if (r.ok) toast('success', 'Turned off', 'Change it any time in Settings → Notifications.');
+  if (r.ok) toast('success', 'Muted — you won’t hear about that anymore', 'Change it any time in Settings → Notifications.');
 }
 
 const openSettings = () => openApp('settings', { props: { section: 'notifications' } });

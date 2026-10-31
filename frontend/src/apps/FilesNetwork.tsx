@@ -105,7 +105,7 @@ export function NetworkSections({
     });
     if (!ok) return;
     const r = await netApi.remove(d.id);
-    if (!r.ok) toast('error', 'Could not remove it', r.error);
+    if (!r.ok) toast('error', 'Couldn’t remove it', r.error);
     await onChanged();
   };
   const shares = sharing?.shares ?? [];
@@ -253,7 +253,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
 
   useEffect(() => {
     void netApi.overview().then((r) => {
-      if (!r.ok) return setError(r.error ?? 'Could not load sharing');
+      if (!r.ok) return setError(r.error ?? 'Couldn’t load sharing');
       setState({ support: r.data.support, sharing: r.data.sharing });
       const canSmb = r.data.support.native && r.data.support.samba;
       setSmb(r.data.sharing.smb || (canSmb && !r.data.sharing.webdav));
@@ -278,10 +278,10 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
     try {
       if (smb !== sharing.smb || dav !== sharing.webdav) {
         const r = await netApi.setProtocols({ smb: smb || sharing.smb, webdav: dav || sharing.webdav });
-        if (!r.ok) return setError(r.error ?? 'Could not turn sharing on');
+        if (!r.ok) return setError(r.error ?? 'Couldn’t turn sharing on');
       }
       const r = await netApi.addShare({ name: shareName.trim(), root, path, read_only: readOnly, guest: guest && readOnly ? 'ro' : guest });
-      if (!r.ok) return setError(r.error ?? 'Could not share the folder');
+      if (!r.ok) return setError(r.error ?? 'Couldn’t share the folder');
       setDone(r.data.name);
       onShared();
     } finally {

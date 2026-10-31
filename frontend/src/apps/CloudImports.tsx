@@ -36,7 +36,7 @@ export function CloudImportsPanel({ roots, onOpen }: { roots: FileRoot[]; onOpen
 
   const load = useCallback(async () => {
     const r = await cloudApi.overview();
-    if (!r.ok) return setError(r.error ?? 'Could not load');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load');
     setError('');
     setStatus(r.data.status);
     setAccounts(r.data.accounts);
@@ -64,7 +64,7 @@ export function CloudImportsPanel({ roots, onOpen }: { roots: FileRoot[]; onOpen
               setInstalling(true);
               const r = await cloudApi.install();
               setInstalling(false);
-              if (!r.ok) return toast('error', 'Could not install rclone', r.error);
+              if (!r.ok) return toast('error', 'Couldn’t install rclone', r.error);
               void load();
             }}
           >
@@ -106,7 +106,7 @@ export function CloudImportsPanel({ roots, onOpen }: { roots: FileRoot[]; onOpen
     const ok = await confirmDialog({ title: `Remove “${a.name}”?`, message: 'NoCapOS forgets this account. Files already imported stay.', confirmLabel: 'Remove', danger: true });
     if (!ok) return;
     const r = await cloudApi.removeAccount(a.id);
-    if (!r.ok) toast('error', 'Could not remove it', r.error);
+    if (!r.ok) toast('error', 'Couldn’t remove it', r.error);
     void load();
   };
 
@@ -162,7 +162,7 @@ function ImportCard({
     const ok = await confirmDialog({ title: `Delete the import “${i.name}”?`, message: 'Files it already copied stay where they are.', confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     const r = await cloudApi.removeImport(i.id);
-    if (!r.ok) toast('error', 'Could not delete it', r.error);
+    if (!r.ok) toast('error', 'Couldn’t delete it', r.error);
     void reload();
   };
   return (
@@ -206,7 +206,7 @@ function ImportCard({
             <Icon name="stop" size={13} /> Stop
           </button>
         ) : (
-          <button type="button" onClick={() => void cloudApi.run(i.id).then((r) => (r.ok ? reload() : toast('error', 'Could not start', r.error)))}>
+          <button type="button" onClick={() => void cloudApi.run(i.id).then((r) => (r.ok ? reload() : toast('error', 'Couldn’t start', r.error)))}>
             <Icon name="download" size={13} /> Import Now
           </button>
         )}
@@ -246,7 +246,7 @@ function ImportEditor({ imp, accounts, roots, onCancel, onSaved }: { imp: CloudI
     void cloudApi.folders(accountId, browse).then((r) => {
       if (!r.ok) {
         setFolders([]);
-        return setFolderErr(r.error ?? 'Could not list folders');
+        return setFolderErr(r.error ?? 'Couldn’t list folders');
       }
       setFolders(r.data.folders);
     });
@@ -266,7 +266,7 @@ function ImportEditor({ imp, accounts, roots, onCancel, onSaved }: { imp: CloudI
       schedule: schedule.every === 'manual' ? { every: 'manual' } : { every: schedule.every, at: schedule.at ?? '03:00', weekday: schedule.weekday ?? 0 },
     });
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not save');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t save');
     if (!imp) {
       const run = await cloudApi.run(r.data.id);
       toast(run.ok ? 'success' : 'error', run.ok ? 'Import started' : 'Saved, but could not start', run.ok ? 'Progress shows in Cloud Imports.' : run.error);
@@ -422,7 +422,7 @@ function AddAccount({ onCancel, onAdded }: { onCancel: () => void; onAdded: () =
     setError('');
     const r = await cloudApi.signInStart(kind);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not start the sign-in');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t start the sign-in');
     setSession({ id: r.data.session, url: r.data.url });
     window.open(r.data.url, '_blank', 'noopener');
   };
@@ -432,7 +432,7 @@ function AddAccount({ onCancel, onAdded }: { onCancel: () => void; onAdded: () =
     setError('');
     const r = await cloudApi.signInFinish(session.id, address, name);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not finish signing in');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t finish signing in');
     toast('success', `${r.data.name} connected`);
     onAdded();
   };
@@ -441,7 +441,7 @@ function AddAccount({ onCancel, onAdded }: { onCancel: () => void; onAdded: () =
     setError('');
     const r = await cloudApi.addAccount({ ...form, name });
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not add the account');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t add the account');
     toast('success', `${r.data.name} connected`);
     onAdded();
   };

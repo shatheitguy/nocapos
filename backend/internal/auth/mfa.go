@@ -21,7 +21,7 @@ const (
 )
 
 // ErrMFAExpired: the challenge is unknown, used up or too old.
-var ErrMFAExpired = errors.New("the sign-in has expired; enter your password again")
+var ErrMFAExpired = errors.New("that sign-in timed out — enter your password again")
 
 // MFAChallenge is returned (as an error) by Login when the account needs a
 // code from its authenticator app to finish signing in.

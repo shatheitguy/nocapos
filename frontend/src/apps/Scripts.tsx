@@ -23,7 +23,7 @@ export function Scripts() {
   const load = useCallback(async () => {
     const r = await scriptsApi.list();
     if (!r.ok) {
-      setError(r.error ?? 'Could not load scripts');
+      setError(r.error ?? 'Couldn’t load scripts');
       return;
     }
     setError(null);
@@ -53,7 +53,7 @@ export function Scripts() {
     const r = selected === 'new' ? await scriptsApi.create(draft) : await scriptsApi.update(selected!, draft);
     setSaving(false);
     if (!r.ok) {
-      toast('error', 'Could not save the script', r.error);
+      toast('error', 'Couldn’t save the script', r.error);
       return null;
     }
     await load();
@@ -65,7 +65,7 @@ export function Scripts() {
     if (!current) return;
     if (!(await confirmDialog({ title: `Delete “${current.name}”?`, message: 'The script is removed for everyone.', confirmLabel: 'Delete', danger: true }))) return;
     const r = await scriptsApi.remove(current.id);
-    if (!r.ok) toast('error', 'Could not delete the script', r.error);
+    if (!r.ok) toast('error', 'Couldn’t delete the script', r.error);
     setSelected(null);
     void load();
   };
@@ -91,7 +91,7 @@ export function Scripts() {
         <button type="button" className="small" onClick={() => void pick('new')}>
           <Icon name="plus" size={14} /> New script
         </button>
-        {list.length === 0 && <p className="muted small">No scripts yet. Saved scripts also appear in the Quick scripts widget.</p>}
+        {list.length === 0 && <p className="muted small">No scripts yet — saved ones also show up in the Quick scripts widget.</p>}
         {list.map((s) => (
           <button key={s.id} type="button" className={`scripts-item ${selected === s.id ? 'on' : ''}`} onClick={() => selected !== s.id && void pick(s.id)}>
             <b className="ellipsis">{s.name}</b>

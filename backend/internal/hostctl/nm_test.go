@@ -214,12 +214,12 @@ func TestWiFiConnectReplacesStaleProfile(t *testing.T) {
 		t.Errorf("deleted another network's profile:\n%s", joined)
 	}
 
-	// A wrong password: a plain "Incorrect password" (no raw nmcli dump),
+	// A wrong password: a plain "password's not it" (no raw nmcli dump),
 	// and the profile it made is cleaned up.
 	s.calls = nil
 	s.fail = map[string]string{"nmcli --wait": "Error: Connection activation failed: (7) Secrets were required, but not provided."}
 	err := WiFiConnect(context.Background(), WiFiJoin{SSID: "Office", Password: "typo-pass"})
-	if err == nil || !strings.Contains(err.Error(), "Incorrect password") {
+	if err == nil || !strings.Contains(err.Error(), "password's not it") {
 		t.Fatalf("error = %v", err)
 	}
 	if n := strings.Count(strings.Join(s.calls, "\n"), "connection delete uuid u-1"); n != 2 {
@@ -239,11 +239,11 @@ func TestWiFiConnectReplacesStaleProfile(t *testing.T) {
 func TestWiFiErrorMessages(t *testing.T) {
 	j := WiFiJoin{SSID: "Home", Password: "x"}
 	for out, want := range map[string]string{
-		"Error: No network with SSID 'Home' found.":                                        "isn't in range",
+		"Error: No network with SSID 'Home' found.":                                        "out of range",
 		"Error: Connection activation failed: IP configuration could not be reserved":      "address",
-		"Error: Timeout expired (45 seconds)":                                              "too long",
+		"Error: Timeout expired (45 seconds)":                                              "taking forever",
 		"Error: Failed to add/activate new connection: weird thing":                        "couldn't join Home: Failed to add/activate",
-		"Error: Connection activation failed: (7) Secrets were required, but not provided": "Incorrect password",
+		"Error: Connection activation failed: (7) Secrets were required, but not provided": "password's not it",
 	} {
 		if got := wifiError(j, out, errors.New("exit status 4")).Error(); !strings.Contains(got, want) {
 			t.Errorf("%q → %q, want %q", out, got, want)

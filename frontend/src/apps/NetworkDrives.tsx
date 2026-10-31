@@ -13,7 +13,7 @@ export function useNetwork(enabled = true) {
   const load = useCallback(async () => {
     if (!enabled) return;
     const r = await netApi.overview();
-    if (!r.ok) return setError(r.error ?? 'Could not load');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load');
     setError('');
     setSupport(r.data.support);
     setDrives(r.data.drives);
@@ -32,7 +32,7 @@ function InstallRow({ label, hint, tool, support, cmd, onDone }: { label: string
     setBusy(true);
     const r = await netApi.install(tool);
     setBusy(false);
-    if (!r.ok) return toast('error', `Could not install ${label}`, r.error);
+    if (!r.ok) return toast('error', `Couldn’t install ${label}`, r.error);
     toast('success', `${label} installed`);
     onDone();
   };
@@ -115,7 +115,7 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
   const find = async () => {
     setExports(null);
     const r = await netApi.exports(host);
-    if (!r.ok) return setError(r.error ?? 'Could not list the shares');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t list the shares');
     setError('');
     setExports(r.data.exports);
   };
@@ -124,8 +124,8 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
     setError('');
     const r = await netApi.add({ name: name || share.split('/').filter(Boolean).pop() || host, kind, host, share, username, password, auto });
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not connect');
-    toast('success', `${r.data.name} connected`, 'It is now in Files.');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t connect');
+    toast('success', `${r.data.name} connected`, 'Find it in Files.');
     setName('');
     setShare('');
     setPassword('');
@@ -234,7 +234,7 @@ function ServerScan({ support, picked, onPick }: { support: NetSupport; picked: 
     setScanning(true);
     const r = await netApi.discover();
     setScanning(false);
-    if (!r.ok) return setError(r.error ?? 'Could not scan the network');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t scan the network');
     setError('');
     setScan(r.data);
   }, []);

@@ -36,7 +36,7 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
     if (r.ok) {
       setList(r.data);
       setError(null);
-    } else setError(r.error ?? 'Could not scan for networks');
+    } else setError(r.error ?? 'Couldn’t scan for networks');
   };
   useEffect(() => {
     void scan(true);
@@ -55,7 +55,7 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
       onChanged?.();
       return true;
     }
-    setFailed({ ssid: n.ssid, error: r.error ?? 'Could not join' });
+    setFailed({ ssid: n.ssid, error: r.error ?? 'Couldn’t join' });
     // A saved network whose stored password no longer works: ask for it.
     if (n.secure && !hidden) setAskFor(n.ssid);
     return false;

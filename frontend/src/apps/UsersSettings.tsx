@@ -22,10 +22,10 @@ function PhotoPicker({ username }: { username: string }) {
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
-    const err = await uploadAvatar(file, username).catch(() => 'That image could not be read.');
+    const err = await uploadAvatar(file, username).catch(() => 'That image wouldn’t open. Try a PNG, JPEG, WebP or GIF.');
     setBusy(false);
-    if (err) toast('error', 'Could not set your photo', err);
-    else toast('success', 'Profile photo updated', 'It also shows on the login screen of this device.');
+    if (err) toast('error', 'Couldn’t set your photo', err);
+    else toast('success', 'New pic, who dis? Photo updated', 'It shows on this device’s login screen too.');
   };
   return (
     <div className="photo-picker">
@@ -71,7 +71,7 @@ export function YourAccount() {
           </span>
         </span>
       </div>
-      <Row label="Close other windows" hint="Tidy up: closes every window except Settings">
+      <Row label="Close other windows" hint="Clean slate: closes every window except Settings">
         <button type="button" className="ghost small" onClick={closeOthers}>
           Close windows
         </button>
@@ -91,7 +91,7 @@ export function UsersSettings({ isAdmin, withAccount = true }: { isAdmin: boolea
     return (
       <div className="stack settings-page">
         <YourAccount />
-        <p className="settings-tip">Only administrators can add people or change roles.</p>
+        <p className="settings-tip">Only administrators can add people or change roles — ask one if you need a hand.</p>
       </div>
     );
   }
@@ -108,7 +108,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
   const load = async () => {
     const r = await usersApi.list();
     if (r.ok) setData(r.data);
-    else setError(r.error ?? 'Could not load users');
+    else setError(r.error ?? 'Couldn’t load the people list. Try again in a sec.');
   };
   useEffect(() => {
     void load();
@@ -119,7 +119,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
     const r = await fn();
     setBusy(null);
     if (!r.ok) {
-      toast('error', 'That didn’t work', r.error);
+      toast('error', 'That didn’t go through', r.error);
       return false;
     }
     toast('success', done);
@@ -131,8 +131,8 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
     const ok = await confirmDialog({
       title: `Delete ${p.username}?`,
       message: linux
-        ? `The Linux account "${p.username}" is removed from this machine and signed out of NoCapOS.`
-        : `"${p.username}" can no longer sign in, and their chats and settings in NoCapOS are deleted.`,
+        ? `This deletes the Linux account "${p.username}" from this machine for real and signs them out of NoCapOS.`
+        : `This deletes "${p.username}" for real: they can’t sign in anymore, and their chats and settings in NoCapOS are gone.`,
       confirmLabel: 'Delete user',
       danger: true,
     });
@@ -141,16 +141,16 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
     if (linux && p.home) {
       removeHome = await confirmDialog({
         title: `Also delete ${p.home}?`,
-        message: `Their home folder and every file in it will be permanently erased. Choose Keep files to leave ${p.home} on disk.`,
+        message: `Their home folder and every file in it get erased for good — no undo. Choose Keep files to leave ${p.home} on disk.`,
         confirmLabel: 'Delete files too',
         danger: true,
       });
     }
-    await act(p.username, () => usersApi.remove(p.username, removeHome), `${p.username} was deleted`);
+    await act(p.username, () => usersApi.remove(p.username, removeHome), `${p.username} is gone for good`);
   };
 
   if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Loading users…</p>;
+  if (!data) return <p className="muted">Rounding up your people…</p>;
   const linux = data.mode === 'system';
 
   return (
@@ -193,7 +193,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                   busy={busy === p.username}
                   onCancel={() => setResetFor(null)}
                   onSave={async (pw) => {
-                    if (await act(p.username, () => usersApi.setPassword(p.username, pw), `Password changed for ${p.username}`)) setResetFor(null);
+                    if (await act(p.username, () => usersApi.setPassword(p.username, pw), `Bet — new password set for ${p.username}`)) setResetFor(null);
                   }}
                 />
               )}
@@ -220,7 +220,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
               </button>
               <button type="button" className="icon-btn neutral" disabled={p.root || p.you || busy === p.username}
                 title={p.disabled ? 'Enable account' : 'Disable account'} aria-label={`${p.disabled ? 'Enable' : 'Disable'} ${p.username}`}
-                onClick={() => void act(p.username, () => usersApi.setDisabled(p.username, !p.disabled), p.disabled ? `${p.username} can sign in again` : `${p.username} is disabled and signed out`)}>
+                onClick={() => void act(p.username, () => usersApi.setDisabled(p.username, !p.disabled), p.disabled ? `${p.username} is back — they can sign in again` : `${p.username} is disabled and signed out`)}>
                 <Icon name={p.disabled ? 'check' : 'lock'} size={15} />
               </button>
               <button type="button" className="icon-btn" disabled={p.root || p.you || busy === p.username} title="Delete user" aria-label={`Delete ${p.username}`}
@@ -274,14 +274,14 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setErr(null);
-    if (!nameOk) return setErr(linux ? 'Use lowercase letters, digits, - or _, starting with a letter.' : 'Use 3–32 letters, digits, ., _ or -.');
-    if (pw.length < 10) return setErr('Passwords need at least 10 characters.');
-    if (pw !== pw2) return setErr("The passwords don't match.");
+    if (!nameOk) return setErr(linux ? 'That user name’s not it — use lowercase letters, digits, - or _, starting with a letter.' : 'That user name’s not it — use 3–32 letters, digits, ., _ or -.');
+    if (pw.length < 10) return setErr('Too short — passwords need at least 10 characters.');
+    if (pw !== pw2) return setErr("Those passwords don't match. Try again?");
     setBusy(true);
     const r = await usersApi.create({ username, full_name: fullName || undefined, password: pw, role, access: role === 'admin' ? 'desktop' : access });
     setBusy(false);
-    if (!r.ok) return setErr(r.error ?? 'Could not add that person');
-    toast('success', `${username} was added`, linux ? 'A Linux account and home folder were created.' : undefined);
+    if (!r.ok) return setErr(r.error ?? 'Couldn’t add that person');
+    toast('success', `${username} just joined the squad`, linux ? 'Their Linux account and home folder are ready.' : undefined);
     setUsername('');
     setFullName('');
     setPw('');
@@ -309,7 +309,7 @@ function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) 
         <Row label="Confirm password">
           <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
         </Row>
-        <Row label="Role" hint={role === 'admin' ? (linux ? 'Full control of NoCapOS, and sudo on this machine' : 'Full control of NoCapOS') : 'Uses apps; can’t manage the system'}>
+        <Row label="Role" hint={role === 'admin' ? (linux ? 'Full control of NoCapOS, and sudo on this machine' : 'Full control of NoCapOS') : 'Uses apps; can’t touch system settings'}>
           <Choice value={role} onChange={setRole} options={[{ id: 'user', label: 'Standard' }, { id: 'admin', label: 'Administrator' }]} />
         </Row>
         {role === 'user' && (

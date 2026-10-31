@@ -43,7 +43,7 @@ export function useScriptRun(onFinished?: () => void) {
     window.clearTimeout(timer.current);
     const r = await scriptsApi.run(s.id);
     if (!r.ok) {
-      toast('error', `Could not run ${s.name}`, r.error);
+      toast('error', `Couldn’t run ${s.name}`, r.error);
       return;
     }
     setRun({ id: r.data.run_id, script_id: s.id, name: s.name, started_at: new Date().toISOString(), running: true, output: '', truncated: false });

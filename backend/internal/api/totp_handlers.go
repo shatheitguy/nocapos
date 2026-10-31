@@ -16,7 +16,7 @@ func (s *Server) totpAuthError(w http.ResponseWriter, r *http.Request, err error
 	case errors.Is(err, auth.ErrTOTPEnabled):
 		writeError(w, http.StatusConflict, "totp_enabled", err.Error())
 	case errors.Is(err, auth.ErrInvalidCredentials):
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "incorrect password")
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "That password’s not it. Try again?")
 	case errors.Is(err, auth.ErrLocked):
 		w.Header().Set("Retry-After", "900")
 		writeError(w, http.StatusTooManyRequests, "locked", err.Error())
@@ -36,7 +36,7 @@ func (s *Server) sensitiveLimited(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	w.Header().Set("Retry-After", "12")
-	writeError(w, http.StatusTooManyRequests, "rate_limited", "too many attempts, slow down")
+	writeError(w, http.StatusTooManyRequests, "rate_limited", "Whoa, too many tries. Wait a few seconds and try again.")
 	return true
 }
 

@@ -74,7 +74,7 @@ export function ContainerEditor({
   useEffect(() => {
     if (containerId) {
       void dockerApi.spec(containerId).then((r) => {
-        if (!r.ok) return setError(r.error ?? 'Could not read the container');
+        if (!r.ok) return setError(r.error ?? 'Couldn’t read the container');
         setSpec(r.data.spec);
         setCmd(joinCmd(r.data.spec.cmd));
         setMeta({ app: r.data.app, stack: r.data.stack, system: r.data.system });
@@ -136,7 +136,7 @@ export function ContainerEditor({
     setBusy(true);
     const r = containerId ? await dockerApi.edit(containerId, final) : await dockerApi.create(final);
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not save');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t save');
     const warning = (r.data as { warning?: string }).warning;
     if (warning) toast('info', 'Changes applied', warning);
     else toast('success', containerId ? `${spec.name} updated` : `${spec.name} created`, meta.app ? 'Kept for future app updates too.' : undefined);
@@ -445,11 +445,11 @@ function FolderPicker({ onClose, onPick }: { onClose: () => void; onPick: (hostP
     let target = path;
     if (newName.trim()) {
       const m = await fileApi.mkdir(root, path, newName.trim());
-      if (!m.ok) return toast('error', 'Could not create the folder', m.error);
+      if (!m.ok) return toast('error', 'Couldn’t create the folder', m.error);
       target = (path === '/' ? '' : path) + '/' + newName.trim();
     }
     const r = await dockerApi.hostPath(root, target);
-    if (!r.ok) return toast('error', 'Could not use that folder', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t use that folder', r.error);
     onPick(r.data.path);
   };
   return (

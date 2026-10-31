@@ -242,7 +242,7 @@ function StorageStep({ visit }: { visit: (open: () => void) => void }) {
             <span className="muted small">{fmtBytes(p.free, 0)} free</span>
           </div>
         ))}
-        {pools && pools.length === 0 && <div className="welcome-row muted small">No storage pools yet. Storage can combine disks into one.</div>}
+        {pools && pools.length === 0 && <div className="welcome-row muted small">No storage pools yet — Storage can combine disks into one.</div>}
       </div>
       <div className="welcome-actions">
         <button type="button" className="ghost" onClick={() => visit(() => openApp('files'))}>

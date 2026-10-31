@@ -26,7 +26,7 @@ export function Memory() {
     const r = await aiApi.setMemoryEnabled(on);
     if (!r.ok) {
       setEnabled(!on);
-      toast('error', 'Could not change memory setting', r.error);
+      toast('error', 'Couldn’t change memory setting', r.error);
     }
   };
 
@@ -37,7 +37,7 @@ export function Memory() {
     if (r.ok) {
       setDraft('');
       void load();
-    } else toast('error', 'Could not save', r.error);
+    } else toast('error', 'Couldn’t save', r.error);
   };
 
   const saveEdit = async () => {
@@ -45,7 +45,7 @@ export function Memory() {
     const r = await aiApi.updateMemory(editing.id, editing.text.trim());
     setEditing(null);
     if (r.ok) void load();
-    else toast('error', 'Could not update', r.error);
+    else toast('error', 'Couldn’t update', r.error);
   };
 
   const remove = async (id: string) => {

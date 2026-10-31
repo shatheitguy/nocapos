@@ -401,21 +401,21 @@ func wifiError(j WiFiJoin, out string, err error) error {
 	case strings.Contains(low, "secrets were required") || strings.Contains(low, "no secrets") ||
 		strings.Contains(low, "802-1x supplicant") || strings.Contains(low, "4-way handshake") || strings.Contains(low, "psk: property is invalid"):
 		if j.Password == "" {
-			why = "This network needs a password."
+			why = "This network needs a password. Pop it in and try again."
 		} else {
-			why = "Incorrect password for " + j.SSID + "."
+			why = "That password's not it for " + j.SSID + ". Try again?"
 		}
 	case strings.Contains(low, "no network with ssid") || strings.Contains(low, "not found"):
-		why = j.SSID + " isn't in range (for a hidden network, choose Other network and tick Hidden)."
+		why = "Lowkey can't find " + j.SSID + " — it's out of range (for a hidden network, choose Other network and tick Hidden)."
 	case strings.Contains(low, "timeout") || strings.Contains(low, "timed out") || strings.Contains(low, "killed") || strings.Contains(low, "deadline"):
-		why = "Joining " + j.SSID + " took too long. Move closer to the router or try again."
+		why = j.SSID + " is taking forever to answer. Move closer to the router and try again."
 	case strings.Contains(low, "ip configuration could not be reserved") || strings.Contains(low, "dhcp"):
-		why = "Joined " + j.SSID + " but didn't get an address from its router."
+		why = "Joined " + j.SSID + ", but its router never handed over an address."
 	case strings.Contains(low, "key-mgmt") || strings.Contains(low, "enterprise") || strings.Contains(low, "802-1x"):
-		why = j.SSID + " uses a sign-in type NoCapOS can't set up here (WPA Enterprise)."
+		why = j.SSID + " uses a sign-in type NoCapOS can't set up here yet (WPA Enterprise)."
 	}
 	if why == "" {
-		return fmt.Errorf("couldn't join %s: %s", j.SSID, raw)
+		return fmt.Errorf("Wi-Fi's being sus — couldn't join %s: %s", j.SSID, raw)
 	}
 	// A recognized failure gets a plain, friendly message only — nmcli's own
 	// text is for the unclassified case above, not for something this common.
