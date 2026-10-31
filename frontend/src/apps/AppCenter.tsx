@@ -11,11 +11,12 @@ import { openApp } from './meta';
 import { Empty } from './Monitor';
 import { WhoCanUse } from './AppAccess';
 import { WebAddressField } from './WebAddress';
+import { LinuxApps } from './LinuxApps';
 
 // App Store: discover, install, open, update and remove self-hosted apps.
 // Each app runs as Docker containers with its own data volumes.
 
-type Tab = 'discover' | 'installed' | 'updates';
+type Tab = 'discover' | 'installed' | 'updates' | 'linux';
 /** A list page: one category, every app ('*'), or nothing (the Discover home). */
 type ListPage = string | null;
 
@@ -66,7 +67,13 @@ export function AppCenter({ win }: { win?: WinState }) {
   const [apps, setApps] = useState<StoreApp[] | null>(null);
   const [docker, setDocker] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('discover');
+  // Opened at a Linux app (e.g. "Show in App Store" from Launchpad).
+  const nativeWanted = win?.props?.native;
+  const [tab, setTab] = useState<Tab>(nativeWanted ? 'linux' : 'discover');
+  const [linuxQ, setLinuxQ] = useState('');
+  useEffect(() => {
+    if (nativeWanted) setTab('linux');
+  }, [nativeWanted]);
   const [list, setList] = useState<ListPage>(null);
   const [q, setQ] = useState('');
   const [detail, setDetail] = useState<string | null>(win?.props?.app ?? null);
@@ -129,10 +136,11 @@ export function AppCenter({ win }: { win?: WinState }) {
     return (apps ?? []).filter((a) => `${a.name} ${a.tagline} ${a.description} ${a.category} ${catLabel(a.category)} ${a.developer}`.toLowerCase().includes(needle));
   }, [apps, q]);
 
-  if (error) return <Empty icon="store" text={error} />;
-  if (!apps) return <Empty icon="store" text="Loading the App Store…" />;
+  const linux = tab === 'linux';
+  if (error && !linux) return <Empty icon="store" text={error} />;
+  if (!apps && !linux) return <Empty icon="store" text="Loading the App Store…" />;
 
-  const current = apps.find((a) => a.id === detail);
+  const current = apps?.find((a) => a.id === detail);
   const open = (id: string) => setDetail(id);
   const goTab = (t: Tab) => {
     setTab(t);
@@ -142,7 +150,11 @@ export function AppCenter({ win }: { win?: WinState }) {
   };
 
   let body: ReactNode;
-  if (current) {
+  if (linux) {
+    body = <LinuxApps initial={nativeWanted} q={linuxQ} />;
+  } else if (!apps) {
+    body = null;
+  } else if (current) {
     body = <AppPage app={current} apps={apps} docker={docker} onBack={() => setDetail(null)} onOpen={open} onChanged={reload} />;
   } else if (q.trim()) {
     body = (
@@ -210,7 +222,21 @@ export function AppCenter({ win }: { win?: WinState }) {
           <button type="button" className={tab === 'updates' && !q ? 'on' : ''} onClick={() => goTab('updates')}>
             Updates {updates.length > 0 && <span className="as-badge">{updates.length}</span>}
           </button>
+          <button type="button" className={linux ? 'on' : ''} onClick={() => goTab('linux')}>
+            Linux apps
+          </button>
         </nav>
+        {linux ? (
+          <label className="as-search">
+            <Icon name="search" size={15} />
+            <input placeholder="Search Flathub" value={linuxQ} onChange={(e) => setLinuxQ(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setLinuxQ('')} />
+            {linuxQ && (
+              <button type="button" className="as-search-clear" title="Clear search" onClick={() => setLinuxQ('')}>
+                <Icon name="close" size={12} />
+              </button>
+            )}
+          </label>
+        ) : (
         <label className="as-search">
           <Icon name="search" size={15} />
           <input
@@ -228,9 +254,10 @@ export function AppCenter({ win }: { win?: WinState }) {
             </button>
           )}
         </label>
+        )}
       </header>
 
-      {!docker && (
+      {!docker && !linux && (
         <div className="as-banner" role="status">
           <Icon name="alert" size={14} />
           <span>Docker isn't running, so apps can't be installed or started right now. NoCapOS reconnects as soon as it's back.</span>
