@@ -12,6 +12,7 @@ import { LANGUAGES, usePrefs } from '../state/prefs';
 import { notifyApi, type NotifySettings } from '../state/notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
+import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
 import type { WinState } from '../state/windows';
 import type { Snapshot, SystemInfo } from '../api/types';
 import { openApp } from './meta';
@@ -434,19 +435,12 @@ function plainNotes(md: string) {
     .trim();
 }
 
-interface UpdateRunStatus {
-  running: boolean;
-  supported: boolean;
-  version: string;
-  log?: string;
-}
-
 function SoftwareUpdate() {
   const [u, setU] = useState<UpdateInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [run, setRun] = useState<UpdateRunStatus | null>(null);
   const [starting, setStarting] = useState(false);
-  const logRef = useRef<HTMLPreElement>(null);
+  const updating = useUpdate((s) => s.phase !== 'idle');
   const check = (refresh: boolean) => {
     setBusy(true);
     void api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`).then((r) => {
@@ -455,29 +449,43 @@ function SoftwareUpdate() {
       else toast('error', 'Could not check for updates', r.error);
     });
   };
-  const pollRun = () => void api<UpdateRunStatus>('/api/v1/system/update/run').then((r) => { if (r.ok) setRun(r.data); });
+  const loadRun = () =>
+    void api<UpdateRunStatus>('/api/v1/system/update/run').then((r) => {
+      if (!r.ok) return;
+      setRun(r.data);
+      // Opened mid-update (another tab started it): follow along full-screen.
+      if (r.data.running && useUpdate.getState().phase === 'idle') void resumeRunningUpdate();
+    });
   useEffect(() => {
     check(false);
-    pollRun(); // in case this page reopened mid-update
   }, []);
   useEffect(() => {
-    if (!run?.running) return;
-    const t = window.setInterval(pollRun, 2000);
-    return () => window.clearInterval(t);
-  }, [run?.running]);
-  useEffect(() => {
-    logRef.current?.scrollTo(0, logRef.current.scrollHeight);
-  }, [run?.log]);
+    if (!updating) loadRun();
+  }, [updating]);
   const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', 'Command copied'));
   const updateNow = () => {
+    if (!u?.latest) return;
     setStarting(true);
-    void api<{ started: boolean }>('/api/v1/system/update/run', { method: 'POST' }).then((r) => {
+    void api<{ started: boolean; from: string; target: string }>('/api/v1/system/update/run', {
+      method: 'POST',
+      body: { target: u.latest },
+    }).then((r) => {
       setStarting(false);
-      if (r.ok || r.status === 409) { pollRun(); return; }
+      if (r.ok) {
+        openUpdate(r.data.from, r.data.target);
+        return;
+      }
+      const code = (r.data as unknown as { error?: { code?: string } } | null)?.error?.code;
+      if (code === 'already_running') {
+        void resumeRunningUpdate();
+        return;
+      }
+      if (code === 'release_changed') check(true);
       toast('error', 'Could not start the update', r.error);
     });
   };
-  const finished = run && !run.running && run.log;
+  const last = run && !run.running ? run.result : null;
+  const canUpdate = !!u && (u.available || u.dev) && !u.error && !!run?.supported;
   return (
     <div className="stack settings-page">
       <div className="ucard set-update">
@@ -492,59 +500,61 @@ function SoftwareUpdate() {
             </>
           ) : u.available ? (
             <>
-              <b>NoCapOS {u.latest} is available</b>
-              <span>You have {u.current}.{u.published && ` Released ${new Date(u.published).toLocaleDateString()}.`}</span>
+              <b>
+                Update available: {vtag(u.current)} → {vtag(u.latest)}
+              </b>
+              <span>
+                {u.published ? `Dropped ${new Date(u.published).toLocaleDateString()}.` : 'A fresh release is out.'} Your settings, apps and files stay put.
+              </span>
             </>
           ) : u.dev ? (
             <>
               <b>Development build</b>
-              <span>This is {u.current}; the latest release is {u.latest ?? 'unknown'}.</span>
+              <span>This is {u.current}; the latest release is {u.latest ? vtag(u.latest) : 'unknown'}.</span>
             </>
           ) : (
             <>
-              <b>NoCapOS is up to date</b>
-              <span>Version {u.current}</span>
+              <b>You're up to date</b>
+              <span>NoCapOS {vtag(u.current)} is the latest. No cap.</span>
             </>
           )}
           {u && <small>Last checked {new Date(u.checked).toLocaleTimeString()}</small>}
         </div>
-        {u && (u.available || u.dev) && !u.error && run?.supported && !run.running ? (
-          <button type="button" className="pill small" disabled={starting} onClick={updateNow}>
-            {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} Update now
-          </button>
-        ) : (
+        <div className="btn-group">
+          {canUpdate && (
+            <button type="button" className="pill small" disabled={starting || run?.running} onClick={updateNow}>
+              {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} Update to {vtag(u.latest)}
+            </button>
+          )}
           <button type="button" className="pill ghost small" disabled={busy} onClick={() => check(true)}>
             {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} Check now
           </button>
-        )}
+        </div>
       </div>
-      {run?.running && (
-        <Group title="Updating NoCapOS" hint="This can take a few minutes. Keep this window open; NoCapOS will restart on its own partway through.">
-          <div className="settings-row full">
-            <span className="spinner sm" /> <b>Installing…</b>
-            <pre ref={logRef} className="set-logs">{run.log || 'Starting…'}</pre>
+      {last && (
+        <Group title="Last update">
+          <div className="settings-row full set-update-last">
+            <div className={`set-update-result ${last.ok ? 'ok' : 'bad'}`}>
+              <Icon name={last.ok ? 'check' : 'alert'} size={15} />
+              <span>
+                {last.ok
+                  ? `Updated ${vtag(last.from)} → ${vtag(last.to)}`
+                  : `Update to ${vtag(last.to)} flopped${last.rolled_back ? ` — ${vtag(last.from)} was put back` : last.unchanged ? ' — nothing changed' : ''}`}
+                {last.finished_at && ` · ${new Date(last.finished_at).toLocaleString()}`}
+              </span>
+            </div>
+            {!last.ok && last.error && <p className="set-update-err">{last.error}</p>}
+            {run?.log && (
+              <details className="set-update-log">
+                <summary>Show details</summary>
+                <pre className="set-logs">{run.log}</pre>
+              </details>
+            )}
           </div>
         </Group>
       )}
-      {finished && (
-        <Group title="Update finished">
-          <div className="settings-row full">
-            <pre ref={logRef} className="set-logs">{run.log}</pre>
-            <button type="button" className="pill small" onClick={() => window.location.reload()}>
-              <Icon name="restart" size={13} /> Reload NoCapOS
-            </button>
-          </div>
-        </Group>
-      )}
-      {u && (u.available || u.dev) && !u.error && !run?.running && (
-        <Group
-          title="How to update"
-          hint={
-            run?.supported
-              ? "Update now installs the latest release over this one and keeps your settings, apps and files. You can also run this on the server yourself."
-              : "Updating from here needs NoCapOS installed directly on a Linux server, running as root. Run this on the server instead."
-          }
-        >
+      {u && (u.available || u.dev) && !u.error && run && !run.supported && (
+        <Group title="How to update" hint="Updating from here needs NoCapOS installed directly on a Linux server, running as root. Run this on the server instead.">
           <div className="settings-row full">
             <pre className="set-logs set-cmd">{u.command}</pre>
             <div className="btn-group set-logs-actions">
@@ -559,7 +569,7 @@ function SoftwareUpdate() {
         </Group>
       )}
       {u?.notes && !u.error && (
-        <Group title={`What's new in ${u.latest}`}>
+        <Group title={`What's new in ${vtag(u.latest)}`}>
           <div className="settings-row full">
             <pre className="set-notes">{plainNotes(u.notes)}</pre>
             {u.url && (
