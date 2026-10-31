@@ -5,6 +5,8 @@ import { getUser, logout, onSessionChange, refresh, setupRequired } from './api/
 import type { User } from './api/types';
 import { AuthScreen, type AuthMode } from './shell/AuthScreen';
 import { Desktop } from './shell/Desktop';
+import { UpdateOverlay } from './shell/UpdateOverlay';
+import { resumeRememberedUpdate, resumeRunningUpdate } from './state/update';
 import { installUiFeedback, playCue } from './lib/uiSound';
 import { applyPrefs, resetPrefs, restorePrefs, usePrefs } from './state/prefs';
 import { useRecents } from './state/recents';
@@ -27,6 +29,9 @@ export function App() {
   }, []);
 
   useEffect(() => installUiFeedback(), []);
+
+  // An update was in flight when this tab reloaded: pick it back up.
+  useEffect(() => resumeRememberedUpdate(), []);
 
   // Lock / unlock sounds, only on a real transition (not on page load).
   const prevKind = useRef(phase.kind);
@@ -82,6 +87,11 @@ export function App() {
     }
   }, [deskId, deskAdmin, signedOut]);
 
+  // Admins: if NoCapOS is updating right now, show it.
+  useEffect(() => {
+    if (deskAdmin) void resumeRunningUpdate();
+  }, [deskAdmin]);
+
   // Lock = end the server session but keep the username and window layout,
   // so unlocking requires the password and restores the desktop as it was.
   const lock = async () => {
@@ -90,7 +100,14 @@ export function App() {
     await logout();
   };
 
-  if (phase.kind === 'boot') return <div className="boot"><Logo size={110} /></div>;
-  if (phase.kind === 'auth') return <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} lockedUserId={phase.lockedUserId} />;
-  return <Desktop user={phase.user} onLock={() => void lock()} />;
+  let screen;
+  if (phase.kind === 'boot') screen = <div className="boot"><Logo size={110} /></div>;
+  else if (phase.kind === 'auth') screen = <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} lockedUserId={phase.lockedUserId} />;
+  else screen = <Desktop user={phase.user} onLock={() => void lock()} />;
+  return (
+    <>
+      {screen}
+      <UpdateOverlay />
+    </>
+  );
 }

@@ -574,7 +574,44 @@ rollback_native() {
   die "the update to $VERSION failed and $prev didn't start either. Check: journalctl -u nocapos -e (database copy: $DB_BACKUP)"
 }
 
+# Started from inside NoCapOS itself (Update now in an older version, or its
+# host terminal), this installer runs in nocapos.service's cgroup, and
+# stopping the service below would kill it halfway through. So it moves to a
+# transient unit of its own first and follows that one from here.
+detach_from_service() {
+  [ -z "${NOCAP_DETACHED:-}" ] || return 0
+  grep -qs 'nocapos\.service' /proc/self/cgroup || return 0
+  has systemd-run || return 0
+  local work="$DATA/update-bundle" unit out log tailpid="" rc
+  unit="nocapos-install-$(date +%s)"
+  rm -rf "$work"
+  mkdir -p "$work"
+  chmod 700 "$work"
+  cp -a "$BUNDLE_DIR/." "$work/" # the bundle may sit in the service's private /tmp
+  out="$(readlink -f "/proc/$$/fd/1" 2>/dev/null || true)"
+  if [ -n "$out" ] && [ -f "$out" ]; then log="$out"; else log="$work/install.log"; : >"$log"; fi
+  info "Continuing in its own service ($unit), so restarting $NAME doesn't stop it"
+  # An older NoCapOS's lock (a bare timestamp) is never removed by the updater
+  # that wrote it, since that one stops with the service: clear it at the end.
+  if ! systemd-run --unit="$unit" --collect --quiet --setenv=NOCAP_DETACHED=1 /bin/bash -c '
+      bash "$1/install.sh" "${@:4}" >>"$2" 2>&1; rc=$?
+      echo "$rc" >"$1/rc"
+      if [ -f "$3/update.running" ] && ! grep -q "^{" "$3/update.running"; then rm -f "$3/update.running"; fi
+      sleep 10; rm -rf "$1"; exit "$rc"' _ "$work" "$log" "$DATA" "${ARGS[@]}"; then
+    warn "Couldn't start a separate service for the update; carrying on here"
+    rm -rf "$work"
+    return 0
+  fi
+  [ "$log" = "$out" ] || { tail -n +1 -f "$log" & tailpid=$!; }
+  while [ ! -f "$work/rc" ] && systemctl is-active --quiet "$unit"; do sleep 1; done
+  sleep 1
+  [ -z "$tailpid" ] || kill "$tailpid" 2>/dev/null || true
+  rc="$(cat "$work/rc" 2>/dev/null || echo 1)"
+  exit "$rc"
+}
+
 install_native_mode() {
+  detach_from_service
   migrate_alfaos
   local fresh=1
   [ -f "$UNIT" ] && fresh=0

@@ -34,15 +34,7 @@ var updateCache struct {
 }
 
 func (s *Server) systemUpdate(w http.ResponseWriter, r *http.Request) {
-	updateCache.Lock()
-	defer updateCache.Unlock()
-	if c := updateCache.info; c != nil && r.URL.Query().Get("refresh") == "" && time.Since(c.Checked) < time.Hour && c.Error == "" {
-		writeJSON(w, http.StatusOK, c)
-		return
-	}
-	info := checkRelease(r.Context(), s.Version)
-	updateCache.info = &info
-	writeJSON(w, http.StatusOK, info)
+	writeJSON(w, http.StatusOK, releaseFor(s, r, r.URL.Query().Get("refresh") != ""))
 }
 
 // checkRelease adapts release.Check's result to this API's wire shape.
