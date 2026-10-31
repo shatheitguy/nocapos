@@ -64,6 +64,14 @@
 .set-update-text b { font-size: 16px; }
 .set-update-text span { font-size: 13px; color: var(--muted); }
 .set-update-text small { font-size: 11.5px; color: var(--muted); opacity: 0.8; }
+.set-update > .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-update-last { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.set-update-result { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.set-update-result.ok svg { color: var(--ok); }
+.set-update-result.bad svg { color: var(--bad); }
+.set-update-err { margin: 0; font-size: 13px; color: var(--bad); }
+.set-update-log summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.set-update-log .set-logs { margin-top: 8px; max-height: 240px; }
 .set-cmd { max-height: none; white-space: pre-wrap; word-break: break-all; }
 .set-notes { margin: 0; max-height: 320px; overflow: auto; font: 13px/1.55 var(--font); white-space: pre-wrap; color: var(--text); }
 .set-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
