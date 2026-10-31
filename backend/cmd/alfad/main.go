@@ -324,9 +324,10 @@ func serve() error {
 	if drives != nil {
 		go drives.Run(ctx) // after api.New, which subscribes to its changes
 	}
+	handler := srv.Handler()
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           srv.Handler(),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    64 << 10,
@@ -352,8 +353,12 @@ func serve() error {
 		go func() { errCh <- httpSrv.Serve(ln) }()
 	}
 	if certFile != "" && cfg.HTTPRedirectAddr != "" {
-		redirect := startHTTPRedirect(cfg.HTTPRedirectAddr, ln.Addr(), log)
+		redirect := startHTTPRedirect(cfg.HTTPRedirectAddr, ln.Addr(), srv, log)
 		defer redirect.Close()
+	}
+	if certFile != "" && cfg.DesktopAddr != "" {
+		desk := startDesktopListener(cfg.DesktopAddr, handler, log)
+		defer desk.Close()
 	}
 	log.Info("alfad ready", "addr", ln.Addr().String(), "tls", certFile != "")
 
@@ -373,14 +378,14 @@ func serve() error {
 // startHTTPRedirect serves a plain-HTTP listener that only redirects to the
 // HTTPS address, so http://nocap.local and http://<ip> open NoCapOS. A busy
 // port (another web server) is logged and skipped.
-func startHTTPRedirect(addr string, httpsAddr net.Addr, log *slog.Logger) *http.Server {
+func startHTTPRedirect(addr string, httpsAddr net.Addr, srv *api.Server, log *slog.Logger) *http.Server {
 	port := ""
 	if tcp, ok := httpsAddr.(*net.TCPAddr); ok {
 		port = strconv.Itoa(tcp.Port)
 	}
-	srv := &http.Server{
+	rs := &http.Server{
 		Addr:              addr,
-		Handler:           tlsutil.RedirectHandler(port),
+		Handler:           srv.LocalOnly(tlsutil.RedirectHandler(port)),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       30 * time.Second,
 		MaxHeaderBytes:    16 << 10,
@@ -389,10 +394,38 @@ func startHTTPRedirect(addr string, httpsAddr net.Addr, log *slog.Logger) *http.
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Warn("http redirect not started (is another web server using the port?)", "addr", addr, "err", err)
+		return rs
+	}
+	go func() { _ = rs.Serve(ln) }()
+	log.Info("redirecting http to https", "addr", addr)
+	return rs
+}
+
+// startDesktopListener serves NoCapOS over plain HTTP on a loopback address
+// for NoCap Desktop's browser on this machine's own screen: no certificate
+// warning, and since only this machine can connect, TLS isn't weakened for
+// any other device. A busy port is logged and skipped.
+func startDesktopListener(addr string, handler http.Handler, log *slog.Logger) *http.Server {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           api.MarkLocalDesktop(handler),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Warn("local desktop listener not started (is another program using the port?)", "addr", addr, "err", err)
+		return srv
+	}
+	if tcp, ok := ln.Addr().(*net.TCPAddr); !ok || !tcp.IP.IsLoopback() {
+		_ = ln.Close()
+		log.Error("local desktop listener must be loopback-only; not started", "addr", ln.Addr().String())
 		return srv
 	}
 	go func() { _ = srv.Serve(ln) }()
-	log.Info("redirecting http to https", "addr", addr)
+	log.Info("local desktop listener (this machine only)", "addr", addr)
 	return srv
 }
 

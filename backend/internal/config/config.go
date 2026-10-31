@@ -72,7 +72,17 @@ type Config struct {
 	// (so http://nocap.local works). Defaults to ":80" with built-in TLS on
 	// Linux; ALFA_HTTP_REDIRECT_ADDR=off turns it off.
 	HTTPRedirectAddr string
+
+	// DesktopAddr is a plain-HTTP listener bound to loopback only, for NoCap
+	// Desktop's browser on this machine's own screen (no certificate warning,
+	// nothing leaves the machine). Defaults to 127.0.0.1:8780 for native
+	// Linux installs with built-in TLS; ALFA_DESKTOP_ADDR=off turns it off.
+	// Only loopback addresses are accepted.
+	DesktopAddr string
 }
+
+// DefaultDesktopAddr is where NoCap Desktop's browser opens NoCapOS.
+const DefaultDesktopAddr = "127.0.0.1:8780"
 
 func (c *Config) TLSEnabled() bool { return c.TLSAuto || c.TLSCert != "" }
 
@@ -136,6 +146,17 @@ func Load() (*Config, error) {
 		c.HTTPRedirectAddr = v
 	case c.TLSEnabled() && runtime.GOOS == "linux":
 		c.HTTPRedirectAddr = ":80"
+	}
+
+	switch v := strings.TrimSpace(os.Getenv("ALFA_DESKTOP_ADDR")); {
+	case strings.EqualFold(v, "off"):
+	case v != "":
+		if !isLoopback(v) {
+			return nil, fmt.Errorf("ALFA_DESKTOP_ADDR: %q must be a loopback address like %s (it serves plain HTTP)", v, DefaultDesktopAddr)
+		}
+		c.DesktopAddr = v
+	case c.TLSEnabled() && runtime.GOOS == "linux" && !InContainer():
+		c.DesktopAddr = DefaultDesktopAddr
 	}
 
 	// Secure cookies need HTTPS (Traefik or built-in TLS). A loopback-only
