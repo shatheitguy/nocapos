@@ -66,11 +66,16 @@ type Manager struct {
 	// portFree reports whether a host port can be bound (swappable in tests).
 	portFree func(port int, proto string) bool
 
-	mu       sync.Mutex
-	jobs     map[string]*job
-	active   map[string]string // app id → running job id
-	last     map[string]string // app id → most recent job id (shown for a while after it ends)
-	reserved map[int]string    // web ports picked by installs that haven't saved yet
+	mu     sync.Mutex
+	jobs   map[string]*job
+	active map[string]string // app id → running job id
+	last   map[string]string // app id → most recent job id (shown for a while after it ends)
+
+	// portMu serialises web port picking: it is held while the installed
+	// apps are read and a port is reserved, and while a finished install
+	// drops its reservation, so a port is always either reserved or saved.
+	portMu   sync.Mutex
+	reserved map[int]string // web ports picked by installs that haven't finished yet
 }
 
 func NewManager(apps []App, engine Engine, db Store) *Manager {
@@ -254,6 +259,23 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 		defer cancel()
 		err := fn(ctx, j)
+		// The install has saved its row (or failed) by now, so its port
+		// reservation can go.
+		m.portMu.Lock()
+		for p, owner := range m.reserved {
+			if owner == app {
+				delete(m.reserved, p)
+			}
+		}
+		m.portMu.Unlock()
+		// The completion callback runs before the next job for the app can start.
+		if onDone != nil {
+			onDone(err)
+		}
+		// Free the app and mark the job done in one step: anyone who sees the
+		// job done can start the next one straight away without ErrBusy.
+		m.mu.Lock()
+		delete(m.active, app)
 		j.mu.Lock()
 		j.Done, j.Ended = true, time.Now().UTC()
 		if err != nil {
@@ -262,17 +284,7 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 			j.Percent, j.Phase = 100, "Done"
 		}
 		j.mu.Unlock()
-		m.mu.Lock()
-		delete(m.active, app)
-		for p, owner := range m.reserved {
-			if owner == app {
-				delete(m.reserved, p)
-			}
-		}
 		m.mu.Unlock()
-		if onDone != nil {
-			onDone(err)
-		}
 	}()
 	return j.ID, nil
 }
@@ -580,6 +592,11 @@ func (m *Manager) removeVolumes(ctx context.Context, a *App) {
 // freeWebPort picks a host port in [portLow, portHigh] that no installed app
 // uses and nothing is listening on.
 func (m *Manager) freeWebPort(ctx context.Context, app string) (int, error) {
+	// Read the installed apps and reserve under one lock: a finished install
+	// saves its row before it drops its reservation, so reading the rows
+	// first and locking afterwards could miss both and hand its port out again.
+	m.portMu.Lock()
+	defer m.portMu.Unlock()
 	rows, err := m.db.InstalledApps(ctx)
 	if err != nil {
 		return 0, err
@@ -590,9 +607,6 @@ func (m *Manager) freeWebPort(ctx context.Context, app string) (int, error) {
 			used[r.WebPort] = true
 		}
 	}
-	// Reserve under the lock so simultaneous installs never pick the same port.
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	for p := portLow; p <= portHigh; p++ {
 		if owner, taken := m.reserved[p]; taken && owner != app {
 			continue
