@@ -213,6 +213,7 @@ smart|smartmontools|smartmontools|smartmontools|smartmontools
 zfs|zfsutils-linux|-|-|-
 media|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
 backup|restic rclone|restic rclone|restic rclone|restic rclone
+flatpak|flatpak|flatpak|flatpak|flatpak
 '
 
 pkg_manager() {
@@ -263,7 +264,7 @@ install_host_packages() {
     apt) col=2 ;; dnf) col=3 ;; pacman) col=4 ;; zypper) col=5 ;;
     *) warn "No supported package manager: skipping the host packages (NoCapOS offers them later)."; return 0 ;;
   esac
-  info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks and media (skip with --minimal)"
+  info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks, media and Linux apps (skip with --minimal)"
   pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -287,6 +288,16 @@ install_host_packages() {
     fi
   done <<<"$PKG_TABLE"
   enable_host_services
+  setup_flathub
+}
+
+# Linux apps: the App Store installs desktop apps from Flathub, system-wide.
+# Never fatal: NoCapOS adds the remote again on the first app install.
+FLATHUB_REPO=https://dl.flathub.org/repo/flathub.flatpakrepo
+setup_flathub() {
+  has flatpak || { warn "flatpak isn't installed: Linux apps in the App Store stay off until it is"; return 0; }
+  flatpak remote-add --if-not-exists --system flathub "$FLATHUB_REPO" >/dev/null 2>&1 ||
+    warn "Couldn't add Flathub right now; NoCapOS adds it on the first Linux app install."
 }
 
 enable_host_services() {

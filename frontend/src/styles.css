@@ -1195,6 +1195,11 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
 .brave-boot button { margin-top: 4px; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: #fb542b; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Linux apps reuse the Brave window, in neutral colours. */
+.native-stream .brave-badge { color: inherit; }
+.native-stream .brave-boot { background: radial-gradient(circle at 50% 35%, #1b2130, #0b0e15 70%); }
+.native-stream .brave-logo { background: rgba(255,255,255,0.08); box-shadow: 0 14px 40px rgba(0,0,0,0.35); }
+.native-stream .spinner { border-top-color: var(--accent, #7c8aa5); }
 
 /* ---- Remote Desktop (RDP via guacd) ---- */
 .rdp-head .spacer { flex: 1; }
