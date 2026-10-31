@@ -403,7 +403,7 @@ func wifiError(j WiFiJoin, out string, err error) error {
 		if j.Password == "" {
 			why = "This network needs a password."
 		} else {
-			why = "The password for " + j.SSID + " wasn't accepted. Check it and try again."
+			why = "Incorrect password for " + j.SSID + "."
 		}
 	case strings.Contains(low, "no network with ssid") || strings.Contains(low, "not found"):
 		why = j.SSID + " isn't in range (for a hidden network, choose Other network and tick Hidden)."
@@ -417,7 +417,9 @@ func wifiError(j WiFiJoin, out string, err error) error {
 	if why == "" {
 		return fmt.Errorf("couldn't join %s: %s", j.SSID, raw)
 	}
-	return fmt.Errorf("%s (nmcli: %s)", why, raw)
+	// A recognized failure gets a plain, friendly message only — nmcli's own
+	// text is for the unclassified case above, not for something this common.
+	return errors.New(why)
 }
 
 func WiFiDisconnect(ctx context.Context, device string) error {
