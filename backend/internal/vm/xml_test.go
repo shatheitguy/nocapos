@@ -60,6 +60,26 @@ func TestDomainXMLWindows(t *testing.T) {
 	}
 }
 
+// Windows 10 doesn't enforce Secure Boot, and asking for the SMM an OVMF
+// Secure Boot variant needs is what made real UEFI VM creation fail on a
+// host that only had plain OVMF installed — so Windows 10 (and any other
+// non-Windows-11 UEFI machine) must not request it.
+func TestDomainXMLWindows10NoSMM(t *testing.T) {
+	s := winSpec()
+	s.OS = OSWindows10
+	x, err := domainXML(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(x)
+	if !strings.Contains(out, `<os firmware="efi">`) {
+		t.Error("Windows 10 should still ask for EFI firmware")
+	}
+	if strings.Contains(out, "<smm") {
+		t.Errorf("Windows 10 shouldn't require SMM:\n%s", out)
+	}
+}
+
 func TestDomainXMLLinux(t *testing.T) {
 	s := spec{Name: "web", UUID: "u", OS: OSLinux, CPUs: 2, MemoryMiB: 2048, Virtio: true, Video: "virtio", Created: time.Now(),
 		Disks:   []specDisk{{Path: "/d/web/disk-1.qcow2", Target: "vda", Bus: "virtio"}},
