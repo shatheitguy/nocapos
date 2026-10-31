@@ -85,6 +85,7 @@ type Server struct {
 	webBook          *webaddr.Book        // admins' own web addresses for apps/containers
 	pkgJobs          *syspkg.Jobs         // Packages app's background jobs
 	pkgAdmin         *syspkg.Admin
+	pairing          pairingState // device pairing codes and the NoCap ID
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -140,6 +141,16 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/auth/avatar", s.authed(s.avatarGet))
 	mux.Handle("PUT /api/v1/auth/avatar", s.authed(s.avatarPut))
 	mux.Handle("DELETE /api/v1/auth/avatar", s.authed(s.avatarDelete))
+
+	// Devices: phones link with a 6-digit code, then use their own token.
+	mux.HandleFunc("GET /api/v1/pair/info", s.pairInfo)
+	mux.HandleFunc("POST /api/v1/pair/claim", s.pairClaim) // rate-limited per client
+	mux.Handle("POST /api/v1/devices/pair-code", s.authed(s.devicesPairCode))
+	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
+	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
+	mux.Handle("GET /api/v1/device/me", s.device(s.deviceMe))
+	mux.Handle("GET /api/v1/device/apps", s.device(s.deviceApps))
+	mux.Handle("POST /api/v1/device/heartbeat", s.device(s.deviceHeartbeat))
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))
