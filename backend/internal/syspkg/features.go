@@ -73,6 +73,11 @@ var Features = []Feature{
 		ID: "backup", Title: "Backups and cloud imports (restic, rclone)", Bins: []string{"restic", "rclone"},
 		Packages: Names{"apt": {"restic", "rclone"}, "dnf": {"restic", "rclone"}, "pacman": {"restic", "rclone"}, "zypper": {"restic", "rclone"}},
 	},
+	{
+		// The App Store's Linux apps tab adds the Flathub remote itself.
+		ID: "flatpak", Title: "Linux apps (Flatpak, apps from Flathub)", Bins: []string{"flatpak"},
+		Packages: Names{"apt": {"flatpak"}, "dnf": {"flatpak"}, "pacman": {"flatpak"}, "zypper": {"flatpak"}},
+	},
 }
 
 // FeatureState is a feature as the Packages app shows it.

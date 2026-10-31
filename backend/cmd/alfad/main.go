@@ -32,6 +32,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/nativeapps"
 	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
@@ -210,6 +211,10 @@ func serve() error {
 	termSvc := terminal.NewService(dc, cfg.AllowHostTerminal)
 	braveMgr := webapps.NewBrave(log, cfg.DataDir)
 	defer braveMgr.Close()
+	appStreams := webapps.NewStreams(log, cfg.DataDir)
+	defer appStreams.Close()
+	go appStreams.Run(ctx)
+	nativeApps := nativeapps.New(cfg.DataDir, appStreams)
 	guacd := rdp.NewGuacd(log, dc, cfg.GuacdAddr)
 
 	catalog, err := appstore.LoadCatalog()
@@ -301,7 +306,7 @@ func serve() error {
 
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
-		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Guacd: guacd, Accounts: dir, Version: version,
+		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Streams: appStreams, Native: nativeApps, Guacd: guacd, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 		FileIndex: fileIndex,
 		Photos:    photoLib,

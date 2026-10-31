@@ -18,7 +18,8 @@ import { isStoreKey } from './storeApps';
 //   data-drop="launchpad" the Launchpad grid: an app dragged out of a folder leaves it
 //
 // The dragged id is an app id, "folder:<id>" for a whole folder, or
-// "store:<id>" for an installed app (desktop shortcuts only: no Dock, no folders).
+// "store:<id>" for an installed app or "native:<id>" for a Linux app
+// (desktop shortcuts only: no Dock, no folders).
 
 export type DragSource = 'dock' | 'launchpad' | 'desktop' | 'folder';
 
@@ -79,7 +80,7 @@ function swallowNextClick() {
 function effective(appId: string, over: DropTarget, folderId?: string): DropTarget {
   if (!over) return null;
   const folder = isFolderKey(appId);
-  if (isStoreKey(appId)) {
+  if (isStoreKey(appId) || appId.startsWith('native:')) {
     if (over.kind === 'app' || over.kind === 'folder') return over.scope === 'desktop' ? { kind: 'desktop' } : { kind: 'launchpad' };
     if (over.kind === 'dock') return null;
     return over;

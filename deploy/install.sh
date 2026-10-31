@@ -220,6 +220,7 @@ smart|smartmontools|smartmontools|smartmontools|smartmontools
 zfs|zfsutils-linux|-|-|-
 media|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
 backup|restic rclone|restic rclone|restic rclone|restic rclone
+flatpak|flatpak|flatpak|flatpak|flatpak
 '
 
 pkg_manager() {
@@ -400,7 +401,7 @@ install_host_packages() {
     apt) col=2 ;; dnf) col=3 ;; pacman) col=4 ;; zypper) col=5 ;;
     *) warn "No supported package manager: skipping the host packages (NoCapOS offers them later)."; return 0 ;;
   esac
-  info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks and media (skip with --minimal)"
+  info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks, media and Linux apps (skip with --minimal)"
   pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -424,6 +425,16 @@ install_host_packages() {
     fi
   done <<<"$PKG_TABLE"
   enable_host_services
+  setup_flathub
+}
+
+# Linux apps: the App Store installs desktop apps from Flathub, system-wide.
+# Never fatal: NoCapOS adds the remote again on the first app install.
+FLATHUB_REPO=https://dl.flathub.org/repo/flathub.flatpakrepo
+setup_flathub() {
+  has flatpak || { warn "flatpak isn't installed: Linux apps in the App Store stay off until it is"; return 0; }
+  flatpak remote-add --if-not-exists --system flathub "$FLATHUB_REPO" >/dev/null 2>&1 ||
+    warn "Couldn't add Flathub right now; NoCapOS adds it on the first Linux app install."
 }
 
 enable_host_services() {
@@ -921,7 +932,44 @@ rollback_native() {
   die "the update to $VERSION failed and $prev didn't start either. Check: journalctl -u nocapos -e (database copy: $DB_BACKUP)"
 }
 
+# Started from inside NoCapOS itself (Update now in an older version, or its
+# host terminal), this installer runs in nocapos.service's cgroup, and
+# stopping the service below would kill it halfway through. So it moves to a
+# transient unit of its own first and follows that one from here.
+detach_from_service() {
+  [ -z "${NOCAP_DETACHED:-}" ] || return 0
+  grep -qs 'nocapos\.service' /proc/self/cgroup || return 0
+  has systemd-run || return 0
+  local work="$DATA/update-bundle" unit out log tailpid="" rc
+  unit="nocapos-install-$(date +%s)"
+  rm -rf "$work"
+  mkdir -p "$work"
+  chmod 700 "$work"
+  cp -a "$BUNDLE_DIR/." "$work/" # the bundle may sit in the service's private /tmp
+  out="$(readlink -f "/proc/$$/fd/1" 2>/dev/null || true)"
+  if [ -n "$out" ] && [ -f "$out" ]; then log="$out"; else log="$work/install.log"; : >"$log"; fi
+  info "Continuing in its own service ($unit), so restarting $NAME doesn't stop it"
+  # An older NoCapOS's lock (a bare timestamp) is never removed by the updater
+  # that wrote it, since that one stops with the service: clear it at the end.
+  if ! systemd-run --unit="$unit" --collect --quiet --setenv=NOCAP_DETACHED=1 /bin/bash -c '
+      bash "$1/install.sh" "${@:4}" >>"$2" 2>&1; rc=$?
+      echo "$rc" >"$1/rc"
+      if [ -f "$3/update.running" ] && ! grep -q "^{" "$3/update.running"; then rm -f "$3/update.running"; fi
+      sleep 10; rm -rf "$1"; exit "$rc"' _ "$work" "$log" "$DATA" "${ARGS[@]}"; then
+    warn "Couldn't start a separate service for the update; carrying on here"
+    rm -rf "$work"
+    return 0
+  fi
+  [ "$log" = "$out" ] || { tail -n +1 -f "$log" & tailpid=$!; }
+  while [ ! -f "$work/rc" ] && systemctl is-active --quiet "$unit"; do sleep 1; done
+  sleep 1
+  [ -z "$tailpid" ] || kill "$tailpid" 2>/dev/null || true
+  rc="$(cat "$work/rc" 2>/dev/null || echo 1)"
+  exit "$rc"
+}
+
 install_native_mode() {
+  detach_from_service
   migrate_alfaos
   local fresh=1
   [ -f "$UNIT" ] && fresh=0
