@@ -18,6 +18,7 @@ import (
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
+	"alfaos/alfad/internal/hostaccess"
 	"alfaos/alfad/internal/nativeapps"
 	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/notify"
@@ -88,7 +89,9 @@ type Server struct {
 	webBook          *webaddr.Book        // admins' own web addresses for apps/containers
 	pkgJobs          *syspkg.Jobs         // Packages app's background jobs
 	pkgAdmin         *syspkg.Admin
-	pairing          pairingState // device pairing codes and the NoCap ID
+	pairing          pairingState        // device pairing codes and the NoCap ID
+	localGate        *hostaccess.Gate    // "Let other devices open NoCapOS" switch
+	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -109,6 +112,8 @@ func New(ctx context.Context, d Deps) *Server {
 	s.webBook = webaddr.NewBook(d.Store)
 	s.pkgJobs = syspkg.NewJobs()
 	s.pkgAdmin = syspkg.NewAdmin()
+	s.localGate = hostaccess.NewGate(d.Config.DataDir)
+	s.desktop = &hostaccess.Desktop{Run: hostaccess.ExecRunner, Native: hostSwitchesNative()}
 	if d.AppStore != nil {
 		s.crashes.Busy = d.AppStore.Busy
 	}
@@ -178,6 +183,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))
 	mux.Handle("GET /api/v1/system/power", s.authed(s.powerInfo))
 	mux.Handle("PUT /api/v1/system/hostname", s.admin(s.hostnameSet))
+	// This machine itself: NoCap Desktop on its screen, and whether other
+	// devices may open NoCapOS (admin only, audited).
+	mux.Handle("GET /api/v1/system/host-access", s.admin(s.hostAccessGet))
+	mux.Handle("PUT /api/v1/system/remote-access", s.admin(s.remoteAccessSet))
+	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))
@@ -408,7 +418,8 @@ func (s *Server) Handler() http.Handler {
 		}
 	})
 
-	return s.recoverer(s.requestLogger(securityHeaders(mux)))
+	// localOnly comes first so a device that's kept out reaches nothing.
+	return s.localOnly(s.recoverer(s.requestLogger(securityHeaders(mux))))
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
