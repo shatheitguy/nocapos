@@ -8,7 +8,9 @@ import { iconCell, useDesktopIcons } from '../state/desktopIcons';
 import { folderIdOf, folderKey, isFolderKey, ungroup, useFolders } from '../state/folders';
 import { usePrefs } from '../state/prefs';
 import { isStoreKey, launchStoreApp, shownOnHome, storeIdOf, uninstallStoreApp, useStoreApps } from '../state/storeApps';
+import { isNativeKey, launchNativeApp, nativeIdOf, useNativeApps } from '../state/nativeApps';
 import { FolderView } from './FolderView';
+import { NativeAppIcon, nativeMenuItems } from './NativeTile';
 import { appMenuItems } from './Shelf';
 
 /** App shortcuts and folders on the desktop: drag anywhere, double-click to open, drop an app on another to make a folder. */
@@ -17,6 +19,8 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
   const folders = useFolders((s) => s.folders);
   const storeApps = useStoreApps((s) => s.apps);
   const storeLoaded = useStoreApps((s) => s.loaded);
+  const nativeApps = useNativeApps((s) => s.apps);
+  const nativeLoaded = useNativeApps((s) => s.loaded);
   usePrefs((s) => s.iconSize); // re-render when the icon size changes
   const cell = iconCell();
   const dragging = useAppDrag((s) => (s.drag?.source === 'desktop' ? s.drag.appId : null));
@@ -51,12 +55,15 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
 
   const folderById = (key: string) => folders.find((f) => f.id === folderIdOf(key));
   const storeById = (key: string) => storeApps.find((a) => a.id === storeIdOf(key) && shownOnHome(a));
+  const nativeById = (key: string) => nativeApps.find((a) => a.id === nativeIdOf(key));
   const visible = icons.filter((i) =>
     isFolderKey(i.appId)
       ? !!folderById(i.appId)
       : isStoreKey(i.appId)
         ? !!storeById(i.appId)
-        : APPS[i.appId] && !APPS[i.appId].hidden && (isAdmin || !APPS[i.appId].adminOnly),
+        : isNativeKey(i.appId)
+          ? !!nativeById(i.appId)
+          : APPS[i.appId] && !APPS[i.appId].hidden && (isAdmin || !APPS[i.appId].adminOnly),
   );
 
   // An app that was uninstalled (or that this person may no longer use) takes its shortcut with it.
@@ -65,6 +72,11 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
     const gone = icons.filter((i) => isStoreKey(i.appId) && !storeApps.some((a) => a.id === storeIdOf(i.appId) && shownOnHome(a)));
     gone.forEach((i) => useDesktopIcons.getState().remove(i.appId));
   }, [icons, storeApps, storeLoaded]);
+  useEffect(() => {
+    if (!nativeLoaded) return;
+    const gone = icons.filter((i) => isNativeKey(i.appId) && !nativeApps.some((a) => a.id === nativeIdOf(i.appId)));
+    gone.forEach((i) => useDesktopIcons.getState().remove(i.appId));
+  }, [icons, nativeApps, nativeLoaded]);
 
   /** Open an app, or open a folder next to its icon. */
   const activate = (key: string, r: DOMRect, e?: RMouseEvent) => {
@@ -72,6 +84,10 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
     else if (isStoreKey(key)) {
       const app = storeById(key);
       if (app) launchStoreApp(app);
+    }
+    else if (isNativeKey(key)) {
+      const app = nativeById(key);
+      if (app) void launchNativeApp(app);
     }
     else if (e?.shiftKey && canMultiWindow(key)) openApp(key, { newWindow: true });
     else openApp(key);
@@ -102,7 +118,8 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
       {visible.map((i) => {
         const folder = isFolderKey(i.appId) ? folderById(i.appId) : undefined;
         const store = isStoreKey(i.appId) ? storeById(i.appId) : undefined;
-        const title = folder ? folder.name : store ? store.name : APPS[i.appId].title;
+        const native = isNativeKey(i.appId) ? nativeById(i.appId) : undefined;
+        const title = folder ? folder.name : store ? store.name : native ? native.name : APPS[i.appId].title;
         return (
           <button
             key={i.appId}
@@ -111,8 +128,8 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
             style={{ left: i.x, top: i.y, width: cell.w }}
             title={`${title} — double-click to open`}
             // Installed apps can't go into folders, so they are no drop target.
-            data-drop={folder ? 'folder' : store ? undefined : 'app'}
-            data-app={folder || store ? undefined : i.appId}
+            data-drop={folder ? 'folder' : store || native ? undefined : 'app'}
+            data-app={folder || store || native ? undefined : i.appId}
             data-folder={folder?.id}
             data-scope="desktop"
             onPointerDown={(e) => {
@@ -125,10 +142,20 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
               e.stopPropagation();
               setSelected(i.appId);
               const r = e.currentTarget.getBoundingClientRect();
-              setMenu({ x: e.clientX, y: e.clientY, items: folder ? folderMenu(i.appId, r) : store ? storeMenu(i.appId, r) : appMenuItems(i.appId) });
+              setMenu({
+                x: e.clientX,
+                y: e.clientY,
+                items: folder ? folderMenu(i.appId, r) : store ? storeMenu(i.appId, r) : native ? nativeMenuItems(native, isAdmin) : appMenuItems(i.appId),
+              });
             }}
           >
-            {folder ? <FolderIcon folder={folder} size={cell.icon} /> : <AppIcon app={store ?? APPS[i.appId]} size={cell.icon} />}
+            {folder ? (
+              <FolderIcon folder={folder} size={cell.icon} />
+            ) : native ? (
+              <NativeAppIcon app={native} size={cell.icon} />
+            ) : (
+              <AppIcon app={store ?? APPS[i.appId]} size={cell.icon} />
+            )}
             <span className="desktop-icon-label">{title}</span>
           </button>
         );
