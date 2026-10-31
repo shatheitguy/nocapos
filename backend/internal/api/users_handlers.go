@@ -130,11 +130,11 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	self := name == me.Username
 	if self && (req.Role != nil && *req.Role != store.RoleAdmin || req.Disabled != nil && *req.Disabled) {
-		writeError(w, http.StatusBadRequest, "self", "You can't demote or disable your own account — ask another administrator.")
+		writeError(w, http.StatusBadRequest, "self", "You can't demote or disable your own account — ask another administrator to do it.")
 		return
 	}
 	if (req.Role != nil && *req.Role != store.RoleAdmin || req.Disabled != nil && *req.Disabled) && s.lastAdmin(r, name) {
-		writeError(w, http.StatusBadRequest, "last_admin", "This is the only administrator. Make someone else an administrator first.")
+		writeError(w, http.StatusBadRequest, "last_admin", "This is the only administrator. Make someone else an administrator first, then come back.")
 		return
 	}
 
@@ -228,7 +228,7 @@ func (s *Server) usersDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.lastAdmin(r, name) {
-		writeError(w, http.StatusBadRequest, "last_admin", "This is the only administrator. Make someone else an administrator first.")
+		writeError(w, http.StatusBadRequest, "last_admin", "This is the only administrator. Make someone else an administrator first, then come back.")
 		return
 	}
 	removeHome := r.URL.Query().Get("remove_home") == "1"
@@ -295,7 +295,7 @@ func (s *Server) syncRecord(r *http.Request, name string, fn func(*store.User) e
 func (s *Server) accountError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, accounts.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not_found", "No such user")
+		writeError(w, http.StatusNotFound, "not_found", "Lowkey can't find that user anymore.")
 	case errors.Is(err, accounts.ErrExists):
 		writeError(w, http.StatusConflict, "exists", err.Error())
 	case errors.Is(err, accounts.ErrProtected), errors.Is(err, accounts.ErrBadName):
@@ -303,7 +303,7 @@ func (s *Server) accountError(w http.ResponseWriter, r *http.Request, err error)
 	case errors.Is(err, auth.ErrInvalidUsername):
 		writeError(w, http.StatusBadRequest, "bad_request", "User names are 3–32 letters, digits, '.', '_' or '-'")
 	case errors.Is(err, auth.ErrWeakPassword):
-		writeError(w, http.StatusBadRequest, "weak_password", "Passwords need at least 10 characters")
+		writeError(w, http.StatusBadRequest, "weak_password", "Too short — passwords need at least 10 characters.")
 	default:
 		// Tool output (useradd/chpasswd/…) is the most useful thing to show.
 		writeError(w, http.StatusBadRequest, "account_failed", err.Error())

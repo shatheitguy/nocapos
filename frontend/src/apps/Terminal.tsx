@@ -220,7 +220,7 @@ export function Terminal({ win }: { win: WinState }) {
       if (disposed) return;
       if (!t.ok) {
         setStatus('closed');
-        setError(t.error ?? 'Could not start the terminal');
+        setError(t.error ?? 'Couldn’t start the terminal');
         if (shellTarget === 'host-root') setRootMode(false); // back to your own shell
         return;
       }

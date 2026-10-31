@@ -93,7 +93,7 @@ export function DevicesSettings() {
           </div>
         ) : list.length === 0 ? (
           <div className="settings-row full">
-            <p className="muted small dev-empty">No devices yet. Hit <b>Link a device</b> and scan the code with your phone.</p>
+            <p className="muted small dev-empty">No devices yet — hit <b>Link a device</b> and scan the code with your phone.</p>
           </div>
         ) : (
           list.map((d) => <DeviceRow key={d.id} d={d} showOwner={isAdmin} onUnlink={() => void unlink(d)} />)
@@ -152,7 +152,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
   const fresh = async () => {
     setPhase({ kind: 'loading' });
     const r = await devicesApi.pairCode();
-    if (!r.ok) return setPhase({ kind: 'error', message: r.error ?? 'Couldn’t make a code' });
+    if (!r.ok) return setPhase({ kind: 'error', message: r.error ?? 'Couldn’t make a code. Try again?' });
     let qr = '';
     try {
       qr = await QRCode.toDataURL(r.data.pair_url, { margin: 1, width: 220 });

@@ -55,7 +55,7 @@ func (s *Server) authed(h http.HandlerFunc) http.Handler {
 func (s *Server) admin(h http.HandlerFunc) http.Handler {
 	return s.authed(func(w http.ResponseWriter, r *http.Request) {
 		if userFrom(r.Context()).Role != store.RoleAdmin {
-			writeError(w, http.StatusForbidden, "forbidden", "administrator role required")
+			writeError(w, http.StatusForbidden, "forbidden", "Only administrators can do that.")
 			return
 		}
 		h(w, r)

@@ -19,8 +19,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidToken       = errors.New("invalid or expired token")
 	ErrTokenReuse         = errors.New("refresh token reuse detected")
-	ErrSetupDone          = errors.New("setup already completed")
-	ErrSetupToken         = errors.New("invalid setup token")
+	ErrSetupDone          = errors.New("setup's already done — just sign in")
+	ErrSetupToken         = errors.New("that setup token's not it — copy it again from the NoCapOS console")
 	// ErrFilesOnly: the account is for file sharing only (SMB / WebDAV),
 	// not for signing in to the desktop.
 	ErrFilesOnly = errors.New("this account is for file sharing only; connect to the shared folders from your computer or phone instead")

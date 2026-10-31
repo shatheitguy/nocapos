@@ -86,10 +86,10 @@ export async function uninstallStoreApp(app: StoreApp): Promise<boolean> {
   if (!pick) return false;
   const r = await storeApi.uninstall(app.id, pick === 'delete');
   if (!r.ok) {
-    toast('error', `Could not uninstall ${app.name}`, r.error);
+    toast('error', `Couldn’t uninstall ${app.name}`, r.error);
     return false;
   }
-  toast('info', `Removing ${app.name}…`);
+  toast('info', `Removing ${app.name}…`, 'Hang tight, this takes a sec.');
   void useStoreApps.getState().load();
   return true;
 }

@@ -85,7 +85,7 @@ export function Assistant() {
     if (!convId) {
       const r = await aiApi.createConversation(provider.id, model);
       if (!r.ok) {
-        toast('error', 'Could not start chat', r.error);
+        toast('error', 'Couldn’t start chat', r.error);
         return;
       }
       convId = r.data.id;
@@ -143,7 +143,7 @@ export function Assistant() {
             <Icon name="plus" size={16} /> New chat
           </button>
           <div className="ai-convs">
-            {convs.length === 0 && <p className="muted small ai-empty-list">No conversations yet.</p>}
+            {convs.length === 0 && <p className="muted small ai-empty-list">No chats yet. Say hi!</p>}
             {convs.map((c) => (
               <div key={c.id} className={`ai-conv ${activeId === c.id ? 'on' : ''}`} onClick={() => void openConversation(c.id)}>
                 <div className="ai-conv-text">
