@@ -93,7 +93,7 @@ export async function uninstallNativeApp(app: Pick<NativeApp, 'id' | 'name'>): P
     toast('error', `Couldn't remove ${app.name}`, r.error);
     return false;
   }
-  toast('info', `Removing ${app.name}…`);
+  toast('info', `Removing ${app.name}…`, 'Hang tight, this takes a sec.');
   void useNativeApps.getState().load();
   return true;
 }

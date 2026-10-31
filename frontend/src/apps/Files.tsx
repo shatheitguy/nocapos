@@ -139,7 +139,7 @@ export function Files({ win }: { win: WinState }) {
   const loadRoots = useCallback(async () => {
     const r = await fileApi.roots();
     if (!r.ok) {
-      setRootsError(r.error ?? 'Could not load storage locations');
+      setRootsError(r.error ?? 'Couldn’t load storage locations');
       return;
     }
     setRootsError(null);
@@ -160,7 +160,7 @@ export function Files({ win }: { win: WinState }) {
   const eject = async (d: ExternalDrive) => {
     const r = await fileApi.eject(d.path);
     if (!r.ok) return toast('error', `Couldn't eject ${d.name}`, r.error);
-    toast('success', `${d.name} ejected`, r.data.powered_off ? 'You can unplug it now.' : 'It is safe to unplug once its light stops blinking.');
+    toast('success', `${d.name} ejected`, r.data.powered_off ? 'Safe to unplug now.' : 'Safe to unplug once its light stops blinking.');
     // Leave a folder on the drive before it disappears.
     [0, 1].forEach((s) => {
       const st = states[s];
@@ -184,7 +184,7 @@ export function Files({ win }: { win: WinState }) {
   const shares = net.sharing?.shares ?? [];
   const unshare = async (sh: NetShare) => {
     const r = await netApi.removeShare(sh.id);
-    if (!r.ok) return toast('error', 'Could not stop sharing', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t stop sharing', r.error);
     toast('success', `Stopped sharing “${sh.name}”`);
     void net.load();
   };
@@ -196,7 +196,7 @@ export function Files({ win }: { win: WinState }) {
     const r = await fileApi.setFavorites(next);
     if (!r.ok) {
       setFavs(before);
-      toast('error', 'Could not save favorites', r.error);
+      toast('error', 'Couldn’t save favorites', r.error);
     }
   };
   const isFav = (root: string, path: string) => favs.some((f) => f.root === root && f.path === path);
@@ -244,7 +244,7 @@ export function Files({ win }: { win: WinState }) {
   const dropToTrash = async (data: DragFiles) => {
     const r = await fileApi.remove(data.root, data.paths, false);
     if (r.ok) toast('success', `Moved ${data.paths.length === 1 ? `“${baseName(data.paths[0])}”` : `${data.paths.length} items`} to Trash`);
-    else toast('error', 'Could not move to Trash', r.error);
+    else toast('error', 'Couldn’t move to Trash', r.error);
     [0, 1].forEach((s) => bump(s as 0 | 1));
     void loadRoots();
   };
@@ -459,7 +459,7 @@ function FilePane({
       const r = special === 'recents' ? await fileApi.recent(150) : await fileApi.search(query, 100);
       setLoading(false);
       if (!r.ok) {
-        setListError(r.error ?? 'Could not load');
+        setListError(r.error ?? 'Couldn’t load');
         setItems([]);
         return;
       }
@@ -473,7 +473,7 @@ function FilePane({
     const r = await fileApi.list(root, path);
     setLoading(false);
     if (!r.ok) {
-      setListError(r.error ?? 'Could not open folder');
+      setListError(r.error ?? 'Couldn’t open folder');
       setItems([]);
       return;
     }
@@ -644,7 +644,7 @@ function FilePane({
       confirm: 'Create',
       onSubmit: async (name) => {
         const r = await fileApi.mkdir(root, path, name);
-        if (!r.ok) toast('error', 'Could not create folder', r.error);
+        if (!r.ok) toast('error', 'Couldn’t create folder', r.error);
         pendingSel.current = name;
         await reload();
       },
@@ -663,7 +663,7 @@ function FilePane({
       onSubmit: async (next) => {
         if (next === name) return;
         const r = await fileApi.rename(i.root, i.path, next);
-        if (!r.ok) toast('error', `Could not rename ${name}`, r.error);
+        if (!r.ok) toast('error', `Couldn’t rename ${name}`, r.error);
         if (!special) pendingSel.current = next;
         await reload();
       },
@@ -679,7 +679,7 @@ function FilePane({
     const run = async () => {
       const r = await fileApi.remove(r0, list.map((i) => i.path), permanent);
       if (r.ok) toast('success', permanent ? `Deleted ${what}` : `Moved ${what} to Trash`);
-      else toast('error', 'Delete failed', r.error);
+      else toast('error', 'Delete didn’t go through', r.error);
       setSelected(new Set());
       await reload();
       onRootsChanged();
@@ -700,8 +700,8 @@ function FilePane({
       danger: true,
       onSubmit: async () => {
         const r = await fileApi.remove(root, [RECYCLE], true);
-        if (r.ok) toast('success', 'Trash emptied');
-        else toast('error', 'Could not empty the Trash', r.error);
+        if (r.ok) toast('success', 'Trash emptied — clean slate');
+        else toast('error', 'Couldn’t empty the Trash', r.error);
         await reload();
         onRootsChanged();
       },
@@ -712,7 +712,7 @@ function FilePane({
     const r0 = list.length ? selRoot() : null;
     if (!r0) return;
     setClip({ root: r0, paths: list.map((i) => i.path), move });
-    toast('info', `${list.length} item${list.length > 1 ? 's' : ''} ${move ? 'cut' : 'copied'}`, 'Open a folder and paste');
+    toast('info', `${list.length} item${list.length > 1 ? 's' : ''} ${move ? 'cut' : 'copied'}`, 'Open a folder and paste — they’re ready');
   };
 
   const paste = async (into = path) => {
@@ -779,7 +779,7 @@ function FilePane({
   const download = async (list: Item[]) => {
     for (const i of list) {
       if (i.entry.dir) continue;
-      if (!(await downloadFile(i.root, i.path))) toast('error', `Could not download ${i.entry.name}`);
+      if (!(await downloadFile(i.root, i.path))) toast('error', `Couldn’t download ${i.entry.name}`);
     }
   };
 
@@ -1123,10 +1123,10 @@ function FilePane({
   const emptyState = () => {
     if (filter && !special) return <EmptyState icon="search" title="No matches" text={`Nothing in this folder matches “${filter}”.`} />;
     if (special === 'recents') return <EmptyState icon="clock" title="No recent files yet" text={note ?? 'Files you add or change show up here.'} />;
-    if (special === 'search') return <EmptyState icon="search" title="Nothing found" text={note ?? `No file or folder names match “${query}”.`} />;
-    if (recycle) return <EmptyState icon="trash" title="Trash is empty" text="Deleted items stay here until you empty the Trash." />;
+    if (special === 'search') return <EmptyState icon="search" title="Nothing found" text={note ?? `Lowkey can’t find anything named like “${query}”.`} />;
+    if (recycle) return <EmptyState icon="trash" title="Trash is empty" text="Squeaky clean. Deleted items wait here until you empty the Trash." />;
     return (
-      <EmptyState glyph title="This folder is empty" text="Drop files here, or upload them.">
+      <EmptyState glyph title="This folder is empty" text="Nothing here yet — drop files in, or upload them.">
         <button type="button" className="pill" onClick={() => uploadInput.current?.click()}>
           <Icon name="upload" size={15} /> Upload
         </button>

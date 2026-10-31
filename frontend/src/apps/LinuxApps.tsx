@@ -91,7 +91,7 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
       else if (watching.current.delete(j.id)) {
         changed = true;
         if (j.error) toast('error', j.action === 'install' ? `Couldn't install ${j.name}` : `Couldn't remove ${j.name}`, j.error);
-        else if (j.action === 'install') toast('success', "Installed — it's in your Launchpad", j.name);
+        else if (j.action === 'install') toast('success', "Big moves: installed — it's in your Launchpad", j.name);
         else toast('success', `${j.name} removed`);
       }
     }

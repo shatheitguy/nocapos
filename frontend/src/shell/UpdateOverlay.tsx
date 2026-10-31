@@ -173,7 +173,7 @@ export function UpdateOverlay() {
     }).then((r) => {
       setRetrying(false);
       if (r.ok) openUpdate(r.data.from, r.data.target);
-      else setRetryError(r.error ?? 'Could not start the update');
+      else setRetryError(r.error ?? 'Couldn’t start the update');
     });
   };
 

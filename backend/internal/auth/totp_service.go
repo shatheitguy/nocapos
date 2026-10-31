@@ -9,7 +9,7 @@ import (
 
 var (
 	ErrTOTPNotEnrolled = errors.New("two-factor authentication is not set up")
-	ErrTOTPBadCode     = errors.New("that code is not valid — check your authenticator app")
+	ErrTOTPBadCode     = errors.New("that code's not it — check your authenticator app and try again")
 	ErrTOTPEnabled     = errors.New("two-factor authentication is already on; turn it off first to set it up again")
 	ErrNoSealer        = errors.New("secret storage is not configured")
 )

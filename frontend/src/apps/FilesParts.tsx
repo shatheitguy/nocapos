@@ -55,7 +55,7 @@ export function FilePreview({ root, path, entry, unix, onClose }: { root: string
         setText({ content: '', error: `Too large to preview here (${fmtBytes(entry.size)}). Open it in the Viewer.` });
         return;
       }
-      void fileApi.readText(root, path).then((r) => live && setText(r.ok ? { content: r.data.content } : { content: '', error: r.error ?? 'Could not read the file' }));
+      void fileApi.readText(root, path).then((r) => live && setText(r.ok ? { content: r.data.content } : { content: '', error: r.error ?? 'Couldn’t read the file' }));
     } else if (kind === 'image' || kind === 'video' || kind === 'audio') {
       void fileTicket(root, path).then((t) => live && setTicket(t));
     }

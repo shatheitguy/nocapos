@@ -79,7 +79,7 @@ export function Photos(_: { win: WinState }) {
   const load = useCallback(async () => {
     const [l, a] = await Promise.all([photosApi.list(), photosApi.albums()]);
     if (!l.ok) {
-      setError(l.error ?? 'Could not load your photos');
+      setError(l.error ?? 'Couldn’t load your photos');
       setItems((v) => v ?? []);
       return;
     }
@@ -236,7 +236,7 @@ export function Photos(_: { win: WinState }) {
     setItems((v) => v?.map((p) => (keys.has(photoKey(p)) ? { ...p, favorite: on } : p)) ?? v);
     const r = await photosApi.favorite(list, on);
     if (!r.ok) {
-      toast('error', 'Could not update favorites', r.error);
+      toast('error', 'Couldn’t update favorites', r.error);
       void load();
     }
   };
@@ -252,7 +252,7 @@ export function Photos(_: { win: WinState }) {
     if (!ok) return false;
     const r = await photosApi.remove(list);
     if (!r.ok) {
-      toast('error', 'Could not delete', r.error);
+      toast('error', 'Couldn’t delete', r.error);
       return false;
     }
     const keys = new Set(list.map(photoKey));
@@ -268,10 +268,10 @@ export function Photos(_: { win: WinState }) {
     if (!ids.length) return false;
     const r = await photosApi.restore(ids);
     if (!r.ok) {
-      toast('error', 'Could not restore', r.error);
+      toast('error', 'Couldn’t restore', r.error);
       return false;
     }
-    toast('success', list.length === 1 ? `Restored “${list[0].name}”` : `Restored ${list.length} items`, 'They are back in your library.');
+    toast('success', list.length === 1 ? `Restored “${list[0].name}”` : `Restored ${list.length} items`, 'They’re back in your library.');
     clearSelection();
     void loadTrash();
     void load();
@@ -289,7 +289,7 @@ export function Photos(_: { win: WinState }) {
     if (!ok) return false;
     const r = await photosApi.purge(list.flatMap((p) => (p.trash ? [p.trash.id] : [])));
     if (!r.ok) {
-      toast('error', 'Could not delete', r.error);
+      toast('error', 'Couldn’t delete', r.error);
       return false;
     }
     clearSelection();
@@ -299,7 +299,7 @@ export function Photos(_: { win: WinState }) {
 
   const newAlbum = async (list: Photo[] = []) => {
     const r = await photosApi.createAlbum('New Album', list);
-    if (!r.ok) return toast('error', 'Could not create the album', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t create the album', r.error);
     clearSelection();
     await load();
     setView({ kind: 'album', id: r.data.id });
@@ -308,7 +308,7 @@ export function Photos(_: { win: WinState }) {
 
   const addToAlbum = async (a: Album, list: Photo[]) => {
     const r = await photosApi.albumItems(a.id, list, true);
-    if (!r.ok) return toast('error', 'Could not add to the album', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t add to the album', r.error);
     toast('success', `Added to “${a.name}”`, list.length === 1 ? list[0].name : `${list.length} items`);
     clearSelection();
     void load();
@@ -316,14 +316,14 @@ export function Photos(_: { win: WinState }) {
 
   const removeFromAlbum = async (a: Album, list: Photo[]) => {
     const r = await photosApi.albumItems(a.id, list, false);
-    if (!r.ok) return toast('error', 'Could not remove from the album', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t remove from the album', r.error);
     clearSelection();
     void load();
   };
 
   const setCover = async (a: Album, p: Photo) => {
     const r = await photosApi.setCover(a.id, p);
-    if (!r.ok) return toast('error', 'Could not change the cover', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t change the cover', r.error);
     toast('success', 'Album cover changed', p.name);
     clearSelection();
     void load();
@@ -338,7 +338,7 @@ export function Photos(_: { win: WinState }) {
     });
     if (!ok) return;
     const r = await photosApi.deleteAlbum(a.id);
-    if (!r.ok) return toast('error', 'Could not delete the album', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t delete the album', r.error);
     setView({ kind: 'albums' });
     void load();
   };
@@ -377,7 +377,7 @@ export function Photos(_: { win: WinState }) {
   const upload = (files: File[]) => {
     const media = files.filter((f) => f.type.startsWith('image/') || f.type.startsWith('video/') || MEDIA.test(f.name));
     if (!uploadTo) return;
-    if (media.length < files.length) toast('info', `${files.length - media.length} skipped`, 'Only pictures and videos go into Photos.');
+    if (media.length < files.length) toast('info', `${files.length - media.length} skipped`, 'Photos only takes pictures and videos.');
     if (media.length) void startUpload(uploadTo.root, uploadTo.path, media);
   };
 
@@ -449,13 +449,13 @@ export function Photos(_: { win: WinState }) {
   const emptyView = () => {
     switch (view.kind) {
       case 'favorites':
-        return <EmptyNote icon="heart" title="No favorites yet" text="Tap the heart on a photo to keep it here." />;
+        return <EmptyNote icon="heart" title="No favorites yet" text="Tap the heart on a photo you love and it lives here." />;
       case 'videos':
         return <EmptyNote icon="fileVideo" title="No videos yet" text="Videos you add to Photos show up here." />;
       case 'recent':
         return <EmptyNote icon="clock" title="Nothing added lately" text={`Photos and videos added in the last ${RECENT_DAYS} days show up here.`} />;
       case 'trash':
-        return <EmptyNote icon="trash" title="Nothing recently deleted" text="Photos you delete wait here, so you can change your mind." />;
+        return <EmptyNote icon="trash" title="Nothing recently deleted" text="Photos you delete chill here for a while, in case you change your mind." />;
       case 'album':
         return (
           <EmptyNote icon="albums" title="This album is empty" text="Add photos from your library.">
@@ -578,7 +578,7 @@ export function Photos(_: { win: WinState }) {
                     setRenaming(null);
                     if (name && name !== albumById.name) {
                       const r = await photosApi.renameAlbum(albumById.id, name);
-                      if (!r.ok) toast('error', 'Could not rename the album', r.error);
+                      if (!r.ok) toast('error', 'Couldn’t rename the album', r.error);
                       void load();
                     }
                   }}

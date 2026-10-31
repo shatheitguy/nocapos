@@ -17,7 +17,7 @@ export function Browser() {
     setStatus({ phase: 'starting', message: 'Preparing Brave…', ready: false });
     const r = await startBrave();
     if (!r.ok) {
-      setFatal(r.status === 403 ? 'Only an administrator can start Brave.' : r.error || 'Could not start Brave.');
+      setFatal(r.status === 403 ? 'Only an administrator can start Brave.' : r.error || 'Couldn’t start Brave.');
       return;
     }
     setStatus(r.data);

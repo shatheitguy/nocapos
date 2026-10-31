@@ -377,11 +377,11 @@ func friendlyMountError(out string, err error) string {
 	case strings.Contains(low, "no such file or directory") || strings.Contains(low, "error(2)"):
 		return "the server doesn't have that share or folder"
 	case strings.Contains(low, "host is down") || strings.Contains(low, "error(112)") || strings.Contains(low, "no route to host"):
-		return "the server can't be reached"
+		return "the server can't be reached — is it on?"
 	case strings.Contains(low, "could not resolve") || strings.Contains(low, "resolve address"):
 		return "the server name couldn't be found; try its IP address"
 	case strings.Contains(low, "timed out") || strings.Contains(low, "deadline"):
-		return "the server didn't answer in time"
+		return "the server ghosted us — it didn't answer in time"
 	case strings.Contains(low, "access denied by server"):
 		return "the server doesn't allow this computer to connect (check the NFS export's allowed clients)"
 	}

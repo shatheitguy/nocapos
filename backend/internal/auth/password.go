@@ -32,7 +32,7 @@ var (
 	b64        = base64.RawStdEncoding
 	errBadHash = errors.New("malformed password hash")
 
-	ErrWeakPassword    = errors.New("password must be 10-256 characters")
+	ErrWeakPassword    = errors.New("passwords need 10 to 256 characters — that one doesn't fit")
 	ErrInvalidUsername = errors.New("username must be 3-32 characters: letters, digits, '.', '_' or '-'")
 
 	usernameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$`)

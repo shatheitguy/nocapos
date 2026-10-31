@@ -80,7 +80,7 @@ export function Backups(_: { win: WinState }) {
 
   const load = useCallback(async () => {
     const r = await backupApi.overview();
-    if (!r.ok) return setError(r.error ?? 'Could not load backups');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t load backups');
     setError('');
     setStatus(r.data.status);
     setRepos(r.data.repos);
@@ -103,8 +103,8 @@ export function Backups(_: { win: WinState }) {
     setInstalling(true);
     const r = await backupApi.install();
     setInstalling(false);
-    if (!r.ok) return toast('error', 'Could not install restic', r.error);
-    toast('success', 'restic installed', 'Backups are ready to set up.');
+    if (!r.ok) return toast('error', 'Couldn’t install restic', r.error);
+    toast('success', 'restic installed', 'You’re ready to set up backups.');
     void load();
   };
 
@@ -276,12 +276,12 @@ function PlanCard({
   const running = !!job && !job.done;
   const run = async () => {
     const r = await backupApi.run(plan.id);
-    if (!r.ok) toast('error', 'Could not start the backup', r.error);
+    if (!r.ok) toast('error', 'Couldn’t start the backup', r.error);
     void reload();
   };
   const toggle = async (enabled: boolean) => {
     const r = await backupApi.savePlan({ ...plan, enabled });
-    if (!r.ok) toast('error', 'Could not change the backup', r.error);
+    if (!r.ok) toast('error', 'Couldn’t change the backup', r.error);
     void reload();
   };
   const remove = async () => {
@@ -293,7 +293,7 @@ function PlanCard({
     });
     if (!ok) return;
     const r = await backupApi.deletePlan(plan.id);
-    if (!r.ok) toast('error', 'Could not delete the backup', r.error);
+    if (!r.ok) toast('error', 'Couldn’t delete the backup', r.error);
     void reload();
   };
 
@@ -423,8 +423,8 @@ function PlanEditor({
     setError('');
     const r = await backupApi.savePlan({ id: plan?.id, name, repo_id: repoId, sources, schedule, keep, enabled: plan?.enabled ?? true });
     setSaving(false);
-    if (!r.ok) return setError(r.error ?? 'Could not save');
-    toast('success', plan ? 'Backup saved' : 'Backup created', plan ? undefined : 'Click Back Up Now to make the first one right away.');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t save');
+    toast('success', plan ? 'Backup saved' : 'Backup created', plan ? undefined : 'Hit Back Up Now to make the first one right away.');
     onDone();
   };
 
@@ -581,7 +581,7 @@ function RepoList({ repos, plans, sshKey, onAdd, reload }: { repos: BackupRepo[]
     });
     if (!ok) return;
     const k = await backupApi.recoveryKey(r.id);
-    if (!k.ok) return toast('error', 'Could not show the key', k.error);
+    if (!k.ok) return toast('error', 'Couldn’t show the key', k.error);
     setShown((s) => ({ ...s, [r.id]: k.data.recovery_key }));
   };
   const remove = async (r: BackupRepo) => {
@@ -593,7 +593,7 @@ function RepoList({ repos, plans, sshKey, onAdd, reload }: { repos: BackupRepo[]
     });
     if (!ok) return;
     const d = await backupApi.deleteRepo(r.id);
-    if (!d.ok) return toast('error', 'Could not remove it', d.error);
+    if (!d.ok) return toast('error', 'Couldn’t remove it', d.error);
     void reload();
   };
   return (
@@ -604,7 +604,7 @@ function RepoList({ repos, plans, sshKey, onAdd, reload }: { repos: BackupRepo[]
           <Icon name="plus" size={16} /> Add Destination
         </button>
       </header>
-      {!repos.length && <p className="muted">No destinations yet. Add a USB disk, another server or cloud storage to back up to.</p>}
+      {!repos.length && <p className="muted">No destinations yet — add a USB disk, another server or cloud storage to back up to.</p>}
       <div className="bk-repos">
         {repos.map((r) => (
           <article key={r.id} className="bk-repo">
@@ -669,7 +669,7 @@ function AddRepo({ sshKey, onCancel, onDone }: { sshKey?: string; onCancel: () =
     setError('');
     const r = await backupApi.addRepo({ name, kind, config: cfg, secret: secret || undefined, recovery_key: existing ? key : undefined });
     setBusy(false);
-    if (!r.ok) return setError(r.error ?? 'Could not add the destination');
+    if (!r.ok) return setError(r.error ?? 'Couldn’t add the destination');
     if (existing) {
       toast('success', 'Connected', `${name} is ready.`);
       return onDone();
@@ -813,7 +813,7 @@ function Rewind({ plans, initial }: { plans: BackupPlan[]; initial?: number }) {
     void backupApi.snapshots(planId).then((r) => {
       if (!r.ok) {
         setSnaps([]);
-        return setError(r.error ?? 'Could not read the backups');
+        return setError(r.error ?? 'Couldn’t read the backups');
       }
       setSnaps(r.data.snapshots);
       setSnap(r.data.snapshots[0] ?? null);
@@ -831,7 +831,7 @@ function Rewind({ plans, initial }: { plans: BackupPlan[]; initial?: number }) {
     void backupApi.browse(planId, snap.id, path).then((r) => {
       if (!r.ok) {
         setEntries([]);
-        return setError(r.error ?? 'Could not open the backup');
+        return setError(r.error ?? 'Couldn’t open the backup');
       }
       setError('');
       if (!path) setLabels(Object.fromEntries(r.data.entries.map((n) => [n.path, n.name])));
@@ -849,7 +849,7 @@ function Rewind({ plans, initial }: { plans: BackupPlan[]; initial?: number }) {
       if (!r.ok) return;
       setJob(r.data);
       if (r.data.done) {
-        if (r.data.error) toast('error', 'Restore failed', r.data.error);
+        if (r.data.error) toast('error', 'Restore didn’t finish', r.data.error);
         else toast('success', 'Restored', r.data.result?.split('\n').map((l) => l.replace(/^[^:]+:/, '')).join(', '));
       }
     }, 800);
@@ -870,7 +870,7 @@ function Rewind({ plans, initial }: { plans: BackupPlan[]; initial?: number }) {
     });
     if (!ok) return;
     const r = await backupApi.restore(planId, snap.id, paths, mode);
-    if (!r.ok) return toast('error', 'Could not restore', r.error);
+    if (!r.ok) return toast('error', 'Couldn’t restore', r.error);
     setJob(r.data);
     setSelected(new Set());
   };
@@ -879,7 +879,7 @@ function Rewind({ plans, initial }: { plans: BackupPlan[]; initial?: number }) {
     if (!planId || !snap) return;
     toast('info', 'Preparing download', n.name);
     const err = await downloadFromBackup(planId, snap.id, n);
-    if (err) toast('error', 'Download failed', err);
+    if (err) toast('error', 'Download didn’t go through', err);
   };
 
   if (!usable.length) {

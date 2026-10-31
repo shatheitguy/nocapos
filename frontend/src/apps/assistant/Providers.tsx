@@ -51,7 +51,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
       setEditing(null);
       onChanged();
       toast('success', editing.id ? 'Provider updated' : 'Provider added');
-    } else toast('error', 'Could not save provider', r.error);
+    } else toast('error', 'Couldn’t save provider', r.error);
   };
 
   const remove = async (p: Provider) => {
@@ -59,7 +59,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
     if (r.ok) {
       onChanged();
       toast('success', `Removed ${p.name}`);
-    } else toast('error', 'Could not remove', r.error);
+    } else toast('error', 'Couldn’t remove', r.error);
   };
 
   if (editing) {

@@ -21,7 +21,7 @@ export function Models({ provider }: { provider: Provider | null }) {
       setModels(r.data);
       setError(null);
     } else {
-      setError(r.error ?? 'Could not list models');
+      setError(r.error ?? 'Couldn’t list models');
       setModels([]);
     }
     if (isLocal) {
@@ -41,7 +41,7 @@ export function Models({ provider }: { provider: Provider | null }) {
     setBusy(model);
     const r = action === 'load' ? await aiApi.load(provider.id, model) : await aiApi.unload(provider.id, model);
     setBusy(null);
-    if (!r.ok) toast('error', `Could not ${action} ${model}`, r.error);
+    if (!r.ok) toast('error', `Couldn’t ${action} ${model}`, r.error);
     else toast('success', action === 'load' ? `Loading ${model} into memory` : `Unloaded ${model}`);
     void load();
   };

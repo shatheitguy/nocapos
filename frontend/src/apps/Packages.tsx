@@ -61,7 +61,7 @@ export function Packages() {
         timer.current = window.setTimeout(() => void poll(), 1000);
       } else {
         if (r.data.ok) toast('success', `${ACTION_LABEL[r.data.action] ?? r.data.action} finished`, r.data.target);
-        else toast('error', `${ACTION_LABEL[r.data.action] ?? r.data.action} failed`, r.data.error);
+        else toast('error', `${ACTION_LABEL[r.data.action] ?? r.data.action} flopped`, r.data.error);
         setReloadKey((k) => k + 1);
         void loadStatus();
       }

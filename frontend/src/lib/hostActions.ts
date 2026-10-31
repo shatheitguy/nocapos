@@ -13,8 +13,8 @@ export async function powerHost(action: 'reboot' | 'shutdown'): Promise<void> {
   const ok = await confirmDialog({
     title: reboot ? 'Restart this machine?' : 'Shut down this machine?',
     message: reboot
-      ? 'Every app, terminal and remote session will close. NoCapOS will be back in a minute or two and this page reconnects by itself.'
-      : "Every app and session will close and the machine will power off. You'll need physical access (or your host's console) to turn it back on.",
+      ? 'Every app, terminal and remote session will close. NoCapOS is back in a minute or two, and this page reconnects on its own.'
+      : "Every app and session will close and the machine powers off. Heads up: you'll need physical access (or your host's console) to turn it back on.",
     confirmLabel: reboot ? 'Restart' : 'Shut down',
     danger: true,
   });
@@ -101,12 +101,12 @@ export async function applyIPv4(iface: string, connection: string, cfg: IPv4Conf
   });
   if (keep) {
     const k = await hostApi.keepIPv4(r.data.token);
-    if (k.ok) toast('success', 'Network settings saved');
-    else toast('error', 'The change was already undone', k.error);
+    if (k.ok) toast('success', 'Bet — network settings saved');
+    else toast('error', 'Too late — the change was already undone', k.error);
     return k.ok;
   }
   await hostApi.revertIPv4(r.data.token);
-  toast('info', 'Previous network settings restored');
+  toast('info', 'No worries — your previous network settings are back');
   return false;
 }
 
@@ -114,10 +114,10 @@ export async function applyIPv4(iface: string, connection: string, cfg: IPv4Conf
 export async function joinWiFi(j: WiFiJoin): Promise<{ state: NetworkState | null; error?: string }> {
   const r = await hostApi.wifiConnect(j);
   if (!r.ok) {
-    const error = r.error ?? 'Could not join the network';
-    toast('error', `Couldn't join ${j.ssid}`, error);
+    const error = r.error ?? 'Couldn’t join the network';
+    toast('error', `Wi-Fi's being sus — couldn't join ${j.ssid}`, error);
     return { state: null, error };
   }
-  toast('success', `Connected to ${j.ssid}`);
+  toast('success', `You're on ${j.ssid} — all set`);
   return { state: r.data };
 }

@@ -42,7 +42,7 @@ export function DateTime() {
         <Toggle label="Show the date in the Dock" hint={`e.g. ${fmtDate(now, tp, 'short')}`} checked={prefs.clockDate} onChange={(clockDate) => set({ clockDate })} />
       </Section>
 
-      <Section title="Time zone" hint="Every clock in NoCapOS uses this zone. Times come from this device's clock.">
+      <Section title="Time zone" hint="Every clock in NoCapOS follows this zone. Times come from this device's clock.">
         <Toggle label="Set time zone automatically" hint={`Uses this device's zone (${device.replace(/_/g, ' ')})`}
           checked={!prefs.timeZone} onChange={(auto) => set({ timeZone: auto ? '' : device })} />
         {prefs.timeZone && (
@@ -83,9 +83,9 @@ function utcOffset(d: Date, tz: string): string {
 // ---------------- Sound ----------------
 
 const SOUND_EVENTS: { key: 'soundClicks' | 'soundWindows' | 'soundAlerts' | 'soundLock'; label: string; hint: string; cue: Cue }[] = [
-  { key: 'soundClicks', label: 'Clicking buttons and icons', hint: 'A soft tick', cue: 'click' },
+  { key: 'soundClicks', label: 'Clicking buttons and icons', hint: 'A soft little tick', cue: 'click' },
   { key: 'soundWindows', label: 'Opening and closing windows', hint: 'A rising or falling chirp', cue: 'open' },
-  { key: 'soundAlerts', label: 'Notifications', hint: 'Different tones for success, info and errors', cue: 'success' },
+  { key: 'soundAlerts', label: 'Notifications', hint: 'Different tones for wins, info and errors', cue: 'success' },
   { key: 'soundLock', label: 'Locking and unlocking', hint: 'When you lock the screen or sign back in', cue: 'unlock' },
 ];
 
@@ -95,13 +95,13 @@ export function SoundSettings() {
   return (
     <div className="stack settings-page">
       <Section title="Sound effects">
-        <Toggle label="Play sound effects" hint="Short synthesized tones — each theme has its own voice"
+        <Toggle label="Play sound effects" hint="Short synth tones — every theme has its own vibe"
           checked={prefs.uiSounds} onChange={(uiSounds) => set({ uiSounds })} />
         <Slider label="Volume" value={prefs.soundVolume} min={0} max={100} step={5}
           format={(v) => (v ? `${v}%` : 'Muted')} onChange={(soundVolume) => set({ soundVolume })} />
       </Section>
 
-      <Section title="Play a sound when" hint={prefs.uiSounds ? undefined : 'Turn on sound effects above to hear these. You can still preview them.'}>
+      <Section title="Play a sound when" hint={prefs.uiSounds ? undefined : 'Turn on sound effects above to hear these. Previewing still works.'}>
         {SOUND_EVENTS.map((e) => (
           <div key={e.key} className={`settings-row ${prefs.uiSounds ? '' : 'dimmed'}`}>
             <span className="settings-row-text">
@@ -143,7 +143,7 @@ export function LockScreen() {
       </Section>
 
       <Section title="Screen saver">
-        <Row label="Style" hint="Shows after a while idle; any movement wakes it">
+        <Row label="Style" hint="Kicks in when you’ve been idle a while; any movement wakes it">
           <Choice value={prefs.screensaver} onChange={(screensaver) => prefs.set({ screensaver })}
             options={SCREENSAVERS.map((s) => ({ id: s.id, label: s.name }))} />
         </Row>
@@ -159,7 +159,7 @@ export function LockScreen() {
           </Row>
         )}
       </Section>
-      <p className="settings-tip">Forgot your password? An administrator can reset it in Users &amp; Groups.</p>
+      <p className="settings-tip">Forgot your password? It happens. An administrator can reset it in Users &amp; Groups.</p>
     </div>
   );
 }
@@ -173,7 +173,7 @@ export function LanguageRegion() {
   return (
     <div className="stack settings-page">
       <Section title="Language">
-        <Row label="NoCapOS language" hint="More languages are coming">
+        <Row label="NoCapOS language" hint="More languages are on the way">
           <select className="select" value={prefs.language} onChange={(e) => prefs.set({ language: e.target.value as typeof prefs.language })}>
             {LANGUAGES.map((l) => (
               <option key={l.id} value={l.id}>
@@ -247,7 +247,7 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
     const r = await accountApi.totpSetup(password);
     setBusy(false);
     if (!r.ok) {
-      setAskErr(r.error ?? 'Could not start setup');
+      setAskErr(r.error ?? 'Couldn’t start setup. Try again?');
       return;
     }
     closeAsk();
@@ -268,11 +268,11 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   const confirm = async () => {
     const r = await accountApi.totpEnable(code.trim());
     if (!r.ok) {
-      setEnrollErr(r.error ?? 'Wrong code');
+      setEnrollErr(r.error ?? 'That code’s not it. Check your authenticator app and try again.');
       return;
     }
     setEnroll(null);
-    toast('success', 'Two-factor authentication enabled');
+    toast('success', 'Two-factor is on — your account just leveled up');
     void load();
   };
 
@@ -281,18 +281,18 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
     const r = await accountApi.totpDisable(password, offCode);
     setBusy(false);
     if (!r.ok) {
-      setAskErr(r.error ?? 'Could not turn off two-factor authentication');
+      setAskErr(r.error ?? 'Couldn’t turn off two-factor authentication');
       setOffCode('');
       return;
     }
     closeAsk();
-    toast('success', 'Two-factor authentication disabled');
+    toast('success', 'Two-factor authentication is off', 'Signing in needs just your password now.');
     void load();
   };
 
   return (
     <Section title="Two-factor authentication"
-      hint="Protect your account with an authenticator app (Google Authenticator, Authy, 1Password…). Signing in then needs your password and a code from the app.">
+      hint="Lock your account down with an authenticator app. Signing in then needs your password and a code from the app.">
       <Toggle label="Ask for a code when signing in" hint={enabled === null ? 'Checking…' : enabled ? 'On' : enroll ? 'Finish setting up below' : 'Off'}
         checked={!!enabled || !!enroll || ask === 'on'} disabled={enabled === null}
         onChange={(on) => {
@@ -385,19 +385,19 @@ export function ChangePassword() {
 
   const submit = async () => {
     setError('');
-    if (next.length < 10) return setError('New password must be at least 10 characters.');
-    if (next !== confirm) return setError('Passwords do not match.');
+    if (next.length < 10) return setError('Too short — your new password needs at least 10 characters.');
+    if (next !== confirm) return setError('Those passwords don’t match. Try again?');
     setBusy(true);
     const r = await accountApi.changePassword(current, next);
     setBusy(false);
     if (!r.ok) {
-      setError(r.error ?? 'Could not change password');
+      setError(r.error ?? 'Couldn’t change your password');
       return;
     }
     setCurrent('');
     setNext('');
     setConfirm('');
-    toast('success', 'Password changed');
+    toast('success', 'Bet — password changed');
   };
 
   return (
@@ -440,8 +440,8 @@ export function Backup() {
     setBusy(true);
     const err = await downloadBackup();
     setBusy(false);
-    if (err) toast('error', 'Backup failed', err);
-    else toast('success', 'Backup downloaded');
+    if (err) toast('error', 'Backup didn’t download', err);
+    else toast('success', 'Backup downloaded — keep it somewhere safe');
   };
   return (
     <div className="stack settings-page">
@@ -451,7 +451,7 @@ export function Backup() {
             <Icon name="download" size={13} /> {busy ? 'Preparing…' : 'Download'}
           </button>
         </Row>
-        <Row label="Restore" hint="Stop NoCapOS, replace nocap.db in the data folder with your backup, and start it again. A one-click restore is coming soon.">
+        <Row label="Restore" hint="Stop NoCapOS, replace nocap.db in the data folder with your backup, and start it again. One-click restore is on the way.">
           <span />
         </Row>
       </Section>

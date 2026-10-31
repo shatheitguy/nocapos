@@ -33,7 +33,7 @@ func (s *Server) internalError(w http.ResponseWriter, r *http.Request, err error
 // for unexpected failures.
 func (s *Server) dockerError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, docker.ErrUnavailable) {
-		writeError(w, http.StatusServiceUnavailable, "docker_unavailable", "Docker engine is not reachable")
+		writeError(w, http.StatusServiceUnavailable, "docker_unavailable", "Can’t reach Docker right now. Make sure it’s running, then try again.")
 		return
 	}
 	var apiErr *docker.APIError
@@ -48,7 +48,7 @@ func (s *Server) dockerError(w http.ResponseWriter, r *http.Request, err error) 
 		}
 	}
 	s.Log.Error("docker request failed", "path", r.URL.Path, "err", err)
-	writeError(w, http.StatusBadGateway, "docker_error", "docker engine request failed")
+	writeError(w, http.StatusBadGateway, "docker_error", "Docker didn’t answer that one. Try again in a sec.")
 }
 
 const maxBodyBytes = 64 << 10
