@@ -284,7 +284,14 @@ func domainXML(s spec) ([]byte, error) {
 	}
 	if s.UEFI {
 		d.OS.Firmware = "efi"
-		d.Features.SMM = &xState{State: "on"}
+		// SMM (needed for Secure Boot) narrows which installed OVMF variant
+		// libvirt will accept — only Windows 11 actually enforces Secure
+		// Boot at setup, so only it is worth that risk; asking for it on
+		// Windows 10 or a generic UEFI Linux machine just makes "efi"
+		// firmware auto-selection fail on hosts without that exact variant.
+		if s.OS == OSWindows11 {
+			d.Features.SMM = &xState{State: "on"}
+		}
 	}
 	if win {
 		d.Features.HyperV = &xHyperV{Mode: "custom", Relaxed: &xState{State: "on"}, VAPIC: &xState{State: "on"},
