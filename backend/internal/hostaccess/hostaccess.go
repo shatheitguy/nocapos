@@ -186,7 +186,7 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 		st.Reason = "NoCap Desktop needs NoCapOS installed straight on Linux (not in Docker)."
 		return st
 	case !d.exists(DesktopUnitPath):
-		st.Reason = "Not set up yet. Plug in a screen and run the installer again with --desktop: sudo bash install.sh --desktop"
+		st.Reason = "Not set up yet. Plug in a screen, then run on the server: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop"
 		return st
 	}
 	st.Available = true
