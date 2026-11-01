@@ -657,7 +657,7 @@ setup_desktop() {
     auto) if display_connected; then want=1; fi ;;
   esac
   if [ "$want" -eq 0 ]; then
-    [ -f "$DESKTOP_UNIT" ] || echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: sudo bash install.sh --desktop)."
+    [ -f "$DESKTOP_UNIT" ] || echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop)."
     return 0
   fi
   # On an update, "auto" keeps whatever Settings last chose.
