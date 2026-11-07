@@ -214,6 +214,7 @@ ensure_docker() { # $1 = required (1) or optional (0)
 PKG_TABLE='
 virtualization|qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients ovmf swtpm swtpm-tools|qemu-kvm qemu-img libvirt edk2-ovmf swtpm swtpm-tools|qemu-base libvirt edk2-ovmf swtpm dnsmasq|qemu-kvm qemu-tools libvirt qemu-ovmf-x86_64 swtpm
 sharing|samba smbclient cifs-utils nfs-common|samba samba-client cifs-utils nfs-utils|samba smbclient cifs-utils nfs-utils|samba samba-client cifs-utils nfs-client
+discovery|wsdd|wsdd|wsdd|wsdd
 remote-desktop|guacd libguac-client-rdp0 libguac-client-vnc0|guacd libguac-client-rdp libguac-client-vnc|-|-
 mdns|avahi-daemon libnss-mdns|avahi nss-mdns|avahi nss-mdns|avahi nss-mdns
 smart|smartmontools|smartmontools|smartmontools|smartmontools

@@ -91,4 +91,42 @@ export const netApi = {
   addShare: (s: { name: string; root: string; path: string; read_only: boolean; guest?: GuestMode }) => api<NetShare>('/api/v1/sharing/shares', { method: 'POST', body: s }),
   setShareReadOnly: (id: number, read_only: boolean) => api<void>(`/api/v1/sharing/shares/${id}`, { method: 'PATCH', body: { read_only } }),
   removeShare: (id: number) => api<void>(`/api/v1/sharing/shares/${id}`, { method: 'DELETE' }),
+  health: () => api<SMBHealth>('/api/v1/sharing/health'),
+  fix: (id: HealthItem['id']) => api<SMBHealth>('/api/v1/sharing/health/fix', { method: 'POST', body: { id } }),
+  mySmb: () => api<MySMB>('/api/v1/sharing/me'),
+  enableMySmb: (password: string) => api<MySMB>('/api/v1/sharing/me', { method: 'POST', body: { password } }),
 };
+
+/** One SMB health check (Files → File Sharing's status card). */
+export interface HealthItem {
+  id: 'installed' | 'service' | 'config' | 'accounts' | 'firewall' | 'discovery';
+  label: string;
+  state: 'ok' | 'warn' | 'bad';
+  detail: string;
+  /** The fix button's label, when NoCapOS can fix it itself. */
+  fix?: string;
+}
+
+export interface SMBAccount {
+  name: string;
+  admin: boolean;
+  /** Samba knows their password: they can sign in over SMB. */
+  ready: boolean;
+}
+
+export interface SMBHealth {
+  smb: boolean;
+  /** On, and nothing in the way. */
+  live: boolean;
+  host: string;
+  addresses: string[];
+  items: HealthItem[];
+  accounts: SMBAccount[];
+}
+
+/** The signed-in person's own SMB sign-in. */
+export interface MySMB {
+  smb: boolean;
+  ready: boolean;
+  root: boolean;
+}
