@@ -70,6 +70,32 @@
 .set-update-result.ok svg { color: var(--ok); }
 .set-update-result.bad svg { color: var(--bad); }
 .set-update-err { margin: 0; font-size: 13px; color: var(--bad); }
+.set-update-part { margin: 0 0 -4px; }
+/* Software Update → System packages */
+.sysupd { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.sysupd-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sysupd-head > .btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.sysupd-icon { width: 38px; height: 38px; flex: none; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.sysupd-icon.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.sysupd-icon.warn { background: color-mix(in srgb, #ff2a2a 14%, transparent); color: #ff2a2a; }
+.sysupd-bar { position: relative; height: 4px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.sysupd-bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 35%; border-radius: inherit;
+  background: linear-gradient(90deg, #a3121a, #ff2a2a, #ff6a4a); animation: brand-slide 1.5s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+.sysupd-restart { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; font-size: 13px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.sysupd-restart span { flex: 1; min-width: 180px; }
+.sysupd-note { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.sysupd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.sysupd-list li { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-size: 13px; min-width: 0; }
+.sysupd-list li + li { border-top: 1px solid var(--border); }
+.sysupd-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sysupd-ver { margin-left: auto; font: 11.5px/1.3 var(--mono); color: var(--muted); text-align: right; overflow-wrap: anywhere; }
+.sysupd-tag { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+.sysupd-tag.sec { background: color-mix(in srgb, #ff2a2a 14%, transparent); border-color: color-mix(in srgb, #ff2a2a 35%, transparent); color: #ff4a4a; }
+.sysupd-more { align-self: flex-start; }
+@media (prefers-reduced-motion: reduce) { .sysupd-bar::after { animation: none; width: 100%; opacity: 0.5; } }
+:root[data-reduce-motion] .sysupd-bar::after { animation: none; width: 100%; opacity: 0.5; }
 .set-update-log summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
 .set-update-log .set-logs { margin-top: 8px; max-height: 240px; }
 .set-cmd { max-height: none; white-space: pre-wrap; word-break: break-all; }

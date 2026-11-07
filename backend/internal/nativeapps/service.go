@@ -81,7 +81,12 @@ type Service struct {
 	mu          sync.Mutex
 	installed   []App
 	installedAt time.Time
+	updates     []Update
+	updatesAt   time.Time
 }
+
+// ErrNoUpdates: "update all" with everything already up to date.
+var ErrNoUpdates = errors.New("Everything's already up to date")
 
 // New wires the real host.
 func New(dataDir string, streams Streamer) *Service {
@@ -170,7 +175,7 @@ func (s *Service) Installed(ctx context.Context) ([]App, error) {
 
 func (s *Service) invalidate() {
 	s.mu.Lock()
-	s.installed = nil
+	s.installed, s.updates = nil, nil
 	s.mu.Unlock()
 }
 
@@ -253,6 +258,71 @@ func (s *Service) Install(id, name string, onDone func(Job)) (Job, error) {
 		name = id
 	}
 	return s.Jobs.Start(id, name, "install", InstallSteps(id), func(j Job) {
+		s.invalidate()
+		if onDone != nil {
+			onDone(j)
+		}
+	})
+}
+
+// Updates lists installed apps with a newer version on Flathub (cached for a
+// couple of minutes; asking the remote is slow).
+func (s *Service) Updates(ctx context.Context, fresh bool) ([]Update, error) {
+	if err := s.Check(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if !fresh && s.updates != nil && time.Since(s.updatesAt) < 2*time.Minute {
+		defer s.mu.Unlock()
+		return append([]Update(nil), s.updates...), nil
+	}
+	s.mu.Unlock()
+	out, err := s.Run(ctx, UpdatesArgs()...)
+	if err != nil {
+		return nil, err
+	}
+	inst, _ := s.Installed(ctx)
+	ups := ParseUpdates(out, inst)
+	s.mu.Lock()
+	s.updates, s.updatesAt = ups, time.Now()
+	s.mu.Unlock()
+	return append([]Update(nil), ups...), nil
+}
+
+// AllApps is the job "app" of an update of everything.
+const AllApps = "*"
+
+// Update starts updating one app, or every app with an update when id is
+// AllApps, as one background job.
+func (s *Service) Update(ctx context.Context, id, name string, onDone func(Job)) (Job, error) {
+	if err := s.Check(); err != nil {
+		return Job{}, err
+	}
+	var steps []Step
+	if id == AllApps {
+		ups, err := s.Updates(ctx, false)
+		if err != nil {
+			return Job{}, err
+		}
+		for _, u := range ups {
+			if ValidID(u.ID) {
+				steps = append(steps, Step{Args: UpdateArgs(u.ID)})
+			}
+		}
+		if len(steps) == 0 {
+			return Job{}, ErrNoUpdates
+		}
+		name = "All system apps"
+	} else {
+		if !ValidID(id) {
+			return Job{}, ErrBadID
+		}
+		steps = []Step{{Args: UpdateArgs(id)}}
+	}
+	if name == "" {
+		name = id
+	}
+	return s.Jobs.Start(id, name, "update", steps, func(j Job) {
 		s.invalidate()
 		if onDone != nil {
 			onDone(j)

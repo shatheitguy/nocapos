@@ -170,7 +170,8 @@ func (s *Server) add(ctx context.Context, n notify.Notification) {
 }
 
 // watchUpdates checks for a new NoCapOS and App Store app updates about a
-// minute after start, then every 6 hours.
+// minute after start, then every 6 hours; and about once a day for security
+// updates to the system's own packages.
 func (s *Server) watchUpdates(ctx context.Context) {
 	t := time.NewTimer(releaseFirstCheck)
 	defer t.Stop()
@@ -182,6 +183,7 @@ func (s *Server) watchUpdates(ctx context.Context) {
 		}
 		s.checkNoCapOSUpdate(ctx)
 		s.checkAppUpdates(ctx)
+		s.checkSystemUpdates(ctx)
 		t.Reset(releaseEvery)
 	}
 }

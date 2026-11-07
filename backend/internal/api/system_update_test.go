@@ -91,8 +91,10 @@ func TestUpdateRunStatusResultPersists(t *testing.T) {
 		t.Errorf("unexpected result %+v", st.Result)
 	}
 
-	// A rolled-back update.
-	res = `{"from":"0.7.1","to":"0.7.2","ok":false,"exit_code":1,"finished_at":"2026-10-31T10:00:00Z"}`
+	// A rolled-back update: the old version runs again.
+	s = newUpdateServer(t, "0.7.1")
+	s.versionSince()
+	res = `{"from":"0.7.1","to":"0.7.2","ok":false,"exit_code":1,"finished_at":"` + time.Now().Add(time.Minute).UTC().Format(time.RFC3339) + `"}`
 	os.WriteFile(s.updateResultPath(), []byte(res), 0o600)
 	os.WriteFile(s.updateLogPath(), []byte("==> Installing /usr/local/bin/nocapos\n==> Waiting for NoCapOS\n"+
 		"warning: NoCapOS 0.7.2 did not start; putting back 0.7.1\n"+

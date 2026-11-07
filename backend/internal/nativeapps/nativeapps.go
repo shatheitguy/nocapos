@@ -79,6 +79,45 @@ func RemoteLsArgs() []string {
 	return []string{"flatpak", "remote-ls", "--system", "--app", "--columns=application,name,description", Remote}
 }
 
+// UpdatesArgs lists installed apps with a newer version on their remote.
+func UpdatesArgs() []string {
+	return []string{"flatpak", "remote-ls", "--updates", "--system", "--app", "--columns=application,name,version"}
+}
+
+// UpdateArgs updates one app (and the runtimes it needs).
+func UpdateArgs(id string) []string {
+	return []string{"flatpak", "update", "-y", "--noninteractive", "--system", id}
+}
+
+// Update is an installed app with a newer version available.
+type Update struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	From string `json:"from,omitempty"` // installed version, when known
+	To   string `json:"to,omitempty"`   // the new version, when known
+}
+
+// ParseUpdates reads `flatpak remote-ls --updates --app
+// --columns=application,name,version`, adding the installed versions.
+func ParseUpdates(out string, installed []App) []Update {
+	have := map[string]App{}
+	for _, a := range installed {
+		have[a.ID] = a
+	}
+	ups := []Update{}
+	for _, a := range ParseList(out) {
+		u := Update{ID: a.ID, Name: a.Name, To: a.Version}
+		if in, ok := have[a.ID]; ok {
+			u.From = in.Version
+			if u.Name == a.ID && in.Name != "" {
+				u.Name = in.Name
+			}
+		}
+		ups = append(ups, u)
+	}
+	return ups
+}
+
 // RunArgs starts an app.
 func RunArgs(id string) []string {
 	return []string{"flatpak", "run", id}

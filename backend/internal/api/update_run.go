@@ -121,6 +121,10 @@ func updateScript(installCmd, logPath, resultPath, lockPath, from, to string) st
 	res, tmp := shellQuote(resultPath), shellQuote(resultPath+".tmp")
 	return strings.Join([]string{
 		"exec >>" + shellQuote(logPath) + " 2>&1",
+		// NEEDRESTART_SUSPEND: package installs must not restart services
+		// mid-update (this unit included). NOCAP_UPDATER: install.sh leaves
+		// this run's lock alone.
+		"export NEEDRESTART_SUSPEND=1 NOCAP_UPDATER=1",
 		"(" + installCmd + "); rc=$?",
 		`if [ "$rc" -eq 0 ]; then ok=true; else ok=false; fi`,
 		`printf '%s"ok":%s,"exit_code":%d,"finished_at":"%s"}\n' ` + shellQuote(prefix) + ` "$ok" "$rc" "$(date -u ` + updateResultTimeFmt + `)" >` + tmp + " && mv -f " + tmp + " " + res,
@@ -178,8 +182,81 @@ var releaseFor = func(s *Server, r *http.Request, refresh bool) updateInfo {
 	return info
 }
 
+// updateInstallerActive reports whether any NoCapOS updater or installer
+// unit is running. An older NoCapOS's lock (a bare timestamp) names no unit,
+// so this is how its updater is known to still be alive. When systemd can't
+// be asked, it says yes and the lock's age decides. Replaced in tests.
+var updateInstallerActive = func() bool {
+	out, err := exec.Command("systemctl", "list-units", "--type=service", "--state=active,activating",
+		"--no-legend", "--plain", updateUnitPrefix+"*", "nocapos-install-*").Output()
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(string(out)) != ""
+}
+
 func sameVersion(a, b string) bool {
 	return strings.TrimPrefix(strings.TrimSpace(a), "v") == strings.TrimPrefix(strings.TrimSpace(b), "v")
+}
+
+// versionAhead reports whether target is a newer version than running. An
+// unknown target is never ahead; if either can't be compared, any other
+// version counts as ahead.
+func versionAhead(target, running string) bool {
+	if strings.TrimSpace(target) == "" {
+		return false
+	}
+	t, okT := release.ParseVersion(target)
+	r, okR := release.ParseVersion(running)
+	if okT && okR {
+		return release.CompareVersion(t, r) > 0
+	}
+	return !sameVersion(target, running)
+}
+
+// staleLockIsFailure decides what a lock whose updater is gone means. Only an
+// update to a version newer than the one now running can have failed; a lock
+// with no target (an older NoCapOS's) or one whose target is already running
+// (the owner finished the update another way) is just cleared.
+func staleLockIsFailure(l *updateLock, running string) bool {
+	return l != nil && versionAhead(l.To, running)
+}
+
+// staleFailure reports whether a failed result no longer means anything: it
+// names no target, its target (or newer) is running now, or it is older
+// than the last time the running version changed.
+func staleFailure(res *updateResult, running string, versionSince time.Time) bool {
+	if res == nil || res.OK {
+		return false
+	}
+	if !versionAhead(res.To, running) {
+		return true
+	}
+	return !versionSince.IsZero() && res.FinishedAt.Before(versionSince)
+}
+
+// versionSeen is version-seen.json: the running version and when it first ran.
+type versionSeen struct {
+	Version string    `json:"version"`
+	Since   time.Time `json:"since"`
+}
+
+// versionSince returns when the running version first started, recording it
+// on the first call after a version change.
+func (s *Server) versionSince() time.Time {
+	if s.Config == nil || s.Config.DataDir == "" {
+		return time.Time{}
+	}
+	path := filepath.Join(s.Config.DataDir, "version-seen.json")
+	var v versionSeen
+	if b, err := os.ReadFile(path); err == nil && json.Unmarshal(b, &v) == nil && v.Version == s.Version && !v.Since.IsZero() {
+		return v.Since
+	}
+	v = versionSeen{Version: s.Version, Since: time.Now().UTC()}
+	if b, err := json.Marshal(v); err == nil {
+		os.WriteFile(path, b, 0o600) //nolint:errcheck
+	}
+	return v.Since
 }
 
 func (s *Server) systemUpdateRun(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +280,11 @@ func (s *Server) systemUpdateRun(w http.ResponseWriter, r *http.Request) {
 	defer updateStarting.Unlock()
 	if _, running := s.updateState(); running {
 		writeError(w, http.StatusConflict, "already_running", "An update is already running")
+		return
+	}
+	if s.pkgJobs != nil && s.pkgJobs.Busy() {
+		// The installer needs the package manager too; it would fail on its lock.
+		writeError(w, http.StatusConflict, "busy", "System packages are being updated. Let that finish, then update NoCapOS.")
 		return
 	}
 
@@ -310,6 +392,11 @@ func (s *Server) updateState() (*updateLock, bool) {
 	if l.Unit != "" {
 		return l, age < updateUnitGrace || updateUnitAlive(l.Unit)
 	}
+	if l.To == "" {
+		// An older NoCapOS's lock: its updater may have been killed with the
+		// service. Only trust it while an updater or installer unit runs.
+		return l, age < updateUnitGrace || (age < updateStaleAfter && updateInstallerActive())
+	}
 	return l, age < updateStaleAfter
 }
 
@@ -352,6 +439,7 @@ func (s *Server) systemUpdateRunStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateRunStatus() updateRunStatus {
 	out := updateRunStatus{Version: s.Version, Supported: s.canSelfUpdate()}
+	since := s.versionSince()
 	log := s.readUpdateLog()
 	prog := parseUpdateProgress(log)
 	lock, running := s.updateState()
@@ -359,8 +447,9 @@ func (s *Server) updateRunStatus() updateRunStatus {
 
 	if lock != nil && !running {
 		// The updater is gone without saying how it ended (killed, or the
-		// machine went down): record that, so this isn't "running" forever.
-		if res == nil || res.FinishedAt.Before(lock.Started) {
+		// machine went down): record that, so this isn't "running" forever —
+		// unless there's nothing it could have failed at (see staleLockIsFailure).
+		if staleLockIsFailure(lock, s.Version) && (res == nil || res.FinishedAt.Before(lock.Started)) {
 			res = &updateResult{OK: false, From: lock.From, To: lock.To, ExitCode: -1, FinishedAt: time.Now().UTC(),
 				Error: "The updater stopped before it finished."}
 			if b, err := json.Marshal(res); err == nil {
@@ -369,6 +458,10 @@ func (s *Server) updateRunStatus() updateRunStatus {
 		}
 		os.Remove(s.updateLockPath())
 		lock = nil
+	}
+	if !running && staleFailure(res, s.Version, since) {
+		os.Remove(s.updateResultPath())
+		res = nil
 	}
 
 	out.Running = running

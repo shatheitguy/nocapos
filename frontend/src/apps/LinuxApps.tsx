@@ -7,11 +7,11 @@ import { launchNativeApp, nativeKey, uninstallNativeApp, useNativeApps } from '.
 import { toast } from '../state/toasts';
 import { Empty } from './Monitor';
 
-// App Store → Linux apps: desktop apps from Flathub, installed on this server.
+// App Store → System apps: desktop apps from Flathub, installed on this server.
 // Installed apps show up in Launchpad by themselves; the desktop only gets a
 // shortcut when someone adds one.
 
-export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
+export function LinuxApps({ initial, q, view = 'discover' }: { initial?: string; q: string; view?: 'discover' | 'installed' }) {
   const [status, setStatus] = useState<NativeStatus | null>(null);
   const [installed, setInstalled] = useState<NativeApp[]>([]);
   const [popular, setPopular] = useState<NativeApp[] | null>(null);
@@ -55,7 +55,7 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
   useEffect(() => {
     if (firstQ.current) firstQ.current = false;
     else setDetail(null);
-    const needle = q.trim();
+    const needle = view === 'discover' ? q.trim() : '';
     if (!needle) {
       setResults(null);
       setSearchError(null);
@@ -71,7 +71,7 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
       } else setSearchError(r.error ?? "Couldn't search Flathub right now.");
     }, 350);
     return () => window.clearTimeout(t);
-  }, [q]);
+  }, [q, view]);
 
   // Follow running jobs; tell people when one ends.
   const watching = useRef(new Set<string>());
@@ -90,6 +90,7 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
       if (!j.done) watching.current.add(j.id);
       else if (watching.current.delete(j.id)) {
         changed = true;
+        if (j.action === 'update') continue; // the Updates tab reports these
         if (j.error) toast('error', j.action === 'install' ? `Couldn't install ${j.name}` : `Couldn't remove ${j.name}`, j.error);
         else if (j.action === 'install') toast('success', "Big moves: installed — it's in your Launchpad", j.name);
         else toast('success', `${j.name} removed`);
@@ -102,6 +103,8 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
   }, [jobs, loadInstalled]);
 
   const installedIds = new Set(installed.map((a) => a.id));
+  const needle = q.trim().toLowerCase();
+  const shownInstalled = needle ? installed.filter((a) => `${a.name} ${a.id} ${a.summary}`.toLowerCase().includes(needle)) : installed;
   const jobFor = (id: string) => jobs.find((j) => j.app === id);
   const mark = (a: NativeApp): NativeApp => ({ ...a, installed: installedIds.has(a.id) });
 
@@ -151,7 +154,18 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
         </div>
       )}
 
-      {q.trim() ? (
+      {view === 'installed' ? (
+        <section className="as-section">
+          <h2 className="as-h2">
+            On this server <span className="muted">{shownInstalled.length}</span>
+          </h2>
+          {shownInstalled.length ? (
+            <LinuxRows apps={shownInstalled} onOpen={setDetail} {...actions} />
+          ) : (
+            <p className="muted">{q.trim() ? 'No installed system app matches that.' : 'No system apps yet. Grab one under Discover.'}</p>
+          )}
+        </section>
+      ) : q.trim() ? (
         <section className="as-section">
           <h2 className="as-h2">
             Results for “{q.trim()}” {results && <span className="muted">{results.length}</span>}
@@ -168,18 +182,10 @@ export function LinuxApps({ initial, q }: { initial?: string; q: string }) {
         </section>
       ) : (
         <>
-          {installed.length > 0 && (
-            <section className="as-section">
-              <h2 className="as-h2">
-                On this server <span className="muted">{installed.length}</span>
-              </h2>
-              <LinuxRows apps={installed} onOpen={setDetail} {...actions} />
-            </section>
-          )}
           <section className="as-section">
             <h2 className="as-h2">Popular</h2>
             {popular ? (
-              <div className="as-cards">
+              <div className="as-cards wrap">
                 {popular.map((a) => (
                   <button key={a.id} type="button" className="as-card" onClick={() => setDetail(a.id)}>
                     <NativeAppIcon app={a} size={64} />
@@ -209,7 +215,7 @@ function LinuxButton({ app, big, jobFor, install }: Actions & { app: NativeApp; 
   const j = jobFor(app.id);
   const cls = `pill as-pill ${big ? 'big' : ''}`;
   if (j && !j.done) {
-    const label = j.action === 'uninstall' ? 'Removing' : 'Installing';
+    const label = j.action === 'uninstall' ? 'Removing' : j.action === 'update' ? 'Updating' : 'Installing';
     return (
       <button type="button" className={`${cls} busy`} style={{ '--p': `${j.percent}%` } as CSSProperties} title={j.phase}>
         <span>{big ? `${label}… ${j.percent}%` : `${j.percent}%`}</span>

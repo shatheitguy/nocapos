@@ -30,7 +30,7 @@ type Job struct {
 	ID        string     `json:"id"`
 	App       string     `json:"app"`
 	Name      string     `json:"name"`
-	Action    string     `json:"action"` // install | uninstall
+	Action    string     `json:"action"` // install | uninstall | update
 	Phase     string     `json:"phase"`
 	Percent   int        `json:"percent"`
 	Done      bool       `json:"done"`

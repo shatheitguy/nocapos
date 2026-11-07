@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api/client';
-import { LogoMark } from '../components/Logo';
+import { api, type ApiResult } from '../api/client';
+import { BrandBar, BrandMark } from '../components/BrandLoader';
 import { Icon } from '../components/Icon';
+import { nextDelay, probeServer, withTimeout } from '../lib/reconnect';
 import { closeUpdate, forgetUpdate, openUpdate, useUpdate, vtag, type UpdateRunStatus, type UpdateStage } from '../state/update';
 
 // Full-screen while NoCapOS updates itself. It keeps going through the
-// restart: when the API stops answering it waits for the server to come
-// back, then asks how the update ended.
+// restart: when the API stops answering it keeps probing the public health
+// check (with a timeout and a gentle backoff, never giving up), then asks
+// how the update ended. A server that answers with a redirect (now on HTTPS,
+// or another address) gets a full page load, which follows it.
 
 const POLL_MS = 2000;
-const SLOW_MS = 10 * 60_000; // down this long: say so, keep trying
+const STATUS_TIMEOUT_MS = 10_000;
+const SLOW_MS = 3 * 60_000; // down this long: offer a reload, keep trying
+const STUCK_MS = 12 * 60_000; // ... and this long: say to check the machine
 const RELOAD_S = 3;
 
 const STAGE_TEXT: Record<UpdateStage, string> = {
@@ -32,15 +37,7 @@ const ORDER: UpdateStage[] = ['download', 'verify', 'packages', 'install', 'rest
 
 const same = (a?: string, b?: string) => !!a && !!b && a.replace(/^v/, '') === b.replace(/^v/, '');
 
-/** The public "is anybody home" check: answers without a session. */
-async function serverUp(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/v1/auth/status', { cache: 'no-store', credentials: 'same-origin' });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+const unreachable = { ok: false, status: 0, data: null, error: 'NoCapOS is not reachable' } as unknown as ApiResult<UpdateRunStatus>;
 
 export function UpdateOverlay() {
   const phase = useUpdate((s) => s.phase);
@@ -48,7 +45,7 @@ export function UpdateOverlay() {
   const target = useUpdate((s) => s.target);
   const status = useUpdate((s) => s.status);
   const percent = useUpdate((s) => s.percent);
-  const [slow, setSlow] = useState(false);
+  const [away, setAway] = useState(0); // how long the server has been away (ms)
   const [countdown, setCountdown] = useState(RELOAD_S);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState('');
@@ -59,49 +56,82 @@ export function UpdateOverlay() {
   useEffect(() => {
     if (!following) return;
     let stopped = false;
+    let busy = false;
     let timer = 0;
+    let delay = POLL_MS;
     let downAt: number | null = phase === 'restarting' ? Date.now() : null;
-    const schedule = () => {
-      if (!stopped) timer = window.setTimeout(() => void tick(), POLL_MS);
+    const schedule = (ms: number) => {
+      window.clearTimeout(timer);
+      if (!stopped) timer = window.setTimeout(() => void tick(), ms);
+    };
+    const wentAway = () => {
+      downAt ??= Date.now();
+      setAway(Date.now() - downAt);
+      delay = nextDelay(Math.max(delay, 1000));
+      const st = useUpdate.getState();
+      if (st.phase !== 'restarting') st.set({ phase: 'restarting' });
+      schedule(delay);
     };
     const tick = async () => {
-      if (downAt !== null && !(await serverUp())) {
-        if (stopped) return;
-        setSlow(Date.now() - downAt > SLOW_MS);
-        return schedule();
-      }
-      const r = await api<UpdateRunStatus>('/api/v1/system/update/run');
-      if (stopped) return;
-      const st = useUpdate.getState();
-      if (r.ok) {
-        downAt = null;
-        setSlow(false);
-        const d = r.data;
-        if (d.running) {
-          st.set({ status: d, percent: Math.max(st.percent, d.percent), target: d.target || st.target, phase: 'installing' });
-          return schedule();
+      if (stopped || busy) return;
+      busy = true;
+      try {
+        if (downAt !== null) {
+          const p = await probeServer();
+          if (stopped) return;
+          if (p === 'moved') {
+            // Back, but somewhere else (HTTPS, another port): a page load
+            // follows the redirect, and the overlay picks up from there.
+            window.location.reload();
+            return;
+          }
+          if (p === 'down') return wentAway();
         }
-        forgetUpdate();
-        const res = d.result;
-        const ok = res ? res.ok : same(d.version, st.target) || (!!st.from && d.version !== st.from);
-        st.set({ status: d, percent: ok ? 100 : st.percent, target: res?.to || st.target, phase: ok ? 'success' : 'failed' });
-        return;
+        const r = await withTimeout(api<UpdateRunStatus>('/api/v1/system/update/run'), STATUS_TIMEOUT_MS, unreachable);
+        if (stopped) return;
+        const st = useUpdate.getState();
+        if (r.ok && r.data) {
+          downAt = null;
+          delay = POLL_MS;
+          setAway(0);
+          const d = r.data;
+          if (d.running) {
+            st.set({ status: d, percent: Math.max(st.percent, d.percent), target: d.target || st.target, phase: 'installing' });
+            return schedule(POLL_MS);
+          }
+          forgetUpdate();
+          const res = d.result;
+          const ok = res ? res.ok : same(d.version, st.target) || (!!st.from && !same(d.version, st.from));
+          st.set({ status: d, percent: ok ? 100 : st.percent, target: res?.to || st.target, phase: ok ? 'success' : 'failed' });
+          return;
+        }
+        if (r.status === 401 || r.status === 403) {
+          // The server is back but this session isn't.
+          forgetUpdate();
+          st.set({ phase: 'signin' });
+          return;
+        }
+        // Not reachable (or a proxy's 502): NoCapOS is restarting.
+        wentAway();
+      } finally {
+        busy = false;
       }
-      if (r.status === 401 || r.status === 403) {
-        // The server is back but this session isn't.
-        forgetUpdate();
-        st.set({ phase: 'signin' });
-        return;
-      }
-      // Not reachable (or a proxy's 502): NoCapOS is restarting.
-      downAt ??= Date.now();
-      if (st.phase !== 'restarting') st.set({ phase: 'restarting' });
-      schedule();
     };
+    // Back on the tab or the network: check now (hidden tabs' timers crawl).
+    const now = () => {
+      if (!document.hidden) {
+        delay = POLL_MS;
+        schedule(0);
+      }
+    };
+    window.addEventListener('online', now);
+    document.addEventListener('visibilitychange', now);
     void tick();
     return () => {
       stopped = true;
       window.clearTimeout(timer);
+      window.removeEventListener('online', now);
+      document.removeEventListener('visibilitychange', now);
     };
   }, [following, phase]);
 
@@ -133,15 +163,19 @@ export function UpdateOverlay() {
   const shownPct = phase === 'success' ? 100 : percent;
   const stageIdx = ORDER.indexOf(stage === 'verify' ? 'download' : stage);
   const versions = from && target ? `${vtag(from)} → ${vtag(target)}` : target ? `Installing ${vtag(target)}` : '';
+  const slow = phase === 'restarting' && away > SLOW_MS;
+  const stuck = phase === 'restarting' && away > STUCK_MS;
 
   let title: string;
   let sub: string;
   switch (phase) {
     case 'restarting':
       title = 'Hang tight, restarting — be right back';
-      sub = slow
-        ? 'This is taking longer than usual. Still trying… if it stays like this, check the server.'
-        : 'NoCapOS is restarting into the new version. This page reconnects on its own.';
+      sub = stuck
+        ? 'This is taking way longer than usual. Still trying… check that the machine is on and on the network.'
+        : slow
+          ? 'Taking a bit longer than usual. Still trying — or reload the page if your browser asks you to trust the certificate again.'
+          : 'NoCapOS is restarting into the new version. This page reconnects on its own.';
       break;
     case 'success':
       title = `You're on ${vtag(status?.version || target)}. That's the update, no cap.`;
@@ -180,9 +214,7 @@ export function UpdateOverlay() {
   return (
     <div className={`upd-overlay ${phase}`} role="dialog" aria-modal="true" aria-labelledby="upd-title" aria-describedby="upd-sub">
       <div className="upd-card">
-        <div className="upd-mark">
-          <LogoMark size={84} />
-        </div>
+        <BrandMark size={96} busy={following} />
         <h2 id="upd-title">{title}</h2>
         <p id="upd-sub" className="upd-sub" aria-live="polite">
           {sub}
@@ -190,16 +222,7 @@ export function UpdateOverlay() {
 
         {(following || phase === 'success') && (
           <>
-            <div
-              className={`upd-bar ${phase === 'restarting' ? 'waiting' : ''}`}
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={shownPct}
-              aria-label="Update progress"
-            >
-              <div className="upd-fill" style={{ width: `${Math.max(shownPct, 3)}%` }} />
-            </div>
+            <BrandBar percent={phase === 'restarting' && shownPct < 1 ? undefined : shownPct} done={phase === 'success'} label="Update progress" />
             <ol className="upd-steps">
               {STEPS.map((s) => {
                 const i = ORDER.indexOf(s.id);
@@ -244,7 +267,7 @@ export function UpdateOverlay() {
             </button>
           </div>
         )}
-        {phase === 'restarting' && slow && (
+        {slow && (
           <div className="upd-actions">
             <button type="button" className="pill ghost small" onClick={() => window.location.reload()}>
               Reload page
