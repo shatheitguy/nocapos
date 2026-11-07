@@ -10,9 +10,10 @@ import { CloudImportsPanel } from './CloudImports';
 import { ConnectServerPanel } from './NetworkDrives';
 import { GuestFields, SharingSettings } from './SharingSettings';
 import { Toggle } from './Personalize';
+import { MySmbCard } from './SmbStatus';
 
 // Network drives and sharing, inside Files: the sidebar's Network section,
-// "Connect to Server…", "File Sharing…" and a folder's "Share on Network…".
+// "Connect to Server…", "File Sharing…" and a folder's "Share this folder…".
 
 /** A large dialog inside the Files window. */
 export function FilesModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -31,9 +32,11 @@ export function FilesModal({ title, onClose, children }: { title: string; onClos
       <div className="dialog fn-modal" role="dialog" aria-label={title} onKeyDown={(e) => e.stopPropagation()}>
         <header className="fn-modal-head">
           <h3>{title}</h3>
-          <button type="button" className="ghost icon-btn neutral" aria-label="Close" onClick={onClose}>
-            <Icon name="close" size={16} />
-          </button>
+          <div className="win-buttons">
+            <button type="button" className="close" aria-label="Close" title="Close" onClick={onClose}>
+              <Icon name="close" size={14} />
+            </button>
+          </div>
         </header>
         <div className="fn-modal-body">{children}</div>
       </div>
@@ -239,7 +242,7 @@ export function NetworkSections({
 
 const shareSafe = (n: string) => n.replace(/[^A-Za-z0-9 _.-]/g, '').trim().slice(0, 40) || 'Shared';
 
-/** "Share on Network…" for one folder: sets sharing up on first use. */
+/** "Share this folder…" for one folder: sets sharing up on first use. */
 export function ShareFolderDialog({ root, path, name, onClose, onShared }: { root: string; path: string; name: string; onClose: () => void; onShared: () => void }) {
   const [state, setState] = useState<{ support: NetSupport; sharing: Sharing } | null>(null);
   const [shareName, setShareName] = useState(shareSafe(name));
@@ -311,6 +314,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
               <code>{a}</code> <Icon name="copy" size={13} />
             </button>
           ))}
+          {(smb || sharing.smb) && <MySmbCard />}
           <button type="button" onClick={onClose}>
             Done
           </button>

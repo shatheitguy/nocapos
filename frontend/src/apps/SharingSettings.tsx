@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { netApi, type GuestMode } from '../api/netdrive';
-import { PERM_LABEL, sharesApi, type FolderInput, type Perm, type SharedFolder, type SharesOverview } from '../api/shares';
+import { netApi, type GuestMode, type SMBHealth } from '../api/netdrive';
+import { sharesApi, type FolderInput, type Perm, type SharedFolder, type SharesOverview } from '../api/shares';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { Choice, Row, Section, Toggle } from './Personalize';
+import { HowToConnect, MySmbCard, SmbStatusCard } from './SmbStatus';
 
 // Files → File Sharing: shared folders and who may use them, how they're
 // offered on the network (SMB and WebDAV), and people's private homes.
@@ -21,11 +22,17 @@ async function run(p: Promise<{ ok: boolean; error?: string }>, done?: string): 
 
 export function SharingSettings() {
   const [data, setData] = useState<SharesOverview | null>(null);
+  const [health, setHealth] = useState<SMBHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadHealth = async () => {
+    const r = await netApi.health();
+    if (r.ok) setHealth(r.data);
+  };
   const load = async () => {
     const r = await sharesApi.overview();
     if (r.ok) setData(r.data);
     else setError(r.error ?? 'Couldn’t load shared folders. Try again in a sec.');
+    void loadHealth();
   };
   useEffect(() => {
     void load();
@@ -33,9 +40,17 @@ export function SharingSettings() {
   if (error) return <p className="error">{error}</p>;
   if (!data) return <p className="muted">Loading shared folders…</p>;
 
+  const example = data.folders.find((f) => f.network && !f.holds_homes)?.name ?? '';
   return (
     <div className="stack settings-page">
+      {health && <SmbStatusCard health={health} onChanged={setHealth} />}
+      {data.smb && <MySmbCard onReady={() => void loadHealth()} />}
       <NetworkStatus data={data} onChanged={load} />
+      {(data.smb || data.webdav) && (
+        <Section title="How to connect" hint={example ? `Using “${example}” as the example — swap in any shared folder’s name.` : 'Swap “Folder” for a shared folder’s name.'}>
+          <HowToConnect health={health} example={example} webdav={data.webdav} />
+        </Section>
+      )}
       <Section title="Homes" hint="Everyone gets a private home folder. On this machine’s Linux accounts it is their own Linux home.">
         <Toggle
           label="Administrators can open people’s homes"
@@ -45,7 +60,7 @@ export function SharingSettings() {
         />
       </Section>
       <Section title="Shared folders" hint="Folders people can open in Files and connect to from their computers and phones. Administrators can always reach every shared folder.">
-        {data.folders.length === 0 && <Row><span className="muted">Nothing shared yet — add a folder below, or right-click one in Files and choose Share on Network.</span></Row>}
+        {data.folders.length === 0 && <Row><span className="muted">Nothing shared yet — add a folder below, or right-click one in Files and choose Share this folder.</span></Row>}
         {data.folders.map((f) => (
           <FolderRow key={f.id} folder={f} data={data} onChanged={load} />
         ))}
@@ -106,10 +121,8 @@ function NetworkStatus({ data, onChanged }: { data: SharesOverview; onChanged: (
 }
 
 function FolderRow({ folder: f, data, onChanged }: { folder: SharedFolder; data: SharesOverview; onChanged: () => void }) {
-  const [open, setOpen] = useState<null | 'perms' | 'edit' | 'delete'>(null);
+  const [open, setOpen] = useState<null | 'edit' | 'delete'>(null);
   const where = `${f.root_name ?? f.root}${f.path === '/' ? '' : f.path}`;
-  const people = data.people.filter((p) => !p.admin);
-  const granted = people.filter((p) => f.permissions[p.username]).length;
   const toggle = (k: typeof open) => setOpen(open === k ? null : k);
   return (
     <div className="settings-row stacked share-row">
@@ -120,7 +133,6 @@ function FolderRow({ folder: f, data, onChanged }: { folder: SharedFolder; data:
           {f.description && <span className="settings-row-hint">{f.description}</span>}
           <span className="user-badges">
             <span className="badge">{where}</span>
-            <span className="badge">{granted === 0 ? 'Administrators only' : `${granted} ${granted === 1 ? 'person' : 'people'}`}</span>
             {f.read_only && <span className="badge">Read only for everyone</span>}
             {f.guest && <span className="badge off">{f.guest === 'rw' && !f.read_only ? 'Guests can read & write' : 'Guests can read'}</span>}
             {!f.network && <span className="badge">Hidden on the network</span>}
@@ -130,71 +142,91 @@ function FolderRow({ folder: f, data, onChanged }: { folder: SharedFolder; data:
           </span>
         </span>
         <div className="settings-row-control user-actions">
-          <button type="button" className={`ghost small ${open === 'perms' ? 'on' : ''}`} onClick={() => toggle('perms')}>
-            <Icon name="users" size={13} /> Permissions
-          </button>
           <button type="button" className="icon-btn neutral" title="Edit" aria-label={`Edit ${f.name}`} onClick={() => toggle('edit')}>
             <Icon name="edit" size={15} />
           </button>
-          <button type="button" className="icon-btn" title="Delete" aria-label={`Delete ${f.name}`} onClick={() => toggle('delete')}>
+          <button type="button" className="icon-btn" title="Stop sharing" aria-label={`Stop sharing ${f.name}`} onClick={() => toggle('delete')}>
             <Icon name="trash" size={15} />
           </button>
         </div>
       </div>
-      {open === 'perms' && <PermMatrix folder={f} data={data} onChanged={onChanged} />}
+      {!f.holds_homes && <WhoCanOpen folder={f} data={data} onChanged={onChanged} />}
       {open === 'edit' && <EditFolder folder={f} onDone={() => { setOpen(null); onChanged(); }} />}
       {open === 'delete' && <DeleteFolder folder={f} onDone={() => { setOpen(null); onChanged(); }} onCancel={() => setOpen(null)} />}
     </div>
   );
 }
 
-/** People × permission for one folder. */
-function PermMatrix({ folder: f, data, onChanged }: { folder: SharedFolder; data: SharesOverview; onChanged: () => void }) {
-  const set = async (name: string, perm: Perm) => {
-    if (await run(sharesApi.setPerms(f.id, { [name]: perm }))) onChanged();
+/** "Who can open it": a chip per person with a Read / Write switch, plus adding someone. */
+function WhoCanOpen({ folder: f, data, onChanged }: { folder: SharedFolder; data: SharesOverview; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const set = async (name: string, perm: Perm, done?: string) => {
+    setBusy(true);
+    const ok = await run(sharesApi.setPerms(f.id, { [name]: perm }), done);
+    setBusy(false);
+    if (ok) onChanged();
   };
-  const perms: Perm[] = ['rw', 'ro', 'none'];
+  const people = data.people.filter((p) => !p.admin && !p.disabled);
+  const inside = people.filter((p) => f.permissions[p.username]);
+  const outside = people.filter((p) => !f.permissions[p.username]);
   return (
-    <table className="perm-matrix">
-      <thead>
-        <tr>
-          <th>Person</th>
-          {perms.map((p) => (
-            <th key={p}>{PERM_LABEL[p]}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {data.people.map((p) => {
-          const cur: Perm = p.admin ? 'rw' : (f.permissions[p.username] ?? 'none');
+    <div className="who-can">
+      <span className="who-can-label">Who can open it</span>
+      <div className="who-can-chips">
+        <span className="chip admin" title="Administrators can always reach every shared folder">
+          <Icon name="shield" size={12} /> Admins · always
+        </span>
+        {inside.map((p) => {
+          const perm = f.permissions[p.username];
+          const canWrite = perm === 'rw' && !f.read_only;
           return (
-            <tr key={p.username} className={p.disabled ? 'dimmed' : ''}>
-              <td>
-                {p.username}
-                {p.admin && <span className="muted small"> · administrator</span>}
-                {p.access === 'files' && <span className="muted small"> · file sharing only</span>}
-              </td>
-              {perms.map((perm) => (
-                <td key={perm}>
-                  <input
-                    type="radio"
-                    name={`perm-${f.id}-${p.username}`}
-                    aria-label={`${p.username}: ${PERM_LABEL[perm]}`}
-                    checked={cur === perm}
-                    disabled={p.admin}
-                    title={p.admin ? 'Administrators can always reach every shared folder' : undefined}
-                    onChange={() => void set(p.username, perm)}
-                  />
-                </td>
-              ))}
-            </tr>
+            <span key={p.username} className="chip person">
+              <Icon name="user" size={12} /> {p.username}
+              <span className="chip-switch" role="group" aria-label={`${p.username} can`}>
+                <button type="button" className={!canWrite ? 'on' : ''} disabled={busy} aria-pressed={!canWrite} onClick={() => void set(p.username, 'ro')}>
+                  Read
+                </button>
+                <button
+                  type="button"
+                  className={canWrite ? 'on' : ''}
+                  disabled={busy || f.read_only}
+                  aria-pressed={canWrite}
+                  title={f.read_only ? 'This folder is read only for everyone' : undefined}
+                  onClick={() => void set(p.username, 'rw')}
+                >
+                  Write
+                </button>
+              </span>
+              <button type="button" className="chip-x" disabled={busy} aria-label={`Remove ${p.username}`} title={`Remove ${p.username}`} onClick={() => void set(p.username, 'none', `${p.username} is out of ${f.name}`)}>
+                <Icon name="close" size={11} />
+              </button>
+            </span>
           );
         })}
-      </tbody>
-      {f.read_only && (
-        <caption className="muted small">This folder is read only for everyone, so “Read & write” means read only here.</caption>
-      )}
-    </table>
+        {f.guest && (
+          <span className="chip guest" title="Anyone on your network, no password">
+            <Icon name="globe" size={12} /> Guests · {f.guest === 'rw' && !f.read_only ? 'read & write' : 'read'}
+          </span>
+        )}
+        {outside.length > 0 && (
+          <select
+            className="select chip-add"
+            value=""
+            disabled={busy}
+            aria-label={`Let someone open ${f.name}`}
+            onChange={(e) => e.target.value && void set(e.target.value, f.read_only ? 'ro' : 'rw', `${e.target.value} can open ${f.name} now`)}
+          >
+            <option value="">+ Add someone</option>
+            {outside.map((p) => (
+              <option key={p.username} value={p.username}>
+                {p.username}
+                {p.access === 'files' ? ' (file sharing only)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -316,7 +348,7 @@ function AddFolder({ data, onAdded }: { data: SharesOverview; onAdded: () => voi
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const ok = await run(sharesApi.create(v), `${v.name} is shared — let people in under Permissions`);
+    const ok = await run(sharesApi.create(v), `${v.name} is shared — pick who can open it below`);
     setBusy(false);
     if (ok) {
       setV(blank);
@@ -324,7 +356,7 @@ function AddFolder({ data, onAdded }: { data: SharesOverview; onAdded: () => voi
     }
   };
   return (
-    <Section title="Add a shared folder" hint="Then choose who may use it under Permissions. Until you do, only administrators can.">
+    <Section title="Add a shared folder" hint="Then pick who can open it. Until you do, only administrators can.">
       <form className="user-add" onSubmit={(e) => void submit(e)}>
         <Row label="Name" hint="Letters, numbers, spaces, - _ or . (up to 40)">
           <input value={v.name} maxLength={40} placeholder="Media" onChange={(e) => setV({ ...v, name: e.target.value })} />
