@@ -23,13 +23,25 @@ export interface NativeJob {
   id: string;
   app: string;
   name: string;
-  action: 'install' | 'uninstall';
+  action: 'install' | 'uninstall' | 'update';
   phase: string;
   percent: number;
   done: boolean;
   ok: boolean;
   error?: string;
 }
+
+export interface NativeUpdate {
+  id: string;
+  name: string;
+  /** Installed version, when known. */
+  from?: string;
+  /** The new version, when known. */
+  to?: string;
+}
+
+/** The job "app" of an update of every system app. */
+export const ALL_NATIVE = '*';
 
 export interface NativeStatus {
   supported: boolean;
@@ -62,6 +74,10 @@ export const nativeApi = {
   jobs: () => api<{ jobs: NativeJob[] }>('/api/v1/native-apps/jobs'),
   install: (id: string, name: string) => api<NativeJob>(`/api/v1/native-apps/${enc(id)}/install`, { method: 'POST', body: { name } }),
   uninstall: (id: string, name: string) => api<NativeJob>(`/api/v1/native-apps/${enc(id)}/uninstall`, { method: 'POST', body: { name } }),
+  /** Installed apps with a newer version (fresh = ask Flathub again). */
+  updates: (fresh = false) => api<{ updates: NativeUpdate[] }>(`/api/v1/native-apps/updates${fresh ? '?fresh=1' : ''}`),
+  update: (id: string, name: string) => api<NativeJob>(`/api/v1/native-apps/${enc(id)}/update`, { method: 'POST', body: { name } }),
+  updateAll: () => api<NativeJob>('/api/v1/native-apps/update-all', { method: 'POST' }),
   launch: (id: string) => api<Launched>(`/api/v1/native-apps/${enc(id)}/launch`, { method: 'POST' }),
   stream: (sid: string) => api<NativeStream>(`/api/v1/native-apps/streams/${enc(sid)}`),
   stopStream: (sid: string) => api<void>(`/api/v1/native-apps/streams/${enc(sid)}`, { method: 'DELETE' }),

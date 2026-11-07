@@ -12,11 +12,16 @@ import { Empty } from './Monitor';
 import { WhoCanUse } from './AppAccess';
 import { WebAddressField } from './WebAddress';
 import { LinuxApps } from './LinuxApps';
+import { InstallEditor } from './InstallEditor';
+import { SystemUpdates, useSystemUpdates } from './SystemUpdates';
 
-// App Store: discover, install, open, update and remove self-hosted apps.
-// Each app runs as Docker containers with its own data volumes.
+// App Store: two families of apps, each with Discover and Installed —
+// Docker apps (self-hosted, from the catalog, as containers with their own
+// data volumes) and System apps (desktop apps from Flathub) — plus one
+// Updates tab covering both.
 
-type Tab = 'discover' | 'installed' | 'updates' | 'linux';
+type Family = 'docker' | 'system';
+type Tab = 'discover' | 'installed' | 'updates';
 /** A list page: one category, every app ('*'), or nothing (the Discover home). */
 type ListPage = string | null;
 
@@ -67,12 +72,16 @@ export function AppCenter({ win }: { win?: WinState }) {
   const [apps, setApps] = useState<StoreApp[] | null>(null);
   const [docker, setDocker] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Opened at a Linux app (e.g. "Show in App Store" from Launchpad).
+  // Opened at a system app (e.g. "Show in App Store" from Launchpad).
   const nativeWanted = win?.props?.native;
-  const [tab, setTab] = useState<Tab>(nativeWanted ? 'linux' : 'discover');
-  const [linuxQ, setLinuxQ] = useState('');
+  const [family, setFamily] = useState<Family>(nativeWanted ? 'system' : 'docker');
+  const [tab, setTab] = useState<Tab>('discover');
+  const [sysQ, setSysQ] = useState('');
   useEffect(() => {
-    if (nativeWanted) setTab('linux');
+    if (nativeWanted) {
+      setFamily('system');
+      setTab('discover');
+    }
   }, [nativeWanted]);
   const [list, setList] = useState<ListPage>(null);
   const [q, setQ] = useState('');
@@ -80,10 +89,15 @@ export function AppCenter({ win }: { win?: WinState }) {
   // Opened again at a specific app (e.g. from search): show that app.
   const wanted = win?.props?.app;
   useEffect(() => {
-    if (wanted) setDetail(wanted);
+    if (wanted) {
+      setFamily('docker');
+      setTab((t) => (t === 'updates' ? 'discover' : t));
+      setDetail(wanted);
+    }
   }, [wanted]);
   const timer = useRef<number | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
+  const sysUpdates = useSystemUpdates();
 
   const load = useCallback(async () => {
     const r = await storeApi.list();
@@ -125,67 +139,88 @@ export function AppCenter({ win }: { win?: WinState }) {
   // New page: start at the top.
   useLayoutEffect(() => {
     scroller.current?.scrollTo(0, 0);
-  }, [tab, list, detail]);
+  }, [family, tab, list, detail]);
 
   const categories = useMemo(() => Array.from(new Set((apps ?? []).map((a) => a.category))).sort((a, b) => catLabel(a).localeCompare(catLabel(b))), [apps]);
   const installed = (apps ?? []).filter((a) => a.installed);
   const updates = installed.filter((a) => a.installed?.update_available);
+  const updateCount = updates.length + (sysUpdates.updates?.length ?? 0);
   const results = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return [];
     return (apps ?? []).filter((a) => `${a.name} ${a.tagline} ${a.description} ${a.category} ${catLabel(a.category)} ${a.developer}`.toLowerCase().includes(needle));
   }, [apps, q]);
 
-  const linux = tab === 'linux';
-  if (error && !linux) return <Empty icon="store" text={error} />;
-  if (!apps && !linux) return <Empty icon="store" text="Loading the App Store…" />;
+  const system = family === 'system' && tab !== 'updates';
+  const dockerView = family === 'docker' && tab !== 'updates';
+  if (error && dockerView) return <Empty icon="store" text={error} />;
+  if (!apps && dockerView) return <Empty icon="store" text="Loading the App Store…" />;
 
   const current = apps?.find((a) => a.id === detail);
   const open = (id: string) => setDetail(id);
-  const goTab = (t: Tab) => {
-    setTab(t);
+  const reset = () => {
     setDetail(null);
     setList(null);
     setQ('');
+    setSysQ('');
+  };
+  const goTab = (t: Tab) => {
+    setTab(t);
+    reset();
+  };
+  const goFamily = (f: Family) => {
+    setFamily(f);
+    if (tab === 'updates') setTab('discover');
+    reset();
   };
 
   let body: ReactNode;
-  if (linux) {
-    body = <LinuxApps initial={nativeWanted} q={linuxQ} />;
+  if (tab === 'updates') {
+    body = (
+      <>
+        <DockerUpdates updates={updates} docker={docker} error={error} onOpen={(id) => {
+          setFamily('docker');
+          setTab('installed');
+          setDetail(id);
+        }} onChanged={reload} />
+        <SystemUpdates state={sysUpdates} />
+      </>
+    );
+  } else if (system) {
+    body = <LinuxApps initial={nativeWanted} q={sysQ} view={tab === 'installed' ? 'installed' : 'discover'} />;
   } else if (!apps) {
     body = null;
   } else if (current) {
     body = <AppPage app={current} apps={apps} docker={docker} onBack={() => setDetail(null)} onOpen={open} onChanged={reload} />;
   } else if (q.trim()) {
+    const shown = tab === 'installed' ? results.filter((a) => a.installed) : results;
     body = (
       <section className="as-section">
         <h2 className="as-h2">
-          Results for “{q.trim()}” <span className="muted">{results.length}</span>
+          Results for “{q.trim()}” <span className="muted">{shown.length}</span>
         </h2>
-        {results.length ? <RowGrid apps={results} docker={docker} onOpen={open} onChanged={reload} /> : <p className="muted">No apps match your search.</p>}
+        {shown.length ? <RowGrid apps={shown} docker={docker} onOpen={open} onChanged={reload} /> : <p className="muted">No apps match your search.</p>}
       </section>
     );
   } else if (tab === 'discover' && list) {
     const shown = list === '*' ? [...apps].sort((a, b) => a.name.localeCompare(b.name)) : apps.filter((a) => a.category === list);
     body = (
-      <>
-        <section className="as-section">
-          <button type="button" className="ghost small pill as-back" onClick={() => setList(null)}>
-            <Icon name="chevronLeft" size={14} /> Discover
-          </button>
-          <h2 className="as-h1">{list === '*' ? 'All apps' : catLabel(list)}</h2>
-          <CategoryBar categories={categories} active={list} onPick={setList} />
-          <RowGrid apps={shown} docker={docker} onOpen={open} onChanged={reload} />
-        </section>
-      </>
+      <section className="as-section">
+        <button type="button" className="ghost small pill as-back" onClick={() => setList(null)}>
+          <Icon name="chevronLeft" size={14} /> Discover
+        </button>
+        <h2 className="as-h1">{list === '*' ? 'All Docker apps' : catLabel(list)}</h2>
+        <CategoryBar categories={categories} active={list} onPick={setList} />
+        <RowGrid apps={shown} docker={docker} onOpen={open} onChanged={reload} />
+      </section>
     );
   } else if (tab === 'discover') {
     body = <Discover apps={apps} categories={categories} docker={docker} onOpen={open} onList={setList} onChanged={reload} />;
-  } else if (tab === 'installed') {
+  } else {
     body = installed.length ? (
       <section className="as-section">
         <h2 className="as-h2">
-          Installed <span className="muted">{installed.length}</span>
+          Installed Docker apps <span className="muted">{installed.length}</span>
         </h2>
         <div className="as-installed">
           {installed.map((a) => (
@@ -194,70 +229,77 @@ export function AppCenter({ win }: { win?: WinState }) {
         </div>
       </section>
     ) : (
-      <Empty icon="store" text="Nothing here yet — find an app under Discover and it’ll show up.">
+      <Empty icon="store" text="No Docker apps yet — find one under Discover and it’ll show up here.">
         <button type="button" className="pill" onClick={() => goTab('discover')}>
           Browse apps
         </button>
       </Empty>
     );
-  } else {
-    body = updates.length ? (
-      <Updates updates={updates} docker={docker} onOpen={open} onChanged={reload} />
-    ) : (
-      <Empty icon="check" text="All your apps are up to date. No cap." />
-    );
   }
+
+  const searchValue = system ? sysQ : q;
+  const setSearch = (v: string) => {
+    if (system) setSysQ(v);
+    else {
+      setQ(v);
+      setDetail(null);
+    }
+  };
 
   return (
     <div className="as" ref={scroller}>
       <header className="as-head">
-        <h1 className="app-title">App Store</h1>
-        <nav className="segmented as-tabs" aria-label="App Store sections">
-          <button type="button" className={tab === 'discover' && !q ? 'on' : ''} onClick={() => goTab('discover')}>
-            Discover
-          </button>
-          <button type="button" className={tab === 'installed' && !q ? 'on' : ''} onClick={() => goTab('installed')}>
-            Installed
-          </button>
-          <button type="button" className={tab === 'updates' && !q ? 'on' : ''} onClick={() => goTab('updates')}>
-            Updates {updates.length > 0 && <span className="as-badge">{updates.length}</span>}
-          </button>
-          <button type="button" className={linux ? 'on' : ''} onClick={() => goTab('linux')}>
-            Linux apps
-          </button>
-        </nav>
-        {linux ? (
-          <label className="as-search">
-            <Icon name="search" size={15} />
-            <input placeholder="Search Flathub" value={linuxQ} onChange={(e) => setLinuxQ(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setLinuxQ('')} />
-            {linuxQ && (
-              <button type="button" className="as-search-clear" title="Clear search" onClick={() => setLinuxQ('')}>
-                <Icon name="close" size={12} />
-              </button>
-            )}
-          </label>
-        ) : (
-        <label className="as-search">
-          <Icon name="search" size={15} />
-          <input
-            placeholder="Search apps"
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setDetail(null);
-            }}
-            onKeyDown={(e) => e.key === 'Escape' && setQ('')}
-          />
-          {q && (
-            <button type="button" className="as-search-clear" title="Clear search" onClick={() => setQ('')}>
-              <Icon name="close" size={12} />
+        <div className="as-head-row">
+          <h1 className="app-title">App Store</h1>
+          <nav className="as-family" aria-label="Kind of app">
+            <button type="button" className={family === 'docker' && tab !== 'updates' ? 'on' : ''} onClick={() => goFamily('docker')}>
+              <Icon name="containers" size={15} />
+              <span>
+                <b>Docker apps</b>
+                <small>Self-hosted, in containers</small>
+              </span>
             </button>
+            <button type="button" className={family === 'system' && tab !== 'updates' ? 'on' : ''} onClick={() => goFamily('system')}>
+              <Icon name="linux" size={15} />
+              <span>
+                <b>System apps</b>
+                <small>Desktop apps from Flathub</small>
+              </span>
+            </button>
+          </nav>
+        </div>
+        <div className="as-head-row">
+          <nav className="segmented as-tabs" aria-label="App Store sections">
+            <button type="button" className={tab === 'discover' ? 'on' : ''} onClick={() => goTab('discover')}>
+              <Icon name="sparkles" size={13} /> Discover
+            </button>
+            <button type="button" className={tab === 'installed' ? 'on' : ''} onClick={() => goTab('installed')}>
+              <Icon name="check" size={13} /> Installed
+            </button>
+            <button type="button" className={tab === 'updates' ? 'on' : ''} onClick={() => goTab('updates')}>
+              <Icon name="download" size={13} /> Updates {updateCount > 0 && <span className="as-badge">{updateCount}</span>}
+            </button>
+          </nav>
+          {tab !== 'updates' && (
+            <label className="as-search">
+              <Icon name="search" size={15} />
+              <input
+                placeholder={system ? (tab === 'installed' ? 'Search your system apps' : 'Search Flathub') : tab === 'installed' ? 'Search your Docker apps' : 'Search Docker apps'}
+                value={searchValue}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+              />
+              {searchValue && (
+                <button type="button" className="as-search-clear" title="Clear search" onClick={() => setSearch('')}>
+                  <Icon name="close" size={12} />
+                </button>
+              )}
+            </label>
           )}
-        </label>
-        )}
+        </div>
       </header>
 
-      {!docker && !linux && (
+      {!docker && dockerView && (
         <div className="as-banner" role="status">
           <Icon name="alert" size={14} />
           <span>Docker isn't running, so apps can't be installed or started right now. NoCapOS reconnects as soon as it's back.</span>
@@ -661,11 +703,24 @@ function newReleases(a: StoreApp) {
   return k > 0 ? a.releases.slice(0, k) : a.releases.slice(0, 1);
 }
 
-function Updates({ updates, docker, onOpen, onChanged }: { updates: StoreApp[]; docker: boolean; onOpen: (id: string) => void; onChanged: () => void }) {
+function DockerUpdates({
+  updates,
+  docker,
+  error,
+  onOpen,
+  onChanged,
+}: {
+  updates: StoreApp[];
+  docker: boolean;
+  error: string | null;
+  onOpen: (id: string) => void;
+  onChanged: () => void;
+}) {
   const [running, setRunning] = useState(false);
   const all = async () => {
     setRunning(true);
     for (const a of updates) {
+      if (a.job && !a.job.done) continue;
       const r = await storeApi.act(a.id, 'update');
       if (!r.ok) toast('error', `Couldn’t update ${a.name}`, r.error);
     }
@@ -676,14 +731,21 @@ function Updates({ updates, docker, onOpen, onChanged }: { updates: StoreApp[]; 
     <section className="as-section">
       <div className="as-section-head">
         <h2 className="as-h2">
-          {updates.length} update{updates.length > 1 ? 's' : ''} available
+          <Icon name="containers" size={17} /> Docker app updates {updates.length > 0 && <span className="muted">{updates.length}</span>}
         </h2>
-        <Tip text={docker ? undefined : DOCKER_DOWN}>
-          <button type="button" className="pill" disabled={!docker || running} onClick={() => void all()}>
-            Update all
-          </button>
-        </Tip>
+        {updates.length > 0 && (
+          <Tip text={docker ? undefined : DOCKER_DOWN}>
+            <button type="button" className="pill" disabled={!docker || running} onClick={() => void all()}>
+              Update all
+            </button>
+          </Tip>
+        )}
       </div>
+      {error ? (
+        <p className="muted small">{error}</p>
+      ) : !updates.length ? (
+        <p className="muted small">All your Docker apps are up to date. No cap.</p>
+      ) : (
       <div className="ucard as-updates">
         {updates.map((a) => {
           const working = !!a.job && !a.job.done;
@@ -718,6 +780,7 @@ function Updates({ updates, docker, onOpen, onChanged }: { updates: StoreApp[]; 
           );
         })}
       </div>
+      )}
     </section>
   );
 }
@@ -744,6 +807,22 @@ function AppPage({
   const working = !!job && !job.done;
   const [reveal, setReveal] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [customizing, setCustomizing] = useState(false);
+
+  if (customizing && !i) {
+    return (
+      <div className="containers as-editor">
+        <InstallEditor
+          app={app}
+          onClose={() => setCustomizing(false)}
+          onStarted={() => {
+            setCustomizing(false);
+            onChanged();
+          }}
+        />
+      </div>
+    );
+  }
 
   if (editing) {
     return (
@@ -784,6 +863,13 @@ function AppPage({
         </div>
         <div className="as-page-actions">
           <MainButton app={app} docker={docker} big onOpen={() => undefined} onChanged={onChanged} />
+          {!i && !working && (
+            <Tip text={docker ? undefined : DOCKER_DOWN}>
+              <button type="button" className="ghost pill" disabled={!docker} onClick={() => setCustomizing(true)} title="Change ports, storage, network, variables and limits first">
+                <Icon name="sliders" size={14} /> Customize install
+              </button>
+            </Tip>
+          )}
           {i && i.update_available && !working && (
             <Tip text={docker ? undefined : DOCKER_DOWN}>
               <button type="button" className="ghost pill" disabled={!docker} onClick={() => void runAction(app, 'update', onChanged)}>
