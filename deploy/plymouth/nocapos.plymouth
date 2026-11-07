@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=NoCapOS
+Description=NoCapOS boot splash: the logo and a loading animation
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/nocapos
+ScriptFile=/usr/share/plymouth/themes/nocapos/nocapos.script
