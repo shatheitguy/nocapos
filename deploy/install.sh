@@ -765,6 +765,171 @@ brand_console() {
   fi
 }
 
+# ---------------------------------------------------------------- boot splash
+# The "nocapos" Plymouth theme: the logo on near-black with loading dots and
+# a progress bar while the machine boots. The previous theme and every
+# kernel command line token added here are recorded in $SPLASH_DIR, so
+# uninstall.sh puts them back.
+SPLASH_DIR="$DATA/bootsplash-backup"
+SPLASH_THEME=/usr/share/plymouth/themes/nocapos
+
+# >>> cmdline helpers (pure; tested by backend/internal/deploytest)
+# cmdline_with TOKEN...: reads a kernel command line (Raspberry Pi
+# cmdline.txt) on stdin and prints it as one line with each token added
+# once; what was there stays as it was.
+cmdline_with() (
+  set -f
+  local out="" w tok
+  for w in $(tr '\r\n' '  '); do out="$out $w"; done
+  for tok in "$@"; do
+    case " $out " in *" $tok "*) ;; *) out="$out $tok" ;; esac
+  done
+  printf '%s\n' "${out# }"
+)
+
+# cmdline_without TOKEN...: the opposite, for uninstalling.
+cmdline_without() (
+  set -f
+  local out="" w tok keep
+  for w in $(tr '\r\n' '  '); do
+    keep=1
+    for tok in "$@"; do [ "$w" = "$tok" ] && keep=0; done
+    [ "$keep" -eq 0 ] || out="$out $w"
+  done
+  printf '%s\n' "${out# }"
+)
+
+# grub_default_with TOKEN...: reads /etc/default/grub on stdin and prints it
+# with the tokens added to GRUB_CMDLINE_LINUX_DEFAULT (adding that line if
+# it's missing). Everything else is left exactly as it was.
+grub_default_with() {
+  awk -v toks="$*" '
+    function addtoks(v,   n, t, i, have) {
+      n = split(toks, t, " ")
+      for (i = 1; i <= n; i++) {
+        have = (" " v " ") ~ (" " t[i] " ")
+        if (!have) v = (v == "" ? t[i] : v " " t[i])
+      }
+      return v
+    }
+    /^GRUB_CMDLINE_LINUX_DEFAULT=/ && !done {
+      v = substr($0, length("GRUB_CMDLINE_LINUX_DEFAULT=") + 1)
+      q = substr(v, 1, 1)
+      if (q == "\"" || q == "\047") { v = substr(v, 2); sub(q "[[:space:]]*$", "", v) }
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      print "GRUB_CMDLINE_LINUX_DEFAULT=\"" addtoks(v) "\""
+      done = 1
+      next
+    }
+    { print }
+    END { if (!done) print "GRUB_CMDLINE_LINUX_DEFAULT=\"" addtoks("") "\"" }
+  '
+}
+
+# grub_default_without TOKEN...: removes the tokens from GRUB_CMDLINE_LINUX_DEFAULT.
+grub_default_without() {
+  awk -v toks="$*" '
+    /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+      v = substr($0, length("GRUB_CMDLINE_LINUX_DEFAULT=") + 1)
+      q = substr(v, 1, 1)
+      if (q == "\"" || q == "\047") { v = substr(v, 2); sub(q "[[:space:]]*$", "", v) }
+      n = split(v, w, " "); m = split(toks, t, " "); out = ""
+      for (i = 1; i <= n; i++) {
+        drop = 0
+        for (j = 1; j <= m; j++) if (w[i] == t[j]) drop = 1
+        if (!drop && w[i] != "") out = (out == "" ? w[i] : out " " w[i])
+      }
+      print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+      next
+    }
+    { print }
+  '
+}
+
+# tokens_missing LINE TOKEN...: prints the tokens LINE doesn't have yet.
+tokens_missing() (
+  set -f
+  local line=" $1 " tok out=""
+  shift
+  for tok in "$@"; do case "$line" in *" $tok "*) ;; *) out="$out $tok" ;; esac; done
+  printf '%s\n' "${out# }"
+)
+# <<< cmdline helpers
+
+# pi_cmdline: the Raspberry Pi's kernel command line file, if this is one.
+pi_cmdline() {
+  local f
+  for f in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
+    if [ -f "$f" ]; then echo "$f"; return 0; fi
+  done
+  return 1
+}
+
+setup_bootsplash() {
+  [ -f "$BUNDLE_DIR/plymouth/nocapos.script" ] || return 0 # an older bundle
+  if ! has plymouth-set-default-theme && [ "$MINIMAL" -eq 0 ]; then
+    local mgr
+    mgr="$(pkg_manager)"
+    case "$mgr" in
+      apt) pkg_available apt plymouth && pkg_install apt plymouth plymouth-themes || true ;;
+      dnf) pkg_install dnf plymouth plymouth-scripts || true ;;
+    esac
+  fi
+  if ! has plymouth-set-default-theme; then
+    warn "Plymouth isn't available, so the NoCapOS boot splash was skipped"
+    return 0
+  fi
+  mkdir -p "$SPLASH_DIR"
+  chmod 700 "$SPLASH_DIR"
+  local current changed=0
+  current="$(plymouth-set-default-theme 2>/dev/null || true)"
+  if [ ! -f "$SPLASH_DIR/theme" ] && [ "$current" != nocapos ]; then echo "${current:-text}" >"$SPLASH_DIR/theme"; fi
+
+  if ! diff -rq "$BUNDLE_DIR/plymouth" "$SPLASH_THEME" >/dev/null 2>&1; then
+    rm -rf "$SPLASH_THEME"
+    mkdir -p "$SPLASH_THEME"
+    cp -R "$BUNDLE_DIR/plymouth/." "$SPLASH_THEME/"
+    chmod -R a+rX "$SPLASH_THEME"
+    changed=1
+  fi
+  if [ "$current" != nocapos ] || [ "$changed" -eq 1 ]; then
+    info "Setting up the NoCapOS boot splash"
+    # -R rebuilds the initramfs so the splash shows from the very start.
+    if ! plymouth-set-default-theme -R nocapos >/dev/null 2>&1; then
+      plymouth-set-default-theme nocapos >/dev/null 2>&1 || { warn "couldn't set the boot splash theme"; return 0; }
+      warn "boot splash set, but the initramfs couldn't be rebuilt; it shows a little later in the boot"
+    fi
+  fi
+
+  # The kernel needs "quiet splash" for Plymouth to draw instead of boot text.
+  local f add
+  if f="$(pi_cmdline)"; then
+    # A serial console (enabled on many Pi images) makes Plymouth fall back to text.
+    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" quiet splash plymouth.ignore-serial-consoles)"
+    if [ -n "$add" ]; then
+      [ -f "$SPLASH_DIR/cmdline.txt" ] || cp -p "$f" "$SPLASH_DIR/cmdline.txt"
+      # shellcheck disable=SC2086 # add is a list of tokens
+      cmdline_with $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f" && rm -f "$f.nocap.tmp"
+      echo "$add" >>"$SPLASH_DIR/cmdline-added"
+    fi
+  elif [ -f /etc/default/grub ]; then
+    local cur
+    cur="$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | head -1 | tr -d "\"'")"
+    add="$(tokens_missing "$cur" quiet splash)"
+    if [ -n "$add" ]; then
+      [ -f "$SPLASH_DIR/grub" ] || cp -p /etc/default/grub "$SPLASH_DIR/grub"
+      # shellcheck disable=SC2086
+      grub_default_with $add </etc/default/grub >/etc/default/grub.nocap.tmp && cat /etc/default/grub.nocap.tmp >/etc/default/grub
+      rm -f /etc/default/grub.nocap.tmp
+      echo "$add" >>"$SPLASH_DIR/grub-added"
+      if has update-grub; then update-grub >/dev/null 2>&1 || warn "update-grub failed; the splash shows after the next GRUB update"
+      elif has grub2-mkconfig && [ -f /boot/grub2/grub.cfg ]; then grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1 || true
+      elif has grub-mkconfig && [ -f /boot/grub/grub.cfg ]; then grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+}
+
 # mDNS: announce this server as <name>.local (default nocap.local) and
 # publish NoCapOS as a web service. The system hostname is left alone; if
 # Avahi already has a host-name of its own (set by you), it is kept.
@@ -902,9 +1067,12 @@ backup_for_rollback() {
 }
 
 wait_native() { # sets READY and TOKEN
-  local logs
+  local logs deadline
   READY=0 TOKEN=""
-  for _ in $(seq 1 30); do
+  # Up to 2 minutes: a Raspberry Pi on an SD card can take a while to start,
+  # and giving up too early would roll back an update that was fine.
+  deadline=$((SECONDS + 120))
+  while [ "$SECONDS" -lt "$deadline" ]; do
     logs="$(journalctl -u nocapos --no-pager -o cat -n 400 2>/dev/null || true)"
     if since_last_start <<<"$logs" | grep '"alfad ready"' >/dev/null; then READY=1; TOKEN="$(setup_token <<<"$logs")"; break; fi
     systemctl is-failed --quiet nocapos && break
@@ -969,8 +1137,22 @@ detach_from_service() {
   exit "$rc"
 }
 
+# Run by hand (not by Update now), clear an update lock whose updater is gone:
+# an older NoCapOS's bare-timestamp lock (its updater stopped with the
+# service), or one naming a unit that no longer runs. Left behind, it makes
+# Settings think an update is still going (and then that it failed).
+clear_stale_update_lock() {
+  local lock="$DATA/update.running" unit
+  [ -f "$lock" ] || return 0
+  [ -z "${NOCAP_UPDATER:-}" ] && [ -z "${NOCAP_DETACHED:-}" ] || return 0
+  if ! grep -q '^{' "$lock"; then rm -f "$lock"; return 0; fi
+  unit="$(sed -n 's/.*"unit":"\([A-Za-z0-9_.@-]*\)".*/\1/p' "$lock")"
+  if [ -z "$unit" ] || ! systemctl is-active --quiet "$unit" 2>/dev/null; then rm -f "$lock"; fi
+}
+
 install_native_mode() {
   detach_from_service
+  clear_stale_update_lock
   migrate_alfaos
   local fresh=1
   [ -f "$UNIT" ] && fresh=0
@@ -1025,7 +1207,10 @@ EOF
   [ "$MINIMAL" -eq 1 ] || install_brave
   setup_desktop
   setup_mdns
-  if [ "$BRANDING" -eq 1 ]; then brand_console; fi
+  if [ "$BRANDING" -eq 1 ]; then
+    brand_console
+    setup_bootsplash || warn "the boot splash couldn't be set up; NoCapOS itself is fine"
+  fi
   local url="https://HOST/"
   [ "$PORT" = 443 ] || url="https://HOST:$PORT/"
   finish "$url" "$TOKEN"

@@ -209,6 +209,7 @@ func (a *Admin) Updates(ctx context.Context) ([]Update, error) {
 	for i := range ups {
 		ups[i].Held = ups[i].Held || held[ups[i].Name]
 	}
+	MarkKernels(ups)
 	return ups, nil
 }
 
