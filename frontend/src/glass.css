@@ -7,24 +7,10 @@
 /* ---------- photo wallpapers (every theme can use them) ---------- */
 body[data-wallpaper='tide'] { background: #061722 url('/wallpapers/tide.jpg') center / cover no-repeat fixed; }
 body[data-wallpaper='nebula'] { background: #0d0822 url('/wallpapers/nebula.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='blaze'] { background: #1a0710 url('/wallpapers/blaze.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='lights'] { background: #03100f url('/wallpapers/lights.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='glacier'] { background: #081426 url('/wallpapers/glacier.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='rose'] { background: #1c0814 url('/wallpapers/rose.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='meadow'] { background: #04140c url('/wallpapers/meadow.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='dune'] { background: #1a1006 url('/wallpapers/dune.jpg') center / cover no-repeat fixed; }
 body[data-wallpaper='midnight'] { background: #05070d url('/wallpapers/midnight.jpg') center / cover no-repeat fixed; }
-body[data-wallpaper='signal'] { background: #121317 url('/wallpapers/signal.jpg') center / cover no-repeat fixed; }
 .wp-tide { background: url('/wallpapers/tide-thumb.jpg') center / cover; }
 .wp-nebula { background: url('/wallpapers/nebula-thumb.jpg') center / cover; }
-.wp-blaze { background: url('/wallpapers/blaze-thumb.jpg') center / cover; }
-.wp-lights { background: url('/wallpapers/lights-thumb.jpg') center / cover; }
-.wp-glacier { background: url('/wallpapers/glacier-thumb.jpg') center / cover; }
-.wp-rose { background: url('/wallpapers/rose-thumb.jpg') center / cover; }
-.wp-meadow { background: url('/wallpapers/meadow-thumb.jpg') center / cover; }
-.wp-dune { background: url('/wallpapers/dune-thumb.jpg') center / cover; }
 .wp-midnight { background: url('/wallpapers/midnight-thumb.jpg') center / cover; }
-.wp-signal { background: url('/wallpapers/signal-thumb.jpg') center / cover; }
 
 /* ---------- tokens ---------- */
 :root[data-ui='glass'] {

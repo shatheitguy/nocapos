@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'qrcode';
@@ -190,7 +191,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
   // Celebrate, then close.
   useEffect(() => {
     if (phase.kind !== 'linked') return;
-    toast('success', `Bet — ${phase.name} is linked`);
+    toast('success', tr('sp.devLinked', { name: phase.name }));
     const t = window.setTimeout(() => closeRef.current(), 1800);
     return () => window.clearTimeout(t);
   }, [phase]);
@@ -226,7 +227,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
         <span className="dev-link-check">
           <Icon name="check" size={30} />
         </span>
-        <b>Bet — {phase.name} is linked</b>
+        <b>{tr('sp.devLinked', { name: phase.name })}</b>
         <span className="muted small">It’s all set. Your apps are on your phone now.</span>
       </div>
     );
@@ -246,7 +247,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
           </div>
           {expired ? (
             <div className="dev-link-expired">
-              <b>Code expired — grab a fresh one</b>
+              <b>{tr('sp.codeExpired')}</b>
               <button type="button" className="small" onClick={() => void fresh()}>
                 <Icon name="restart" size={13} /> New code
               </button>

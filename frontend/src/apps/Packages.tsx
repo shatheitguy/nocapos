@@ -1,3 +1,5 @@
+import { tr } from '../i18n';
+import { WinClose } from '../components/WinClose';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { pkgApi, type Pkg, type PkgAction, type PkgFeature, type PkgJob, type PkgStatus, type PkgUpdate } from '../api/packages';
 import { Icon, type IconName } from '../components/Icon';
@@ -61,7 +63,7 @@ export function Packages() {
         timer.current = window.setTimeout(() => void poll(), 1000);
       } else {
         if (r.data.ok) toast('success', `${ACTION_LABEL[r.data.action] ?? r.data.action} finished`, r.data.target);
-        else toast('error', `${ACTION_LABEL[r.data.action] ?? r.data.action} flopped`, r.data.error);
+        else toast('error', tr('apps.pkgFailed', { action: ACTION_LABEL[r.data.action] ?? r.data.action }), r.data.error);
         setReloadKey((k) => k + 1);
         void loadStatus();
       }
@@ -156,9 +158,7 @@ function JobPanel({ job, onClose }: { job: PkgJob; onClose: () => void }) {
           {job.running ? '…' : job.ok ? ' — done' : ' — failed'}
         </b>
         {!job.running && (
-          <button type="button" className="ghost icon-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" size={14} />
-          </button>
+          <WinClose onClick={onClose} label={tr('common.close')} />
         )}
       </div>
       {job.error && <span className="error small">{job.error}</span>}

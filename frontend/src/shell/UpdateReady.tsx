@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { tr } from '../i18n';
 import { Icon } from '../components/Icon';
 import { useWM } from '../state/windows';
 
@@ -55,11 +56,11 @@ export function UpdateReady() {
   return (
     <div className="update-ready" role="status">
       <Icon name="refresh" size={14} />
-      <span>NoCapOS was updated</span>
+      <span>{tr('upd.ready')}</span>
       <button type="button" onClick={() => window.location.reload()}>
-        Reload
+        {tr('upd.readyReload')}
       </button>
-      <button type="button" className="update-ready-x" aria-label="Later" title="Later" onClick={() => setReady(false)}>
+      <button type="button" className="update-ready-x" aria-label={tr('upd.later')} title={tr('upd.later')} onClick={() => setReady(false)}>
         <Icon name="close" size={10} />
       </button>
     </div>

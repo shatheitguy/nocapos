@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useState } from 'react';
 import { storeApi, type TemplateService } from '../api/appstore';
 import { dockerApi, emptySpec, type ContainerSpec, type DockerNetwork } from '../api/docker';
@@ -79,7 +80,7 @@ export function ContainerEditor({
     }
     const warning = (r.data as { warning?: string }).warning;
     if (warning) toast('info', 'Changes applied', warning);
-    else toast('success', containerId ? `${spec.name} updated — fresh` : `${spec.name} created`, meta.app ? 'Saved with the app, so updates keep it.' : undefined);
+    else toast('success', containerId ? tr('apps.containerUpdated', { name: spec.name }) : tr('apps.containerCreated', { name: spec.name }), meta.app ? tr('apps.containerSavedWithApp') : undefined);
     onSaved();
   };
 

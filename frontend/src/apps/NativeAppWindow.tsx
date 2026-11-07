@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { nativeApi, streamURL, type NativeStream } from '../api/nativeApps';
 import { Icon } from '../components/Icon';
@@ -128,7 +129,7 @@ export function NativeAppWindow({ win }: { win: WinState }) {
               <>
                 <div className="spinner" />
                 <b>Starting {name}</b>
-                <p className="muted small">Spinning up its own screen on the server… first launch can take a few secs.</p>
+                <p className="muted small">{tr('apps.nativeStarting')}</p>
               </>
             )}
           </div>

@@ -112,8 +112,10 @@ func (s *Server) notifyTest(w http.ResponseWriter, r *http.Request) {
 	_, err := s.notify.Add(r.Context(), notify.Notification{
 		Key: "test:" + strconv.FormatInt(now.UnixNano(), 10), Kind: notify.KindTest, Level: "info",
 		Title: "Test notification",
-		Body:  "Sent " + now.Format("Mon 2 Jan at 15:04:05") + ". This is how NoCapOS notifications look — you're all set.",
-		Icon:  "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "notifications"}},
+		Body:  "Sent " + now.Format("Mon 2 Jan at 15:04:05") + ". This is how NoCapOS notifications look.",
+		GenZ: &notify.Variant{Title: "Test notification, no cap",
+			Body: "Sent " + now.Format("Mon 2 Jan at 15:04:05") + ". This is how The Tea looks — you're all set."},
+		Icon: "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "notifications"}},
 	})
 	if err != nil {
 		s.internalError(w, r, err)
@@ -205,9 +207,11 @@ func releaseNotification(info updateInfo) notify.Notification {
 	v := strings.TrimPrefix(info.Latest, "v")
 	return notify.Notification{
 		Key: "update:" + info.Latest, Kind: notify.KindUpdate, Level: "info",
-		Title: "NoCapOS " + v + " just dropped",
+		Title: "NoCapOS " + v + " is available",
 		Body:  "You're on " + strings.TrimPrefix(info.Current, "v") + ". Open Software Update to see what's new and install it.",
-		Icon:  "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "update"}},
+		GenZ: &notify.Variant{Title: "NoCapOS " + v + " just dropped",
+			Body: "You're on " + strings.TrimPrefix(info.Current, "v") + ". Open Glow Up to see what's new and install it."},
+		Icon: "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "update"}},
 	}
 }
 
@@ -234,9 +238,11 @@ func (s *Server) checkAppUpdates(ctx context.Context) {
 func appUpdateNotification(id, name, latest, current string) notify.Notification {
 	return notify.Notification{
 		Key: "appupdate:" + id + ":" + latest, Kind: notify.KindAppUpdate, Level: "info",
-		Title: name + " " + latest + " just dropped",
-		Body:  "You're on " + current + ". Update it in the App Store — its data and settings stay put.",
-		Icon:  "store:" + id, Action: storeAction(id),
+		Title: name + " " + latest + " is available",
+		Body:  "You're on " + current + ". Update it in the App Store; its data and settings are kept.",
+		GenZ: &notify.Variant{Title: name + " " + latest + " just dropped",
+			Body: "You're on " + current + ". Update it in the App Store — its data and settings stay put."},
+		Icon: "store:" + id, Action: storeAction(id),
 	}
 }
 
@@ -280,6 +286,7 @@ func crashNotification(c notify.Crash, appName, container string) notify.Notific
 		Key: c.Key, Kind: notify.KindAppError, Level: "error",
 		Title: appName + " stopped unexpectedly",
 		Body:  "Its container " + strings.TrimPrefix(container, "/") + " exited with code " + c.ExitCode + ". Open it in the App Store to get it running again.",
+		GenZ:  &notify.Variant{Title: appName + " took an L and stopped"},
 		Icon:  "store:" + c.App, Action: storeAction(c.App),
 	}
 }
@@ -294,6 +301,7 @@ func (s *Server) notifyAppJob(app, action string, err error) {
 		Kind: notify.KindAppError, Level: "error",
 		Title: "Couldn't " + action + " " + s.appName(app),
 		Body:  errText(err),
+		GenZ:  &notify.Variant{Title: s.appName(app) + ": " + action + " flopped"},
 		Icon:  "store:" + app, Action: storeAction(app),
 	})
 }

@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ALL_NATIVE, nativeApi, type NativeJob, type NativeUpdate } from '../api/nativeApps';
 import { Icon } from '../components/Icon';
@@ -52,7 +53,7 @@ export function SystemUpdates({ state }: { state: ReturnType<typeof useSystemUpd
       if (j.action !== 'update' || !j.done || !watching.current.delete(j.id)) continue;
       changed = true;
       if (j.error) toast('error', `Couldn't update ${j.name}`, j.error);
-      else toast('success', j.app === ALL_NATIVE ? 'All system apps updated — fresh' : `Big moves: ${j.name} updated`);
+      else toast('success', j.app === ALL_NATIVE ? tr('apps.systemUpdatedAll') : tr('apps.updated', { name: j.name }));
     }
     if (changed) {
       void load(true);
@@ -72,7 +73,7 @@ export function SystemUpdates({ state }: { state: ReturnType<typeof useSystemUpd
   if (unsupported) body = <p className="muted small">{unsupported}</p>;
   else if (error) body = <p className="muted small">{error}</p>;
   else if (!updates) body = <p className="muted small">Checking Flathub…</p>;
-  else if (!updates.length) body = <p className="muted small">All system apps are up to date. No cap.</p>;
+  else if (!updates.length) body = <p className="muted small">{tr('apps.systemUpToDate')}</p>;
   else
     body = (
       <div className="ucard as-updates">

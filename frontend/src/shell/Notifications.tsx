@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as RMouseEvent } from 'react';
+import { lingo, tr } from '../i18n';
 import { APPS, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { Icon } from '../components/Icon';
@@ -8,6 +9,7 @@ import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
 import { toast } from '../state/toasts';
 import {
+  noticeText,
   BANNER_MS,
   isToday,
   notifyApi,
@@ -54,7 +56,7 @@ async function turnOff(n: Notice) {
   const cur = await notifyApi.settings();
   if (!cur.ok) return;
   const r = await notifyApi.saveSettings({ ...cur.data, [key]: false });
-  if (r.ok) toast('success', 'Muted — you won’t hear about that anymore', 'Change it any time in Settings → Notifications.');
+  if (r.ok) toast('success', tr('nc.muted'), tr('nc.mutedBody'));
 }
 
 const openSettings = () => openApp('settings', { props: { section: 'notifications' } });
@@ -103,10 +105,10 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
         <AppIcon app={src.app} size={36} />
         <div className="nb-text">
           <div className="nb-top">
-            <b className="nb-title">{n.title}</b>
+            <b className="nb-title">{noticeText(n, lingo()).title}</b>
             <span className="nb-time">{relTime(n.created_at, now.getTime())}</span>
           </div>
-          {n.body && <div className="nb-body">{n.body}</div>}
+          {noticeText(n, lingo()).body && <div className="nb-body">{noticeText(n, lingo()).body}</div>}
         </div>
       </div>
     );
@@ -138,8 +140,8 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
         )}
       </div>
       <div className="nb-main">
-        <b className="nb-title">{n.title}</b>
-        {n.body && <div className="nb-body">{n.body}</div>}
+        <b className="nb-title">{noticeText(n, lingo()).title}</b>
+        {noticeText(n, lingo()).body && <div className="nb-body">{noticeText(n, lingo()).body}</div>}
       </div>
       {n.action && (
         <div className="nb-actions">
@@ -201,8 +203,8 @@ function Card({ n, look, onPress, onClear, alt }: CardProps) {
       <button
         type="button"
         className={`nb-x ${alt ? 'all' : ''}`}
-        aria-label={alt ? 'Clear all' : 'Clear'}
-        title={alt ? 'Clear all' : 'Clear'}
+        aria-label={alt ? tr('nc.clearAll') : tr('nc.clear')}
+        title={alt ? tr('nc.clearAll') : tr('nc.clear')}
         onClick={(e) => {
           e.stopPropagation();
           if (alt) clearAll();
@@ -210,15 +212,15 @@ function Card({ n, look, onPress, onClear, alt }: CardProps) {
           else remove(n.id);
         }}
       >
-        {alt ? 'Clear All' : <Icon name="close" size={look === 'mac' ? 9 : 12} />}
+        {alt ? tr('nc.clearAllCaps') : <Icon name="close" size={look === 'mac' ? 9 : 12} />}
       </button>
       {look === 'mac' && <AppIcon app={src.app} size={36} />}
       <div className="nb-text">
         <div className="nb-top">
-          <b className="nb-title">{n.title}</b>
+          <b className="nb-title">{noticeText(n, lingo()).title}</b>
           <span className="nb-time">{when}</span>
         </div>
-        {n.body && <div className="nb-body">{n.body}</div>}
+        {noticeText(n, lingo()).body && <div className="nb-body">{noticeText(n, lingo()).body}</div>}
       </div>
     </div>
   );
@@ -228,7 +230,7 @@ function Empty() {
   return (
     <div className="nc-empty">
       <Icon name="bell" size={26} />
-      <span>No new notifications</span>
+      <span>{tr('nc.empty')}</span>
     </div>
   );
 }
@@ -261,11 +263,11 @@ function MacStack({ list, alt }: { list: Notice[]; alt: boolean }) {
         <button
           type="button"
           className={`nc-round ${alt ? 'all' : ''}`}
-          aria-label={alt ? 'Clear all' : `Clear ${src.name} notifications`}
-          title={alt ? 'Clear all' : 'Clear'}
+          aria-label={alt ? tr('nc.clearAll') : tr('nc.clearFrom', { name: src.name })}
+          title={alt ? tr('nc.clearAll') : tr('nc.clear')}
           onClick={alt ? clearAll : clearStack}
         >
-          {alt ? 'Clear All' : <Icon name="close" size={10} />}
+          {alt ? tr('nc.clearAllCaps') : <Icon name="close" size={10} />}
         </button>
       </div>
       {list.map((n) => (
@@ -336,13 +338,13 @@ function WinCenter({ items }: { items: Notice[] }) {
   return (
     <>
       <div className="nc-head">
-        <h2>Notifications</h2>
+        <h2>{tr('nc.title')}</h2>
         <span className="spacer" />
         <button
           type="button"
           className={`nb-tool nc-focus ${focus ? 'on' : ''}`}
           aria-pressed={focus}
-          title={focus ? 'Focus is on: only errors pop up' : 'Turn on Focus (do not disturb)'}
+          title={focus ? tr('nc.focusOn') : tr('nc.focusOff')}
           onClick={() => usePrefs.getState().set({ focusMode: !focus })}
         >
           <Icon name="moon" size={14} />
@@ -398,7 +400,7 @@ function Center({ look }: { look: Look }) {
 
   if (!shown) return null;
   return (
-    <aside ref={ref} className={`nc ${look} ${open ? '' : 'leaving'}`} aria-label="Notification Center">
+    <aside ref={ref} className={`nc ${look} ${open ? '' : 'leaving'}`} aria-label={tr('nc.center')}>
       {look === 'mac' ? <MacCenter items={items} /> : <WinCenter items={items} />}
     </aside>
   );
@@ -419,7 +421,7 @@ export function NotificationLayer() {
 export function NotifyBell({ className, size = 16 }: { className: string; size?: number }) {
   const unread = useNotifications((s) => s.unread);
   const open = useNotifications((s) => s.centerOpen);
-  const label = unread ? `Notifications — ${unread} unread` : 'Notifications';
+  const label = unread ? tr('nc.bellUnread', { n: unread }) : tr('nc.bell');
   return (
     <button
       type="button"

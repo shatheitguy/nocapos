@@ -1,3 +1,5 @@
+import { tr } from '../i18n';
+import { WinClose } from '../components/WinClose';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { baseName, downloadFile, fileApi, fileKind, fileTicket, rawUrl } from '../api/files';
 import { Icon } from '../components/Icon';
@@ -28,11 +30,11 @@ export function Viewer({ win }: { win: WinState }) {
     };
   }, [root, path, kind]);
 
-  const download = () => void downloadFile(root, path).then((ok) => !ok && toast('error', `Couldn’t download ${name}`));
+  const download = () => void downloadFile(root, path).then((ok) => !ok && toast('error', tr('files.toast.downloadFail', { name })));
 
   if (kind === 'text' || kind === 'code') return <TextEditor win={win} root={root} path={path} onDownload={download} />;
   if (linkError) return <Unsupported name={name} text="The file could not be opened." onDownload={download} />;
-  if (!url) return <div className="empty muted">Loading…</div>;
+  if (!url) return <div className="empty muted">{tr('files.loading')}</div>;
 
   return (
     <div className="viewer">
@@ -70,7 +72,7 @@ export function Viewer({ win }: { win: WinState }) {
             }
           />
         )}
-        {(kind === 'archive' || kind === 'file') && <Unsupported name={name} text="No preview available for this file type." onDownload={download} />}
+        {(kind === 'archive' || kind === 'file') && <Unsupported name={name} text={tr('files.noPreview')} onDownload={download} />}
       </div>
     </div>
   );
@@ -103,7 +105,7 @@ function Unsupported({ name, text, onDownload, action }: { name: string; text: s
       <div className="btn-group">
         {action}
         <button type="button" className={action ? 'ghost' : ''} onClick={onDownload}>
-          <Icon name="download" size={15} /> Download
+          <Icon name="download" size={15} /> {tr('files.download')}
         </button>
       </div>
     </div>
@@ -150,17 +152,17 @@ function TextEditor({ win, root, path, onDownload }: { win: WinState; root: stri
     const r = await fileApi.writeText(root, path, content, modTime);
     setSaving(false);
     if (!r.ok) {
-      toast('error', 'That didn’t save', r.error);
+      toast('error', tr('files.toast.saveFail'), r.error);
       return;
     }
     setSaved(content);
     setModTime(r.data.mod_time);
     setSize(r.data.size);
-    toast('success', `Bet — saved ${baseName(path)}`);
+    toast('success', tr('files.toast.saved', { name: baseName(path) }));
   }, [content, modTime, path, root, saving]);
 
   if (error) return <Unsupported name={baseName(path)} text={error} onDownload={onDownload} />;
-  if (content === null) return <div className="empty muted">Loading…</div>;
+  if (content === null) return <div className="empty muted">{tr('files.loading')}</div>;
 
   return (
     <div className="editor">
@@ -252,14 +254,12 @@ export function FileLightbox({ items, index, onIndex, onClose }: { items: { root
     onClose();
     openApp('viewer', { title: item.name, props: { root, path: item.path }, key: `viewer:${root}:${item.path}` });
   };
-  const download = () => void downloadFile(root, item.path).then((ok) => !ok && toast('error', `Couldn’t download ${item.name}`));
+  const download = () => void downloadFile(root, item.path).then((ok) => !ok && toast('error', tr('files.toast.downloadFail', { name: item.name })));
 
   return (
     <div className="flb" role="dialog" aria-label={item.name} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <header className="flb-bar">
-        <button type="button" className="icon-btn flb-btn" aria-label="Close" onClick={onClose}>
-          <Icon name="close" size={16} />
-        </button>
+        <WinClose className="flb-close" onClick={onClose} label={tr('common.close')} />
         <div className="flb-title">
           <b className="ellipsis">{item.name}</b>
           <span>
@@ -310,9 +310,9 @@ export function FileLightbox({ items, index, onIndex, onClose }: { items: { root
           <div className="flb-card">
             <Icon name="file" size={56} />
             <b>{item.name}</b>
-            <p>No preview for this kind of file.</p>
+            <p>{tr('files.noPreview')}</p>
             <button type="button" className="pill" onClick={download}>
-              <Icon name="download" size={15} /> Download
+              <Icon name="download" size={15} /> {tr('files.download')}
             </button>
           </div>
         )}

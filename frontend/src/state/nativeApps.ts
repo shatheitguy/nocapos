@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { create } from 'zustand';
 import { fetchNativeIcon, nativeApi, type NativeApp, type NativeJob, type NativeStatus } from '../api/nativeApps';
 import { getUser } from '../api/client';
@@ -93,7 +94,7 @@ export async function uninstallNativeApp(app: Pick<NativeApp, 'id' | 'name'>): P
     toast('error', `Couldn't remove ${app.name}`, r.error);
     return false;
   }
-  toast('info', `Removing ${app.name}…`, 'Hang tight, this takes a sec.');
+  toast('info', tr('apps.removing', { name: app.name }), tr('apps.removingBody'));
   void useNativeApps.getState().load();
   return true;
 }

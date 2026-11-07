@@ -24,8 +24,10 @@ import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
 import { DevicesSettings } from './SettingsDevices';
 import { AgentsSettings } from './SettingsAgents';
-import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings } from './SettingsSections';
-import { CATS, ENTRIES, SUBS, type Cat, type Sub } from './settingsPages';
+import { Backup, DateTime, LockScreen, Security, SoundSettings } from './SettingsSections';
+import { LanguageRegion } from './SettingsLanguage';
+import { CATS, ENTRIES, SUBS, pageDesc, pageName, type Cat, type Sub } from './settingsPages';
+import { tr, useGenZ, useT } from '../i18n';
 
 // Settings, organised like a phone or Mac: a short sidebar of categories
 // (Network, General, Personalization, …), each opening grouped sub-pages.
@@ -51,9 +53,9 @@ function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; s
 /** Sidebar sections, with a heading each (the first has none). */
 const SIDEBAR: { title?: string; cats: Cat[] }[] = [
   { cats: ['network', 'general', 'devices', 'agents'] },
-  { title: 'Personalization', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
-  { title: 'Notifications & Sound', cats: ['notifications', 'sound'] },
-  { title: 'Security & Users', cats: ['lock', 'security', 'users'] },
+  { title: 'set.group.personal', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
+  { title: 'set.group.notify', cats: ['notifications', 'sound'] },
+  { title: 'set.group.security', cats: ['lock', 'security', 'users'] },
 ];
 
 export function Settings({ win }: { win: WinState }) {
@@ -67,6 +69,8 @@ export function Settings({ win }: { win: WinState }) {
   const [sub, setSub] = useState<Sub | null>(wanted?.sub ?? null);
   const [start2fa, setStart2fa] = useState(false);
   const [query, setQuery] = useState('');
+  const t = useT();
+  const genz = useGenZ();
 
   // Opening Settings at a page while it's already open switches to it.
   useEffect(() => {
@@ -95,11 +99,16 @@ export function Settings({ win }: { win: WinState }) {
   };
   const cats = CATS.filter((c) => isAdmin || !c.admin);
   const info = cat ? CATS.find((c) => c.id === cat) : undefined;
+  const pageId = sub ?? info?.id;
   const title = query.trim()
-    ? 'Search'
+    ? t('set.searchTitle')
     : sub
-      ? (SUBS[sub]?.label ?? sub.replace(/^iface:/, ''))
-      : (info?.label ?? 'Settings');
+      ? (SUBS[sub] ? pageName(t, sub) : sub.replace(/^iface:/, ''))
+      : info
+        ? pageName(t, info.id)
+        : t('set.title');
+  // Gen Z names always come with a plain line saying what the page is.
+  const subtitle = genz && !query.trim() && pageId && (SUBS[pageId] || CATS.some((c) => c.id === pageId)) ? pageDesc(t, pageId) : null;
   const showSide = !compact || (!cat && !query.trim());
   const showMain = !compact || !!cat || !!query.trim();
   const back = sub ? () => setSub(null) : compact && (cat || query.trim()) ? () => go(null) : null;
@@ -110,7 +119,7 @@ export function Settings({ win }: { win: WinState }) {
         <aside className="set2-side">
           <label className="set2-search">
             <Icon name="search" size={14} />
-            <input value={query} placeholder="Search" aria-label="Search settings" onChange={(e) => setQuery(e.target.value)}
+            <input value={query} placeholder={t('set.search')} aria-label={t('set.searchLabel')} onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setQuery('')} />
           </label>
           {user && (
@@ -118,19 +127,20 @@ export function Settings({ win }: { win: WinState }) {
               <UserAvatar name={user.username} />
               <span>
                 <b>{user.username}</b>
-                <small>{isAdmin ? 'Administrator' : 'Standard user'}</small>
+                <small>{isAdmin ? t('set.admin') : t('set.standardUser')}</small>
               </span>
             </button>
           )}
           {SIDEBAR.map((g, i) => {
             const list = cats.filter((c) => g.cats.includes(c.id));
             return list.length ? (
-              <nav key={i} className="set2-group" aria-label={g.title}>
-                {g.title && <h4 className="set2-heading">{g.title}</h4>}
+              <nav key={i} className="set2-group" aria-label={g.title && t(g.title)}>
+                {g.title && <h4 className="set2-heading">{t(g.title)}</h4>}
                 {list.map((c) => (
-                  <button key={c.id} type="button" className={`set2-cat ${cat === c.id && !query ? 'on' : ''}`} onClick={() => go(c.id)}>
+                  <button key={c.id} type="button" className={`set2-cat ${cat === c.id && !query ? 'on' : ''}`} onClick={() => go(c.id)}
+                    title={genz ? pageDesc(t, c.id) : undefined}>
                     <IconTile icon={c.icon} color={c.color} size={24} />
-                    <span>{c.label}</span>
+                    <span>{pageName(t, c.id)}</span>
                   </button>
                 ))}
               </nav>
@@ -142,11 +152,14 @@ export function Settings({ win }: { win: WinState }) {
         <main className="set2-main">
           <header className="set2-head">
             {back && (
-              <button type="button" className="icon-btn ghost set-back" onClick={back} aria-label="Back" title="Back">
+              <button type="button" className="icon-btn ghost set-back" onClick={back} aria-label={t('common.back')} title={t('common.back')}>
                 <Icon name="chevronLeft" size={18} />
               </button>
             )}
-            <h2>{title}</h2>
+            <span className="set2-titles">
+              <h2>{title}</h2>
+              {subtitle && <small className="set2-subtitle">{subtitle}</small>}
+            </span>
           </header>
           <div className="set2-scroll" ref={scroller}>
             <div className="set2-page" key={`${query ? 'q' : ''}${cat}-${sub}`}>
@@ -164,22 +177,24 @@ export function Settings({ win }: { win: WinState }) {
 }
 
 function Results({ query, isAdmin, go }: { query: string; isAdmin: boolean; go: (c: Cat, s?: Sub | null) => void }) {
+  const t = useT();
   const q = query.trim().toLowerCase();
   const hits = ENTRIES.filter((e) => isAdmin || !e.admin)
     .map((e) => {
-      const head = `${e.label} ${e.desc} ${e.keywords ?? ''}`.toLowerCase().includes(q);
+      const fun = SUBS[e.id] || CATS.some((c) => c.id === e.id) ? `${pageName(t, e.id)} ${pageDesc(t, e.id)}` : '';
+      const head = `${e.label} ${fun} ${e.desc} ${e.keywords ?? ''}`.toLowerCase().includes(q);
       const opts = (e.options ?? []).filter((o) => o.toLowerCase().includes(q));
-      return head || opts.length ? { e, desc: opts.length ? `Has: ${opts.join(', ')}` : e.desc } : null;
+      return head || opts.length ? { e, desc: opts.length ? t('set.has', { list: opts.join(', ') }) : e.desc } : null;
     })
     .filter((x) => x !== null);
-  if (!hits.length) return <p className="muted set-empty">Nothing in Settings matches “{query.trim()}”. Try another word?</p>;
+  if (!hits.length) return <p className="muted set-empty">{t('set.noResults', { q: query.trim() })}</p>;
   return (
     <div className="ucard ulist">
       {hits.map(({ e, desc }) => (
         <button key={e.id} type="button" className="urow" onClick={() => go(e.cat, e.sub ?? null)}>
           <IconTile icon={e.icon} color={(e.sub && SUBS[e.sub]?.color) || CATS.find((c) => c.id === e.cat)?.color || '#8e8e93'} />
           <span className="urow-text">
-            <span className="urow-title">{e.label}</span>
+            <span className="urow-title">{SUBS[e.id] || CATS.some((c) => c.id === e.id) ? pageName(t, e.id) : e.label}</span>
             <span className="urow-desc">{desc}</span>
           </span>
           <span className="urow-control"><Icon name="chevronRight" size={16} /></span>
@@ -215,13 +230,14 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
   const tp = useTimePrefs();
   const disk = storageTotals(latest);
   const groups = CATS.find((c) => c.id === cat)?.groups ?? [];
+  const t = useT();
   const value = (id: Sub): ReactNode => {
     switch (id) {
       case 'about': return info?.host.hostname;
       case 'update': return info ? `NoCapOS ${info.version}` : undefined;
-      case 'storage': return disk.total ? `${fmtBytes(Math.max(0, disk.total - disk.used))} free` : undefined;
+      case 'storage': return disk.total ? t('set.free', { size: fmtBytes(Math.max(0, disk.total - disk.used)) }) : undefined;
       case 'datetime': return fmtTime(now, tp, false);
-      case 'language': return LANGUAGES.find((l) => l.id === prefs.language)?.name;
+      case 'language': return `${LANGUAGES.find((l) => l.id === prefs.language)?.name ?? ''} · ${prefs.lingo === 'genz' ? t('set.lang.genz') : t('set.lang.standard')}`;
       default: return undefined;
     }
   };
@@ -240,8 +256,8 @@ function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s:
                 <button key={id} type="button" className="urow set-navrow" onClick={() => open(id)}>
                   <IconTile icon={s.icon} color={s.color} />
                   <span className="urow-text">
-                    <span className="urow-title">{s.label}</span>
-                    {s.desc && <span className="urow-desc">{s.desc}</span>}
+                    <span className="urow-title">{pageName(t, id)}</span>
+                    <span className="urow-desc">{pageDesc(t, id)}</span>
                   </span>
                   <span className="urow-control">
                     {v != null && <span className="set-row-value">{v}</span>}
@@ -310,6 +326,7 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
 }
 
 function Hero({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT();
   const info = useSystem((s) => s.info);
   const uptime = useSystem((s) => s.latest?.uptime);
   const [power, setPower] = useState<PowerInfo | null>(null);
@@ -324,17 +341,17 @@ function Hero({ isAdmin }: { isAdmin: boolean }) {
         <div className="set-hero-text">
           <h1 className="set-hero-title">{info?.host.hostname ?? '…'}</h1>
           <div className="set-hero-meta">
-            Running NoCapOS {info?.version ?? '…'}
-            {uptime != null && <> · Up {fmtUptime(uptime)}</>}
+            {t('set.hero.running', { version: info?.version ?? '…' })}
+            {uptime != null && <> · {t('set.hero.up', { time: fmtUptime(uptime) })}</>}
           </div>
         </div>
         {isAdmin && (
           <div className="set-hero-power">
-            <button type="button" className="pill ghost small" disabled={!can} title={why ?? 'Restart this machine'} onClick={() => void powerHost('reboot')}>
-              <Icon name="restart" size={13} /> Restart
+            <button type="button" className="pill ghost small" disabled={!can} title={why ?? t('set.hero.restartTitle')} onClick={() => void powerHost('reboot')}>
+              <Icon name="restart" size={13} /> {t('set.hero.restart')}
             </button>
-            <button type="button" className="pill ghost small danger" disabled={!can} title={why ?? 'Shut down this machine'} onClick={() => void powerHost('shutdown')}>
-              <Icon name="power" size={13} /> Shut down
+            <button type="button" className="pill ghost small danger" disabled={!can} title={why ?? t('set.hero.shutdownTitle')} onClick={() => void powerHost('shutdown')}>
+              <Icon name="power" size={13} /> {t('set.hero.shutdown')}
             </button>
           </div>
         )}
@@ -369,17 +386,18 @@ function Meter({ pct }: { pct: number }) {
 
 // ---------------- Notifications ----------------
 
-const NOTIFY_TOPICS: { key: keyof NotifySettings; label: string; hint: string }[] = [
-  { key: 'update', label: 'NoCapOS updates', hint: 'A fresh NoCapOS version just dropped' },
-  { key: 'app_updates', label: 'App updates', hint: 'An App Store app you installed has a new version' },
-  { key: 'app_errors', label: 'App problems', hint: 'An app crashes, or an install or update fails' },
-  { key: 'storage', label: 'Disk and pool health', hint: 'A disk is failing or a RAID pool is degraded — heads up' },
-  { key: 'backups', label: 'Backups', hint: 'A backup plan didn’t run' },
-  { key: 'devices', label: 'USB drives', hint: 'A USB drive or memory card is plugged in or removed' },
+const notifyTopics = (): { key: keyof NotifySettings; label: string; hint: string }[] => [
+  { key: 'update', label: tr('sp.ntUpdate'), hint: tr('sp.ntUpdateHint') },
+  { key: 'app_updates', label: tr('sp.ntAppUpdates'), hint: tr('sp.ntAppUpdatesHint') },
+  { key: 'app_errors', label: tr('sp.ntAppErrors'), hint: tr('sp.ntAppErrorsHint') },
+  { key: 'storage', label: tr('sp.ntStorage'), hint: tr('sp.ntStorageHint') },
+  { key: 'backups', label: tr('sp.ntBackups'), hint: tr('sp.ntBackupsHint') },
+  { key: 'devices', label: tr('sp.ntDevices'), hint: tr('sp.ntDevicesHint') },
 ];
 
 function Notifications({ isAdmin }: { isAdmin: boolean }) {
   const prefs = usePrefs();
+  const t = useT();
   const [topics, setTopics] = useState<NotifySettings | null>(null);
   useEffect(() => {
     if (isAdmin) void notifyApi.settings().then((r) => r.ok && setTopics(r.data));
@@ -392,22 +410,22 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
       if (r.ok) setTopics(r.data);
       else {
         setTopics(topics);
-        toast('error', 'That didn’t save. Try again?', r.error);
+        toast('error', tr('sp.saveFail'), r.error);
       }
     });
   };
   return (
     <div className="stack settings-page">
       {isAdmin && (
-        <Group title="Notify me about" hint="Applies to every admin. Anything you turn off skips the Notification Center too.">
-          {NOTIFY_TOPICS.map((t) => (
-            <Toggle key={t.key} label={t.label} hint={t.hint} checked={topics?.[t.key] ?? true} disabled={!topics} onChange={(on) => setTopic(t.key, on)} />
+        <Group title={t('sp.notifyAbout')} hint={t('sp.notifyAboutHint')}>
+          {notifyTopics().map((n) => (
+            <Toggle key={n.key} label={n.label} hint={n.hint} checked={topics?.[n.key] ?? true} disabled={!topics} onChange={(on) => setTopic(n.key, on)} />
           ))}
         </Group>
       )}
       <FocusSettings />
-      <Group title="Alerts">
-        <Toggle label="Play a sound for notifications" hint={prefs.uiSounds ? 'Uses the volume in Sound' : 'Turn on sound effects in Sound first — then this unlocks'}
+      <Group title={t('sp.alerts')} hint={t('sp.alertsHint')}>
+        <Toggle label={t('sp.alertSound')} hint={prefs.uiSounds ? t('sp.alertSoundOn') : t('sp.alertSoundOff')}
           checked={prefs.soundAlerts} disabled={!prefs.uiSounds} onChange={(soundAlerts) => prefs.set({ soundAlerts })} />
       </Group>
     </div>
@@ -448,12 +466,13 @@ function SoftwareUpdate() {
   const [run, setRun] = useState<UpdateRunStatus | null>(null);
   const [starting, setStarting] = useState(false);
   const updating = useUpdate((s) => s.phase !== 'idle');
+  const t = useT();
   const check = (refresh: boolean) => {
     setBusy(true);
     void api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`).then((r) => {
       setBusy(false);
       if (r.ok) setU(r.data);
-      else toast('error', 'Couldn’t check for updates right now', r.error);
+      else toast('error', tr('sp.updCheckFail'), r.error);
     });
   };
   const loadRun = () =>
@@ -469,7 +488,7 @@ function SoftwareUpdate() {
   useEffect(() => {
     if (!updating) loadRun();
   }, [updating]);
-  const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', 'Bet — command copied'));
+  const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', tr('sp.cmdCopied')));
   const updateNow = () => {
     if (!u?.latest) return;
     setStarting(true);
@@ -488,7 +507,7 @@ function SoftwareUpdate() {
         return;
       }
       if (code === 'release_changed') check(true);
-      toast('error', 'The update didn’t start', r.error);
+      toast('error', tr('sp.updStartFail'), r.error);
     });
   };
   const last = run && !run.running ? run.result : null;
@@ -500,61 +519,59 @@ function SoftwareUpdate() {
         <Logo size={40} />
         <div className="set-update-text">
           {!u ? (
-            <b>Checking for the latest drop…</b>
+            <b>{t('sp.updChecking')}</b>
           ) : u.error ? (
             <>
-              <b>Couldn't check for updates</b>
+              <b>{t('sp.updCantCheck')}</b>
               <span>{u.error}</span>
             </>
           ) : u.available ? (
             <>
-              <b>
-                Update available: {vtag(u.current)} → {vtag(u.latest)}
-              </b>
+              <b>{t('sp.updAvailable', { from: vtag(u.current), to: vtag(u.latest) })}</b>
               <span>
-                {u.published ? `Dropped ${new Date(u.published).toLocaleDateString()}.` : 'A fresh release is out.'} Your settings, apps and files stay put.
+                {u.published ? t('sp.updPublished', { date: new Date(u.published).toLocaleDateString() }) : t('sp.updFresh')} {t('sp.updKeep')}
               </span>
             </>
           ) : u.dev ? (
             <>
-              <b>Development build (living on the edge)</b>
-              <span>This is {u.current}; the latest release is {u.latest ? vtag(u.latest) : 'unknown'}.</span>
+              <b>{t('sp.updDev')}</b>
+              <span>{t('sp.updDevBody', { current: u.current, latest: u.latest ? vtag(u.latest) : t('sp.unknown') })}</span>
             </>
           ) : (
             <>
-              <b>You're all caught up</b>
-              <span>NoCapOS {vtag(u.current)} is the latest. No cap.</span>
+              <b>{t('sp.updLatest')}</b>
+              <span>{t('sp.updLatestBody', { version: vtag(u.current) })}</span>
             </>
           )}
-          {u && <small>Last checked {new Date(u.checked).toLocaleTimeString()}</small>}
+          {u && <small>{t('sp.updChecked', { time: new Date(u.checked).toLocaleTimeString() })}</small>}
         </div>
         <div className="btn-group">
           {canUpdate && (
             <button type="button" className="pill small" disabled={starting || run?.running} onClick={updateNow}>
-              {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} Update to {vtag(u.latest)}
+              {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} {t('sp.updTo', { version: vtag(u.latest) })}
             </button>
           )}
           <button type="button" className="pill ghost small" disabled={busy} onClick={() => check(true)}>
-            {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} Check now
+            {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} {t('sp.checkNow')}
           </button>
         </div>
       </div>
       {last && (
-        <Group title="Last update">
+        <Group title={t('sp.lastUpdate')} hint={t('sp.lastUpdateHint')}>
           <div className="settings-row full set-update-last">
             <div className={`set-update-result ${last.ok ? 'ok' : 'bad'}`}>
               <Icon name={last.ok ? 'check' : 'alert'} size={15} />
               <span>
                 {last.ok
-                  ? `Updated ${vtag(last.from)} → ${vtag(last.to)}`
-                  : `${last.to ? `Update to ${vtag(last.to)}` : 'The last update'} flopped${last.rolled_back && last.from ? ` — ${vtag(last.from)} was put back` : last.unchanged ? ' — nothing changed' : ''}`}
+                  ? t('sp.updDone', { from: vtag(last.from), to: vtag(last.to) })
+                  : `${last.to ? t('sp.updFailedTo', { to: vtag(last.to) }) : t('sp.updFailed')}${last.rolled_back && last.from ? t('sp.updRolledBack', { from: vtag(last.from) }) : last.unchanged ? t('sp.updUnchanged') : ''}`}
                 {last.finished_at && ` · ${new Date(last.finished_at).toLocaleString()}`}
               </span>
             </div>
             {!last.ok && last.error && <p className="set-update-err">{last.error}</p>}
             {run?.log && (
               <details className="set-update-log">
-                <summary>Show details</summary>
+                <summary>{t('sp.showDetails')}</summary>
                 <pre className="set-logs">{run.log}</pre>
               </details>
             )}
@@ -562,27 +579,27 @@ function SoftwareUpdate() {
         </Group>
       )}
       {u && (u.available || u.dev) && !u.error && run && !run.supported && (
-        <Group title="How to update" hint="Updating from here needs NoCapOS installed directly on a Linux server, running as root. Run this on the server instead.">
+        <Group title={t('sp.howUpdate')} hint={t('sp.howUpdateHint')}>
           <div className="settings-row full">
             <pre className="set-logs set-cmd">{u.command}</pre>
             <div className="btn-group set-logs-actions">
               <button type="button" className="ghost small" onClick={copy}>
-                <Icon name="copy" size={13} /> Copy command
+                <Icon name="copy" size={13} /> {t('sp.copyCmd')}
               </button>
               <button type="button" className="ghost small" onClick={() => openApp('terminal')}>
-                <Icon name="terminal" size={13} /> Open Terminal
+                <Icon name="terminal" size={13} /> {t('sp.openTerminal')}
               </button>
             </div>
           </div>
         </Group>
       )}
       {u?.notes && !u.error && (
-        <Group title={`What's new in ${vtag(u.latest)}`}>
+        <Group title={t('sp.whatsNew', { version: vtag(u.latest) })} hint={t('sp.whatsNewHint')}>
           <div className="settings-row full">
             <pre className="set-notes">{plainNotes(u.notes)}</pre>
             {u.url && (
               <a className="set-link" href={u.url} target="_blank" rel="noreferrer">
-                View on GitHub <Icon name="external" size={12} />
+                {t('sp.viewGithub')} <Icon name="external" size={12} />
               </a>
             )}
           </div>
@@ -598,32 +615,33 @@ function SoftwareUpdate() {
 function About({ isAdmin }: { isAdmin: boolean }) {
   const info = useSystem((s) => s.info);
   const [ips, setIps] = useState<string[] | null>(null);
+  const t = useT();
   useEffect(() => {
     if (!isAdmin) return;
     void hostApi.network().then((r) => {
       if (r.ok) setIps(r.data.interfaces.flatMap((i) => i.addresses.filter((a) => !a.includes(':')).map((a) => `${a.replace(/\/\d+$/, '')} (${i.name})`)));
     });
   }, [isAdmin]);
-  if (!info) return <p className="muted">Loading…</p>;
+  if (!info) return <p className="muted">{t('sp.loading')}</p>;
   const h = info.host;
   const rows: [string, string][] = [
-    ['Name', h.hostname],
-    ...(h.board ? [['Model', h.board] as [string, string]] : []),
-    ['Processor', `${h.cpu_model || '–'}${h.cpu_cores ? ` (${h.cpu_cores} cores)` : ''}`],
-    ['Memory', fmtBytes(h.mem_total)],
-    ...(info.accelerators.length ? [['Accelerators', info.accelerators.map((a) => a.name).join('\n')] as [string, string]] : []),
-    ['Operating system', h.os || '–'],
-    ['Kernel', h.kernel || '–'],
-    ['Architecture', h.arch],
-    ...(ips ? [['IP addresses', ips.length ? ips.join('\n') : 'None'] as [string, string]] : []),
+    [t('sp.abName'), h.hostname],
+    ...(h.board ? [[t('sp.abModel'), h.board] as [string, string]] : []),
+    [t('sp.abCpu'), `${h.cpu_model || '–'}${h.cpu_cores ? ` (${t('sp.abCores', { n: h.cpu_cores })})` : ''}`],
+    [t('sp.abMem'), fmtBytes(h.mem_total)],
+    ...(info.accelerators.length ? [[t('sp.abAccel'), info.accelerators.map((a) => a.name).join('\n')] as [string, string]] : []),
+    [t('sp.abOs'), h.os || '–'],
+    [t('sp.abKernel'), h.kernel || '–'],
+    [t('sp.abArch'), h.arch],
+    ...(ips ? [[t('sp.abIps'), ips.length ? ips.join('\n') : t('sp.none')] as [string, string]] : []),
     ['NoCapOS', info.version],
     // Engine details are for administrators only.
     ...(info.docker || info.docker_error
-      ? [['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : `Not connected — ${info.docker_error}`] as [string, string]]
+      ? [['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : t('sp.dockerOff', { error: info.docker_error })] as [string, string]]
       : []),
   ];
   const copy = () =>
-    void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', 'Device info copied — ready to paste'));
+    void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', tr('sp.infoCopied')));
   return (
     <div className="stack settings-page">
       <div className="set-about-hero">
@@ -640,7 +658,7 @@ function About({ isAdmin }: { isAdmin: boolean }) {
         ))}
       </dl>
       <button type="button" className="ghost small align-start" onClick={copy}>
-        <Icon name="copy" size={13} /> Copy details
+        <Icon name="copy" size={13} /> {t('sp.copyDetails')}
       </button>
     </div>
   );
@@ -654,6 +672,7 @@ function HostnameEdit({ name }: { name: string }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(name);
   const [busy, setBusy] = useState(false);
+  const t = useT();
   const valid = HOSTNAME_RE.test(value.trim()) && !/^[\d.]+$/.test(value.trim());
   const save = async () => {
     const next = value.trim();
@@ -661,10 +680,10 @@ function HostnameEdit({ name }: { name: string }) {
     setBusy(true);
     const r = await hostApi.setHostname(next);
     setBusy(false);
-    if (!r.ok) return toast('error', 'Rename didn’t go through', r.error);
+    if (!r.ok) return toast('error', tr('sp.renameFail'), r.error);
     const info = await api<SystemInfo>('/api/v1/system/info');
     if (info.ok) useSystem.getState().setInfo(info.data);
-    toast('success', `New name, who dis? It’s “${r.data.hostname}” now`, `On your network it answers as ${r.data.hostname.split('.')[0]}.local.`);
+    toast('success', tr('sp.renamed', { name: r.data.hostname }), tr('sp.renamedBody', { short: r.data.hostname.split('.')[0] }));
     setEditing(false);
   };
   if (!editing) {
@@ -674,8 +693,8 @@ function HostnameEdit({ name }: { name: string }) {
         <button
           type="button"
           className="icon-btn neutral"
-          title="Rename this device"
-          aria-label="Rename this device"
+          title={t('sp.renameDevice')}
+          aria-label={t('sp.renameDevice')}
           onClick={() => {
             setValue(name);
             setEditing(true);
@@ -694,15 +713,15 @@ function HostnameEdit({ name }: { name: string }) {
         if (valid) void save();
       }}
     >
-      <input autoFocus value={value} maxLength={63} spellCheck={false} aria-label="Device name" onChange={(e) => setValue(e.target.value)} />
+      <input autoFocus value={value} maxLength={63} spellCheck={false} aria-label={t('sp.deviceName')} onChange={(e) => setValue(e.target.value)} />
       <button type="submit" className="small" disabled={!valid || busy}>
-        {busy ? 'Renaming…' : 'Rename'}
+        {busy ? t('sp.renaming') : t('sp.rename')}
       </button>
       <button type="button" className="ghost small" onClick={() => setEditing(false)}>
-        Cancel
+        {t('sp.cancel')}
       </button>
       <span className="muted small" style={{ flexBasis: '100%', textAlign: 'center' }}>
-        {valid || !value ? 'Letters, digits and hyphens, e.g. living-room-nas. It takes effect right away.' : 'That name’s not it — letters, digits and hyphens only (no hyphen at the start or end).'}
+        {valid || !value ? t('sp.hostHint') : t('sp.hostBad')}
       </span>
     </form>
   );
@@ -714,30 +733,31 @@ function StoragePage() {
   const latest = useSystem((s) => s.latest);
   const disks = latest?.disks ?? [];
   const total = storageTotals(latest);
+  const t = useT();
   return (
     <div className="stack settings-page">
       <div className="settings-card set-storage-hero">
         <span className="set-tile-value">
-          {fmtBytes(total.used)} <small>used of {fmtBytes(total.total)}</small>
+          {fmtBytes(total.used)} <small>{t('sp.usedOf', { total: fmtBytes(total.total) })}</small>
         </span>
         <Meter pct={total.total ? (total.used / total.total) * 100 : 0} />
-        <span className="muted small">{fmtBytes(Math.max(0, total.total - total.used))} free</span>
+        <span className="muted small">{t('sp.free', { size: fmtBytes(Math.max(0, total.total - total.used)) })}</span>
       </div>
-      <Group title="Disks">
+      <Group title={t('sp.disks')} hint={t('sp.disksHint')}>
         {disks.length ? (
           disks.map((d) => (
             <div key={d.path} className="settings-row stacked">
               <span className="settings-row-text slider-head">
                 <span className="settings-row-label set-mono">{d.path}</span>
                 <span className="settings-value">
-                  {fmtBytes(d.used)} of {fmtBytes(d.total)}
+                  {t('sp.diskOf', { used: fmtBytes(d.used), total: fmtBytes(d.total) })}
                 </span>
               </span>
               <Meter pct={d.percent} />
             </div>
           ))
         ) : (
-          <Row label="No disks showing up yet">
+          <Row label={t('sp.noDisks')}>
             <span />
           </Row>
         )}
@@ -752,38 +772,39 @@ function Troubleshoot() {
   const [logs, setLogs] = useState<{ supported: boolean; reason?: string; lines: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLPreElement>(null);
+  const t = useT();
   const load = () => {
     setError(null);
     void api<{ supported: boolean; reason?: string; lines: string[] }>('/api/v1/system/logs?lines=400').then((r) => {
       if (r.ok) setLogs(r.data);
-      else setError(r.error ?? 'Couldn’t pull the logs. Hit Refresh to try again.');
+      else setError(r.error ?? tr('sp.logsFail'));
     });
   };
   useEffect(load, []);
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [logs]);
-  const copy = () => void navigator.clipboard?.writeText(logs?.lines.join('\n') ?? '').then(() => toast('success', 'Logs copied'));
+  const copy = () => void navigator.clipboard?.writeText(logs?.lines.join('\n') ?? '').then(() => toast('success', tr('sp.logsCopied')));
   return (
     <div className="stack settings-page">
-      <Group title="NoCapOS logs" hint="The latest lines from the NoCapOS service. Something off? Include these when you report it.">
+      <Group title={t('sp.logs')} hint={t('sp.logsHint')}>
         <div className="settings-row full">
           {error ? (
             <p className="error">{error}</p>
           ) : !logs ? (
-            <p className="muted small">Loading…</p>
+            <p className="muted small">{t('sp.loading')}</p>
           ) : logs.supported ? (
-            <pre ref={box} className="set-logs">{logs.lines.length ? logs.lines.join('\n') : 'Nothing logged yet — it’s quiet in here.'}</pre>
+            <pre ref={box} className="set-logs">{logs.lines.length ? logs.lines.join('\n') : t('sp.logsEmpty')}</pre>
           ) : (
             <p className="muted small">{logs.reason}</p>
           )}
           <div className="btn-group set-logs-actions">
             <button type="button" className="ghost small" onClick={load}>
-              <Icon name="restart" size={13} /> Refresh
+              <Icon name="restart" size={13} /> {t('sp.refresh')}
             </button>
             {logs?.supported && (
               <button type="button" className="ghost small" onClick={copy}>
-                <Icon name="copy" size={13} /> Copy
+                <Icon name="copy" size={13} /> {t('sp.copy')}
               </button>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { hostApi, type NetInterface, type NetworkState } from '../api/hostctl';
 import { Icon, type IconName } from '../components/Icon';
@@ -52,7 +53,7 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
   const { net, setNet, error } = useNetwork();
   const [busy, setBusy] = useState(false);
   if (error) return <p className="error">{error}</p>;
-  if (!net) return <p className="muted">Checking the vibes on your network…</p>;
+  if (!net) return <p className="muted">{tr('sp.netChecking')}</p>;
   const flip = async (kind: 'wifi' | 'networking', on: boolean) => {
     setBusy(true);
     const next = await setNetwork(kind, on);
@@ -152,9 +153,9 @@ export function WifiPage() {
 export function InterfacePage({ name }: { name: string }) {
   const { net, error, rev, load } = useNetwork();
   if (error) return <p className="error">{error}</p>;
-  if (!net) return <p className="muted">Checking the vibes on your network…</p>;
+  if (!net) return <p className="muted">{tr('sp.netChecking')}</p>;
   const iface = net.interfaces.find((i) => i.name === name);
-  if (!iface) return <p className="muted">Lowkey can’t find the adapter “{name}” anymore. It may have been unplugged.</p>;
+  if (!iface) return <p className="muted">{tr('sp.netNoAdapter', { name })}</p>;
   return (
     <div className="stack settings-page">
       <ViewOnly net={net} />
