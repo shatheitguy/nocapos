@@ -92,6 +92,7 @@ type Server struct {
 	pairing          pairingState        // device pairing codes and the NoCap ID
 	localGate        *hostaccess.Gate    // "Let other devices open NoCapOS" switch
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
+	agents           agentsState         // NoCap MCP: approvals and the screen
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -412,6 +413,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Linux apps from Flathub: install (admin, audited), open (everyone).
 	s.nativeRoutes(mux)
+
+	// NoCap MCP for AI agents (/mcp) and Settings → AI Agents.
+	s.agentRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.

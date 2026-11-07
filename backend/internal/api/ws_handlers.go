@@ -56,6 +56,7 @@ func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
 //	container.logs/<id>      admin      last 200 lines, then follow (batched)
 //	storage.alerts           admin      disk and pool health alerts, on change
 //	notifications            admin      new notifications and the unread count
+//	agents.approvals         any user   their AI agents' actions waiting for approval
 func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, error) {
 	// Re-read the person: a connection outlives role changes.
 	cur, err := s.currentUser(context.Background(), u.ID, "", false)
@@ -66,6 +67,9 @@ func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, err
 	name, arg, _ := strings.Cut(topic, "/")
 	if name == "system.metrics" && arg == "" {
 		return ws.Subscription{Shared: true, Source: s.metricsSource}, nil
+	}
+	if name == "agents.approvals" && arg == "" {
+		return ws.Subscription{Shared: false, Source: s.agentApprovalsSource(u.ID)}, nil
 	}
 	if u.Role != store.RoleAdmin {
 		return ws.Subscription{}, errForbidden
