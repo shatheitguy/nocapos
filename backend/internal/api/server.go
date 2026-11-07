@@ -159,6 +159,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/device/me", s.device(s.deviceMe))
 	mux.Handle("GET /api/v1/device/apps", s.device(s.deviceApps))
 	mux.Handle("POST /api/v1/device/heartbeat", s.device(s.deviceHeartbeat))
+	mux.Handle("POST /api/v1/device/session", s.device(s.deviceSession))
+	mux.HandleFunc("POST /api/v1/auth/link", s.authLink) // NoCap Link web sign-in ticket, rate-limited
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))
