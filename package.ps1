@@ -29,6 +29,7 @@ foreach ($t in $Targets) {
     foreach ($f in "install.sh", "uninstall.sh", "nocapos.service", "docker-compose.yml", "docker-compose.nvidia.yml", "Dockerfile.bundle") {
         Copy-Item "$root\deploy\$f" "$stage\$f"
     }
+    Copy-Item -Recurse "$root\deploy\plymouth" "$stage\plymouth" # boot splash theme
     Set-Content -NoNewline -Encoding ascii "$stage\VERSION" $Version
     Set-Content -NoNewline -Encoding ascii "$stage\ARCH" $label
     Set-Content -NoNewline -Encoding ascii "$stage\rootfs\data\.keep" ""

@@ -188,6 +188,74 @@ if has docker; then
   fi
 fi
 
+# ---------------------------------------------------------------- boot splash
+# Put back the Plymouth theme that was there before, and take out only the
+# kernel command line tokens install.sh added (recorded in $SPLASH_DIR).
+SPLASH_DIR="$DATA/bootsplash-backup"
+cmdline_without() (
+  set -f
+  local out="" w tok keep
+  for w in $(tr '\r\n' '  '); do
+    keep=1
+    for tok in "$@"; do [ "$w" = "$tok" ] && keep=0; done
+    [ "$keep" -eq 0 ] || out="$out $w"
+  done
+  printf '%s\n' "${out# }"
+)
+grub_default_without() {
+  awk -v toks="$*" '
+    /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+      v = substr($0, length("GRUB_CMDLINE_LINUX_DEFAULT=") + 1)
+      q = substr(v, 1, 1)
+      if (q == "\"" || q == "\047") { v = substr(v, 2); sub(q "[[:space:]]*$", "", v) }
+      n = split(v, w, " "); m = split(toks, t, " "); out = ""
+      for (i = 1; i <= n; i++) {
+        drop = 0
+        for (j = 1; j <= m; j++) if (w[i] == t[j]) drop = 1
+        if (!drop && w[i] != "") out = (out == "" ? w[i] : out " " w[i])
+      }
+      print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+      next
+    }
+    { print }
+  '
+}
+if [ -d "$SPLASH_DIR" ] || [ -d /usr/share/plymouth/themes/nocapos ]; then
+  info "Restoring the boot splash"
+  if has plymouth-set-default-theme; then
+    prev="$(cat "$SPLASH_DIR/theme" 2>/dev/null || true)"
+    [ -n "$prev" ] && [ "$prev" != nocapos ] || prev=""
+    if [ -z "$prev" ]; then
+      for t in bgrt spinner text; do
+        if [ -d "/usr/share/plymouth/themes/$t" ]; then prev="$t"; break; fi
+      done
+    fi
+    if [ -n "$prev" ] && [ "$(plymouth-set-default-theme 2>/dev/null)" = nocapos ]; then
+      plymouth-set-default-theme -R "$prev" >/dev/null 2>&1 || plymouth-set-default-theme "$prev" >/dev/null 2>&1 || warn "couldn't put back the $prev boot splash"
+    fi
+  fi
+  rm -rf /usr/share/plymouth/themes/nocapos
+  if [ -s "$SPLASH_DIR/cmdline-added" ]; then
+    for f in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
+      [ -f "$f" ] || continue
+      # shellcheck disable=SC2046 # the recorded tokens
+      cmdline_without $(cat "$SPLASH_DIR/cmdline-added") <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
+      rm -f "$f.nocap.tmp"
+      break
+    done
+  fi
+  if [ -s "$SPLASH_DIR/grub-added" ] && [ -f /etc/default/grub ]; then
+    # shellcheck disable=SC2046
+    grub_default_without $(cat "$SPLASH_DIR/grub-added") </etc/default/grub >/etc/default/grub.nocap.tmp && cat /etc/default/grub.nocap.tmp >/etc/default/grub
+    rm -f /etc/default/grub.nocap.tmp
+    if has update-grub; then update-grub >/dev/null 2>&1 || true
+    elif has grub2-mkconfig && [ -f /boot/grub2/grub.cfg ]; then grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1 || true
+    elif has grub-mkconfig && [ -f /boot/grub/grub.cfg ]; then grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -rf "$SPLASH_DIR"
+fi
+
 # ---------------------------------------------------------------- console and mDNS
 # Put back the login banner, the MOTD scripts and Avahi's settings exactly as
 # they were before NoCapOS (install.sh kept the originals in $BRAND_DIR).
