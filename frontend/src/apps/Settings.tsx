@@ -18,6 +18,7 @@ import type { Snapshot, SystemInfo } from '../api/types';
 import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
 import { HostAccessPage } from './SettingsHostAccess';
+import { SystemPackagesUpdate } from './SettingsSystemUpdates';
 import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
@@ -491,6 +492,7 @@ function SoftwareUpdate() {
   const canUpdate = !!u && (u.available || u.dev) && !u.error && !!run?.supported;
   return (
     <div className="stack settings-page">
+      <h3 className="settings-section-title set-update-part">NoCapOS</h3>
       <div className="ucard set-update">
         <Logo size={40} />
         <div className="set-update-text">
@@ -542,7 +544,7 @@ function SoftwareUpdate() {
               <span>
                 {last.ok
                   ? `Updated ${vtag(last.from)} → ${vtag(last.to)}`
-                  : `Update to ${vtag(last.to)} flopped${last.rolled_back ? ` — ${vtag(last.from)} was put back` : last.unchanged ? ' — nothing changed' : ''}`}
+                  : `${last.to ? `Update to ${vtag(last.to)}` : 'The last update'} flopped${last.rolled_back && last.from ? ` — ${vtag(last.from)} was put back` : last.unchanged ? ' — nothing changed' : ''}`}
                 {last.finished_at && ` · ${new Date(last.finished_at).toLocaleString()}`}
               </span>
             </div>
@@ -583,6 +585,7 @@ function SoftwareUpdate() {
           </div>
         </Group>
       )}
+      <SystemPackagesUpdate />
     </div>
   );
 }

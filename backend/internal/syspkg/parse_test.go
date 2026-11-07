@@ -71,11 +71,60 @@ WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
 `
 	got := parseAptUpgradable(out)
 	want := []Update{
-		{Name: "bash", Available: "5.1-6ubuntu1.1", Arch: "amd64", Current: "5.1-6ubuntu1"},
-		{Name: "libssl3", Available: "3.0.2-0ubuntu1.18", Arch: "amd64", Current: "3.0.2-0ubuntu1.15"},
+		{Name: "bash", Origin: "jammy-updates", Available: "5.1-6ubuntu1.1", Arch: "amd64", Current: "5.1-6ubuntu1"},
+		{Name: "libssl3", Origin: "jammy-security,jammy-updates", Available: "3.0.2-0ubuntu1.18", Arch: "amd64", Current: "3.0.2-0ubuntu1.15", Security: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestParseAptUpgradableDebianSecurity(t *testing.T) {
+	// Debian 12 / Raspberry Pi OS: security updates come from "<codename>-security".
+	out := `Listing...
+openssl/stable-security 3.0.15-1~deb12u1 arm64 [upgradable from: 3.0.14-1~deb12u2]
+libc6/bookworm-security 2.36-9+deb12u9 arm64 [upgradable from: 2.36-9+deb12u7]
+tzdata/stable-updates 2024b-0+deb12u1 all [upgradable from: 2024a-0+deb12u1]
+linux-image-6.1.0-28-amd64/stable-security 6.1.119-1 amd64 [upgradable from: 6.1.115-1]
+raspberrypi-kernel/stable 1:1.20241008-1 arm64 [upgradable from: 1:1.20240924-1]
+curl/bookworm 7.88.1-10+deb12u8 arm64 [upgradable from: 7.88.1-10+deb12u7]
+`
+	got := parseAptUpgradable(out)
+	if len(got) != 6 {
+		t.Fatalf("got %d updates: %+v", len(got), got)
+	}
+	sec := map[string]bool{}
+	kern := map[string]bool{}
+	for _, u := range got {
+		sec[u.Name], kern[u.Name] = u.Security, u.Kernel
+	}
+	for name, want := range map[string]bool{"openssl": true, "libc6": true, "tzdata": false, "linux-image-6.1.0-28-amd64": true, "raspberrypi-kernel": false, "curl": false} {
+		if sec[name] != want {
+			t.Errorf("%s: security = %v, want %v", name, sec[name], want)
+		}
+	}
+	for name, want := range map[string]bool{"linux-image-6.1.0-28-amd64": true, "raspberrypi-kernel": true, "openssl": false, "curl": false} {
+		if kern[name] != want {
+			t.Errorf("%s: kernel = %v, want %v", name, kern[name], want)
+		}
+	}
+	if CountSecurity(got) != 3 {
+		t.Errorf("CountSecurity = %d", CountSecurity(got))
+	}
+	for _, s := range []string{"security", "noble-security", "a,b-security"} {
+		if !AptSecuritySuite(s) {
+			t.Errorf("%q should be security", s)
+		}
+	}
+	for _, s := range []string{"", "stable", "bookworm-updates", "securityish"} {
+		if AptSecuritySuite(s) {
+			t.Errorf("%q shouldn't be security", s)
+		}
+	}
+	for _, n := range []string{"linux-headers-6.1.0-28-amd64", "linux-firmware-x", "kernelshark", "linuxlogo"} {
+		if IsKernelPackage(n) {
+			t.Errorf("%s isn't a kernel", n)
+		}
 	}
 }
 

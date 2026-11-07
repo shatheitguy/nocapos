@@ -27,26 +27,6 @@ export async function powerHost(action: 'reboot' | 'shutdown'): Promise<void> {
   usePowerState.setState({ action });
 }
 
-/** Wait for the server to go away and come back after a restart, then reload. */
-export function waitForReturn(onBack: () => void): () => void {
-  let wentDown = false;
-  let stopped = false;
-  const tick = async () => {
-    if (stopped) return;
-    try {
-      const res = await fetch('/healthz', { cache: 'no-store' });
-      if (res.ok && wentDown) return onBack();
-      if (!res.ok) wentDown = true;
-    } catch {
-      wentDown = true;
-    }
-    window.setTimeout(tick, 3000);
-  };
-  window.setTimeout(tick, 4000);
-  return () => {
-    stopped = true;
-  };
-}
 
 /**
  * Flip Wi-Fi or all networking. Turning one off warns first, because the

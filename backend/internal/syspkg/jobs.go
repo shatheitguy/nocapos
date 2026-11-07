@@ -164,6 +164,13 @@ func (js *Jobs) run(ctx context.Context, x *job, steps []Step) error {
 	return nil
 }
 
+// Busy reports whether a package task is running.
+func (js *Jobs) Busy() bool {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	return js.busy
+}
+
 // Get returns a job by id.
 func (js *Jobs) Get(id string) (Job, bool) {
 	js.mu.Lock()
