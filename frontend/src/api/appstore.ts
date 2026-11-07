@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { IconName } from '../components/Icon';
+import type { ContainerSpec } from './docker';
 
 export interface StoreJob {
   id: string;
@@ -57,10 +58,33 @@ export interface StoreApp {
   access?: { everyone: boolean; users: string[] };
 }
 
+/** One container of an app as an editable form. */
+export interface TemplateService {
+  service: string;
+  spec: ContainerSpec;
+  catalog_image: string;
+  /** Variables holding generated secrets (shown masked). */
+  secrets: string[];
+  /** Container port of the web UI (its server port may stay on auto). */
+  web_port?: number;
+  /** Has saved changes. */
+  saved: boolean;
+}
+
+export interface AppTemplate {
+  services: TemplateService[];
+  /** The app's own network (multi-container apps), made on install. */
+  network?: string;
+}
+
 const path = (id: string) => `/api/v1/appstore/${encodeURIComponent(id)}`;
 
 export const storeApi = {
   list: () => api<{ apps: StoreApp[]; docker: boolean }>('/api/v1/appstore'),
+  /** The app's containers as a form (defaults = the catalog's alone). */
+  template: (id: string, defaults = false) => api<AppTemplate>(`/api/v1/appstore/templates/${encodeURIComponent(id)}${defaults ? '?defaults=1' : ''}`),
+  /** Install with changes made first, by service. */
+  installWith: (id: string, services: Record<string, ContainerSpec>) => api<{ job: string }>(`${path(id)}/install`, { method: 'POST', body: { services } }),
   act: (id: string, action: 'install' | 'update' | 'start' | 'stop' | 'restart') => api<{ job?: string }>(`${path(id)}/${action}`, { method: 'POST' }),
   uninstall: (id: string, deleteData: boolean) => api<{ job: string }>(`${path(id)}/uninstall`, { method: 'POST', body: { delete_data: deleteData } }),
   job: (id: string) => api<StoreJob>(`/api/v1/appstore/jobs/${encodeURIComponent(id)}`),

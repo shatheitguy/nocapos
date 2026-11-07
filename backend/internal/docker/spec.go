@@ -32,6 +32,7 @@ type Spec struct {
 	CPUs        float64     `json:"cpus"`         // 0 = no limit
 	Privileged  bool        `json:"privileged"`
 	Devices     []string    `json:"devices"` // "/dev/dri" or "/dev/ttyUSB0:/dev/ttyACM0"
+	CapAdd      []string    `json:"cap_add"` // extra Linux capabilities, e.g. NET_ADMIN
 	Hostname    string      `json:"hostname,omitempty"`
 }
 
@@ -141,6 +142,10 @@ func specFrom(raw *rawContainer) Spec {
 		Mounts:      []SpecMount{},
 		Networks:    []NetLink{},
 		Devices:     []string{},
+		CapAdd:      []string{},
+	}
+	for _, c := range strs(hc["CapAdd"]) {
+		s.CapAdd = append(s.CapAdd, strings.TrimPrefix(strings.ToUpper(c), "CAP_"))
 	}
 	if h := str(cfg, "Hostname"); h != "" && !strings.HasPrefix(raw.ID, h) {
 		s.Hostname = h // only a hostname someone chose, not the generated one
@@ -271,6 +276,8 @@ func (c *Client) GetSpec(ctx context.Context, ref string) (Spec, error) {
 var (
 	nameRe   = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$`)
 	envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
+	capRe    = regexp.MustCompile(`^[A-Z][A-Z0-9_]{1,39}$`)
+	devRe    = regexp.MustCompile(`^/dev/[A-Za-z0-9_./-]+$`)
 )
 
 // Validate checks a Spec and tidies it (defaults, trimmed values).
@@ -353,10 +360,27 @@ func (s *Spec) Validate() error {
 		return errors.New("a memory limit must be at least 6 MB")
 	}
 	for _, d := range s.Devices {
-		if !strings.HasPrefix(d, "/dev/") {
+		host, ctr, two := strings.Cut(d, ":")
+		if !devRe.MatchString(host) || strings.Contains(host, "..") || (two && (!devRe.MatchString(ctr) || strings.Contains(ctr, ".."))) {
 			return fmt.Errorf("device %q must be under /dev", d)
 		}
 	}
+	seenCap := map[string]bool{}
+	caps := make([]string, 0, len(s.CapAdd))
+	for _, c := range s.CapAdd {
+		c = strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(c)), "CAP_")
+		if c == "" {
+			continue
+		}
+		if !capRe.MatchString(c) {
+			return fmt.Errorf("capability %q isn't valid (e.g. NET_ADMIN)", c)
+		}
+		if !seenCap[c] {
+			seenCap[c] = true
+			caps = append(caps, c)
+		}
+	}
+	s.CapAdd = caps
 	if s.NetworkMode == "" {
 		s.NetworkMode = "bridge"
 	}
@@ -485,6 +509,7 @@ func createBody(raw *rawContainer, s Spec) map[string]any {
 	hc["NanoCpus"] = int64(s.CPUs * 1e9)
 	hc["Privileged"] = s.Privileged
 	hc["Devices"] = s.devices()
+	hc["CapAdd"] = s.CapAdd
 	hc["NetworkMode"] = s.NetworkMode
 	body["HostConfig"] = hc
 	if len(s.Networks) > 0 && s.NetworkMode == s.Networks[0].Name {
@@ -754,6 +779,7 @@ func (s Spec) CreateConfig(labels map[string]string) CreateConfig {
 			NanoCpus:      int64(s.CPUs * 1e9),
 			Privileged:    s.Privileged,
 			NetworkMode:   s.NetworkMode,
+			CapAdd:        s.CapAdd,
 		},
 	}
 	if s.NetworkMode != "host" {

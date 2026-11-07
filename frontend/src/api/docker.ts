@@ -40,6 +40,8 @@ export interface ContainerSpec {
   cpus: number;
   privileged: boolean;
   devices: string[];
+  /** Extra Linux capabilities, e.g. NET_ADMIN. */
+  cap_add?: string[];
   hostname?: string;
 }
 
@@ -119,4 +121,5 @@ export const emptySpec = (): ContainerSpec => ({
   cpus: 0,
   privileged: false,
   devices: [],
+  cap_add: [],
 });

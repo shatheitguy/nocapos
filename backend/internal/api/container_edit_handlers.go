@@ -126,7 +126,7 @@ func (s *Server) containerEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if app != "" && svc != "" {
-		if e := s.AppStore.SaveOverride(context.WithoutCancel(r.Context()), app, svc, spec); e != nil {
+		if e := s.AppStore.SaveEdit(context.WithoutCancel(r.Context()), app, svc, spec, d.Image); e != nil {
 			s.Log.Warn("container edit: save app override", "app", app, "err", e)
 		}
 	}
