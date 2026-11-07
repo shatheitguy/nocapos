@@ -1,0 +1,17 @@
+# pi-gen settings for the NoCapOS Raspberry Pi image (Raspberry Pi OS Lite,
+# arm64, plus the NoCapOS stage). build.sh adds IMG_NAME.
+RELEASE=trixie
+PI_GEN_RELEASE="NoCapOS"
+TARGET_HOSTNAME=nocap
+LOCALE_DEFAULT=en_US.UTF-8
+KEYBOARD_KEYMAP=us
+KEYBOARD_LAYOUT="English (US)"
+TIMEZONE_DEFAULT=Etc/UTC
+# No default account: the first boot asks for a user name and password
+# (or takes the ones set in Raspberry Pi Imager's customisation).
+FIRST_USER_NAME=pi
+DISABLE_FIRST_BOOT_USER_RENAME=0
+ENABLE_SSH=0
+DEPLOY_COMPRESSION=xz
+COMPRESSION_LEVEL=6
+STAGE_LIST="stage0 stage1 stage2 stage-nocapos"

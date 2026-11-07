@@ -1,0 +1,20 @@
+# NoCapOS image: finishes setup on the first boot (Docker, host packages,
+# NoCap Desktop, mDNS, banner) by running the bundled installer once.
+# Settings: /etc/nocapos/image.conf. Run again: rm /var/lib/nocapos/.image-firstboot-done
+[Unit]
+Description=NoCapOS first-boot setup
+After=network-online.target nocapos.service
+Wants=network-online.target
+ConditionPathExists=!/var/lib/nocapos/.image-firstboot-done
+# Not in the live session of the installer ISO.
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/image/firstboot.sh
+TimeoutStartSec=0
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
