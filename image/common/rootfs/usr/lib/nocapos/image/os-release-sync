@@ -15,7 +15,9 @@ ORIG=/usr/lib/os-release.debian
 
 if [ "${1:-}" = --divert ]; then
   if ! dpkg-divert --list "$TARGET" | grep -q "$ORIG"; then
-    dpkg-divert --local --rename --divert "$ORIG" --add "$TARGET"
+    # Copy instead of --rename: the file never goes missing (base-files is Essential).
+    cp -p "$TARGET" "$ORIG"
+    dpkg-divert --local --no-rename --divert "$ORIG" --add "$TARGET"
   fi
 fi
 [ -f "$ORIG" ] || exit 0
