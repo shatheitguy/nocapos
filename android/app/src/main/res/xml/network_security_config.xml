@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NoCapOS servers usually live on your own network: plain http is allowed
+     for them, and https certificates are checked by the app's own
+     trust-on-first-use pin (see net/Pins.kt), not by a CA. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
