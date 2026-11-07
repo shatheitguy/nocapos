@@ -112,7 +112,14 @@ func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 	)
 	switch action {
 	case "install":
-		jobID, err = s.AppStore.Install(ctx, id, done)
+		// Optional changes made before installing ("Edit before install").
+		var req struct {
+			Services map[string]docker.Spec `json:"services"`
+		}
+		if r.ContentLength > 0 && !decodeJSON(w, r, &req) {
+			return
+		}
+		jobID, err = s.AppStore.InstallWith(ctx, id, req.Services, done)
 	case "update":
 		jobID, err = s.AppStore.Update(ctx, id, done)
 	case "uninstall":
@@ -153,8 +160,22 @@ func (s *Server) appstoreJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, j)
 }
 
+// appstoreTemplate is an app's containers as an editable form: the catalog's
+// settings plus any saved changes (?defaults=1: the catalog's alone).
+func (s *Server) appstoreTemplate(w http.ResponseWriter, r *http.Request) {
+	t, err := s.AppStore.Template(r.Context(), r.PathValue("id"), r.URL.Query().Get("defaults") == "1")
+	if err != nil {
+		s.appstoreError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, t)
+}
+
 func (s *Server) appstoreError(w http.ResponseWriter, r *http.Request, err error) {
+	var bad *appstore.EditError
 	switch {
+	case errors.As(err, &bad):
+		writeError(w, http.StatusBadRequest, "bad_request", bad.Msg)
 	case errors.Is(err, appstore.ErrUnknownApp):
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, appstore.ErrBusy), errors.Is(err, appstore.ErrInstalled):
