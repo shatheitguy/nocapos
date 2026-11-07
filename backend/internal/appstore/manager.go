@@ -3,7 +3,6 @@ package appstore
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -293,12 +292,22 @@ func (m *Manager) start(app, action string, fn func(ctx context.Context, j *job)
 
 // Install pulls the app's images and starts its containers in the background.
 func (m *Manager) Install(ctx context.Context, id string, onDone func(error)) (string, error) {
+	return m.InstallWith(ctx, id, nil, onDone)
+}
+
+// InstallWith installs the app with changes made before installing (by
+// service; nil = as the catalog has it). The changes are checked first and
+// saved with the app, so updates keep them.
+func (m *Manager) InstallWith(ctx context.Context, id string, edits map[string]docker.Spec, onDone func(error)) (string, error) {
 	a, err := m.App(id)
 	if err != nil {
 		return "", err
 	}
 	if _, err := m.db.InstalledApp(ctx, id); err == nil {
 		return "", ErrInstalled
+	}
+	if err := m.checkEdits(ctx, a, edits); err != nil {
+		return "", err
 	}
 	return m.start(id, "install", func(ctx context.Context, j *job) error {
 		row := &store.InstalledApp{ID: id, Version: a.Version, Secrets: map[string]string{}}
@@ -309,8 +318,15 @@ func (m *Manager) Install(ctx context.Context, id string, onDone func(error)) (s
 			}
 			row.WebPort = port
 		}
-		if err := m.checkFixedPorts(a); err != nil {
+		if err := m.checkFixedPorts(a, edits); err != nil {
 			return err
+		}
+		for _, s := range a.Services {
+			if spec, ok := edits[s.Name]; ok {
+				if err := m.saveOverride(ctx, a, s.Name, spec, s.Image, true); err != nil {
+					return fmt.Errorf("save your changes: %w", err)
+				}
+			}
 		}
 		if err := m.pullAll(ctx, a, j, 0, 80); err != nil {
 			return err
@@ -326,7 +342,7 @@ func (m *Manager) Install(ctx context.Context, id string, onDone func(error)) (s
 }
 
 // Update pulls the catalog's images and recreates the containers, keeping
-// the app's data volumes, port and secrets.
+// the app's data volumes, port, secrets and saved changes.
 func (m *Manager) Update(ctx context.Context, id string, onDone func(error)) (string, error) {
 	a, err := m.App(id)
 	if err != nil {
@@ -366,7 +382,7 @@ func (m *Manager) Uninstall(ctx context.Context, id string, deleteData bool, onD
 		_ = m.engine.RemoveNetwork(ctx, netName(id))
 		if deleteData {
 			j.set("Deleting app data…", 70)
-			m.removeVolumes(ctx, a)
+			m.removeVolumesOf(ctx, a)
 			// Saved changes go with the data (they may point at its folders).
 			_ = m.db.DeleteAppOverrides(ctx, id)
 		}
@@ -421,13 +437,18 @@ func serviceIndex(a *App, c docker.Container) int {
 }
 
 func (m *Manager) pullAll(ctx context.Context, a *App, j *job, from, to int) error {
+	overrides, err := m.overrides(ctx, a.ID)
+	if err != nil {
+		return err
+	}
 	n := len(a.Services)
 	for i, s := range a.Services {
-		image, tag := splitImage(s.Image)
+		ref := imageFor(s, overrides)
+		image, tag := splitImage(ref)
 		base := from + (to-from)*i/n
 		span := (to - from) / n
 		layers, done := map[string]bool{}, map[string]bool{}
-		j.set(fmt.Sprintf("Downloading %s…", s.Image), base)
+		j.set(fmt.Sprintf("Downloading %s…", ref), base)
 		err := m.engine.PullImage(ctx, image, tag, func(p docker.PullProgress) {
 			if p.ID == "" || strings.HasPrefix(p.Status, "Pulling from") {
 				return
@@ -440,10 +461,10 @@ func (m *Manager) pullAll(ctx context.Context, a *App, j *job, from, to int) err
 			if len(layers) > 0 {
 				pct = base + span*len(done)/len(layers)
 			}
-			j.set(fmt.Sprintf("Downloading %s… %d of %d layers", s.Image, len(done), len(layers)), pct)
+			j.set(fmt.Sprintf("Downloading %s… %d of %d layers", ref, len(done), len(layers)), pct)
 		})
 		if err != nil {
-			return fmt.Errorf("download %s: %w", s.Image, err)
+			return fmt.Errorf("download %s: %w", ref, err)
 		}
 	}
 	return nil
@@ -457,64 +478,35 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 		}
 	}
 	gen := func() string { return randomString(24) }
-	overrides, err := m.db.AppOverrides(ctx, a.ID)
+	overrides, err := m.overrides(ctx, a.ID)
 	if err != nil {
-		return fmt.Errorf("read saved changes: %w", err)
+		return err
 	}
 	for i, s := range a.Services {
 		j.set(fmt.Sprintf("Starting %s…", s.Name), 85+10*i/len(a.Services))
-		cfg := docker.CreateConfig{
-			Image:  s.Image,
-			Labels: map[string]string{LabelApp: a.ID, LabelService: s.Name, "nocapos.version": a.Version},
-			HostConfig: docker.HostConfig{
-				RestartPolicy: &docker.RestartPolicy{Name: "unless-stopped"},
-				PortBindings:  map[string][]docker.PortBinding{},
-			},
-			ExposedPorts: map[string]struct{}{},
-		}
-		for _, c := range s.Cmd {
-			cfg.Cmd = append(cfg.Cmd, expand(c, row.Secrets, gen))
-		}
-		keys := make([]string, 0, len(s.Env))
-		for k := range s.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			cfg.Env = append(cfg.Env, k+"="+expand(s.Env[k], row.Secrets, gen))
-		}
-		for _, p := range s.Ports {
-			proto := p.Protocol
-			if proto == "" {
-				proto = "tcp"
-			}
-			host := p.Host
-			if host == 0 && a.Web != nil && a.Web.Service == s.Name && a.Web.Port == p.Container {
-				host = row.WebPort
-			}
-			if host == 0 {
-				continue // internal only
-			}
-			key := strconv.Itoa(p.Container) + "/" + proto
-			cfg.ExposedPorts[key] = struct{}{}
-			cfg.HostConfig.PortBindings[key] = append(cfg.HostConfig.PortBindings[key], docker.PortBinding{HostPort: strconv.Itoa(host)})
-		}
-		for _, v := range s.Volumes {
-			cfg.HostConfig.Mounts = append(cfg.HostConfig.Mounts, docker.MountSpec{Type: "volume", Source: volumeName(a.ID, v.Name), Target: v.Path, ReadOnly: v.ReadOnly})
-		}
-		if multi {
-			cfg.HostConfig.NetworkMode = netName(a.ID)
-			cfg.NetworkingConfig = &docker.NetworkingConfig{EndpointsConfig: map[string]docker.EndpointConfig{netName(a.ID): {Aliases: []string{s.Name}}}}
-		}
+		cfg := catalogConfig(a, s, row, gen)
+		name := containerName(a.ID, s.Name)
 		var extra []docker.NetLink
-		if raw, ok := overrides[s.Name]; ok {
-			var ov docker.Spec
-			if err := json.Unmarshal([]byte(raw), &ov); err != nil {
-				return fmt.Errorf("saved changes for %s: %w", s.Name, err)
+		if ov, ok := overrides[s.Name]; ok {
+			ov = ov.expanded(row.Secrets, gen)
+			isWeb := a.Web != nil && a.Web.Service == s.Name
+			if isWeb {
+				// The web UI's port left on "auto" gets the app's own port.
+				for k, p := range ov.Ports {
+					if p.Container == a.Web.Port && p.Host == 0 && (p.Protocol == "" || p.Protocol == "tcp") {
+						ov.Ports[k].Host = row.WebPort
+					}
+				}
 			}
 			cfg, extra = applyOverride(cfg, ov)
+			if ov.Name != "" {
+				name = ov.Name
+			}
+			if isWeb {
+				row.WebPort = webPortOf(cfg, a.Web.Port)
+			}
 		}
-		id, err := m.engine.CreateContainer(ctx, containerName(a.ID, s.Name), cfg)
+		id, err := m.engine.CreateContainer(ctx, name, cfg)
 		if err != nil {
 			return fmt.Errorf("create %s: %w", s.Name, err)
 		}
@@ -530,21 +522,97 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 	return nil
 }
 
+// catalogConfig is a service's container exactly as the catalog describes it.
+func catalogConfig(a *App, s Service, row *store.InstalledApp, gen func() string) docker.CreateConfig {
+	cfg := docker.CreateConfig{
+		Image:  s.Image,
+		Labels: map[string]string{LabelApp: a.ID, LabelService: s.Name, "nocapos.version": a.Version},
+		HostConfig: docker.HostConfig{
+			RestartPolicy: &docker.RestartPolicy{Name: "unless-stopped"},
+			PortBindings:  map[string][]docker.PortBinding{},
+		},
+		ExposedPorts: map[string]struct{}{},
+	}
+	for _, c := range s.Cmd {
+		cfg.Cmd = append(cfg.Cmd, expand(c, row.Secrets, gen))
+	}
+	for _, k := range sortedKeys(s.Env) {
+		cfg.Env = append(cfg.Env, k+"="+expand(s.Env[k], row.Secrets, gen))
+	}
+	for _, p := range s.Ports {
+		proto := p.Protocol
+		if proto == "" {
+			proto = "tcp"
+		}
+		host := p.Host
+		if host == 0 && a.Web != nil && a.Web.Service == s.Name && a.Web.Port == p.Container {
+			host = row.WebPort
+		}
+		if host == 0 {
+			continue // internal only
+		}
+		key := strconv.Itoa(p.Container) + "/" + proto
+		cfg.ExposedPorts[key] = struct{}{}
+		cfg.HostConfig.PortBindings[key] = append(cfg.HostConfig.PortBindings[key], docker.PortBinding{HostPort: strconv.Itoa(host)})
+	}
+	for _, v := range s.Volumes {
+		cfg.HostConfig.Mounts = append(cfg.HostConfig.Mounts, docker.MountSpec{Type: "volume", Source: volumeName(a.ID, v.Name), Target: v.Path, ReadOnly: v.ReadOnly})
+	}
+	if len(a.Services) > 1 {
+		cfg.HostConfig.NetworkMode = netName(a.ID)
+		cfg.NetworkingConfig = &docker.NetworkingConfig{EndpointsConfig: map[string]docker.EndpointConfig{netName(a.ID): {Aliases: []string{s.Name}}}}
+	}
+	return cfg
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// webPortOf is the host port the web UI ends up on (0 = not published).
+func webPortOf(cfg docker.CreateConfig, port int) int {
+	if cfg.HostConfig.NetworkMode == "host" {
+		return port
+	}
+	for _, b := range cfg.HostConfig.PortBindings[strconv.Itoa(port)+"/tcp"] {
+		if p, err := strconv.Atoi(b.HostPort); err == nil && p > 0 {
+			return p
+		}
+	}
+	return 0
+}
+
 // applyOverride uses the changes someone saved for a container: their ports,
-// storage, networks, restart policy and limits win; the image and labels
-// always come from the catalog (so updates still update), and environment
-// variables are merged, theirs winning.
-func applyOverride(catalog docker.CreateConfig, ov docker.Spec) (docker.CreateConfig, []docker.NetLink) {
-	ov.Image = catalog.Image
+// storage, networks, restart policy, limits and capabilities win; labels
+// always come from the catalog, and so does the image unless they picked
+// their own (so updates still update). Environment variables are merged,
+// theirs winning, minus the catalog ones they removed.
+func applyOverride(catalog docker.CreateConfig, ov Override) (docker.CreateConfig, []docker.NetLink) {
+	if !ov.KeepImage || ov.Image == "" {
+		ov.Image = catalog.Image
+	}
 	cfg := ov.CreateConfig(catalog.Labels)
 	if len(ov.Cmd) == 0 {
 		cfg.Cmd = catalog.Cmd
 	}
+	removed := map[string]bool{}
+	for _, k := range ov.EnvRemoved {
+		removed[k] = true
+	}
 	idx := map[string]int{}
-	env := append([]string(nil), catalog.Env...)
-	for i, kv := range env {
+	env := []string{}
+	for _, kv := range catalog.Env {
 		k, _, _ := strings.Cut(kv, "=")
-		idx[k] = i
+		if removed[k] {
+			continue
+		}
+		idx[k] = len(env)
+		env = append(env, kv)
 	}
 	for _, e := range ov.Env {
 		if i, ok := idx[e.Key]; ok {
@@ -558,17 +626,62 @@ func applyOverride(catalog docker.CreateConfig, ov docker.Spec) (docker.CreateCo
 	return cfg, ov.ExtraNetworks()
 }
 
-// SaveOverride remembers the changes made to one of an app's containers, so
-// they are applied again when the app is updated.
+// SaveOverride remembers changes to one of an app's containers, so they are
+// applied again when the app is updated. Its variables are merged onto the
+// catalog's (none are removed).
 func (m *Manager) SaveOverride(ctx context.Context, appID, service string, spec docker.Spec) error {
-	if _, err := m.App(appID); err != nil {
-		return err
-	}
-	raw, err := json.Marshal(spec)
+	return m.saveEdit(ctx, appID, service, spec, spec.Image, false)
+}
+
+// SaveEdit saves an installed container's new settings. prevImage is the
+// image it ran before: a different image now means someone picked their own
+// image or tag, and updates keep it instead of following the catalog.
+// spec holds the container's whole environment, so catalog variables missing
+// from it stay removed.
+func (m *Manager) SaveEdit(ctx context.Context, appID, service string, spec docker.Spec, prevImage string) error {
+	return m.saveEdit(ctx, appID, service, spec, prevImage, true)
+}
+
+func (m *Manager) saveEdit(ctx context.Context, appID, service string, spec docker.Spec, prevImage string, fullEnv bool) error {
+	a, err := m.App(appID)
 	if err != nil {
 		return err
 	}
-	return m.db.SaveAppOverride(ctx, appID, service, string(raw))
+	if err := m.saveOverride(ctx, a, service, spec, prevImage, fullEnv); err != nil {
+		return err
+	}
+	// The web UI moved: "Open" follows it.
+	if a.Web != nil && a.Web.Service == service {
+		if row, err := m.db.InstalledApp(ctx, appID); err == nil {
+			ov := Override{Spec: spec}
+			ov.Ports = append([]docker.PortMap(nil), spec.Ports...)
+			for k, p := range ov.Ports {
+				if p.Container == a.Web.Port && p.Host == 0 {
+					ov.Ports[k].Host = row.WebPort
+				}
+			}
+			if port := webPortOf(ov.CreateConfig(nil), a.Web.Port); port != row.WebPort {
+				row.WebPort = port
+				return m.db.SaveInstalledApp(ctx, row)
+			}
+		}
+	}
+	return nil
+}
+
+// removeVolumesOf deletes the app's volumes, including ones its saved
+// changes added (only those named after the app).
+func (m *Manager) removeVolumesOf(ctx context.Context, a *App) {
+	ov, _ := m.overrides(ctx, a.ID)
+	prefix := "nocap-" + a.ID + "-"
+	for _, o := range ov {
+		for _, mt := range o.Mounts {
+			if mt.Type == "volume" && strings.HasPrefix(mt.Source, prefix) {
+				_ = m.engine.RemoveVolume(ctx, mt.Source)
+			}
+		}
+	}
+	m.removeVolumes(ctx, a)
 }
 
 func (m *Manager) removeContainers(ctx context.Context, app string) {
@@ -619,8 +732,11 @@ func (m *Manager) freeWebPort(ctx context.Context, app string) (int, error) {
 	return 0, errors.New("no free port for the app's web page")
 }
 
-func (m *Manager) checkFixedPorts(a *App) error {
+func (m *Manager) checkFixedPorts(a *App, edits map[string]docker.Spec) error {
 	for _, s := range a.Services {
+		if _, edited := edits[s.Name]; edited {
+			continue // checked with the changes
+		}
 		for _, p := range s.Ports {
 			if p.Host == 0 {
 				continue
