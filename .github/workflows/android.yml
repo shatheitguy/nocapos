@@ -1,0 +1,78 @@
+name: NoCap OS app
+
+# The NoCap OS phone app (android/). Pull requests that touch it get a debug
+# APK as a build artifact. After a NoCapOS release is published, the APK is
+# attached to it as nocap-os.apk, so Settings -> Devices can link to
+# releases/latest/download/nocap-os.apk.
+#
+# The APK is signed with the Android SDK's debug key for now (no signing
+# secrets in this repo). Android only lets an app update over itself when
+# both builds have the same signature, and each CI runner makes its own debug
+# key, so an update from a newer release may need the old app removed first.
+#
+# The Release workflow publishes with the built-in token, which does not fire
+# "release" events for other workflows; so this also runs after Release
+# finishes (workflow_run) and uploads to that release's tag.
+
+on:
+  pull_request:
+    paths: ['android/**', '.github/workflows/android.yml']
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the APK to the release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # After Release: build exactly what it released.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk nocap-os.apk
+          ls -la nocap-os.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocap-os-apk
+          path: android/nocap-os.apk
+          if-no-files-found: error
+
+      - name: Attach to the NoCapOS release
+        if: github.event_name == 'release' || github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="v$(cat VERSION)"
+          fi
+          echo "Uploading nocap-os.apk to $tag"
+          gh release upload "$tag" android/nocap-os.apk --clobber --repo "${{ github.repository }}"

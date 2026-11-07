@@ -23,6 +23,7 @@ import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
 import { DevicesSettings } from './SettingsDevices';
+import { AgentsSettings } from './SettingsAgents';
 import { Backup, DateTime, LanguageRegion, LockScreen, Security, SoundSettings } from './SettingsSections';
 import { CATS, ENTRIES, SUBS, type Cat, type Sub } from './settingsPages';
 
@@ -49,7 +50,7 @@ function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; s
 
 /** Sidebar sections, with a heading each (the first has none). */
 const SIDEBAR: { title?: string; cats: Cat[] }[] = [
-  { cats: ['network', 'general', 'devices'] },
+  { cats: ['network', 'general', 'devices', 'agents'] },
   { title: 'Personalization', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
   { title: 'Notifications & Sound', cats: ['notifications', 'sound'] },
   { title: 'Security & Users', cats: ['lock', 'security', 'users'] },
@@ -301,6 +302,8 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <UsersSettings isAdmin={isAdmin} withAccount={false} />;
     case 'devices':
       return <DevicesSettings />;
+    case 'agents':
+      return <AgentsSettings />;
     default:
       return null;
   }

@@ -2,13 +2,13 @@
 // search can list the pages without loading the whole app.
 import type { IconName } from '../components/Icon';
 
-export type Cat = 'network' | 'general' | 'devices' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
+export type Cat = 'network' | 'general' | 'devices' | 'agents' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 export type Sub =
   | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
   | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
-  | 'account' | 'users' | 'devices'
+  | 'account' | 'users' | 'devices' | 'agents'
   | 'wifi' | `iface:${string}`;
 
 export interface CatInfo {
@@ -26,6 +26,7 @@ export const CATS: CatInfo[] = [
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
     groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
   { id: 'devices', label: 'Devices', icon: 'phone', color: '#30d158', groups: [] },
+  { id: 'agents', label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', groups: [] },
   { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'wallpaper', label: 'Wallpaper', icon: 'image', color: '#32ade6', groups: [] },
   { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
@@ -60,6 +61,7 @@ export const SUBS: Record<string, { label: string; icon: IconName; color: string
   users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add your people and pick who runs the show' },
   wifi: { label: 'Wi-Fi', icon: 'wifi', color: '#0a84ff' },
   devices: { label: 'Devices', icon: 'phone', color: '#30d158', desc: 'Link your phone with the NoCap OS app' },
+  agents: { label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', desc: 'Let AI agents use this server, with your OK' },
 };
 
 /** Everything searchable: deep-link ids (also used by universal search and older links). */
@@ -94,6 +96,8 @@ export const ENTRIES: Entry[] = [
   { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
   { id: 'devices', cat: 'devices', label: 'Devices', icon: 'phone', desc: 'Link your phone and see your linked devices', keywords: 'phone android tablet pair pairing link launcher app nocap id qr code mobile',
     options: ['Your NoCap ID', 'Link a device', 'Unlink'] },
+  { id: 'agents', cat: 'agents', label: 'AI Agents', icon: 'sparkles', desc: 'NoCap MCP: let AI agents use this server, with your approval', keywords: 'mcp ai agent hermes claude token computer use automation assistant approval',
+    options: ['Let AI agents in', 'Only agents on this machine', 'Add an agent', 'Revoke', 'Recent activity'] },
   { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
   { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },

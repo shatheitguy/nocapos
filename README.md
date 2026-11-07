@@ -89,6 +89,9 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 - **Notifications** — updates, app updates, app errors, storage and backups, as macOS-style banners with
   the menu-bar desktop or Windows-style toasts with the taskbar.
 - **Terminal, Monitor, Remote Desktop, Brave, Scripts and an AI Assistant** (local Ollama or cloud).
+- **NoCap MCP** — AI agents like Hermes Agent or Claude Code can use your server through MCP (`cap mcp`
+  or Streamable HTTP at `/mcp`) with a per-agent token from Settings → AI Agents. Reading is instant;
+  editing files, running commands, controlling apps, VMs or the screen waits for your approval. Off by default.
 - **Security** — argon2id passwords, two-factor sign-in, rotating sessions, an audit log of every admin
   action and a strict Content-Security-Policy.
 
