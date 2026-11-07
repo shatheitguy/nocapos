@@ -33,9 +33,9 @@ func TestRenderSambaGuest(t *testing.T) {
 	if strings.Count(got, "guest ok") != 2 {
 		t.Errorf("guest ok on a private share:\n%s", got)
 	}
-	// No guest shares: nothing global, nothing open.
+	// No guest shares: nothing open, only the protocol floor in [global].
 	plain := RenderSamba(SambaConfig{SMB: true, Shares: []SambaShare{{Name: "Private", Path: "/p", Valid: []string{"admin"}}}})
-	if strings.Contains(plain, "[global]") || strings.Contains(plain, "guest") {
+	if !strings.Contains(plain, "[global]\n   server min protocol = SMB2_02\n") || strings.Contains(plain, "guest") {
 		t.Errorf("guest settings without guest shares:\n%s", plain)
 	}
 }

@@ -88,6 +88,15 @@ type Manager struct {
 	lookPath func(string) (string, error)
 	native   func() bool
 	sambaDir string // /etc/samba
+	// SMB extras (see smbhealth.go): Avahi's services folder, where
+	// NoCapOS's own systemd units go, installing packages, this host's name
+	// and addresses.
+	avahiDir    string
+	unitDir     string
+	canInstall  func() bool
+	installPkgs func(ctx context.Context, names syspkg.Names) error
+	hostname    func() (string, error)
+	addrs       func() []string
 
 	mu    sync.Mutex
 	state map[int64]*driveState
@@ -113,6 +122,8 @@ func NewManager(st *store.Store, box Sealer, fsvc *files.Service, dataDir string
 	return &Manager{
 		st: st, box: box, files: fsvc, dataDir: dataDir, mountBase: base, log: log,
 		run: execRunner, mounted: isMountPoint, lookPath: exec.LookPath, native: syspkg.Native, sambaDir: "/etc/samba",
+		avahiDir: "/etc/avahi/services", unitDir: "/etc/systemd/system",
+		canInstall: syspkg.CanInstall, installPkgs: syspkg.Install, hostname: os.Hostname, addrs: lanAddrs,
 		state: map[int64]*driveState{}, dav: newDavAuth(),
 	}
 }
@@ -127,9 +138,23 @@ type Support struct {
 	SMBClient  bool `json:"smbclient"`   // smbclient present (finding servers and shares)
 }
 
-func (m *Manager) has(tool string) bool {
-	_, err := m.lookPath(toolBinary[tool])
-	return err == nil
+func (m *Manager) has(tool string) bool { return m.hasBin(toolBinary[tool]) }
+
+// hasBin looks for a program in PATH and in the sbin folders, which aren't
+// always in PATH (smbd lives in /usr/sbin).
+func (m *Manager) hasBin(name string) bool {
+	if name == "" {
+		return false
+	}
+	if _, err := m.lookPath(name); err == nil {
+		return true
+	}
+	for _, d := range []string{"/usr/sbin/", "/sbin/", "/usr/local/sbin/"} {
+		if _, err := m.lookPath(d + name); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) Support() Support {
