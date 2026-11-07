@@ -12,7 +12,7 @@ import { Section as Group } from './Personalize';
 // Settings → Devices: link a phone running the NoCap OS app with a 6-digit
 // code (or its QR), see linked devices and unlink them.
 
-const APP_URL = 'https://github.com/shatheitguy/alfa-launcher/releases/latest';
+const APP_URL = 'https://github.com/shatheitguy/nocapos/releases/latest/download/nocap-os.apk';
 
 const PLATFORM: Record<LinkedDevice['platform'], { label: string; icon: IconName }> = {
   android: { label: 'Android', icon: 'android' },
@@ -74,7 +74,7 @@ export function DevicesSettings() {
               </button>
             )}
           </span>
-          <span className="dev-hero-hint">This server’s ID in the NoCap ecosystem. It never changes.</span>
+          <span className="dev-hero-hint">This server’s ID on NoCap Link. It never changes.</span>
         </div>
         <button type="button" className="pill small" onClick={() => setLinking(true)}>
           <Icon name="plus" size={13} /> Link a device
@@ -82,7 +82,7 @@ export function DevicesSettings() {
       </section>
 
       <Group title={isAdmin ? 'Linked devices (everyone’s)' : 'Your linked devices'}
-        hint="Phones and tablets running the NoCap OS app. Unlink one and it’s cut off instantly.">
+        hint="Phones and tablets on NoCap Link, running the NoCap OS app. Unlink one and it’s cut off instantly.">
         {error ? (
           <div className="settings-row full">
             <p className="error">{error}</p>
@@ -237,7 +237,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
     const code = phase.pc.code;
     body = (
       <>
-        <p>Open the NoCap OS app on your phone, then scan this or type the code.</p>
+        <p>Open the NoCap OS app on your phone, tap Link with NoCap Link, then scan this or type the code.</p>
         <div className={`dev-link-code ${expired ? 'expired' : ''}`}>
           {phase.qr && <img src={phase.qr} alt="QR code for linking your phone" className="dev-link-qr" />}
           <div className="dev-link-digits" aria-label={`Code ${code.split('').join(' ')}`}>
@@ -268,7 +268,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
           </button>
         </div>
         <a className="set-link" href={APP_URL} target="_blank" rel="noreferrer">
-          Get the NoCap OS app <Icon name="external" size={12} />
+          Get the NoCap OS app (Android, NoCap Link) <Icon name="external" size={12} />
         </a>
       </>
     );

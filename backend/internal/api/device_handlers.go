@@ -35,6 +35,22 @@ type pairingState struct {
 	codes *devices.Codes
 	idMu  sync.Mutex
 	id    string
+	// links: one-time web sign-in tickets for the NoCap OS app's "Open my
+	// NoCap desktop" (user ID + the device that asked).
+	linksOnce sync.Once
+	links     *auth.TicketStore
+}
+
+// linkTicketTTL: how long a web sign-in ticket from a device lasts.
+const linkTicketTTL = 60 * time.Second
+
+func (s *Server) linkTickets() *auth.TicketStore {
+	s.pairing.linksOnce.Do(func() {
+		if s.pairing.links == nil {
+			s.pairing.links = auth.NewTicketStore(linkTicketTTL)
+		}
+	})
+	return s.pairing.links
 }
 
 func (s *Server) pairCodes() *devices.Codes {

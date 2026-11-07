@@ -235,3 +235,35 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 .dev-link-check { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--ok); animation: dev-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
 @keyframes dev-pop { from { transform: scale(0.4); opacity: 0; } }
 :root[data-reduce-motion] .dev-link-check { animation: none; }
+
+/* Settings → AI Agents (NoCap MCP) */
+.agent-tools { display: flex; flex-direction: column; gap: 8px; }
+.agent-tool { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.agent-tool > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.agent-tool > span .muted { flex-basis: 100%; }
+.agent-tool code, .agent-args code { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.agent-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 0; }
+.agent-badge.warn { background: rgba(255, 159, 10, 0.16); color: #ff9f0a; cursor: pointer; }
+.agent-code { position: relative; width: 100%; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.agent-code pre { margin: 0; padding: 10px 40px 10px 12px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; user-select: text; }
+.agent-code .icon-btn { position: absolute; top: 6px; right: 6px; }
+.agent-code.token pre { font-size: 13px; font-weight: 600; }
+.agent-snippet .settings-row-text { margin-bottom: 6px; }
+.agent-act { gap: 10px; }
+.agent-act-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.agent-act-dot.ok { background: #30d158; }
+.agent-act-dot.error { background: #ff453a; }
+.agent-act-dot.denied, .agent-act-dot.timeout { background: #ff9f0a; }
+.agent-add { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; text-align: left; }
+.agent-add .settings-section-title { font-size: 13px; }
+.agent-field { display: flex; flex-direction: column; gap: 4px; width: 100%; font-size: 12.5px; color: var(--muted); }
+.agent-field input { width: 100%; box-sizing: border-box; }
+.agent-scope { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.agent-scope label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); cursor: pointer; }
+.agent-scope label.on { border-color: var(--accent); background: var(--accent-soft); }
+.agent-scope label > span { display: flex; flex-direction: column; gap: 2px; }
+.agent-approve { width: min(480px, 100%); }
+.agent-args { width: 100%; text-align: left; }
+.agent-args summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
+.agent-args pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; user-select: text; }
+.agent-approve-actions { flex-wrap: wrap; }

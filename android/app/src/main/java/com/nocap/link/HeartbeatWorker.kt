@@ -1,0 +1,78 @@
+package com.nocap.link
+
+import android.content.Context
+import android.content.Intent
+import android.os.BatteryManager
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import com.nocap.link.net.ApiError
+import com.nocap.link.net.NoCapApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+
+/**
+ * Tells the server this phone is still around (battery + app version), so
+ * Settings → Devices shows when it was last seen. Every 15 minutes, only
+ * with a network.
+ */
+class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val vault = Vault.get(applicationContext)
+        val link = vault.link ?: return@withContext Result.success()
+        try {
+            NoCapApi(link).heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME)
+            if (vault.unlinked) vault.unlinked = false
+            Result.success()
+        } catch (e: ApiError) {
+            if (e.status == 401 && !vault.unlinked) {
+                vault.unlinked = true
+                Notices.show(
+                    applicationContext, 1, "NoCap Link: phone unlinked",
+                    "${link.serverName.ifBlank { "Your NoCapOS" }} doesn't know this phone anymore. Open NoCap OS to link it again.",
+                    Intent(applicationContext, MainActivity::class.java),
+                )
+            }
+            Result.success() // nothing to retry: the server answered
+        } catch (_: Exception) {
+            Result.success() // offline or cert changed: the next run tries again
+        }
+    }
+
+    companion object {
+        private const val NAME = "nocap-heartbeat"
+
+        fun schedule(ctx: Context) {
+            val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            val wm = WorkManager.getInstance(ctx)
+            wm.enqueueUniquePeriodicWork(
+                NAME, ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<HeartbeatWorker>(15, TimeUnit.MINUTES).setConstraints(net).build(),
+            )
+        }
+
+        /** One right now (after linking). */
+        fun now(ctx: Context) {
+            WorkManager.getInstance(ctx).enqueueUniqueWork(
+                "$NAME-now", ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<HeartbeatWorker>().build(),
+            )
+        }
+
+        fun cancel(ctx: Context) {
+            WorkManager.getInstance(ctx).cancelUniqueWork(NAME)
+        }
+
+        fun battery(ctx: Context): Int? {
+            val bm = ctx.getSystemService(BatteryManager::class.java) ?: return null
+            val v = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            return v.takeIf { it in 0..100 }
+        }
+    }
+}
