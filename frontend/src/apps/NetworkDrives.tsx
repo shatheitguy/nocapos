@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useState } from 'react';
 import { netApi, type Discovery, type FoundServer, type NetDrive, type NetSupport, type Sharing } from '../api/netdrive';
 import { Icon } from '../components/Icon';
@@ -32,8 +33,8 @@ function InstallRow({ label, hint, tool, support, cmd, onDone }: { label: string
     setBusy(true);
     const r = await netApi.install(tool);
     setBusy(false);
-    if (!r.ok) return toast('error', `Couldn’t install ${label}`, r.error);
-    toast('success', `${label} installed`);
+    if (!r.ok) return toast('error', tr('files.toast.installFail', { name: label }), r.error);
+    toast('success', tr('files.toast.installed', { name: label }));
     onDone();
   };
   return (
@@ -125,7 +126,7 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
     const r = await netApi.add({ name: name || share.split('/').filter(Boolean).pop() || host, kind, host, share, username, password, auto });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Couldn’t connect');
-    toast('success', `${r.data.name} connected`, 'Find it in Files.');
+    toast('success', tr('files.toast.driveConnected', { name: r.data.name }), tr('files.toast.findInFiles'));
     setName('');
     setShare('');
     setPassword('');
@@ -196,7 +197,7 @@ function AddDrive({ support, onAdded }: { support: NetSupport; onAdded: () => Pr
               </button>
             ))
           ) : (
-            <span className="muted small">No exports found on {host}.</span>
+            <span className="muted small">{tr('files.net.noExports', { host })}</span>
           )}
         </div>
       )}
@@ -252,7 +253,7 @@ function ServerScan({ support, picked, onPick }: { support: NetSupport; picked: 
         )}
         {error && <p className="error nd-pad">{error}</p>}
         {scan && scan.servers.length === 0 && !scanning && (
-          <p className="muted small nd-pad">{tools && !tools.avahi && !tools.nmblookup ? 'Can’t look for servers yet.' : 'No file servers answered. Type the server’s address below.'}</p>
+          <p className="muted small nd-pad">{tools && !tools.avahi && !tools.nmblookup ? tr('files.net.cantScan') : tr('files.net.noServers')}</p>
         )}
         {scan?.servers.map((s) => (
           <button key={s.host} type="button" className={`nd-server ${picked === s.host ? 'on' : ''}`} onClick={() => onPick(s)}>

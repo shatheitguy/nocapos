@@ -294,6 +294,7 @@ func vmStopNotification(v vm.VM, why string, at time.Time) notify.Notification {
 		Key: "vmstop:" + v.UUID + ":" + strconv.FormatInt(at.UnixNano(), 10), Kind: notify.KindAppError, Level: "error",
 		Title: v.Name + " stopped unexpectedly",
 		Body:  "The virtual machine is off because " + strings.TrimSuffix(why, ".") + ". Open Virtual Desk to start it again.",
+		GenZ:  &notify.Variant{Title: v.Name + " took an L and stopped"},
 		Icon:  "virtualdesk", Action: &notify.Action{App: "virtualdesk", Props: map[string]any{"vm": v.Name}},
 	}
 }

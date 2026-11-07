@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { agentsApi, type AgentActivity, type AgentScope, type AgentToken, type AgentsOverview } from '../api/agents';
@@ -77,7 +78,7 @@ export function AgentsSettings() {
           <b>Let your AI agents use this server</b>
           <span className="dev-hero-hint">
             Agents that speak MCP get NoCapOS’s tools: files, apps, containers, VMs, the screen. Looking around is instant;
-            anything that changes stuff waits for your OK. No cap.
+            {tr('sp.agentsIntro')}
           </span>
         </div>
         <button type="button" className="pill small" onClick={() => setAdding(true)}>
@@ -327,7 +328,7 @@ function AddAgentDialog({ data, onClose }: { data: AgentsOverview; onClose: () =
                 <Icon name="copy" size={14} />
               </button>
             </div>
-            {!data.enabled && <p className="muted small">Heads up: AI agents are switched off in Access, so this token won’t work yet.</p>}
+            {!data.enabled && <p className="muted small">{tr('sp.agentsOffNote')}</p>}
             <div className="agent-snippets-mini">
               <Setup data={data} token={token} />
             </div>

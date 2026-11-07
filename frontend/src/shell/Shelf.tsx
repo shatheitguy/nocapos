@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent as RMouseEvent } from 'react';
+import { tr } from '../i18n';
 import { TransfersButton } from './Transfers';
 import { UserAvatar } from '../components/UserAvatar';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
@@ -43,16 +44,16 @@ export function appMenuItems(appId: string, extra: MenuItem[] = []): MenuItem[] 
   const wm = useWM.getState();
   const open = wm.windows.filter((w) => w.appId === appId);
   const items: MenuItem[] = [{ label: open.length ? 'Show' : 'Open', icon: 'launcher', onClick: () => activate(appId) }];
-  if (canMultiWindow(appId)) items.push({ label: 'New window', icon: 'plus', onClick: () => openApp(appId, { newWindow: true }) });
+  if (canMultiWindow(appId)) items.push({ label: tr('dock.newWindow'), icon: 'plus', onClick: () => openApp(appId, { newWindow: true }) });
   items.push(
     dock.has(appId)
-      ? { label: 'Remove from Dock', icon: 'pin', onClick: () => dock.remove(appId) }
-      : { label: 'Add to Dock', icon: 'pin', onClick: () => dock.add(appId) },
+      ? { label: tr('dock.removeFromDock'), icon: 'pin', onClick: () => dock.remove(appId) }
+      : { label: tr('dock.addToDock'), icon: 'pin', onClick: () => dock.add(appId) },
   );
   items.push(
     desk.has(appId)
-      ? { label: 'Remove from Desktop', icon: 'desktop', onClick: () => desk.remove(appId) }
-      : { label: 'Add to Desktop', icon: 'desktop', onClick: () => desk.place(appId) },
+      ? { label: tr('dock.removeFromDesktop'), icon: 'desktop', onClick: () => desk.remove(appId) }
+      : { label: tr('dock.addToDesktop'), icon: 'desktop', onClick: () => desk.place(appId) },
   );
   items.push(...extra);
   if (open.length) {
@@ -153,9 +154,9 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   };
 
   const menuItems = (m: Menu): MenuItem[] =>
-    m.appId ? appMenuItems(m.appId) : [{ label: 'Reset Dock to default', icon: 'pin', onClick: () => useDock.getState().resetDefaults() }];
+    m.appId ? appMenuItems(m.appId) : [{ label: tr('dock.reset'), icon: 'pin', onClick: () => useDock.getState().resetDefaults() }];
 
-  const openTrash = () => openApp('files', { title: 'Recycle Bin', props: { path: '/.recycle' }, key: 'files:recycle' });
+  const openTrash = () => openApp('files', { title: tr('dock.trash'), props: { path: '/.recycle' }, key: 'files:recycle' });
 
   return (
     <footer
@@ -169,7 +170,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
     >
       <nav
         className={`dock ${dragging && over?.kind === 'dock' ? 'drop-target' : ''}`}
-        aria-label="Dock"
+        aria-label={tr('dock.label')}
         data-drop="dock"
         onContextMenu={(e) => {
           if ((e.target as HTMLElement).closest('.dock-item')) return;
@@ -177,7 +178,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
           setMenu({ x: e.clientX, y: e.clientY });
         }}
       >
-        <button type="button" className="dock-item launchpad" title="Launchpad" aria-label="Launchpad" onClick={onLauncher}>
+        <button type="button" className="dock-item launchpad" title={tr('dock.launchpad')} aria-label={tr('dock.launchpad')} onClick={onLauncher}>
           <span className="launchpad-icon art">
             <AppArt id="launchpad" size={44} />
           </span>
@@ -206,8 +207,8 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
           <button
             type="button"
             className={`dock-item trash ${dragging && over?.kind === 'trash' ? 'drop-over' : ''}`}
-            title="Recycle Bin — drop an icon here to remove it"
-            aria-label="Recycle Bin"
+            title={tr('dock.trashTitle')}
+            aria-label={tr('dock.trash')}
             data-drop="trash"
             onClick={openTrash}
           >
@@ -227,14 +228,14 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
             type="button"
             className={`tray-btn tray-status ${qsOpen ? 'open' : ''}`}
             onClick={() => { setAcctMenu(false); setQsOpen((v) => !v); }}
-            aria-label="Control Center"
+            aria-label={tr('dock.controlCenter')}
             title={`Control Center — Wi-Fi, network, sound${online ? '' : ' (reconnecting…)'}`}
           >
             <span className={`status-dot ${online ? 'on' : 'off'}`} />
             <Icon name="network" size={16} />
             <Icon name="sound" size={16} />
           </button>
-          <button ref={clockRef} type="button" className={`tray-btn tray-clock ${clockOpen ? 'open' : ''}`} onClick={() => setClockOpen((v) => !v)} title="Clock & calendar">
+          <button ref={clockRef} type="button" className={`tray-btn tray-clock ${clockOpen ? 'open' : ''}`} onClick={() => setClockOpen((v) => !v)} title={tr('dock.clock')}>
             <TrayClock />
           </button>
           <button

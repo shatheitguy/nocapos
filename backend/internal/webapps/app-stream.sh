@@ -34,14 +34,37 @@ if [ -f "/tmp/.X${n}-lock" ] && ! pgrep -f "Xvfb ${DISPLAY_NUM}" >/dev/null; the
 fi
 
 # Whatever happens, take the display, VNC and bridge down with us.
-trap 'kill $(jobs -p) 2>/dev/null || true' EXIT
+trap 'kill $(jobs -p) 2>/dev/null || true; [ -z "${fbdir:-}" ] || rm -rf "$fbdir"' EXIT
 
 Xvfb "$DISPLAY_NUM" -screen 0 "${GEOM}x24" -nolisten tcp &
 for _ in $(seq 1 50); do [ -S "/tmp/.X11-unix/X${n}" ] && break; sleep 0.1; done
 export DISPLAY="$DISPLAY_NUM"
 unset WAYLAND_DISPLAY
 
-if command -v fluxbox >/dev/null; then fluxbox >/dev/null 2>&1 & fi
+# The window manager runs every window maximized with no title bar or
+# borders of its own (and no toolbar): the NoCapOS window around the stream
+# already has the title bar and the close / minimize / maximize buttons.
+if command -v fluxbox >/dev/null; then
+  fbdir="$(mktemp -d)"
+  cat >"$fbdir/apps" <<'APPS'
+[app] (name=.*)
+  [Deco]      {NONE}
+  [Maximized] {yes}
+[end]
+APPS
+  cat >"$fbdir/init" <<INIT
+session.appsFile: $fbdir/apps
+session.screen0.toolbar.visible: false
+session.screen0.slit.autoHide: true
+session.screen0.defaultDeco: NONE
+session.screen0.workspaces: 1
+INIT
+  : >"$fbdir/keys"
+  printf 'session.keyFile: %s/keys\n' "$fbdir" >>"$fbdir/init"
+  fluxbox -rc "$fbdir/init" >/dev/null 2>&1 &
+fi
+# GTK apps: no client-side title bars where the toolkit allows it.
+export GTK_CSD=0
 
 x11vnc -display "$DISPLAY_NUM" -rfbport "$VNC_PORT" -localhost -forever -shared -nopw -quiet -o /dev/null &
 websockify --web "$web" "127.0.0.1:${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &

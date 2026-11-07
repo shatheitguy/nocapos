@@ -42,6 +42,7 @@ func TestCommandArgv(t *testing.T) {
 		"remote-ls": {RemoteLsArgs(), {"flatpak", "remote-ls", "--system", "--app", "--columns=application,name,description", "flathub"}},
 		"remote":    {RemoteAddArgs(), {"flatpak", "remote-add", "--if-not-exists", "--system", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"}},
 		"run":       {RunArgs("org.gimp.GIMP"), {"flatpak", "run", "org.gimp.GIMP"}},
+		"stream":    {StreamArgs("org.gimp.GIMP"), {"flatpak", "run", "--env=GTK_CSD=0", "--env=QT_WAYLAND_DISABLE_WINDOWDECORATION=1", "org.gimp.GIMP"}},
 	}
 	for name, c := range cases {
 		if !reflect.DeepEqual(c[0], c[1]) {
@@ -324,7 +325,7 @@ func TestLaunchPrefersServerScreen(t *testing.T) {
 		t.Fatalf("stream launch = %+v %v", got, err)
 	}
 	fs := s.Streams.(*fakeStreams)
-	if sp := fs.specs[0]; !reflect.DeepEqual(sp.Command, []string{"flatpak", "run", "org.gimp.GIMP"}) || sp.Title != "GIMP" || sp.RunAs != nil || !strings.Contains(sp.Home, "u1") {
+	if sp := fs.specs[0]; !reflect.DeepEqual(sp.Command, StreamArgs("org.gimp.GIMP")) || sp.Title != "GIMP" || sp.RunAs != nil || !strings.Contains(sp.Home, "u1") {
 		t.Fatalf("spec = %+v", sp)
 	}
 	// The file exists but the session is gone: still streamed.

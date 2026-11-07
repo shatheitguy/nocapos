@@ -1,3 +1,4 @@
+import { tr, useT } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { create } from 'zustand';
@@ -159,8 +160,8 @@ export function Files({ win }: { win: WinState }) {
   usePoll(loadExternal, 4000, isAdminUser());
   const eject = async (d: ExternalDrive) => {
     const r = await fileApi.eject(d.path);
-    if (!r.ok) return toast('error', `Couldn't eject ${d.name}`, r.error);
-    toast('success', `${d.name} ejected`, r.data.powered_off ? 'Safe to unplug now.' : 'Safe to unplug once its light stops blinking.');
+    if (!r.ok) return toast('error', tr('files.toast.ejectFail', { name: d.name }), r.error);
+    toast('success', tr('files.toast.ejected', { name: d.name }), r.data.powered_off ? tr('files.toast.unplugNow') : tr('files.toast.unplugSoon'));
     // Leave a folder on the drive before it disappears.
     [0, 1].forEach((s) => {
       const st = states[s];
@@ -184,8 +185,8 @@ export function Files({ win }: { win: WinState }) {
   const shares = net.sharing?.shares ?? [];
   const unshare = async (sh: NetShare) => {
     const r = await netApi.removeShare(sh.id);
-    if (!r.ok) return toast('error', 'Couldn’t stop sharing', r.error);
-    toast('success', `Stopped sharing “${sh.name}”`);
+    if (!r.ok) return toast('error', tr('files.toast.unshareFail'), r.error);
+    toast('success', tr('files.toast.unshared', { name: sh.name }));
     void net.load();
   };
 
@@ -196,7 +197,7 @@ export function Files({ win }: { win: WinState }) {
     const r = await fileApi.setFavorites(next);
     if (!r.ok) {
       setFavs(before);
-      toast('error', 'Couldn’t save favorites', r.error);
+      toast('error', tr('files.toast.favoritesFail'), r.error);
     }
   };
   const isFav = (root: string, path: string) => favs.some((f) => f.root === root && f.path === path);
@@ -236,15 +237,15 @@ export function Files({ win }: { win: WinState }) {
 
   // Something dragged from a pane onto a sidebar folder: move it there (Ctrl copies).
   const dropInto = async (data: DragFiles, root: string, path: string, copy: boolean) => {
-    if (data.root !== root) return toast('error', 'Moving between storage locations is not supported yet');
+    if (data.root !== root) return toast('error', tr('files.toast.crossMove'));
     const paths = data.paths.filter((p) => p !== path && parentPath(p) !== path);
     if (!paths.length) return;
     if (await startTransfer(root, paths, path, !copy)) [0, 1].forEach((s) => bump(s as 0 | 1));
   };
   const dropToTrash = async (data: DragFiles) => {
     const r = await fileApi.remove(data.root, data.paths, false);
-    if (r.ok) toast('success', `Moved ${data.paths.length === 1 ? `“${baseName(data.paths[0])}”` : `${data.paths.length} items`} to Trash`);
-    else toast('error', 'Couldn’t move to Trash', r.error);
+    if (r.ok) toast('success', tr('files.toast.trashed', { what: data.paths.length === 1 ? `“${baseName(data.paths[0])}”` : tr('files.nItems', { n: data.paths.length }) }));
+    else toast('error', tr('files.toast.trashFail'), r.error);
     [0, 1].forEach((s) => bump(s as 0 | 1));
     void loadRoots();
   };
@@ -255,7 +256,7 @@ export function Files({ win }: { win: WinState }) {
         <Icon name="alert" size={32} />
         <p className="muted">{rootsError}</p>
         <button type="button" onClick={() => void loadRoots()}>
-          Retry
+          {tr('files.retry')}
         </button>
       </div>
     );
@@ -408,6 +409,7 @@ function FilePane({
   onRemoveFav,
   rootLabel,
 }: PaneProps) {
+  const t = useT();
   const [root, setRoot] = useState<string>(initialRoot);
   const [path, setPath] = useState<string>(initialPath);
   const [special, setSpecial] = useState<Special>(null);
@@ -612,7 +614,7 @@ function FilePane({
   const selRoot = () => {
     const rs = new Set(selItems().map((i) => i.root));
     if (rs.size > 1) {
-      toast('error', 'Those items are in different storage locations', 'Pick items from one location at a time.');
+      toast('error', tr('files.toast.mixedRoots'), tr('files.toast.mixedRootsBody'));
       return null;
     }
     return [...rs][0] ?? root;
@@ -638,13 +640,13 @@ function FilePane({
   const newFolder = () =>
     setDialog({
       kind: 'prompt',
-      title: 'New folder',
-      label: 'Name',
-      initial: 'New folder',
-      confirm: 'Create',
+      title: tr('files.newFolder'),
+      label: tr('files.name'),
+      initial: tr('files.newFolderName'),
+      confirm: tr('files.create'),
       onSubmit: async (name) => {
         const r = await fileApi.mkdir(root, path, name);
-        if (!r.ok) toast('error', 'Couldn’t create folder', r.error);
+        if (!r.ok) toast('error', tr('files.toast.mkdirFail'), r.error);
         pendingSel.current = name;
         await reload();
       },
@@ -655,15 +657,15 @@ function FilePane({
     const dot = name.lastIndexOf('.');
     setDialog({
       kind: 'prompt',
-      title: 'Rename',
-      label: 'New name',
+      title: tr('files.rename'),
+      label: tr('files.newName'),
       initial: name,
       selectTo: !i.entry.dir && dot > 0 ? dot : undefined,
-      confirm: 'Rename',
+      confirm: tr('files.rename'),
       onSubmit: async (next) => {
         if (next === name) return;
         const r = await fileApi.rename(i.root, i.path, next);
-        if (!r.ok) toast('error', `Couldn’t rename ${name}`, r.error);
+        if (!r.ok) toast('error', tr('files.toast.renameFail', { name }), r.error);
         if (!special) pendingSel.current = next;
         await reload();
       },
@@ -675,17 +677,17 @@ function FilePane({
     const r0 = selRoot();
     if (!r0) return;
     const permanent = forcePermanent || recycle;
-    const what = list.length === 1 ? `“${list[0].entry.name}”` : `${list.length} items`;
+    const what = list.length === 1 ? `“${list[0].entry.name}”` : tr('files.nItems', { n: list.length });
     const run = async () => {
       const r = await fileApi.remove(r0, list.map((i) => i.path), permanent);
-      if (r.ok) toast('success', permanent ? `Deleted ${what}` : `Moved ${what} to Trash`);
-      else toast('error', 'Delete didn’t go through', r.error);
+      if (r.ok) toast('success', permanent ? tr('files.toast.deleted', { what }) : tr('files.toast.trashed', { what }));
+      else toast('error', tr('files.toast.deleteFail'), r.error);
       setSelected(new Set());
       await reload();
       onRootsChanged();
     };
     if (permanent) {
-      setDialog({ kind: 'confirm', title: `Permanently delete ${what}?`, body: 'This cannot be undone.', confirm: 'Delete forever', danger: true, onSubmit: run });
+      setDialog({ kind: 'confirm', title: tr('files.confirm.deleteForever', { what }), body: tr('files.confirm.cantUndo'), confirm: tr('files.deleteForever'), danger: true, onSubmit: run });
     } else {
       void run();
     }
@@ -694,14 +696,14 @@ function FilePane({
   const emptyBin = () =>
     setDialog({
       kind: 'confirm',
-      title: 'Empty the Trash?',
-      body: `Everything in the Trash of ${rootLabel(root)} will be permanently deleted.`,
-      confirm: 'Empty Trash',
+      title: tr('files.confirm.emptyTrash'),
+      body: tr('files.confirm.emptyTrashBody', { place: rootLabel(root) }),
+      confirm: tr('files.emptyTrash'),
       danger: true,
       onSubmit: async () => {
         const r = await fileApi.remove(root, [RECYCLE], true);
-        if (r.ok) toast('success', 'Trash emptied — clean slate');
-        else toast('error', 'Couldn’t empty the Trash', r.error);
+        if (r.ok) toast('success', tr('files.toast.trashEmptied'));
+        else toast('error', tr('files.toast.emptyTrashFail'), r.error);
         await reload();
         onRootsChanged();
       },
@@ -712,13 +714,13 @@ function FilePane({
     const r0 = list.length ? selRoot() : null;
     if (!r0) return;
     setClip({ root: r0, paths: list.map((i) => i.path), move });
-    toast('info', `${list.length} item${list.length > 1 ? 's' : ''} ${move ? 'cut' : 'copied'}`, 'Open a folder and paste — they’re ready');
+    toast('info', tr(move ? 'files.toast.cut' : 'files.toast.copied', { what: list.length === 1 ? tr('files.oneItem') : tr('files.nItems', { n: list.length }) }), tr('files.toast.pasteHint'));
   };
 
   const paste = async (into = path) => {
     if (!clip || special) return;
     if (clip.root !== root) {
-      toast('error', 'Paste across storage locations is not supported yet');
+      toast('error', tr('files.toast.crossPaste'));
       return;
     }
     const ok = await startTransfer(root, clip.paths, into, clip.move);
@@ -737,16 +739,16 @@ function FilePane({
     const stem = list.length === 1 ? (first.dir || first.name.lastIndexOf('.') <= 0 ? first.name : first.name.slice(0, first.name.lastIndexOf('.'))) : 'Archive';
     setDialog({
       kind: 'prompt',
-      title: list.length === 1 ? `Compress “${first.name}”` : `Compress ${list.length} items`,
-      label: 'Zip file name',
+      title: tr('files.compressTitle', { what: list.length === 1 ? `“${first.name}”` : tr('files.nItems', { n: list.length }) }),
+      label: tr('files.zipName'),
       initial: `${stem}.zip`,
       selectTo: stem.length,
-      confirm: 'Compress',
+      confirm: tr('files.compress'),
       onSubmit: async (name) => {
         const out = await startArchiveJob('compress', root, list.map((i) => i.path), path, name);
         if (out?.[0]) {
           pendingSel.current = baseName(out[0]);
-          toast('success', `Created ${baseName(out[0])}`);
+          toast('success', tr('files.toast.created', { name: baseName(out[0]) }));
         }
       },
     });
@@ -757,7 +759,7 @@ function FilePane({
     const out = await startArchiveJob('extract', i.root, [i.path], dest);
     if (out?.[0]) {
       if (!special && dest === path) pendingSel.current = baseName(out[0]);
-      toast('success', `Extracted to “${baseName(out[0])}”`);
+      toast('success', tr('files.toast.extracted', { name: baseName(out[0]) }));
     }
   };
 
@@ -765,11 +767,11 @@ function FilePane({
     const list = selItems();
     if (!other || !list.length || special) return;
     if (other.root !== root) {
-      toast('error', 'The other pane is on a different storage location', 'Copy and move work within one location for now.');
+      toast('error', tr('files.toast.otherPaneRoot'), tr('files.toast.otherPaneRootBody'));
       return;
     }
     if (other.path === path) {
-      toast('error', 'Both panes show the same folder');
+      toast('error', tr('files.toast.samePane'));
       return;
     }
     setSelected(new Set());
@@ -779,7 +781,7 @@ function FilePane({
   const download = async (list: Item[]) => {
     for (const i of list) {
       if (i.entry.dir) continue;
-      if (!(await downloadFile(i.root, i.path))) toast('error', `Couldn’t download ${i.entry.name}`);
+      if (!(await downloadFile(i.root, i.path))) toast('error', tr('files.toast.downloadFail', { name: i.entry.name }));
     }
   };
 
@@ -971,7 +973,7 @@ function FilePane({
       if (data) {
         e.preventDefault();
         e.stopPropagation();
-        if (data.root !== root2) return toast('error', 'Moving between storage locations is not supported yet');
+        if (data.root !== root2) return toast('error', tr('files.toast.crossMove'));
         const paths = data.paths.filter((p) => p !== target && parentPath(p) !== target && !target.startsWith(p + '/'));
         if (paths.length) void startTransfer(root2, paths, target, !(e.ctrlKey || e.altKey)).then((ok) => ok && onTransferred());
       } else if (hasFiles(e)) {
@@ -1121,17 +1123,17 @@ function FilePane({
   });
 
   const emptyState = () => {
-    if (filter && !special) return <EmptyState icon="search" title="No matches" text={`Nothing in this folder matches “${filter}”.`} />;
-    if (special === 'recents') return <EmptyState icon="clock" title="No recent files yet" text={note ?? 'Files you add or change show up here.'} />;
-    if (special === 'search') return <EmptyState icon="search" title="Nothing found" text={note ?? `Lowkey can’t find anything named like “${query}”.`} />;
-    if (recycle) return <EmptyState icon="trash" title="Trash is empty" text="Squeaky clean. Deleted items wait here until you empty the Trash." />;
+    if (filter && !special) return <EmptyState icon="search" title={t('files.empty.noMatches')} text={t('files.empty.noMatchesText', { filter })} />;
+    if (special === 'recents') return <EmptyState icon="clock" title={t('files.empty.recents')} text={note ?? t('files.empty.recentsText')} />;
+    if (special === 'search') return <EmptyState icon="search" title={t('files.empty.nothingFound')} text={note ?? t('files.empty.nothingFoundText', { query })} />;
+    if (recycle) return <EmptyState icon="trash" title={t('files.empty.trash')} text={t('files.empty.trashText')} />;
     return (
-      <EmptyState glyph title="This folder is empty" text="Nothing here yet — drop files in, or upload them.">
+      <EmptyState glyph title={t('files.empty.folder')} text={t('files.empty.folderText')}>
         <button type="button" className="pill" onClick={() => uploadInput.current?.click()}>
-          <Icon name="upload" size={15} /> Upload
+          <Icon name="upload" size={15} /> {t('files.upload')}
         </button>
         <button type="button" className="pill ghost" onClick={newFolder}>
-          <Icon name="folderPlus" size={15} /> New Folder
+          <Icon name="folderPlus" size={15} /> {t('files.newFolder')}
         </button>
       </EmptyState>
     );

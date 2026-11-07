@@ -1,30 +1,25 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 import { flushSaves, saveLater } from '../lib/saveLater';
+import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
+
+export { isCustomWallpaper };
 
 export type ThemeMode = 'auto' | 'light' | 'dark';
 
-/** Photo-style wallpapers (in /wallpapers) bring their own accent for the Glass theme. */
+/** The built-in wallpapers (in /wallpapers); each brings its own accent for the Glass theme. The first is the default. */
 export const WALLPAPERS = [
-  { id: 'tide', name: 'Tide', image: true, accent: '#2dd4bf' },
-  { id: 'nebula', name: 'Nebula', image: true, accent: '#a78bfa' },
-  { id: 'blaze', name: 'Blaze', image: true, accent: '#fb923c' },
-  { id: 'lights', name: 'Lights', image: true, accent: '#34d399' },
-  { id: 'glacier', name: 'Glacier', image: true, accent: '#60a5fa' },
-  { id: 'rose', name: 'Rose', image: true, accent: '#f472b6' },
-  { id: 'meadow', name: 'Meadow', image: true, accent: '#84cc16' },
-  { id: 'dune', name: 'Dune', image: true, accent: '#f59e0b' },
-  { id: 'midnight', name: 'Midnight', image: true, accent: '#818cf8' },
-  { id: 'signal', name: 'Signal', image: true, accent: '#ef4444' },
-  { id: 'nocap', name: 'NoCap', image: false, accent: '#e8232b' },
-  { id: 'aurora', name: 'Aurora', image: false, accent: '#8b7bff' },
-  { id: 'dusk', name: 'Dusk', image: false, accent: '#ff6a88' },
-  { id: 'ocean', name: 'Ocean', image: false, accent: '#3b9cff' },
-  { id: 'forest', name: 'Forest', image: false, accent: '#2fbf87' },
-  { id: 'ember', name: 'Ember', image: false, accent: '#f0772b' },
-  { id: 'graphite', name: 'Graphite', image: false, accent: '#8a94a8' },
+  { id: 'tide', name: 'Tide', accent: '#2dd4bf' },
+  { id: 'nebula', name: 'Nebula', accent: '#a78bfa' },
+  { id: 'midnight', name: 'Midnight', accent: '#818cf8' },
 ] as const;
-export type WallpaperId = (typeof WALLPAPERS)[number]['id'] | 'custom';
+/** A built-in id, or 'custom' / 'custom-…' for pictures people added themselves. */
+export type WallpaperId = string;
+const BUILT_IN_IDS: readonly string[] = WALLPAPERS.map((w) => w.id);
+
+/** The voice NoCapOS speaks in: playful (default) or plain, professional copy. */
+export type Lingo = 'genz' | 'standard';
+export const LINGOS: Lingo[] = ['genz', 'standard'];
 
 // Idle before auto-lock, in minutes. 0 = never.
 export const LOCK_TIMEOUTS = [
@@ -119,6 +114,7 @@ export interface PrefValues {
   screensaver: Screensaver;
   saverDelay: number; // minutes
   language: LanguageId;
+  lingo: Lingo; // Gen Z or Standard wording
 
   welcomeDone: boolean; // the first-start welcome was finished or skipped
   welcomeStep: number; // where the welcome was left, to pick up there
@@ -172,6 +168,7 @@ export const DEFAULT_PREFS: PrefValues = {
   screensaver: 'off',
   saverDelay: 5,
   language: 'en',
+  lingo: 'genz',
 
   welcomeDone: false,
   welcomeStep: 0,
@@ -305,12 +302,11 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
       if (k in raw && typeof raw[k] === typeof DEFAULT_PREFS[k]) (out as Record<string, unknown>)[k] = raw[k];
     }
     // Wallpapers that no longer exist fall back to the default.
-    if (out.wallpaper && out.wallpaper !== 'custom' && !WALLPAPERS.some((w) => w.id === out.wallpaper)) delete out.wallpaper;
+    // (Retired built-ins, e.g. the old gradients, land here.)
+    if (out.wallpaper && !BUILT_IN_IDS.includes(out.wallpaper) && !isCustomWallpaper(out.wallpaper)) delete out.wallpaper;
+    if (out.lingo && !LINGOS.includes(out.lingo)) delete out.lingo;
     // One-time move to the Glass look (people can switch back in Appearance).
-    if (!raw.glass1) {
-      if (out.uiTheme === 'classic') delete out.uiTheme;
-      if (out.wallpaper === 'nocap') delete out.wallpaper;
-    }
+    if (!raw.glass1 && out.uiTheme === 'classic') delete out.uiTheme;
     // The old on/off switch becomes the far end of the Transparency slider.
     if (raw.reduceTransparency === true && !('transparency' in raw)) out.transparency = 0;
     // One-time move to the current default look: Objects icons, 50% transparency.
@@ -325,10 +321,7 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
     // Themes that no longer exist fall back to the default.
     if (out.uiTheme && !UI_THEMES.some((t) => t.id === out.uiTheme)) delete out.uiTheme;
     // One-time move to the NoCap brand look for people still on the old defaults.
-    if (!raw.brand1) {
-      if (out.wallpaper === 'aurora') delete out.wallpaper;
-      if (out.theme === 'auto') delete out.theme;
-    }
+    if (!raw.brand1 && out.theme === 'auto') delete out.theme;
     return out;
   } catch {
     return {};
@@ -346,24 +339,52 @@ export const usePrefs = create<Prefs>((set) => ({
   },
 }));
 
-// ---- custom wallpaper (kept apart from prefs: it's a large image) ----
+// ---- wallpapers people add (kept apart from prefs: they're large images) ----
+//
+// The original single picture lives under 'alfa.wallpaper.custom' (id
+// "custom"); newer ones under 'alfa.wallpaper.custom-<x>', listed in
+// 'alfa.wallpapers'. All keys are per person (userKey).
 
 const WALL_KEY = 'alfa.wallpaper.custom';
+const WALL_LIST_KEY = 'alfa.wallpapers';
+const wallKey = (id: string) => userKey(id === 'custom' ? WALL_KEY : `alfa.wallpaper.${id}`);
 
-// The image is large; read it once and keep it, rather than on every pref change.
-let customWall: string | null | undefined;
+export interface CustomWallpaper {
+  id: string;
+  url: string;
+}
 
-export function loadCustomWallpaper(): string | null {
+// The images are large; read them once and keep them, rather than on every pref change.
+let customWall: CustomWallpaper[] | undefined;
+
+export function customWallpapers(): CustomWallpaper[] {
   if (customWall !== undefined) return customWall;
+  let ids: string[] = [];
   try {
-    customWall = localStorage.getItem(userKey(WALL_KEY));
+    const raw = JSON.parse(readStore(userKey(WALL_LIST_KEY)) ?? 'null') as unknown;
+    if (Array.isArray(raw)) ids = raw.filter((x): x is string => typeof x === 'string' && isCustomWallpaper(x));
   } catch {
-    customWall = null;
+    /* unreadable list: rebuilt below */
   }
+  if (!ids.includes('custom') && readStore(wallKey('custom'))) ids.unshift('custom');
+  customWall = ids.flatMap((id) => {
+    const url = readStore(wallKey(id));
+    return url ? [{ id, url }] : [];
+  });
   return customWall;
 }
 
-/** Downscale an image file to at most 2560px and store it as a JPEG data URL. */
+/** The image of one of your own wallpapers, if it's still stored. */
+export function loadCustomWallpaper(id: string): string | null {
+  return customWallpapers().find((w) => w.id === id)?.url ?? null;
+}
+
+function writeWallList(list: CustomWallpaper[]) {
+  customWall = list;
+  writeStore(userKey(WALL_LIST_KEY), JSON.stringify(list.map((w) => w.id)));
+}
+
+/** Downscale an image file to at most 2560px, store it as a JPEG data URL and return its id. */
 export async function saveCustomWallpaper(file: File): Promise<string> {
   const bitmap = await createImageBitmap(file);
   const scale = Math.min(1, 2560 / Math.max(bitmap.width, bitmap.height));
@@ -372,18 +393,36 @@ export async function saveCustomWallpaper(file: File): Promise<string> {
   canvas.height = Math.round(bitmap.height * scale);
   canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
+  const id = `custom-${Date.now().toString(36)}`;
   for (const q of [0.86, 0.75, 0.6]) {
     const url = canvas.toDataURL('image/jpeg', q);
     try {
-      localStorage.setItem(userKey(WALL_KEY), url);
-      customWall = url;
-      return url;
+      localStorage.setItem(wallKey(id), url);
+      writeWallList([...customWallpapers(), { id, url }]);
+      return id;
     } catch {
       /* too big for storage — try a smaller encoding */
     }
   }
-  throw new Error('That image is too large to save. Try a smaller one.');
+  throw new Error('too-large');
 }
+
+/** Delete one of your own wallpapers; if it was showing, the first built-in takes over. */
+export function deleteCustomWallpaper(id: string) {
+  if (!isCustomWallpaper(id)) return; // built-ins can't be deleted
+  try {
+    localStorage.removeItem(wallKey(id));
+  } catch {
+    /* storage unavailable */
+  }
+  writeWallList(customWallpapers().filter((w) => w.id !== id));
+  const p = usePrefs.getState();
+  if (p.wallpaper === id) p.set({ wallpaper: WALLPAPERS[0].id });
+}
+
+/** The wallpaper that's really shown: the chosen one, or the first built-in when it's gone. */
+export const shownWallpaper = (chosen: string) =>
+  pickWallpaper(chosen, BUILT_IN_IDS, customWallpapers().map((w) => w.id));
 
 // ---- applying prefs to the page ----
 
@@ -433,7 +472,8 @@ export function applyPrefs(p: PrefValues) {
   if (ui.id !== 'classic') root.dataset.theme = 'dark';
   else if (p.theme === 'auto') delete root.dataset.theme;
   else root.dataset.theme = p.theme;
-  const wall = WALLPAPERS.find((w) => w.id === p.wallpaper);
+  const wallId = shownWallpaper(p.wallpaper);
+  const wall = WALLPAPERS.find((w) => w.id === wallId);
   root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wall ? wall.accent : ui.accent));
   root.toggleAttribute('data-grid', ui.id === 'cyberdeck' && p.fxGrid);
 
@@ -465,8 +505,8 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-no-labels', !p.iconLabels);
 
   const body = document.body;
-  body.dataset.wallpaper = p.wallpaper;
-  const custom = p.wallpaper === 'custom' ? loadCustomWallpaper() : null;
+  const custom = isCustomWallpaper(wallId) ? loadCustomWallpaper(wallId) : null;
+  body.dataset.wallpaper = custom ? 'custom' : wallId;
   const bg = custom ? `url("${custom}")` : '';
   // Re-assigning a multi-MB data URL on every slider tick is expensive.
   if (bg !== appliedBg) {

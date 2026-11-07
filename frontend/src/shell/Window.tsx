@@ -1,4 +1,5 @@
 import { memo, Suspense, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
+import { tr } from '../i18n';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { APP_COMPONENTS } from '../apps/components';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
@@ -25,7 +26,7 @@ export const Window = memo(function Window({ id, compact }: { id: string; compac
   const win = useWM((s) => s.windows.find((w) => w.id === id));
   // Maximized/snapped rects depend on the viewport and the dock's edge.
   useViewport();
-  usePrefs((s) => `${s.dockPosition}:${s.dockSize}:${s.dockAutoHide}:${s.titleButtons}`);
+  usePrefs((s) => `${s.dockPosition}:${s.dockSize}:${s.dockAutoHide}:${s.titleButtons}:${s.lingo}`);
   return win ? <WindowFrame win={win} compact={compact} /> : null;
 });
 
@@ -144,13 +145,13 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
 
   const titleMenu = (): MenuItem[] => [
     ...(canMultiWindow(win.appId)
-      ? [{ label: 'New window', icon: 'plus' as const, onClick: () => openApp(win.appId, { newWindow: true }) }]
+      ? [{ label: tr('win.newWindow'), icon: 'plus' as const, onClick: () => openApp(win.appId, { newWindow: true }) }]
       : []),
-    { label: 'Minimize', icon: 'minimize', onClick: () => wm.minimize(win.id) },
+    { label: tr('win.minimize'), icon: 'minimize', onClick: () => wm.minimize(win.id) },
     ...(!compact
-      ? [{ label: tiled ? 'Restore' : 'Maximize', icon: (tiled ? 'restore' : 'maximize') as 'restore' | 'maximize', onClick: () => wm.toggleMaximize(win.id) }]
+      ? [{ label: tiled ? tr('win.restore') : tr('win.maximize'), icon: (tiled ? 'restore' : 'maximize') as 'restore' | 'maximize', onClick: () => wm.toggleMaximize(win.id) }]
       : []),
-    { label: 'Close', icon: 'close', danger: true, onClick: () => wm.close(win.id) },
+    { label: tr('win.close'), icon: 'close', danger: true, onClick: () => wm.close(win.id) },
   ];
 
   return (
@@ -184,15 +185,15 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
           <AppIcon app={meta} size={20} />
           <span className="title">{win.title}</span>
           <div className="win-buttons">
-            <button type="button" aria-label="Minimize" onClick={() => wm.minimize(win.id)}>
+            <button type="button" aria-label={tr('win.minimize')} title={tr('win.minimize')} onClick={() => wm.minimize(win.id)}>
               <Icon name="minimize" size={14} />
             </button>
             {!compact && (
-              <button type="button" aria-label={tiled ? 'Restore' : 'Maximize'} onClick={() => wm.toggleMaximize(win.id)}>
+              <button type="button" aria-label={tiled ? tr('win.restore') : tr('win.maximize')} title={tiled ? tr('win.restore') : tr('win.maximize')} onClick={() => wm.toggleMaximize(win.id)}>
                 <Icon name={tiled ? 'restore' : 'maximize'} size={13} />
               </button>
             )}
-            <button type="button" className="close" aria-label="Close" onClick={() => wm.close(win.id)}>
+            <button type="button" className="close" aria-label={tr('win.close')} title={tr('win.close')} onClick={() => wm.close(win.id)}>
               <Icon name="close" size={14} />
             </button>
           </div>

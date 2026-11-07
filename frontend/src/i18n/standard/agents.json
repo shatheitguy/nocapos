@@ -1,0 +1,13 @@
+{
+  "agent.sendFail": "Couldn’t send your answer",
+  "agent.alwaysOk": "{agent} can {tool} without asking now",
+  "agent.approved": "Approved",
+  "agent.wants": "{agent} wants to {tool}",
+  "agent.details": "Details",
+  "agent.timeout": "If there is no answer before the timer runs out, the request is denied.",
+  "agent.more": "{n} more waiting.",
+  "agent.deny": "Deny",
+  "agent.alwaysTitle": "Don’t ask again for this tool and agent",
+  "agent.always": "Always allow",
+  "agent.once": "Approve once"
+}

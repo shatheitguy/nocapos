@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { agentsApi, type Approval, type Decision } from '../api/agents';
@@ -39,9 +40,9 @@ export function AgentApprovals() {
     setBusy(true);
     const r = await agentsApi.decide(a.id, d);
     setBusy(false);
-    if (!r.ok && r.status !== 404) return toast('error', 'Couldn’t send your answer', r.error);
+    if (!r.ok && r.status !== 404) return toast('error', tr('agent.sendFail'), r.error);
     setPending((p) => p.filter((x) => x.id !== a.id));
-    if (r.ok && d !== 'deny') toast('success', d === 'always' ? `${a.agent} can ${a.tool_title.toLowerCase()} without asking now` : 'Approved');
+    if (r.ok && d !== 'deny') toast('success', d === 'always' ? tr('agent.alwaysOk', { agent: a.agent, tool: a.tool_title.toLowerCase() }) : tr('agent.approved'));
   };
 
   const total = Math.max(1, new Date(a.expires_at).getTime() - new Date(a.created_at).getTime());
@@ -56,13 +57,13 @@ export function AgentApprovals() {
           <Icon name="sparkles" size={22} />
         </div>
         <h3 id="agent-approve-title">
-          {a.agent} wants to {a.tool_title.toLowerCase()}
+          {tr('agent.wants', { agent: a.agent, tool: a.tool_title.toLowerCase() })}
         </h3>
         <p>{a.summary}</p>
         {args && (
           <details className="agent-args">
             <summary>
-              Details <code>{a.tool}</code>
+              {tr('agent.details')} <code>{a.tool}</code>
             </summary>
             <pre>{args}</pre>
           </details>
@@ -73,16 +74,16 @@ export function AgentApprovals() {
             {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
           </b>
         </div>
-        <p className="muted small">No answer before the timer runs out counts as a no.{pending.length > 1 ? ` ${pending.length - 1} more waiting.` : ''}</p>
+        <p className="muted small">{tr('agent.timeout')}{pending.length > 1 ? ` ${tr('agent.more', { n: pending.length - 1 })}` : ''}</p>
         <div className="confirm-actions agent-approve-actions">
           <button type="button" className="ghost" disabled={busy} onClick={() => void decide('deny')}>
-            Deny
+            {tr('agent.deny')}
           </button>
-          <button type="button" className="ghost" disabled={busy} onClick={() => void decide('always')} title="Don’t ask again for this tool and agent">
-            Always allow
+          <button type="button" className="ghost" disabled={busy} onClick={() => void decide('always')} title={tr('agent.alwaysTitle')}>
+            {tr('agent.always')}
           </button>
           <button type="button" disabled={busy} onClick={() => void decide('once')}>
-            Approve once
+            {tr('agent.once')}
           </button>
         </div>
       </div>

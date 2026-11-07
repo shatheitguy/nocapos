@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import { netApi, type GuestMode, type SMBHealth } from '../api/netdrive';
 import { sharesApi, type FolderInput, type Perm, type SharedFolder, type SharesOverview } from '../api/shares';
@@ -13,7 +14,7 @@ import { HowToConnect, MySmbCard, SmbStatusCard } from './SmbStatus';
 async function run(p: Promise<{ ok: boolean; error?: string }>, done?: string): Promise<boolean> {
   const r = await p;
   if (!r.ok) {
-    toast('error', 'That didn’t go through', r.error);
+    toast('error', tr('files.toast.didntWork'), r.error);
     return false;
   }
   if (done) toast('success', done);
@@ -56,11 +57,11 @@ export function SharingSettings() {
           label="Administrators can open people’s homes"
           hint="Shows a Homes location in Files for administrators. Turn it off to keep homes private even from them."
           checked={data.admins_see_homes}
-          onChange={(on) => void run(sharesApi.setAdminsSeeHomes(on), on ? 'Administrators can open homes' : 'Homes are hidden from administrators').then(load)}
+          onChange={(on) => void run(sharesApi.setAdminsSeeHomes(on), on ? tr('files.share.adminsSeeHomes') : tr('files.share.homesHidden')).then(load)}
         />
       </Section>
       <Section title="Shared folders" hint="Folders people can open in Files and connect to from their computers and phones. Administrators can always reach every shared folder.">
-        {data.folders.length === 0 && <Row><span className="muted">Nothing shared yet — add a folder below, or right-click one in Files and choose Share this folder.</span></Row>}
+        {data.folders.length === 0 && <Row><span className="muted">{tr('files.share.empty')}</span></Row>}
         {data.folders.map((f) => (
           <FolderRow key={f.id} folder={f} data={data} onChanged={load} />
         ))}
@@ -76,7 +77,7 @@ function NetworkStatus({ data, onChanged }: { data: SharesOverview; onChanged: (
   const sup = data.support;
   const install = async () => {
     setBusy(true);
-    await run(netApi.install('samba'), 'Samba’s installed — SMB sharing is unlocked');
+    await run(netApi.install('samba'), tr('files.share.sambaInstalled'));
     setBusy(false);
     onChanged();
   };
@@ -92,7 +93,7 @@ function NetworkStatus({ data, onChanged }: { data: SharesOverview; onChanged: (
         hint={smbHint}
         checked={data.smb}
         disabled={!sup.native || !sup.samba}
-        onChange={(on) => void run(netApi.setProtocols({ smb: on }), on ? 'SMB sharing is on' : 'SMB sharing is off').then(onChanged)}
+        onChange={(on) => void run(netApi.setProtocols({ smb: on }), on ? tr('files.share.smbOn') : tr('files.share.smbOff')).then(onChanged)}
       />
       {sup.native && !sup.samba && (
         <Row label="Samba" hint={sup.can_install ? 'Installs the samba package with this machine’s package manager.' : 'Install the samba package on this machine, then come back.'}>
@@ -107,7 +108,7 @@ function NetworkStatus({ data, onChanged }: { data: SharesOverview; onChanged: (
         label="Share over WebDAV (phones, the internet)"
         hint={`At ${window.location.origin}/dav/ — each person sees their home and the folders they may use.`}
         checked={data.webdav}
-        onChange={(on) => void run(netApi.setProtocols({ webdav: on }), on ? 'WebDAV sharing is on' : 'WebDAV sharing is off').then(onChanged)}
+        onChange={(on) => void run(netApi.setProtocols({ webdav: on }), on ? tr('files.share.webdavOn') : tr('files.share.webdavOff')).then(onChanged)}
       />
       {data.shared_account && (
         <Row label="Shared network account" hint={data.per_user
@@ -285,7 +286,7 @@ function EditFolder({ folder: f, onDone }: { folder: SharedFolder; onDone: () =>
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const ok = await run(sharesApi.update(f.id, v), `Bet — ${v.name} saved`);
+    const ok = await run(sharesApi.update(f.id, v), tr('files.share.saved', { name: v.name }));
     setBusy(false);
     if (ok) onDone();
   };
@@ -310,7 +311,7 @@ function DeleteFolder({ folder: f, onDone, onCancel }: { folder: SharedFolder; o
   const [busy, setBusy] = useState(false);
   const go = async (deleteData: boolean) => {
     setBusy(true);
-    const ok = await run(sharesApi.remove(f.id, deleteData, typed), deleteData ? `${f.name} and its files are deleted for good` : `Stopped sharing ${f.name} — its files stay put`);
+    const ok = await run(sharesApi.remove(f.id, deleteData, typed), deleteData ? tr('files.share.deletedAll', { name: f.name }) : tr('files.share.stopped', { name: f.name }));
     setBusy(false);
     if (ok) onDone();
   };
@@ -348,7 +349,7 @@ function AddFolder({ data, onAdded }: { data: SharesOverview; onAdded: () => voi
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const ok = await run(sharesApi.create(v), `${v.name} is shared — pick who can open it below`);
+    const ok = await run(sharesApi.create(v), tr('files.share.created', { name: v.name }));
     setBusy(false);
     if (ok) {
       setV(blank);

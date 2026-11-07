@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { appURL, openStoreApp, storeApi, type StoreApp } from '../api/appstore';
@@ -130,8 +131,8 @@ export function AppCenter({ win }: { win?: WinState }) {
       if (!j) continue;
       if (!j.done) watching.current.add(j.id);
       else if (watching.current.delete(j.id)) {
-        if (j.error) toast('error', `${a.name}: ${j.action} flopped`, j.error);
-        else toast('success', j.action === 'install' ? `${a.name} installed — no cap, it's ready` : j.action === 'update' ? `Big moves: ${a.name} updated` : `${a.name} removed`);
+        if (j.error) toast('error', tr('apps.jobFailed', { name: a.name, action: j.action }), j.error);
+        else toast('success', j.action === 'install' ? tr('apps.installed', { name: a.name }) : j.action === 'update' ? tr('apps.updated', { name: a.name }) : tr('apps.removed', { name: a.name }));
       }
     }
   }, [apps]);
@@ -744,7 +745,7 @@ function DockerUpdates({
       {error ? (
         <p className="muted small">{error}</p>
       ) : !updates.length ? (
-        <p className="muted small">All your Docker apps are up to date. No cap.</p>
+        <p className="muted small">{tr('apps.dockerUpToDate')}</p>
       ) : (
       <div className="ucard as-updates">
         {updates.map((a) => {

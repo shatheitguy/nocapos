@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import {
@@ -108,8 +109,8 @@ export function Storage({ win }: { win: WinState }) {
     setInstalling(tool);
     const r = await storageApi.install(tool);
     setInstalling(null);
-    if (!r.ok) return toast('error', tool === 'zfs' ? 'Couldn’t install ZFS' : 'Couldn’t install SMART tools', r.error);
-    toast('success', tool === 'zfs' ? 'ZFS is installed' : 'SMART tools are installed');
+    if (!r.ok) return toast('error', tool === 'zfs' ? tr('storage.toast.zfsFail') : tr('storage.toast.smartFail'), r.error);
+    toast('success', tool === 'zfs' ? tr('storage.toast.zfsInstalled') : tr('storage.toast.smartInstalled'));
     void load();
   };
 
@@ -209,8 +210,8 @@ export function Storage({ win }: { win: WinState }) {
           onClose={() => setModal(null)}
           onConfirm={async () => {
             const r = await storageApi.destroyPool(modal.pool, modal.pool);
-            if (!r.ok) return r.error ?? 'Couldn’t destroy the pool';
-            toast('success', `Pool ${modal.pool} destroyed`);
+            if (!r.ok) return r.error ?? tr('storage.toast.destroyFail');
+            toast('success', tr('storage.toast.poolDestroyed', { name: modal.pool }));
             setModal(null);
             setView({ tab: 'pools' });
             reload();
@@ -422,8 +423,8 @@ function ImportCard({ importable, onChanged }: { importable: ImportablePool[]; o
     setBusy(p.name);
     const r = await storageApi.importPool(p.id || p.name);
     setBusy(null);
-    if (!r.ok) return toast('error', `Couldn’t import ${p.name}`, r.error);
-    toast('success', `Pool ${p.name} imported`);
+    if (!r.ok) return toast('error', tr('storage.toast.importFail', { name: p.name }), r.error);
+    toast('success', tr('storage.toast.imported', { name: p.name }));
     onChanged();
   };
   return (
@@ -500,7 +501,7 @@ function PoolsView({ status, pools, importable, disks, onOpen, onCreate, onChang
     const r = await storageApi.setSettings(v);
     if (!r.ok) {
       setAuto(!v);
-      toast('error', 'Couldn’t save', r.error);
+      toast('error', tr('storage.toast.saveFail'), r.error);
     }
   };
   const ready = status.zfs.installed && status.zfs.module;
@@ -521,8 +522,8 @@ function PoolsView({ status, pools, importable, disks, onOpen, onCreate, onChang
       {ready && pools.length === 0 && (
         <div className="ucard pad st-empty">
           <Icon name="layers" size={30} />
-          <b>No pools yet</b>
-          <p className="muted">Pick two or more free disks and NoCapOS sets up a mirror or RAIDZ for you.</p>
+          <b>{tr('storage.empty.pools')}</b>
+          <p className="muted">{tr('storage.empty.poolsText')}</p>
         </div>
       )}
       {pools.length > 0 && (
@@ -571,7 +572,7 @@ function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone
     const r = await fn();
     setBusy(false);
     if (!r.ok) {
-      toast('error', 'That didn’t work', r.error);
+      toast('error', tr('storage.toast.didntWork'), r.error);
       return false;
     }
     toast('success', done);
@@ -580,11 +581,11 @@ function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone
   };
   const exportPool = async () => {
     const ok = await confirmDialog({
-      title: `Export ${pool.name}?`,
-      message: 'NoCapOS stops using the pool so you can move its disks to another computer. Nothing is deleted; you can import it again later.',
-      confirmLabel: 'Export',
+      title: tr('storage.confirm.export', { name: pool.name }),
+      message: tr('storage.confirm.exportBody'),
+      confirmLabel: tr('storage.export'),
     });
-    if (ok && (await act(() => storageApi.exportPool(pool.name), `Pool ${pool.name} exported`))) onGone();
+    if (ok && (await act(() => storageApi.exportPool(pool.name), tr('storage.toast.exported', { name: pool.name })))) onGone();
   };
 
   return (
@@ -619,7 +620,7 @@ function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone
             <label className="st-switch-row toggle compact">
               <span><b>Show in Files</b></span>
               <input type="checkbox" role="switch" checked={pool.in_files} disabled={busy}
-                onChange={(e) => void act(() => storageApi.poolFiles(pool.name, e.target.checked), e.target.checked ? 'Shown in Files' : 'Hidden from Files')} />
+                onChange={(e) => void act(() => storageApi.poolFiles(pool.name, e.target.checked), e.target.checked ? tr('storage.toast.shownInFiles') : tr('storage.toast.hiddenFromFiles'))} />
             </label>
             {pool.in_files && (
               <button type="button" className="ghost small" onClick={() => openApp('files')}><Icon name="folder" size={13} /> Open Files</button>
@@ -631,11 +632,11 @@ function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone
             <b>{scan.state === 'scanning' || scan.state === 'paused' ? (scan.function === 'resilver' ? 'Resilvering' : 'Scrubbing') : 'Scrub'}</b>
             {scan.function !== 'resilver' && (
               scan.state === 'scanning' || scan.state === 'paused' ? (
-                <button type="button" className="ghost small" disabled={busy} onClick={() => void act(() => storageApi.scrub(pool.name, 'stop'), 'Scrub stopped')}>
+                <button type="button" className="ghost small" disabled={busy} onClick={() => void act(() => storageApi.scrub(pool.name, 'stop'), tr('storage.toast.scrubStopped'))}>
                   <Icon name="stop" size={12} /> Stop
                 </button>
               ) : (
-                <button type="button" className="ghost small" disabled={busy || pool.health === 'FAULTED'} onClick={() => void act(() => storageApi.scrub(pool.name, 'start'), 'Scrub started')}>
+                <button type="button" className="ghost small" disabled={busy || pool.health === 'FAULTED'} onClick={() => void act(() => storageApi.scrub(pool.name, 'start'), tr('storage.toast.scrubStarted'))}>
                   <Icon name="play" size={12} /> Start scrub
                 </button>
               )
@@ -693,7 +694,7 @@ function VdevRow({ v, depth, byName, onReplace }: { v: Vdev; depth: number; byNa
         </span>
         {!group && (
           <span className="st-vdev-errs" title="Read / write / checksum errors">
-            {errs > 0 ? <span className="chip warn">{v.read_errors}/{v.write_errors}/{v.checksum_errors} errors</span> : <span className="muted small">No errors</span>}
+            {errs > 0 ? <span className="chip warn">{v.read_errors}/{v.write_errors}/{v.checksum_errors} errors</span> : <span className="muted small">{tr('storage.noErrors')}</span>}
           </span>
         )}
         {!group && v.health && <HealthChip health={v.health} />}
@@ -767,7 +768,7 @@ function Datasets({ pool, onChanged }: { pool: Pool; onChanged: () => void }) {
             </div>
           );
         })}
-        {list && list.length === 0 && <p className="muted small st-pad">No datasets.</p>}
+        {list && list.length === 0 && <p className="muted small st-pad">{tr('storage.empty.datasets')}</p>}
         {!list && !error && <p className="muted small st-pad">Loading…</p>}
       </div>
       {edit && (
@@ -782,8 +783,8 @@ function Datasets({ pool, onChanged }: { pool: Pool; onChanged: () => void }) {
           onClose={() => setDel(null)}
           onConfirm={async () => {
             const r = await storageApi.deleteDataset(del.name, del.name);
-            if (!r.ok) return r.error ?? 'Couldn’t delete';
-            toast('success', `${del.name} deleted`);
+            if (!r.ok) return r.error ?? tr('storage.toast.deleteFail');
+            toast('success', tr('storage.toast.deleted', { name: del.name }));
             setDel(null);
             load();
             onChanged();
@@ -813,7 +814,7 @@ function DatasetEditor({ pool, ds, onClose, onDone }: { pool: string; ds: Datase
       : await storageApi.createDataset({ name: `${pool}/${name}`, quota: q || undefined, compression: comp === 'inherit' ? undefined : comp });
     setBusy(false);
     if (!r.ok) return setError(r.error ?? 'Couldn’t save');
-    toast('success', ds ? 'Saved' : `Dataset ${pool}/${name} created`);
+    toast('success', ds ? tr('storage.toast.saved') : tr('storage.toast.datasetCreated', { name: `${pool}/${name}` }));
     onDone();
   };
   const options = [...(isRoot ? [] : [{ id: 'inherit', label: 'Inherit' }]), { id: 'lz4', label: 'LZ4' }, { id: 'zstd', label: 'ZSTD' }, { id: 'off', label: 'Off' }];
@@ -865,16 +866,16 @@ function Snapshots({ dataset }: { dataset: string }) {
   const create = async () => {
     const n = name.trim() || `manual-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`;
     const r = await storageApi.createSnapshot(dataset, n);
-    if (!r.ok) return toast('error', 'Couldn’t take a snapshot', r.error);
-    toast('success', 'Snapshot taken — you’ve got a save point');
+    if (!r.ok) return toast('error', tr('storage.toast.snapFail'), r.error);
+    toast('success', tr('storage.toast.snapTaken'));
     setName('');
     load();
   };
   const remove = async (s: Snapshot) => {
-    const ok = await confirmDialog({ title: 'Delete snapshot?', message: `${s.name} will be deleted. The current files stay as they are.`, confirmLabel: 'Delete', danger: true });
+    const ok = await confirmDialog({ title: tr('storage.confirm.deleteSnap'), message: tr('storage.confirm.deleteSnapBody', { name: s.name }), confirmLabel: tr('storage.delete'), danger: true });
     if (!ok) return;
     const r = await storageApi.deleteSnapshot(s.name);
-    if (!r.ok) return toast('error', 'Couldn’t delete', r.error);
+    if (!r.ok) return toast('error', tr('storage.toast.deleteFail'), r.error);
     load();
   };
   return (
@@ -883,7 +884,7 @@ function Snapshots({ dataset }: { dataset: string }) {
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Snapshot name (optional)" onKeyDown={(e) => e.key === 'Enter' && void create()} />
         <button type="button" className="small" onClick={() => void create()}><Icon name="camera" size={13} /> Take snapshot</button>
       </div>
-      {list?.length === 0 && <p className="muted small">No snapshots of {dataset} yet.</p>}
+      {list?.length === 0 && <p className="muted small">{tr('storage.empty.snapshots', { name: dataset })}</p>}
       {list?.slice().reverse().map((s) => (
         <div key={s.name} className="st-snap">
           <Icon name="camera" size={14} />
@@ -909,8 +910,8 @@ function Snapshots({ dataset }: { dataset: string }) {
           onClose={() => setRollback(null)}
           onConfirm={async () => {
             const r = await storageApi.rollback(rollback.name, rollback.name);
-            if (!r.ok) return r.error ?? 'Couldn’t roll back';
-            toast('success', `${dataset} rolled back`);
+            if (!r.ok) return r.error ?? tr('storage.toast.rollbackFail');
+            toast('success', tr('storage.toast.rolledBack', { name: dataset }));
             setRollback(null);
             load();
             return null;

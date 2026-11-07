@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { Icon } from '../components/Icon';
@@ -75,7 +76,7 @@ export function SystemPackagesUpdate() {
         setJob(r.data);
         if (!r.data.running) {
           const install = r.data.action === 'upgrade-all';
-          if (r.data.ok) toast('success', install ? 'System packages updated — fresh and patched' : 'Package lists refreshed');
+          if (r.data.ok) toast('success', install ? tr('sp.sysPkgUpdated') : tr('sp.sysPkgListsRefreshed'));
           else toast('error', install ? 'Some updates didn’t install' : 'Couldn’t check for system updates', r.data.error);
           load();
           return;
@@ -143,13 +144,13 @@ export function SystemPackagesUpdate() {
   let detail: string;
   if (job?.running) {
     headline = installing ? 'Installing system updates…' : 'Checking for system updates…';
-    detail = installing ? 'Hang tight, this can take a few minutes. NoCapOS stays up the whole time.' : 'Asking the package mirrors what’s new.';
+    detail = installing ? tr('sp.sysPkgInstalling') : tr('sp.sysPkgChecking');
   } else if (st.error) {
     headline = 'Couldn’t read the system updates';
     detail = st.error;
   } else if (pending.length === 0) {
     headline = 'System packages are up to date';
-    detail = 'Nothing to patch right now. No cap.';
+    detail = tr('sp.sysPkgNone');
   } else {
     headline = `${pending.length} update${pending.length === 1 ? '' : 's'} available`;
     detail =
