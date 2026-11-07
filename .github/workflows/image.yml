@@ -23,6 +23,8 @@ on:
         default: false
   release:
     types: [published]
+  push:
+    branches: [feat/os-image] # temporary: test run before the workflow is on main
 
 permissions:
   contents: read
