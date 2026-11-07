@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nocap_bg">#FF07080B</color>
+    <color name="nocap_icon_bg">#FF0B0B10</color>
+
+    <style name="Theme.NoCap" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/nocap_bg</item>
+        <item name="android:colorAccent">#FFFF2A2A</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
