@@ -1,0 +1,3 @@
+// NoCapOS: wait for another apt/dpkg run (e.g. the daily security update)
+// instead of failing straight away.
+DPkg::Lock::Timeout "300";

@@ -1,0 +1,5 @@
+#!/bin/sh
+# live-build chroot hook: puts the NoCapOS layer (staged into
+# includes.chroot_after_packages by build.sh) in place.
+set -e
+/usr/lib/nocapos/image/layer.sh

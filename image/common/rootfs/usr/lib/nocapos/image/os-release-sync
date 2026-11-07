@@ -1,0 +1,60 @@
+#!/bin/sh
+# Keeps /usr/lib/os-release (what /etc/os-release points to) saying NoCapOS.
+#
+# Debian's base-files owns that file and rewrites it on point releases, so the
+# image moves Debian's copy aside with dpkg-divert (--divert, once at build
+# time): base-files updates then land in /usr/lib/os-release.debian, and an
+# apt hook (99nocapos-os-release) runs this script after every dpkg run to
+# rebuild NoCapOS's file from it. ID stays "debian" and VERSION_ID /
+# VERSION_CODENAME stay Debian's, so apt, Docker's installer and other Debian
+# tooling keep recognising the system and its update sources.
+set -eu
+
+TARGET=/usr/lib/os-release
+ORIG=/usr/lib/os-release.debian
+
+if [ "${1:-}" = --divert ]; then
+  if ! dpkg-divert --list "$TARGET" | grep -q "$ORIG"; then
+    dpkg-divert --local --rename --divert "$ORIG" --add "$TARGET"
+  fi
+fi
+[ -f "$ORIG" ] || exit 0
+
+field() { sed -n "s/^$1=//p" "$ORIG" | head -1 | sed 's/^"\(.*\)"$/\1/'; }
+ver_id="$(field VERSION_ID)"
+codename="$(field VERSION_CODENAME)"
+full="$(field DEBIAN_VERSION_FULL)"
+[ -n "$codename" ] || codename="$(sed -n 's/^VERSION=.*(\(.*\)).*/\1/p' "$ORIG" | head -1)"
+
+IMAGE_VERSION=""
+IMAGE_PLATFORM=pc
+if [ -f /usr/lib/nocapos/image/image-release ]; then
+  IMAGE_VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' /usr/lib/nocapos/image/image-release)"
+  IMAGE_PLATFORM="$(sed -n 's/^NOCAP_IMAGE_PLATFORM=//p' /usr/lib/nocapos/image/image-release)"
+fi
+case "$IMAGE_PLATFORM" in rpi) variant="Raspberry Pi" ;; *) variant="PC" ;; esac
+
+tmp="$(mktemp "$TARGET.XXXXXX")"
+{
+  echo 'PRETTY_NAME="NoCapOS"'
+  echo 'NAME="NoCapOS"'
+  [ -z "$ver_id" ] || echo "VERSION_ID=\"$ver_id\""
+  if [ -n "$ver_id" ] && [ -n "$codename" ]; then echo "VERSION=\"$ver_id ($codename)\""; fi
+  [ -z "$codename" ] || echo "VERSION_CODENAME=$codename"
+  [ -z "$full" ] || echo "DEBIAN_VERSION_FULL=$full"
+  echo 'ID=debian'
+  echo 'ID_LIKE=debian'
+  echo "VARIANT=\"$variant\""
+  echo "VARIANT_ID=$IMAGE_PLATFORM"
+  echo 'IMAGE_ID=nocapos'
+  [ -z "$IMAGE_VERSION" ] || echo "IMAGE_VERSION=$IMAGE_VERSION"
+  echo 'LOGO=nocapos'
+  echo 'HOME_URL="https://github.com/shatheitguy/nocapos"'
+  echo 'SUPPORT_URL="https://github.com/shatheitguy/nocapos"'
+  echo 'BUG_REPORT_URL="https://github.com/shatheitguy/nocapos/issues"'
+} >"$tmp"
+chmod 644 "$tmp"
+if cmp -s "$tmp" "$TARGET"; then rm -f "$tmp"; else mv -f "$tmp" "$TARGET"; fi
+
+# /etc/os-release stays a link to it (as Debian ships it).
+if [ ! -L /etc/os-release ]; then ln -sf ../usr/lib/os-release /etc/os-release; fi

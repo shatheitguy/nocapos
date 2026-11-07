@@ -1,0 +1,21 @@
+# NoCapOS image: what the NoCapOS layer needs from Debian. The bigger host
+# packages (virtual machines, Samba, media, ZFS, Docker) come with the
+# first-boot run of the installer, the same as a one-line install.
+ca-certificates
+curl
+sudo
+openssh-server
+avahi-daemon
+libnss-mdns
+smartmontools
+unattended-upgrades
+apt-listchanges
+plymouth
+plymouth-themes
+initramfs-tools
+grub-common
+locales
+console-setup
+keyboard-configuration
+network-manager
+firmware-linux-free

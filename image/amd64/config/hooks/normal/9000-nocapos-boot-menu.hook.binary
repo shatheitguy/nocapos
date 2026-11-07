@@ -1,0 +1,72 @@
+#!/bin/sh
+# live-build binary hook (runs in binary/, after the boot menus and splash
+# were generated, before the ISO is made): NoCapOS names, colours and art
+# for the ISO's boot menus (GRUB for UEFI, syslinux for BIOS).
+set -e
+ART=../config/nocapos-art
+VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' ../chroot/usr/lib/nocapos/image/image-release)"
+
+brand_names() {
+  sed -i \
+    -e 's/Live system/Try NoCapOS/g' \
+    -e 's/Start installer with speech synthesis/Install NoCapOS with speech synthesis/g' \
+    -e 's/Start installer/Install NoCapOS/g' \
+    -e 's/Graphical install/Install NoCapOS (graphical)/g' \
+    -e 's/Debian GNU\/Linux/NoCapOS/g' \
+    -e 's/Debian/NoCapOS/g' \
+    -e 's/menu title Boot menu/menu title NoCapOS/' \
+    "$@"
+}
+
+# UEFI (and BIOS when GRUB is the BIOS loader): GRUB.
+if [ -d boot/grub ]; then
+  for f in boot/grub/*.cfg; do if [ -f "$f" ]; then brand_names "$f"; fi; done
+  cp "$ART/grub-live-splash.png" boot/grub/splash.png
+  mkdir -p boot/grub/live-theme
+  cat >boot/grub/live-theme/theme.txt <<'THEME'
+title-text: ""
+desktop-image: "../splash.png"
+desktop-color: "#050508"
+terminal-font: "Unifont Regular 16"
++ boot_menu {
+  left = 15%
+  width = 70%
+  top = 50%
+  height = 38%
+  item_font = "Unifont Regular 16"
+  selected_item_font = "Unifont Regular 16"
+  item_color = "#9a9aa4"
+  selected_item_color = "#ffffff"
+  item_height = 18
+  item_padding = 2
+  item_spacing = 4
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+}
++ progress_bar {
+  id = "__timeout__"
+  left = 30%
+  width = 40%
+  top = 92%
+  height = 4
+  fg_color = "#e5383b"
+  bg_color = "#202028"
+  border_color = "#202028"
+  show_text = false
+}
+THEME
+fi
+
+# BIOS: syslinux.
+if [ -d isolinux ]; then
+  for f in isolinux/*.cfg; do if [ -f "$f" ]; then brand_names "$f"; fi; done
+  cp "$ART/isolinux-splash.png" isolinux/splash.png
+  if [ -f isolinux/stdmenu.cfg ]; then
+    sed -i -e 's/#76a1d0ff/#ffe5383b/g' -e 's/^menu vshift .*/menu vshift 13/' isolinux/stdmenu.cfg
+  fi
+fi
+
+if [ -d .disk ]; then
+  echo "NoCapOS ${VERSION} amd64" >.disk/info
+fi
