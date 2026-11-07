@@ -27,6 +27,13 @@ type Update struct {
 	Available string `json:"available"`
 	Arch      string `json:"arch,omitempty"`
 	Held      bool   `json:"held"`
+	// Origin: where the new version comes from (apt: its suites, e.g.
+	// "bookworm-security"), when the package manager says.
+	Origin string `json:"origin,omitempty"`
+	// Security: the distribution marks this as a security update.
+	Security bool `json:"security"`
+	// Kernel: a kernel (or boot firmware) update; it takes effect after a restart.
+	Kernel bool `json:"kernel"`
 }
 
 func lines(out string) []string {
@@ -149,7 +156,7 @@ func parseSize(s string) int64 {
 	return int64(v * mult)
 }
 
-var aptUpgradableRe = regexp.MustCompile(`^(\S+?)/\S+\s+(\S+)\s+(\S+)(?:\s+\[upgradable from:\s*([^\]]+)\])?`)
+var aptUpgradableRe = regexp.MustCompile(`^(\S+?)/(\S+)\s+(\S+)\s+(\S+)(?:\s+\[upgradable from:\s*([^\]]+)\])?`)
 
 // parseAptUpgradable reads `apt list --upgradable`.
 func parseAptUpgradable(out string) []Update {
@@ -159,9 +166,59 @@ func parseAptUpgradable(out string) []Update {
 		if m == nil {
 			continue
 		}
-		ups = append(ups, Update{Name: m[1], Available: m[2], Arch: m[3], Current: strings.TrimSpace(m[4])})
+		ups = append(ups, Update{Name: m[1], Origin: m[2], Available: m[3], Arch: m[4], Current: strings.TrimSpace(m[5]),
+			Security: AptSecuritySuite(m[2]), Kernel: IsKernelPackage(m[1])})
 	}
 	return ups
+}
+
+// AptSecuritySuite reports whether apt's suite list for an update
+// ("bookworm-security", "jammy-security,jammy-updates") includes the
+// distribution's security archive.
+func AptSecuritySuite(suites string) bool {
+	for _, s := range strings.Split(suites, ",") {
+		s = strings.TrimSpace(s)
+		if strings.HasSuffix(s, "-security") || s == "security" {
+			return true
+		}
+	}
+	return false
+}
+
+// kernelPackages: exact names, and (ending in "-") name prefixes, of packages
+// that only take effect after a restart.
+var kernelPackages = []string{
+	"linux-image-", "linux-modules-", "linux-signed-image-", "raspberrypi-kernel", "raspberrypi-bootloader",
+	"raspi-firmware", "kernel", "kernel-core", "kernel-default", "linux", "linux-lts", "linux-zen", "linux-hardened",
+}
+
+// IsKernelPackage reports whether updating the package needs a restart to
+// take effect (a kernel, or the Raspberry Pi's boot firmware).
+func IsKernelPackage(name string) bool {
+	for _, k := range kernelPackages {
+		if name == k || (strings.HasSuffix(k, "-") && strings.HasPrefix(name, k)) {
+			return true
+		}
+	}
+	return false
+}
+
+// MarkKernels sets Kernel on updates whose package needs a restart.
+func MarkKernels(ups []Update) {
+	for i := range ups {
+		ups[i].Kernel = ups[i].Kernel || IsKernelPackage(ups[i].Name)
+	}
+}
+
+// CountSecurity counts the security updates.
+func CountSecurity(ups []Update) int {
+	n := 0
+	for _, u := range ups {
+		if u.Security {
+			n++
+		}
+	}
+	return n
 }
 
 // parseDnfCheckUpdate reads `dnf check-update` ("name.arch version repo";
@@ -333,7 +390,9 @@ func Plan(mgr, action, arg string) ([][]string, error) {
 		case ActRefresh:
 			return [][]string{cmd("apt-get", "update")}, nil
 		case ActUpgradeAll:
-			return [][]string{cmd("apt-get", "update"), apt("-y", "upgrade")}, nil
+			// --with-new-pkgs: a new kernel arrives as a new package, which a
+			// plain "upgrade" holds back (with its meta-package).
+			return [][]string{cmd("apt-get", "update"), apt("-y", "--with-new-pkgs", "upgrade")}, nil
 		case ActUpgrade:
 			return [][]string{apt("-y", "install", "--only-upgrade", arg)}, nil
 		case ActInstall:

@@ -25,6 +25,7 @@ for target in amd64 arm64 armv7; do
     go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$stage/cap" ./cmd/cap)
   cp "$ROOT/deploy/install.sh" "$ROOT/deploy/uninstall.sh" "$ROOT/deploy/nocapos.service" "$ROOT/deploy/docker-compose.yml" \
      "$ROOT/deploy/docker-compose.nvidia.yml" "$ROOT/deploy/Dockerfile.bundle" "$stage/"
+  cp -R "$ROOT/deploy/plymouth" "$stage/plymouth" # boot splash theme
   printf '%s' "$VERSION" >"$stage/VERSION"
   printf '%s' "$target" >"$stage/ARCH"
   : >"$stage/rootfs/data/.keep"

@@ -94,6 +94,7 @@ type HostConfig struct {
 	NanoCpus      int64                    `json:"NanoCpus,omitempty"`
 	Privileged    bool                     `json:"Privileged,omitempty"`
 	Devices       []DeviceMapping          `json:"Devices,omitempty"`
+	CapAdd        []string                 `json:"CapAdd,omitempty"`
 	ShmSize       int64                    `json:"ShmSize,omitempty"`
 	RestartPolicy *RestartPolicy           `json:"RestartPolicy,omitempty"`
 	SecurityOpt   []string                 `json:"SecurityOpt,omitempty"`
