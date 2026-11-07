@@ -379,7 +379,7 @@ func (s *Service) Launch(ctx context.Context, who Person, id string) (Launched, 
 	if s.Streams == nil {
 		return Launched{}, ErrUnsupported{reasonNotNative}
 	}
-	spec := webapps.StreamSpec{Key: streamKey(id), Title: app.Name, Command: RunArgs(id)}
+	spec := webapps.StreamSpec{Key: streamKey(id), Title: app.Name, Command: StreamArgs(id)}
 	if a := s.Account(who.Username); a != nil && a.UID != 0 {
 		spec.RunAs = a
 	} else {

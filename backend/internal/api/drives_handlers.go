@@ -72,6 +72,7 @@ func driveNotification(d removable.Drive, added bool, at time.Time) notify.Notif
 	case d.Mount != "":
 		n.Title = d.Name + " connected — Open in Files"
 		n.Body = "It's under External storage in Files."
+		n.GenZ = &notify.Variant{Title: d.Name + " pulled up — open it in Files", Body: n.Body}
 		n.Action = &notify.Action{App: "files", Props: map[string]any{"root": "system", "path": d.Mount}}
 	case d.Error != "":
 		n.Level, n.Title = "warning", d.Name+" connected, but it can't be opened"

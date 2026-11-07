@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { hostApi, type IPv4Config, type NetworkState, type WiFiJoin } from '../api/hostctl';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import { tr } from '../i18n';
 
 /** Full-screen state after a power action (rendered by <PowerOverlay>). */
 export const usePowerState = create<{ action: 'reboot' | 'shutdown' | null }>(() => ({ action: null }));
@@ -11,17 +12,15 @@ export const usePowerState = create<{ action: 'reboot' | 'shutdown' | null }>(()
 export async function powerHost(action: 'reboot' | 'shutdown'): Promise<void> {
   const reboot = action === 'reboot';
   const ok = await confirmDialog({
-    title: reboot ? 'Restart this machine?' : 'Shut down this machine?',
-    message: reboot
-      ? 'Every app, terminal and remote session will close. NoCapOS is back in a minute or two, and this page reconnects on its own.'
-      : "Every app and session will close and the machine powers off. Heads up: you'll need physical access (or your host's console) to turn it back on.",
-    confirmLabel: reboot ? 'Restart' : 'Shut down',
+    title: reboot ? tr('host.rebootTitle') : tr('host.shutdownTitle'),
+    message: reboot ? tr('host.rebootMsg') : tr('host.shutdownMsg'),
+    confirmLabel: reboot ? tr('host.reboot') : tr('host.shutdown'),
     danger: true,
   });
   if (!ok) return;
   const r = await hostApi.powerAction(action);
   if (!r.ok) {
-    toast('error', reboot ? "Couldn't restart" : "Couldn't shut down", r.error);
+    toast('error', reboot ? tr('host.rebootFail') : tr('host.shutdownFail'), r.error);
     return;
   }
   usePowerState.setState({ action });
@@ -35,19 +34,17 @@ export async function powerHost(action: 'reboot' | 'shutdown'): Promise<void> {
 export async function setNetwork(kind: 'wifi' | 'networking', on: boolean): Promise<NetworkState | null> {
   if (!on) {
     const ok = await confirmDialog({
-      title: kind === 'wifi' ? 'Turn off Wi-Fi?' : 'Turn off all networking?',
-      message:
-        kind === 'wifi'
-          ? "If you're reaching NoCapOS over this machine's Wi-Fi, this page will lose its connection and you'll need local access to turn it back on."
-          : "This disconnects every network on this machine. If you're using NoCapOS remotely, you'll lose access until someone turns networking back on locally.",
-      confirmLabel: 'Turn off',
+      title: kind === 'wifi' ? tr('host.wifiOffTitle') : tr('host.netOffTitle'),
+      message: kind === 'wifi' ? tr('host.wifiOffMsg') : tr('host.netOffMsg'),
+      confirmLabel: tr('host.turnOff'),
       danger: true,
     });
     if (!ok) return null;
   }
   const r = await hostApi.setNetwork({ [kind]: on });
   if (!r.ok) {
-    toast('error', `Couldn't turn ${kind === 'wifi' ? 'Wi-Fi' : 'networking'} ${on ? 'on' : 'off'}`, r.error);
+    const title = kind === 'wifi' ? (on ? tr('host.wifiOnFail') : tr('host.wifiOffFail')) : on ? tr('host.netOnFail') : tr('host.netOffFail');
+    toast('error', title, r.error);
     return null;
   }
   return r.data;
@@ -59,34 +56,34 @@ export async function setNetwork(kind: 'wifi' | 'networking', on: boolean): Prom
  * old settings back by itself.
  */
 export async function applyIPv4(iface: string, connection: string, cfg: IPv4Config): Promise<boolean> {
-  const desc = cfg.method === 'auto' ? 'get its address automatically (DHCP)' : `use the static address ${cfg.address}`;
+  const desc = cfg.method === 'auto' ? tr('host.ipDhcp') : tr('host.ipStatic', { address: cfg.address });
   const go = await confirmDialog({
-    title: `Change ${iface} settings?`,
-    message: `${iface} will ${desc}. If this page reaches NoCapOS through ${iface}, it may disconnect for a moment. You'll be asked to keep the change — if you don't, it's undone automatically.`,
-    confirmLabel: 'Apply',
+    title: tr('host.ipTitle', { iface }),
+    message: tr('host.ipMsg', { iface, desc }),
+    confirmLabel: tr('host.apply'),
   });
   if (!go) return false;
   const r = await hostApi.setIPv4(connection, cfg);
   if (!r.ok) {
-    toast('error', "Couldn't change the network settings", r.error);
+    toast('error', tr('host.ipFail'), r.error);
     return false;
   }
   await new Promise((res) => setTimeout(res, 4000)); // give NetworkManager time to re-apply
   const keep = await confirmDialog({
-    title: 'Keep these network settings?',
-    message: `${iface} now uses the new settings. If anything stopped working, choose Revert — or just wait and they'll be undone.`,
-    confirmLabel: 'Keep',
-    cancelLabel: 'Revert',
+    title: tr('host.keepTitle'),
+    message: tr('host.keepMsg', { iface }),
+    confirmLabel: tr('host.keep'),
+    cancelLabel: tr('host.revert'),
     timeoutSec: Math.max(10, r.data.revert_in - 8),
   });
   if (keep) {
     const k = await hostApi.keepIPv4(r.data.token);
-    if (k.ok) toast('success', 'Bet — network settings saved');
-    else toast('error', 'Too late — the change was already undone', k.error);
+    if (k.ok) toast('success', tr('host.kept'));
+    else toast('error', tr('host.tooLate'), k.error);
     return k.ok;
   }
   await hostApi.revertIPv4(r.data.token);
-  toast('info', 'No worries — your previous network settings are back');
+  toast('info', tr('host.reverted'));
   return false;
 }
 
@@ -94,10 +91,10 @@ export async function applyIPv4(iface: string, connection: string, cfg: IPv4Conf
 export async function joinWiFi(j: WiFiJoin): Promise<{ state: NetworkState | null; error?: string }> {
   const r = await hostApi.wifiConnect(j);
   if (!r.ok) {
-    const error = r.error ?? 'Couldn’t join the network';
-    toast('error', `Wi-Fi's being sus — couldn't join ${j.ssid}`, error);
+    const error = r.error ?? tr('host.joinErr');
+    toast('error', tr('host.joinFail', { ssid: j.ssid }), error);
     return { state: null, error };
   }
-  toast('success', `You're on ${j.ssid} — all set`);
+  toast('success', tr('host.joined', { ssid: j.ssid }));
   return { state: r.data };
 }

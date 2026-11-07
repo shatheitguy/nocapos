@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useState, type FormEvent } from 'react';
 import { netApi, type HealthItem, type MySMB, type SMBHealth } from '../api/netdrive';
 import { Icon } from '../components/Icon';
@@ -7,7 +8,7 @@ import { toast } from '../state/toasts';
 // addresses to use (or exactly what's wrong, with a Fix button), turning SMB
 // on for your own account, and how to connect from each kind of device.
 
-const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast('success', 'Copied', text));
+const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast('success', tr('files.toast.copiedText'), text));
 
 function CopyAddr({ text }: { text: string }) {
   return (
@@ -29,8 +30,8 @@ export function SmbStatusCard({ health, onChanged }: { health: SMBHealth; onChan
     setBusy(it.id);
     const r = await netApi.fix(it.id);
     setBusy(null);
-    if (!r.ok) return toast('error', `Couldn’t fix ${it.label.toLowerCase()}`, r.error);
-    toast('success', 'Fixed it', it.label);
+    if (!r.ok) return toast('error', tr('files.toast.fixFail', { what: it.label.toLowerCase() }), r.error);
+    toast('success', tr('files.toast.fixed'), it.label);
     onChanged(r.data);
   };
   if (!health.smb) return null;
@@ -111,7 +112,7 @@ export function MySmbCard({ onReady }: { onReady?: () => void }) {
     if (!r.ok) return setError(r.error ?? 'That didn’t go through');
     setPw('');
     setMe(r.data);
-    toast('success', 'SMB is on for your account', 'Use your usual password from other devices');
+    toast('success', tr('files.toast.smbMine'), tr('files.toast.smbMineBody'));
     onReady?.();
   };
   return (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { tr } from '../i18n';
 import { api, type ApiResult } from '../api/client';
 import { BrandBar, BrandMark } from '../components/BrandLoader';
 import { Icon } from '../components/Icon';
@@ -17,21 +18,21 @@ const SLOW_MS = 3 * 60_000; // down this long: offer a reload, keep trying
 const STUCK_MS = 12 * 60_000; // ... and this long: say to check the machine
 const RELOAD_S = 3;
 
-const STAGE_TEXT: Record<UpdateStage, string> = {
-  download: 'Grabbing the update…',
-  verify: 'Making sure it’s legit…',
-  packages: 'Syncing system packages…',
-  install: 'Leveling up NoCapOS…',
-  restart: 'Wrapping up…',
-  done: 'All done',
-  failed: 'Update flopped',
+const STAGE_TEXT: Record<UpdateStage, () => string> = {
+  download: () => tr('upd.stage.download'),
+  verify: () => tr('upd.stage.verify'),
+  packages: () => tr('upd.stage.packages'),
+  install: () => tr('upd.stage.install'),
+  restart: () => tr('upd.stage.restart'),
+  done: () => tr('upd.stage.done'),
+  failed: () => tr('upd.stage.failed'),
 };
 
-const STEPS: { id: UpdateStage; label: string }[] = [
-  { id: 'download', label: 'Download' },
-  { id: 'packages', label: 'Packages' },
-  { id: 'install', label: 'Install' },
-  { id: 'restart', label: 'Restart' },
+const STEPS: { id: UpdateStage; label: () => string }[] = [
+  { id: 'download', label: () => tr('upd.step.download') },
+  { id: 'packages', label: () => tr('upd.step.packages') },
+  { id: 'install', label: () => tr('upd.step.install') },
+  { id: 'restart', label: () => tr('upd.step.restart') },
 ];
 const ORDER: UpdateStage[] = ['download', 'verify', 'packages', 'install', 'restart', 'done'];
 
@@ -162,7 +163,7 @@ export function UpdateOverlay() {
   const res = status?.result ?? null;
   const shownPct = phase === 'success' ? 100 : percent;
   const stageIdx = ORDER.indexOf(stage === 'verify' ? 'download' : stage);
-  const versions = from && target ? `${vtag(from)} → ${vtag(target)}` : target ? `Installing ${vtag(target)}` : '';
+  const versions = from && target ? `${vtag(from)} → ${vtag(target)}` : target ? tr('upd.installing', { version: vtag(target) }) : '';
   const slow = phase === 'restarting' && away > SLOW_MS;
   const stuck = phase === 'restarting' && away > STUCK_MS;
 
@@ -170,32 +171,32 @@ export function UpdateOverlay() {
   let sub: string;
   switch (phase) {
     case 'restarting':
-      title = 'Hang tight, restarting — be right back';
+      title = tr('upd.restartingTitle');
       sub = stuck
-        ? 'This is taking way longer than usual. Still trying… check that the machine is on and on the network.'
+        ? tr('upd.stuck')
         : slow
-          ? 'Taking a bit longer than usual. Still trying — or reload the page if your browser asks you to trust the certificate again.'
-          : 'NoCapOS is restarting into the new version. This page reconnects on its own.';
+          ? tr('upd.slow')
+          : tr('upd.restartingSub');
       break;
     case 'success':
-      title = `You're on ${vtag(status?.version || target)}. That's the update, no cap.`;
-      sub = `Reloading in ${countdown}…`;
+      title = tr('upd.successTitle', { version: vtag(status?.version || target) });
+      sub = tr('upd.reloading', { n: countdown });
       break;
     case 'signin':
-      title = 'NoCapOS is back';
-      sub = 'Your session ended while it restarted. Sign back in to keep going — Settings shows how the update went.';
+      title = tr('upd.backTitle');
+      sub = tr('upd.backSub');
       break;
     case 'failed':
-      title = res?.unchanged ? 'Update flopped — nothing changed, your stuff is safe.' : 'Update flopped';
+      title = res?.unchanged ? tr('upd.failedUnchanged') : tr('upd.failed');
       sub = res?.rolled_back
-        ? `The new version didn't start, so ${vtag(res.from || from)} was put back with your data as it was.`
+        ? tr('upd.rolledBack', { version: vtag(res.from || from) })
         : res?.unchanged
-          ? 'NoCapOS was left exactly as it was.'
-          : 'Something went sideways partway through. The details below say what.';
+          ? tr('upd.leftAsIs')
+          : tr('upd.partway');
       break;
     default:
-      title = 'Leveling up NoCapOS';
-      sub = status?.rolling_back ? 'The new version didn’t start — putting the old one back…' : STAGE_TEXT[stage];
+      title = tr('upd.workingTitle');
+      sub = status?.rolling_back ? tr('upd.rollingBack') : STAGE_TEXT[stage]();
   }
 
   const retry = () => {
@@ -207,7 +208,7 @@ export function UpdateOverlay() {
     }).then((r) => {
       setRetrying(false);
       if (r.ok) openUpdate(r.data.from, r.data.target);
-      else setRetryError(r.error ?? 'Couldn’t start the update');
+      else setRetryError(r.error ?? tr('upd.startFail'));
     });
   };
 
@@ -222,7 +223,7 @@ export function UpdateOverlay() {
 
         {(following || phase === 'success') && (
           <>
-            <BrandBar percent={phase === 'restarting' && shownPct < 1 ? undefined : shownPct} done={phase === 'success'} label="Update progress" />
+            <BrandBar percent={phase === 'restarting' && shownPct < 1 ? undefined : shownPct} done={phase === 'success'} label={tr('upd.progress')} />
             <ol className="upd-steps">
               {STEPS.map((s) => {
                 const i = ORDER.indexOf(s.id);
@@ -230,7 +231,7 @@ export function UpdateOverlay() {
                 return (
                   <li key={s.id} className={cls}>
                     {cls === 'done' ? <Icon name="check" size={11} /> : <span className="dot" />}
-                    {s.label}
+                    {s.label()}
                   </li>
                 );
               })}
@@ -245,7 +246,7 @@ export function UpdateOverlay() {
 
         {status?.log && phase !== 'success' && (
           <details className="upd-details">
-            <summary>Show details</summary>
+            <summary>{tr('upd.details')}</summary>
             <pre ref={logRef}>{status.log}</pre>
           </details>
         )}
@@ -253,24 +254,24 @@ export function UpdateOverlay() {
         {phase === 'failed' && (
           <div className="upd-actions">
             <button type="button" className="pill ghost small" onClick={closeUpdate}>
-              Close
+              {tr('upd.close')}
             </button>
             <button type="button" className="pill small" disabled={retrying} onClick={retry}>
-              {retrying ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} Try again
+              {retrying ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} {tr('upd.retry')}
             </button>
           </div>
         )}
         {phase === 'signin' && (
           <div className="upd-actions">
             <button type="button" className="pill small" onClick={() => window.location.reload()}>
-              Sign in
+              {tr('upd.signIn')}
             </button>
           </div>
         )}
         {slow && (
           <div className="upd-actions">
             <button type="button" className="pill ghost small" onClick={() => window.location.reload()}>
-              Reload page
+              {tr('upd.reload')}
             </button>
           </div>
         )}

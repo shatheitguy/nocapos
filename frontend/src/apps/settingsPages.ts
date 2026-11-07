@@ -50,7 +50,7 @@ export const SUBS: Record<string, { label: string; icon: IconName; color: string
   troubleshoot: { label: 'Troubleshoot', icon: 'wrench', color: '#8e8e93', admin: true },
   power: { label: 'Restart & Shut Down', icon: 'power', color: '#ff453a' },
   appearance: { label: 'Appearance', icon: 'palette', color: '#5e5ce6', desc: 'Theme, accent color, brightness — make it yours' },
-  wallpaper: { label: 'Wallpaper', icon: 'image', color: '#32ade6', desc: 'Photos, gradients or your own picture' },
+  wallpaper: { label: 'Wallpaper', icon: 'image', color: '#32ade6', desc: 'Built-in wallpapers or your own pictures' },
   desktop: { label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', desc: 'Dock, widgets and desktop icons' },
   windows: { label: 'Windows', icon: 'maximize', color: '#3a3a3c', desc: 'Title bar buttons and double-click' },
   notifications: { label: 'Notifications', icon: 'bell', color: '#ff3b30', desc: 'Banners, what pings you, Focus and sounds' },
@@ -90,7 +90,7 @@ export const ENTRIES: Entry[] = [
   { id: 'storage', cat: 'general', sub: 'storage', label: 'Storage', icon: 'disk', desc: 'Disks and how full they are', keywords: 'disk drive space capacity usage' },
   { id: 'datetime', cat: 'general', sub: 'datetime', label: 'Date & Time', icon: 'clock', desc: 'Time zone, 24-hour clock and calendar', keywords: 'clock time zone calendar week',
     options: ['24-hour time', 'Show seconds', 'Show the date in the Dock', 'Set time zone automatically', 'Time zone', 'First day of the week'] },
-  { id: 'language', cat: 'general', sub: 'language', label: 'Language & Region', icon: 'globe', desc: 'Language and region formats', keywords: 'locale currency number format', options: ['NoCapOS language', 'Region formats'] },
+  { id: 'language', cat: 'general', sub: 'language', label: 'Language & Region', icon: 'globe', desc: 'Language and region formats', keywords: 'locale currency number format gen z genz standard wording slang professional voice', options: ['Wording', 'Gen Z', 'Standard', 'NoCapOS language', 'Region formats'] },
   { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
   { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
   { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
@@ -100,7 +100,7 @@ export const ENTRIES: Entry[] = [
     options: ['Let AI agents in', 'Only agents on this machine', 'Add an agent', 'Revoke', 'Recent activity'] },
   { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
-  { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Photos, gradients or your own picture', keywords: 'background photo picture', options: ['Your photo', 'Dim wallpaper'] },
+  { id: 'wallpaper', cat: 'wallpaper', label: 'Wallpaper', icon: 'image', desc: 'Built-in wallpapers or your own pictures', keywords: 'background photo picture', options: ['Your picture', 'Delete wallpaper', 'Dim wallpaper'] },
   { id: 'desktop', cat: 'desktop', label: 'Desktop & Dock', icon: 'launcher', desc: 'Dock, widgets and desktop icons', keywords: 'dock taskbar widgets icons grid desktop',
     options: ['Position on screen', 'Icon size', 'Magnify on hover', 'Automatically hide the Dock', 'Show recent apps', 'Show widgets on the desktop', 'Snap icons to grid'] },
   { id: 'windows', cat: 'windows', label: 'Windows', icon: 'maximize', desc: 'Title bar buttons and double-click', keywords: 'title bar macos menu bar', options: ['Window buttons', 'Double-click a title bar to'] },
@@ -118,3 +118,11 @@ export const ENTRIES: Entry[] = [
 export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconName; admin?: boolean; keywords?: string }[] = ENTRIES.map((e) => ({
   id: e.id, label: e.label, icon: e.icon, admin: e.admin, keywords: `${e.desc} ${e.keywords ?? ''} ${(e.options ?? []).join(' ')}`,
 }));
+
+type Translate = (key: string) => string;
+
+/** A Settings page's name in the current voice (keys set.<id> in the dictionaries). */
+export const pageName = (t: Translate, id: string) => t(`set.${id}`);
+
+/** The plain one-line description that goes under a page's name. */
+export const pageDesc = (t: Translate, id: string) => t(`set.${id}.desc`);

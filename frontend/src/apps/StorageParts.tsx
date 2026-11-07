@@ -1,3 +1,5 @@
+import { tr } from '../i18n';
+import { WinClose } from '../components/WinClose';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import {
@@ -135,9 +137,7 @@ export function Sheet({ title, icon, onClose, wide, children, footer }: {
         <header className="st-sheet-head">
           {icon && <span className="st-sheet-icon"><Icon name={icon} size={18} /></span>}
           <h2>{title}</h2>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
-            <Icon name="close" size={16} />
-          </button>
+          <WinClose onClick={onClose} label={tr('common.close')} />
         </header>
         <div className="st-sheet-body">{children}</div>
         {footer && <footer className="st-sheet-foot">{footer}</footer>}
@@ -154,7 +154,7 @@ export function useJob(onDone: () => void) {
     setError(null);
     const r = await p;
     if (!r.ok) {
-      setError(r.error ?? 'That didn’t work');
+      setError(r.error ?? tr('storage.toast.didntWork'));
       return;
     }
     setJob(r.data.job);
@@ -230,7 +230,7 @@ export function DiskPicker({ disks, picked, onChange, single }: {
   };
   return (
     <div className="st-picker">
-      {avail.length === 0 && <p className="muted">No free disks right now. Connect a new disk, or free one up first.</p>}
+      {avail.length === 0 && <p className="muted">{tr('storage.empty.freeDisks')}</p>}
       {avail.map((d) => (
         <label key={d.name} className={`st-pick ${picked.includes(d.name) ? 'on' : ''}`}>
           <input type={single ? 'radio' : 'checkbox'} name="st-disk" checked={picked.includes(d.name)} onChange={() => toggle(d.name)} />
@@ -332,7 +332,7 @@ export function CreatePoolWizard({ disks, onClose, onDone }: { disks: Disk[]; on
 
   const next = [picked.length > 0, !!layout && sizes.length >= (def?.min ?? 99), nameOk, confirm === 'ERASE'][step];
   const create = () =>
-    void start(storageApi.createPool({ name, layout: layout!, disks: picked, compression, add_to_files: inFiles, confirm }), `Pool ${name} is ready`);
+    void start(storageApi.createPool({ name, layout: layout!, disks: picked, compression, add_to_files: inFiles, confirm }), tr('storage.toast.poolReady', { name }));
 
   return (
     <Sheet
@@ -441,7 +441,7 @@ export function FormatDisk({ disk, onClose, onDone }: { disk: Disk; onClose: () 
               <button type="button" disabled={!ok} onClick={() => setStep(1)}>Continue</button>
             ) : (
               <button type="button" className="danger solid" disabled={confirm !== 'ERASE'}
-                onClick={() => void start(storageApi.format(disk.name, label, inFiles, confirm), `${label} is ready`)}>
+                onClick={() => void start(storageApi.format(disk.name, label, inFiles, confirm), tr('storage.toast.diskReady', { name: label }))}>
                 Erase and set up
               </button>
             )}
@@ -509,7 +509,7 @@ export function AddDisks({ pool, disks, onClose, onDone }: { pool: Pool; disks: 
               <button type="button" disabled={!can} onClick={() => setStep(1)}>Continue</button>
             ) : (
               <button type="button" className="danger solid" disabled={!can}
-                onClick={() => void start(storageApi.addVdev(pool.name, { layout, disks: picked, confirm, allow_mismatch: mismatch || undefined }), `Added ${picked.length} disks to ${pool.name}`)}>
+                onClick={() => void start(storageApi.addVdev(pool.name, { layout, disks: picked, confirm, allow_mismatch: mismatch || undefined }), tr('storage.toast.vdevAdded', { n: picked.length, name: pool.name }))}>
                 Erase and add
               </button>
             )}
@@ -573,7 +573,7 @@ export function ReplaceDisk({ pool, old, oldLabel, disks, onClose, onDone }: {
               <button type="button" disabled={!picked.length} onClick={() => setStep(1)}>Continue</button>
             ) : (
               <button type="button" className="danger solid" disabled={confirm !== 'ERASE'}
-                onClick={() => void start(storageApi.replace(pool.name, { old: oldRef, disk: picked[0], confirm }), 'Replacement started; ZFS is copying data to the new disk')}>
+                onClick={() => void start(storageApi.replace(pool.name, { old: oldRef, disk: picked[0], confirm }), tr('storage.toast.replaceStarted'))}>
                 Erase and replace
               </button>
             )}
@@ -656,12 +656,12 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
     setTesting(true);
     const r = await storageApi.smartTest(disk.name, type);
     setTesting(false);
-    if (!r.ok) return toast('error', 'Couldn’t start the test', r.error);
+    if (!r.ok) return toast('error', tr('storage.toast.testFail'), r.error);
     const mins = type === 'short' ? (smart?.summary.short_test_min ?? 2) : smart?.summary.long_test_min;
     toast(
       'info',
-      type === 'short' ? 'Short test started' : 'Long test started',
-      `${mins ? `It takes ${fmtETA(mins * 60)}` : 'It can take several hours'}; the disk stays usable and you'll get a notification with the result.`,
+      type === 'short' ? tr('storage.toast.shortTest') : tr('storage.toast.longTest'),
+      mins ? tr('storage.toast.testTakes', { eta: fmtETA(mins * 60) }) : tr('storage.toast.testHours'),
     );
     window.setTimeout(() => void load(), 1500);
   };
@@ -699,7 +699,7 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
 
       <h4 className="section-label">Partitions</h4>
       {disk.partitions.length === 0 ? (
-        <p className="muted small">No partitions — this disk is blank.</p>
+        <p className="muted small">{tr('storage.empty.partitions')}</p>
       ) : (
         <div className="ucard st-table-wrap">
           <table className="table st-table">
@@ -811,8 +811,8 @@ function FilesToggleDisk({ disk, onChanged }: { disk: Disk; onChanged: () => voi
     setBusy(true);
     const r = await storageApi.diskFiles(disk.name, on);
     setBusy(false);
-    if (!r.ok) return toast('error', 'Couldn’t change Files', r.error);
-    toast('success', on ? 'Shown in Files' : 'Hidden from Files');
+    if (!r.ok) return toast('error', tr('storage.toast.filesFail'), r.error);
+    toast('success', on ? tr('storage.toast.shownInFiles') : tr('storage.toast.hiddenFromFiles'));
     onChanged();
   };
   return (

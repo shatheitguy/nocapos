@@ -1,4 +1,5 @@
 // Phase 5 pieces for Files: RWX permission badges and the preview panel.
+import { tr } from '../i18n';
 import { useEffect, useState } from 'react';
 import { fileApi, fileKind, fileTicket, rawUrl, type FileEntry, type FileKind } from '../api/files';
 import { FilesModal } from './FilesNetwork';
@@ -120,7 +121,7 @@ export function FilePreview({ root, path, entry, unix, onClose }: { root: string
             ) : kind === 'audio' && ticket ? (
               <audio className="fp-audio" src={rawUrl(root, path, ticket)} controls />
             ) : (
-              <p className="muted small">No preview for this kind of file.</p>
+              <p className="muted small">{tr('files.noPreview')}</p>
             )}
           </div>
         </>

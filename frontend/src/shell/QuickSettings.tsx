@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { tr } from '../i18n';
 import { UserAvatar } from '../components/UserAvatar';
 import { hostApi, type NetworkState } from '../api/hostctl';
 import type { User } from '../api/types';
@@ -115,14 +116,14 @@ export function QuickSettings({
     return (
       <div ref={ref} className="popover quick-settings control-center" role="dialog" aria-label={wifi ? 'Wi-Fi' : 'Network'}>
         <div className="cc-detail-head">
-          <button type="button" className="icon-btn neutral" aria-label="Back" onClick={() => setView('main')}>
+          <button type="button" className="icon-btn neutral" aria-label={tr('qs.back')} onClick={() => setView('main')}>
             <Icon name="chevronLeft" size={16} />
           </button>
           <b>{wifi ? 'Wi-Fi' : 'Network'}</b>
           <span className="spacer" />
           {wifi && net.wifi.supported && (
             <label className="toggle row cc-detail-switch">
-              <input type="checkbox" role="switch" aria-label="Wi-Fi" checked={net.wifi.enabled} disabled={!!busy} onChange={() => void flip('wifi')} />
+              <input type="checkbox" role="switch" aria-label={tr('qs.wifi')} checked={net.wifi.enabled} disabled={!!busy} onChange={() => void flip('wifi')} />
             </label>
           )}
         </div>
@@ -131,13 +132,13 @@ export function QuickSettings({
             !net.wifi.supported ? (
               <p className="net-note">{net.wifi.reason}</p>
             ) : !net.wifi.enabled ? (
-              <p className="net-note">Wi-Fi is off.</p>
+              <p className="net-note">{tr('qs.wifiOff')}</p>
             ) : (
               <WifiList device={wireless?.name} onChanged={loadNet} />
             )
           ) : (
             <div className="cc-ifaces">
-              {net.interfaces.length === 0 && <p className="net-note">No network adapters found.</p>}
+              {net.interfaces.length === 0 && <p className="net-note">{tr('qs.noAdapters')}</p>}
               {net.interfaces.map((i) => (
                 <div key={i.name} className="cc-iface">
                   <div className="cc-iface-head">
@@ -160,7 +161,7 @@ export function QuickSettings({
   }
 
   return (
-    <div ref={ref} className="popover quick-settings control-center" role="dialog" aria-label="Control Center">
+    <div ref={ref} className="popover quick-settings control-center" role="dialog" aria-label={tr('qs.label')}>
       <div className="qs-user">
         <UserAvatar name={user.username} size="lg" />
         <div>
@@ -177,19 +178,19 @@ export function QuickSettings({
           <>
             <Tile
               icon="wifi"
-              title="Wi-Fi"
+              title={tr('qs.wifi')}
               on={!!net?.wifi.enabled}
               disabled={!net}
-              sub={busy === 'wifi' ? 'Switching…' : !net ? 'Checking…' : net.wifi.enabled ? wireless?.connection || 'On' : net.wifi.supported ? 'Off' : 'Not available'}
+              sub={busy === 'wifi' ? tr('qs.switching') : !net ? tr('qs.checking') : net.wifi.enabled ? wireless?.connection || tr('qs.on') : net.wifi.supported ? tr('qs.off') : tr('qs.na')}
               onClick={() => void flip('wifi')}
               onMore={() => setView('wifi')}
             />
             <Tile
               icon="ethernet"
-              title="Network"
+              title={tr('qs.network')}
               on={!!net?.networking.enabled}
               disabled={!net}
-              sub={busy === 'networking' ? 'Switching…' : !net ? 'Checking…' : net.networking.enabled ? wired?.name || 'Connected' : 'Off'}
+              sub={busy === 'networking' ? tr('qs.switching') : !net ? tr('qs.checking') : net.networking.enabled ? wired?.name || tr('qs.connected') : tr('qs.off')}
               onClick={() => void flip('networking')}
               onMore={() => setView('network')}
             />
@@ -197,17 +198,17 @@ export function QuickSettings({
         )}
         <Tile
           icon={light ? 'sun' : 'moon'}
-          title="Light mode"
+          title={tr('qs.lightMode')}
           on={light}
           disabled={!classic}
-          sub={!classic ? `${prefs.uiTheme === 'glass' ? 'Glass' : 'Cyber-Deck'} is always dark` : light ? 'On' : 'Off'}
+          sub={!classic ? tr('qs.alwaysDark', { theme: prefs.uiTheme === 'glass' ? 'Glass' : 'Cyber-Deck' }) : light ? tr('qs.on') : tr('qs.off')}
           onClick={() => prefs.set({ theme: light ? 'dark' : 'light' })}
         />
         <Tile
           icon="moon"
-          title="Focus"
+          title={tr('qs.focus')}
           on={prefs.focusMode}
-          sub={prefs.focusMode ? 'Notifications silenced' : 'Off'}
+          sub={prefs.focusMode ? tr('qs.focusOn') : tr('qs.off')}
           onClick={() => prefs.set({ focusMode: !prefs.focusMode })}
           onMore={() => openSettings('focus')}
         />
@@ -216,14 +217,14 @@ export function QuickSettings({
       <div className="cc-sliders">
         <CcSlider
           icon={prefs.brightness < 60 ? 'moon' : 'sun'}
-          label="Brightness"
+          label={tr('qs.brightness')}
           value={prefs.brightness}
           min={30}
           onChange={(brightness) => prefs.set({ brightness })}
         />
         <CcSlider
           icon="sound"
-          label="Sound"
+          label={tr('qs.sound')}
           muted={!prefs.uiSounds || prefs.soundVolume === 0}
           value={prefs.uiSounds ? prefs.soundVolume : 0}
           onIcon={() => {

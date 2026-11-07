@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
+import { tr } from '../i18n';
 import type { StoreApp } from '../api/appstore';
 import { canMultiWindow, openApp, visibleApps, type AppMeta } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
@@ -268,11 +269,11 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
     const desk = useDesktopIcons.getState();
     const key = folderKey(id);
     return [
-      { label: 'Open', icon: 'folder', onClick: () => setOpenFolder(id) },
+      { label: tr('lp.open'), icon: 'folder', onClick: () => setOpenFolder(id) },
       desk.has(key)
-        ? { label: 'Remove from Desktop', icon: 'desktop', onClick: () => desk.remove(key) }
-        : { label: 'Add to Desktop', icon: 'desktop', onClick: () => desk.place(key) },
-      { label: 'Ungroup', icon: 'close', danger: true, onClick: () => ungroup(id) },
+        ? { label: tr('dock.removeFromDesktop'), icon: 'desktop', onClick: () => desk.remove(key) }
+        : { label: tr('dock.addToDesktop'), icon: 'desktop', onClick: () => desk.place(key) },
+      { label: tr('lp.ungroup'), icon: 'close', danger: true, onClick: () => ungroup(id) },
     ];
   };
 
@@ -281,7 +282,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
     const key = storeKey(app.id);
     const items: MenuItem[] = [
       {
-        label: 'Open',
+        label: tr('lp.open'),
         icon: 'launcher',
         onClick: () => {
           launchStoreApp(app);
@@ -292,13 +293,13 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
     if (app.installed) {
       items.push(
         desk.has(key)
-          ? { label: 'Remove from Desktop', icon: 'desktop', onClick: () => desk.remove(key) }
-          : { label: 'Add to Desktop', icon: 'desktop', onClick: () => desk.place(key) },
+          ? { label: tr('dock.removeFromDesktop'), icon: 'desktop', onClick: () => desk.remove(key) }
+          : { label: tr('dock.addToDesktop'), icon: 'desktop', onClick: () => desk.place(key) },
       );
     }
     if (isAdmin) {
       items.push({
-        label: 'Show in App Store',
+        label: tr('lp.showInStore'),
         icon: 'store',
         onClick: () => {
           openApp('appcenter', { props: { app: app.id } });
@@ -320,7 +321,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           data-drop="folder"
           data-folder={f.id}
           data-scope="launchpad"
-          title="Open folder · drag it to the Desktop"
+          title={tr('lp.folderTitle')}
           onPointerDown={(e) => pressApp(e, folderKey(f.id), 'launchpad', { touchHold: TOUCH_HOLD })}
           onClick={() => setOpenFolder(f.id)}
           onContextMenu={(e) => {
@@ -354,7 +355,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         data-drop="app"
         data-app={a.id}
         data-scope="launchpad"
-        title="Drag onto another app to make a folder · Shift+click for a new window"
+        title={tr('lp.appTitle')}
         onPointerDown={(e) => pressApp(e, a.id, 'launchpad', { touchHold: TOUCH_HOLD })}
         onClick={(e) => launch(a.id, e.shiftKey)}
         onContextMenu={(e) => {
@@ -388,8 +389,8 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           <input
             ref={input}
             value={q}
-            placeholder="Search apps"
-            aria-label="Search apps"
+            placeholder={tr('lp.search')}
+            aria-label={tr('lp.search')}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' || !firstApp) return;
@@ -439,7 +440,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           )}
         </div>
         {!needle && pages.length > 1 && (
-          <div className="launcher-dots" role="tablist" aria-label="Launchpad pages">
+          <div className="launcher-dots" role="tablist" aria-label={tr('lp.pages')}>
             {pages.map((_, p) => (
               <button
                 key={p}

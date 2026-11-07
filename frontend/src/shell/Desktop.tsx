@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { tr } from '../i18n';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../api/client';
 import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
@@ -44,6 +45,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   // re-render the whole desktop.
   const windowIds = useWM(useShallow((s) => s.windows.map((w) => w.id)));
   const widgets = usePrefs((s) => s.widgets);
+  // Switching between Gen Z and Standard wording re-renders the shell (the dock,
+  // menus and panels read their words with tr()).
+  usePrefs((s) => s.lingo);
   const lockTimeout = usePrefs((s) => s.lockTimeout);
   const screensaver = usePrefs((s) => s.screensaver);
   const saverDelay = usePrefs((s) => s.saverDelay);
@@ -154,17 +158,17 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     const prefs = usePrefs.getState();
     const icons = useDesktopIcons.getState();
     return [
-      { label: 'Add apps to Desktop…', icon: 'plus', onClick: () => setLauncher(true) },
-      ...(icons.icons.length ? [{ label: 'Clean Up icons', icon: 'launcher' as const, onClick: icons.cleanUp }] : []),
-      { label: 'Edit widgets', icon: 'pencil', onClick: openWidgetEdit },
+      { label: tr('desk.addApps'), icon: 'plus', onClick: () => setLauncher(true) },
+      ...(icons.icons.length ? [{ label: tr('desk.cleanUp'), icon: 'launcher' as const, onClick: icons.cleanUp }] : []),
+      { label: tr('desk.editWidgets'), icon: 'pencil', onClick: openWidgetEdit },
       {
         label: widgets ? 'Hide widgets' : 'Show widgets',
         icon: 'eye',
         onClick: () => prefs.set({ widgets: !widgets }),
       },
-      { label: 'Open Launchpad', icon: 'launcher', onClick: () => setLauncher(true) },
-      { label: 'Change wallpaper…', icon: 'image', onClick: () => openApp('settings', { props: { section: 'wallpaper' } }) },
-      { label: 'Desktop & Dock settings…', icon: 'settings', onClick: () => openApp('settings', { props: { section: 'desktop' } }) },
+      { label: tr('desk.openLaunchpad'), icon: 'launcher', onClick: () => setLauncher(true) },
+      { label: tr('desk.wallpaper'), icon: 'image', onClick: () => openApp('settings', { props: { section: 'wallpaper' } }) },
+      { label: tr('desk.settings'), icon: 'settings', onClick: () => openApp('settings', { props: { section: 'desktop' } }) },
     ];
   };
 

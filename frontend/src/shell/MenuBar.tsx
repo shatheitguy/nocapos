@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useT } from '../i18n';
 import { AccountPanel } from './AccountPanel';
 import { TransfersButton } from './Transfers';
 import type { User } from '../api/types';
@@ -27,7 +28,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
   // A string, so moving the front window doesn't re-render the menu bar.
   const frontTitle = useWM((s) => {
     const w = s.windows.find((x) => x.id === s.focused && !x.minimized);
-    return w ? (APPS[w.appId]?.title ?? w.title) : 'Desktop';
+    return w ? (APPS[w.appId]?.title ?? w.title) : '';
   });
   const [brandMenu, setBrandMenu] = useState(false);
   const brandRef = useRef<HTMLButtonElement>(null);
@@ -36,42 +37,43 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLButtonElement>(null);
   const isAdmin = user.role === 'admin';
+  const t = useT();
 
 
   return (
-    <header className="menubar" aria-label="Menu bar">
+    <header className="menubar" aria-label={t('mb.label')}>
       <button
         ref={brandRef}
         type="button"
         className={`mb-brand ${brandMenu ? 'open' : ''}`}
-        aria-label={`${user.username} menu`}
+        aria-label={t('mb.userMenu', { name: user.username })}
         aria-expanded={brandMenu}
         title={user.username}
         onClick={() => setBrandMenu((v) => !v)}
       >
         <UserAvatar name={user.username} />
       </button>
-      <b className="mb-app">{frontTitle}</b>
+      <b className="mb-app">{frontTitle || t('mb.desktop')}</b>
 
       <span className="spacer" />
 
       <div className="mb-status">
         {focusMode && (
-          <button type="button" className="mb-icon" title="Focus is on" onClick={() => usePrefs.getState().set({ focusMode: false })}>
+          <button type="button" className="mb-icon" title={t('mb.focusOn')} onClick={() => usePrefs.getState().set({ focusMode: false })}>
             <Icon name="moon" size={15} />
           </button>
         )}
         <TransfersButton className="mb-icon" />
         {isAdmin && <NotifyBell className="mb-icon" size={15} />}
-        <button type="button" className="mb-icon" title="Search (Ctrl+Space)" aria-label="Search" onClick={() => useSpotlight.getState().toggle()}>
+        <button type="button" className="mb-icon" title={t('mb.search')} aria-label={t('mb.searchLabel')} onClick={() => useSpotlight.getState().toggle()}>
           <Icon name="search" size={15} />
         </button>
         <button
           ref={ccRef}
           type="button"
           className={`mb-icon mb-status-btn ${ccOpen ? 'open' : ''}`}
-          title={`Control Center — Wi-Fi, network, sound${online ? '' : ' (reconnecting…)'}`}
-          aria-label="Control Center"
+          title={online ? t('mb.cc') : t('mb.ccOffline')}
+          aria-label={t('dock.controlCenter')}
           onClick={() => setCcOpen((v) => !v)}
         >
           <Icon name="wifi" size={15} />
@@ -79,7 +81,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
           <Icon name="sliders" size={15} />
           {!online && <span className="mb-dot" />}
         </button>
-        <button ref={clockRef} type="button" className={`mb-icon mb-clock ${clockOpen ? 'open' : ''}`} title="Clock & calendar" onClick={() => setClockOpen((v) => !v)}>
+        <button ref={clockRef} type="button" className={`mb-icon mb-clock ${clockOpen ? 'open' : ''}`} title={t('dock.clock')} onClick={() => setClockOpen((v) => !v)}>
           {fmtDate(now, tp, 'short')}&nbsp;&nbsp;{fmtTime(now, tp)}
         </button>
       </div>

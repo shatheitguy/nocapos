@@ -237,3 +237,32 @@ func TestCrashIgnoresIntendedExits(t *testing.T) {
 		t.Fatal("crash long after a kill was ignored")
 	}
 }
+
+func TestGenZWordingIsStoredAlongside(t *testing.T) {
+	ctx := context.Background()
+	s := newService(t)
+	n := Notification{Key: "update:v9", Kind: KindUpdate, Title: "NoCapOS 9 is available", Body: "Open Software Update.",
+		GenZ: &Variant{Title: "NoCapOS 9 just dropped", Body: "Open Glow Up."}}
+	if added, err := s.Add(ctx, n); err != nil || !added {
+		t.Fatalf("add: %v %v", added, err)
+	}
+	// An empty variant is dropped rather than stored.
+	if _, err := s.Add(ctx, Notification{Key: "plain", Kind: KindTest, Title: "Plain", GenZ: &Variant{}}); err != nil {
+		t.Fatal(err)
+	}
+	items, _, err := s.List(ctx, 0)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("list: %d items, %v", len(items), err)
+	}
+	byKey := map[string]Notification{}
+	for _, it := range items {
+		byKey[it.Key] = it
+	}
+	got := byKey["update:v9"]
+	if got.Title != n.Title || got.GenZ == nil || got.GenZ.Title != n.GenZ.Title || got.GenZ.Body != n.GenZ.Body {
+		t.Fatalf("stored = %+v (genz %+v)", got, got.GenZ)
+	}
+	if byKey["plain"].GenZ != nil {
+		t.Fatalf("empty variant kept: %+v", byKey["plain"].GenZ)
+	}
+}

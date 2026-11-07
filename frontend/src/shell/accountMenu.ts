@@ -1,4 +1,5 @@
 import type { User } from '../api/types';
+import { tr } from '../i18n';
 import { openApp } from '../apps/meta';
 import type { MenuItem } from '../components/ContextMenu';
 import { powerHost } from '../lib/hostActions';
@@ -13,9 +14,9 @@ async function quitAll() {
   const wm = useWM.getState();
   if (!wm.windows.length) return;
   const ok = await confirmDialog({
-    title: 'Close all apps?',
-    message: `Closes every open window (${wm.windows.length}). Anything unsaved in them is lost.`,
-    confirmLabel: 'Close all',
+    title: tr('acct.closeAllTitle'),
+    message: tr('acct.closeAllMsg', { n: wm.windows.length }),
+    confirmLabel: tr('acct.closeAllOk'),
     danger: true,
   });
   if (ok) for (const w of useWM.getState().windows) useWM.getState().close(w.id);
@@ -24,26 +25,26 @@ async function quitAll() {
 export function accountMenuItems(user: User, onLock: () => void): MenuItem[] {
   const isAdmin = user.role === 'admin';
   return [
-    { label: 'About NoCapOS', icon: 'info', onClick: () => openApp('settings', { props: { section: 'about' } }) },
-    { label: 'Settings…', icon: 'settings', divider: true, onClick: () => openApp('settings') },
-    ...(isAdmin ? [{ label: 'App Store…', icon: 'store' as const, onClick: () => openApp('appcenter') }] : []),
-    { label: 'Close All Apps…', icon: 'close', divider: true, onClick: () => void quitAll() },
+    { label: tr('acct.about'), icon: 'info', onClick: () => openApp('settings', { props: { section: 'about' } }) },
+    { label: tr('acct.settings'), icon: 'settings', divider: true, onClick: () => openApp('settings') },
+    ...(isAdmin ? [{ label: tr('acct.store'), icon: 'store' as const, onClick: () => openApp('appcenter') }] : []),
+    { label: tr('acct.closeAll'), icon: 'close', divider: true, onClick: () => void quitAll() },
     ...(isAdmin
       ? [
-          { label: 'Restart…', icon: 'restart' as const, divider: true, onClick: () => void powerHost('reboot') },
-          { label: 'Shut Down…', icon: 'power' as const, onClick: () => void powerHost('shutdown') },
+          { label: tr('acct.restart'), icon: 'restart' as const, divider: true, onClick: () => void powerHost('reboot') },
+          { label: tr('acct.shutdown'), icon: 'power' as const, onClick: () => void powerHost('shutdown') },
         ]
       : []),
     {
-      label: 'Lock Screen',
-      hint: 'Keeps your apps and windows open; your password unlocks it',
+      label: tr('acct.lock'),
+      hint: tr('acct.lockHint'),
       icon: 'lock',
       divider: true,
       onClick: onLock,
     },
     {
-      label: `Log Out ${user.username}`,
-      hint: 'Closes all your windows and ends your session',
+      label: tr('acct.logout', { name: user.username }),
+      hint: tr('acct.logoutHint'),
       icon: 'logout',
       onClick: () => void logOutClean(),
     },

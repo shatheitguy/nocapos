@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { create } from 'zustand';
 import { appURL, openStoreApp, storeApi, type StoreApp } from '../api/appstore';
 import { getUser } from '../api/client';
@@ -89,7 +90,7 @@ export async function uninstallStoreApp(app: StoreApp): Promise<boolean> {
     toast('error', `Couldn’t uninstall ${app.name}`, r.error);
     return false;
   }
-  toast('info', `Removing ${app.name}…`, 'Hang tight, this takes a sec.');
+  toast('info', tr('apps.removing', { name: app.name }), tr('apps.removingBody'));
   void useStoreApps.getState().load();
   return true;
 }

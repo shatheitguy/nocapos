@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { tr } from '../i18n';
 import { createPortal } from 'react-dom';
 import { useConfirm } from '../state/confirm';
 import { Icon } from './Icon';
@@ -47,7 +48,7 @@ export function ConfirmHost() {
         )}
         <div className="confirm-actions">
           <button ref={cancelRef} type="button" className="ghost" onClick={() => req.resolve(false)}>
-            {req.cancelLabel ?? 'Cancel'}
+            {req.cancelLabel ?? tr('dlg.cancel')}
           </button>
           {req.choices && req.pick ? (
             req.choices.map((c, i) => (
@@ -62,7 +63,7 @@ export function ConfirmHost() {
             ))
           ) : (
             <button type="button" className={req.danger ? 'danger-solid' : ''} onClick={() => req.resolve(true)}>
-              {req.confirmLabel ?? 'Continue'}
+              {req.confirmLabel ?? tr('dlg.continue')}
             </button>
           )}
         </div>
