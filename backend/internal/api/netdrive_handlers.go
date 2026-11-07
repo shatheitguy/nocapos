@@ -248,3 +248,55 @@ func (s *Server) shareDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// shareHealth checks SMB sharing end to end (Files → File Sharing's status card).
+func (s *Server) shareHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.NetDrives.Health(r.Context()))
+}
+
+// shareFix runs one health check's fix and returns the new picture.
+func (s *Server) shareFix(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	err := s.NetDrives.Fix(r.Context(), req.ID)
+	s.audit(r, userFrom(r.Context()).ID, "sharing.fix", req.ID, err == nil, errText(err))
+	if err != nil {
+		s.netError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.NetDrives.Health(r.Context()))
+}
+
+// mySMB: whether the signed-in person can use SMB yet.
+func (s *Server) mySMB(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.NetDrives.MySMBStatus(r.Context(), userFrom(r.Context()).Username))
+}
+
+// mySMBEnable turns SMB on for the signed-in person's own account with their
+// password (checked, then handed to Samba on stdin).
+func (s *Server) mySMBEnable(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	u := userFrom(r.Context())
+	err := s.NetDrives.EnableMySMB(r.Context(), u.Username, req.Password)
+	s.audit(r, u.ID, "sharing.smb_account", u.Username, err == nil, errText(err))
+	switch {
+	case errors.Is(err, netdrive.ErrBadPassword):
+		writeError(w, http.StatusBadRequest, "bad_password", "That password’s not it. Use the one you sign in with.")
+	case errors.Is(err, netdrive.ErrTooManyTries):
+		w.Header().Set("Retry-After", "900")
+		writeError(w, http.StatusTooManyRequests, "locked", "Too many wrong tries. Take 15 and try again.")
+	case err != nil:
+		s.netError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, s.NetDrives.MySMBStatus(r.Context(), u.Username))
+	}
+}

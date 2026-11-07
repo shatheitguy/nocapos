@@ -128,6 +128,14 @@ if [ -f "$SAMBA_DIR/nocapos.conf" ] || grep -qs '^include = /etc/samba/nocapos.c
     for svc in smbd smb samba; do systemctl reload "$svc" 2>/dev/null && break; done || true
   fi
 fi
+# Network discovery NoCapOS set up for SMB: its Avahi announcement and, where
+# only the wsdd program was installed, its own wsdd unit.
+rm -f /etc/avahi/services/nocapos-smb.service
+if [ -f /etc/systemd/system/nocapos-wsdd.service ]; then
+  systemctl disable --now nocapos-wsdd >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/nocapos-wsdd.service
+  systemctl daemon-reload >/dev/null 2>&1 || true
+fi
 # The old shared "nocapos" sharing account (a login-less system user NoCapOS made).
 if has pdbedit && pdbedit -L 2>/dev/null | grep -q "^$SHARE_USER:"; then
   pdbedit -x "$SHARE_USER" >/dev/null 2>&1 || true

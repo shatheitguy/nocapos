@@ -27,6 +27,9 @@ func TestRenderSambaGolden(t *testing.T) {
 	want := `# Managed by NoCapOS (Settings → File Sharing). Changes here are overwritten.
 # Empty: nobody has access yet
 
+[global]
+   server min protocol = SMB2_02
+
 [homes]
    comment = Home
    path = /srv/nocap/homes/%S

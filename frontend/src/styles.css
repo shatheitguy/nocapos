@@ -2648,3 +2648,44 @@ button.ce-add-line { align-self: flex-start; }
 .acct-text small { color: var(--muted); font-size: 11.5px; line-height: 1.35; white-space: normal; }
 .acct-sep { border: 0; border-top: 1px solid var(--border); margin: 5px 8px; }
 :root[data-menubar] .acct-panel.left { left: 8px; right: auto; }
+
+/* File Sharing: SMB status card, your own SMB sign-in, how to connect, who can open a folder */
+.smb-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); }
+.smb-card.live { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); background: color-mix(in srgb, var(--ok) 8%, var(--surface-2)); }
+.smb-card.down { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); background: color-mix(in srgb, var(--bad) 6%, var(--surface-2)); }
+.smb-card-head { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.smb-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--bad); }
+.smb-card.live .smb-dot { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent); }
+.smb-addrs { display: flex; flex-wrap: wrap; gap: 6px; }
+.smb-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.smb-issues li { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.45; }
+.smb-issues li > svg { flex: none; margin-top: 2px; }
+.smb-issues li.bad > svg { color: var(--bad); }
+.smb-issues li.warn > svg { color: var(--warn); }
+.smb-issues li > span { flex: 1; min-width: 0; }
+.smb-issues li > button { flex: none; display: inline-flex; align-items: center; gap: 5px; }
+.smb-people { display: flex; flex-wrap: wrap; gap: 6px; }
+.smb-me { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.smb-me p { margin: 2px 0 0; }
+.smb-me.ready { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.smb-me.ready > svg { color: var(--ok); flex: none; }
+.smb-me-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.smb-me-row input { flex: 1 1 180px; min-width: 0; }
+.smb-me-row button { display: inline-flex; align-items: center; gap: 6px; }
+.smb-howto { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.smb-howto-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.smb-howto-row > svg { flex: none; color: var(--muted); }
+.smb-howto-text { display: flex; flex-direction: column; flex: 1 1 180px; min-width: 0; font-size: 13px; }
+.smb-howto p { margin: 6px 0 0; }
+.who-can { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 2px 28px; }
+.who-can-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.who-can-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.who-can .chip { padding: 3px 4px 3px 9px; gap: 6px; font-weight: 500; color: var(--text); }
+.who-can .chip.admin, .who-can .chip.guest { padding-right: 9px; color: var(--muted); }
+.who-can .chip.guest { background: color-mix(in srgb, var(--warn) 17%, transparent); color: var(--warn); }
+.chip-switch { display: inline-flex; border-radius: 99px; background: var(--surface-3); padding: 2px; }
+.chip-switch button { padding: 1px 8px; font-size: 11px; font-weight: 600; border-radius: 99px; background: transparent; color: var(--muted); }
+.chip-switch button.on { background: var(--accent); color: var(--accent-ink); }
+.chip-x { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.chip-x:hover:not(:disabled) { background: var(--surface-3); color: var(--bad); filter: none; }
+.select.chip-add { width: auto; padding: 3px 10px; font-size: 12px; border-radius: 99px; }

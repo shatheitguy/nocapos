@@ -39,6 +39,12 @@ var Features = []Feature{
 		},
 	},
 	{
+		// WS-Discovery: the server shows up in Windows' Network view while
+		// SMB sharing is on (NoCapOS starts and stops it).
+		ID: "discovery", Title: "Show up in Windows’ Network view (WS-Discovery)", Bins: []string{"wsdd"},
+		Packages: Names{"apt": {"wsdd"}, "dnf": {"wsdd"}, "pacman": {"wsdd"}, "zypper": {"wsdd"}},
+	},
+	{
 		ID: "remote-desktop", Title: "Remote Desktop engine (guacd with RDP and VNC)", Bins: []string{"guacd"},
 		Packages: Names{
 			"apt": {"guacd", "libguac-client-rdp0", "libguac-client-vnc0"},
