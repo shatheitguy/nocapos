@@ -39,6 +39,8 @@ const (
 	keyWebDAV   = "share.webdav"
 	confName    = "nocapos.conf"
 	includeLine = "include = /etc/samba/nocapos.conf"
+	// SMB1 stays off: everything from the last 15 years speaks SMB2 or newer.
+	minProtocol = "SMB2_02"
 )
 
 // UserCheck verifies a person's NoCapOS password for the network services.
@@ -257,14 +259,16 @@ func RenderSamba(c SambaConfig) string {
 	for _, note := range c.Skipped {
 		fmt.Fprintf(&b, "# %s\n", oneLine(note))
 	}
+	b.WriteString("\n[global]\n")
 	for _, sh := range c.Shares {
 		if sh.Guest != "" {
 			// Unknown or empty user names become the guest, an unprivileged
 			// account; only shares marked "guest ok" let the guest in.
-			b.WriteString("\n[global]\n   map to guest = Bad User\n   guest account = nobody\n")
+			b.WriteString("   map to guest = Bad User\n   guest account = nobody\n")
 			break
 		}
 	}
+	b.WriteString("   server min protocol = " + minProtocol + "\n")
 	if c.Homes {
 		b.WriteString("\n[homes]\n")
 		b.WriteString("   comment = Home\n")
@@ -416,7 +420,9 @@ func (m *Manager) ApplySamba(ctx context.Context) error {
 	if err := os.MkdirAll(m.sambaDir, 0o755); err != nil {
 		return err
 	}
-	if err := writeFileAtomic(filepath.Join(m.sambaDir, confName), []byte(RenderSamba(c)), 0o644); err != nil {
+	confPath := filepath.Join(m.sambaDir, confName)
+	prev, prevErr := os.ReadFile(confPath)
+	if err := writeFileAtomic(confPath, []byte(RenderSamba(c)), 0o644); err != nil {
 		return err
 	}
 	if err := m.ensureInclude(); err != nil {
@@ -424,22 +430,80 @@ func (m *Manager) ApplySamba(ctx context.Context) error {
 	}
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	if err := m.testparm(cctx); err != nil {
+		// Never leave Samba with settings it refuses: put the last ones back.
+		if prevErr != nil {
+			prev = []byte(RenderSamba(SambaConfig{}))
+		}
+		_ = writeFileAtomic(confPath, prev, 0o644)
+		return fmt.Errorf("Samba didn’t accept the new settings: %w", err)
+	}
 	if hash, _ := m.st.Setting(ctx, keyPassword); hash != "" && !m.legacy(ctx) {
 		// People have their own access now: retire the shared account.
 		_, _ = m.run(cctx, "", "smbpasswd", "-d", ShareUser)
 	}
 	unit := m.sambaUnit(cctx)
 	if c.SMB {
-		if out, err := m.run(cctx, "", "systemctl", "enable", "--now", unit); err != nil {
-			return fmt.Errorf("start Samba: %s", lastLine(out))
+		if err := m.startSamba(cctx, unit); err != nil {
+			return err
 		}
-		if out, err := m.run(cctx, "", "systemctl", "reload-or-restart", unit); err != nil {
-			return fmt.Errorf("reload Samba: %s", lastLine(out))
+		// Reachable and findable: firewall open, announced on the network.
+		if err := m.openFirewall(cctx); err != nil {
+			m.log.Warn("sharing: open the firewall for SMB", "err", err)
 		}
-	} else if out, err := m.run(cctx, "", "systemctl", "try-reload-or-restart", unit); err != nil {
+		if err := m.setDiscovery(cctx, true); err != nil {
+			m.log.Warn("sharing: announce on the network", "err", err)
+		}
+		return nil
+	}
+	if out, err := m.run(cctx, "", "systemctl", "try-reload-or-restart", unit); err != nil {
 		m.log.Warn("sharing: reload samba", "out", lastLine(out))
 	}
+	_ = m.setDiscovery(cctx, false)
 	return nil
+}
+
+// startSamba enables and (re)starts smbd, plus nmbd where it's installed
+// (NetBIOS names for older Windows; its failing isn't fatal).
+func (m *Manager) startSamba(ctx context.Context, unit string) error {
+	if out, err := m.run(ctx, "", "systemctl", "enable", "--now", unit); err != nil {
+		return fmt.Errorf("start Samba: %s", lastLine(out))
+	}
+	if out, err := m.run(ctx, "", "systemctl", "reload-or-restart", unit); err != nil {
+		return fmt.Errorf("reload Samba: %s", lastLine(out))
+	}
+	if nmb := m.nmbUnit(ctx); nmb != "" {
+		if out, err := m.run(ctx, "", "systemctl", "enable", "--now", nmb); err != nil {
+			m.log.Warn("sharing: start nmbd", "out", lastLine(out))
+		}
+	}
+	return nil
+}
+
+// testparm checks smb.conf (NoCapOS's include with it) the way Samba reads
+// it. Where testparm isn't installed there's nothing to check with.
+func (m *Manager) testparm(ctx context.Context) error {
+	if !m.hasBin("testparm") {
+		return nil
+	}
+	if out, err := m.run(ctx, "", "testparm", "-s", filepath.Join(m.sambaDir, "smb.conf")); err != nil {
+		return errors.New(testparmError(out))
+	}
+	return nil
+}
+
+// testparmError picks the line saying what's wrong from testparm's output.
+func testparmError(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		low := strings.ToLower(line)
+		if strings.Contains(low, "error") || strings.Contains(low, "unknown parameter") || strings.Contains(low, "ignoring") {
+			return oneLine(line)
+		}
+	}
+	if l := lastLine(out); l != "" {
+		return oneLine(l)
+	}
+	return "testparm failed"
 }
 
 // sambaUnit is "smbd" on Debian/Ubuntu and "smb" on Fedora/Arch/openSUSE.
@@ -458,18 +522,29 @@ func (m *Manager) ensureInclude() error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if strings.Contains(string(cur), includeLine) {
+	if hasInclude(string(cur)) {
 		return nil
 	}
 	text := string(cur)
 	if len(cur) == 0 {
-		text = "[global]\n   workgroup = WORKGROUP\n   server string = NoCapOS\n   server min protocol = SMB2\n"
+		text = "[global]\n   workgroup = WORKGROUP\n   server string = NoCapOS\n   server min protocol = " + minProtocol + "\n"
 	}
 	if !strings.HasSuffix(text, "\n") {
 		text += "\n"
 	}
 	text += "\n# Shares managed by NoCapOS\n" + includeLine + "\n"
 	return writeFileAtomic(path, []byte(text), 0o644)
+}
+
+// hasInclude reports whether smb.conf really includes NoCapOS's file: a
+// commented-out line doesn't count.
+func hasInclude(conf string) bool {
+	for _, line := range strings.Split(conf, "\n") {
+		if strings.TrimSpace(line) == includeLine {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------- per-person Samba accounts ----------
@@ -592,7 +667,11 @@ func (m *Manager) sambaUser(ctx context.Context, username, pw string, system boo
 		}
 		m.remember(systemUsersFile, username)
 	}
-	if out, err := m.run(cctx, pw+"\n"+pw+"\n", "smbpasswd", "-a", "-s", username); err != nil {
+	stdin, args, err := smbpasswdSet(username, pw)
+	if err != nil {
+		return err
+	}
+	if out, err := m.run(cctx, stdin, "smbpasswd", args...); err != nil {
 		return fmt.Errorf("set the Samba password: %s", lastLine(out))
 	}
 	m.remember(sambaUsersFile, username)
@@ -600,6 +679,19 @@ func (m *Manager) sambaUser(ctx context.Context, username, pw string, system boo
 		return fmt.Errorf("enable the Samba account: %s", lastLine(out))
 	}
 	return nil
+}
+
+// smbpasswdSet builds `smbpasswd -a -s <user>`: the password goes in on
+// stdin (twice, new and confirm), never in the arguments, where any user on
+// the machine could read it from the process list.
+func smbpasswdSet(username, pw string) (stdin string, args []string, err error) {
+	if pw == "" || strings.ContainsAny(pw, "\n\r\x00") {
+		return "", nil, errors.New("that password can’t be used for SMB")
+	}
+	if username == "" || strings.HasPrefix(username, "-") || strings.ContainsAny(username, " \t\n\r\x00:/\\") {
+		return "", nil, errors.New("that user name can’t be used for SMB")
+	}
+	return pw + "\n" + pw + "\n", []string{"-a", "-s", username}, nil
 }
 
 // remember adds a name to one of the lists of accounts NoCapOS made.

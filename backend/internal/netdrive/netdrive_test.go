@@ -15,6 +15,7 @@ import (
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
+	"alfaos/alfad/internal/syspkg"
 )
 
 type plainBox struct{}
@@ -106,6 +107,12 @@ func setup(t *testing.T) (*Manager, *fakeHost, string) {
 	m.lookPath = func(string) (string, error) { return "/usr/bin/x", nil }
 	m.mountBase = filepath.Join(dir, "mnt")
 	m.sambaDir = filepath.Join(dir, "samba")
+	m.avahiDir = filepath.Join(dir, "avahi", "services")
+	m.unitDir = filepath.Join(dir, "systemd")
+	m.canInstall = func() bool { return false }
+	m.installPkgs = func(context.Context, syspkg.Names) error { return errors.New("no installing in tests") }
+	m.hostname = func() (string, error) { return "nocap", nil }
+	m.addrs = func() []string { return []string{"192.168.1.20"} }
 	sp, err := spaces.New(context.Background(), st, fsvc, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)

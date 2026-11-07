@@ -990,7 +990,7 @@ function FilePane({
     const existing = shares.find((sh) => sh.root === root && sh.path === folder);
     return existing
       ? { label: `Stop Sharing “${existing.name}”`, icon: 'network', onClick: () => onUnshare(existing) }
-      : { label: 'Share on Network…', icon: 'network', onClick: () => onShare(root, folder, name) };
+      : { label: 'Share this folder…', icon: 'share', onClick: () => onShare(root, folder, name) };
   };
   const favItem = (r: string, p: string): MenuEntry =>
     isFav(r, p)
