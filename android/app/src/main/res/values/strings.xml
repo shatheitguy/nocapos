@@ -2,4 +2,13 @@
 <resources>
     <string name="app_name">NoCap OS</string>
     <string name="desktop_label">NoCap desktop</string>
+    <string name="ai_label">NoCap AI</string>
+    <string name="ai_short">AI</string>
+    <string name="share_label">Send to NoCap</string>
+    <string name="ask_hint">Ask NoCap AI anything…</string>
+    <string name="ask_widget_desc">Ask NoCap AI, the assistant on your NoCap server</string>
+    <string name="lock_service_label">NoCap OS lock</string>
+    <string name="lock_service_desc">Lets NoCap OS lock your screen when you double-tap the home screen. It doesn\'t read anything on your screen and does nothing else.</string>
+    <string name="lock_admin_label">NoCap OS lock</string>
+    <string name="dots_label">NoCap OS notification dots</string>
 </resources>

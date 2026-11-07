@@ -6,16 +6,31 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Only for scanning the pairing QR code. -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- "This phone got unlinked" and "download saved" notices. -->
+    <!-- "Unlinked", "download saved" and (opt-in) your server's notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- "Set as my phone's wallpaper too". -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- Swipe down on the home screen opens the notification shade. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <!-- Long-press an app → Uninstall (Android still asks you). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
-    <!-- The launcher lists every app that has a launcher icon. -->
     <queries>
+        <!-- The launcher lists every app that has a launcher icon. -->
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Voice input for NoCap AI. -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+        <!-- Opening a file from your server in a phone app. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
         </intent>
     </queries>
 
@@ -66,5 +81,97 @@
             android:taskAffinity="com.nocap.link.desktop"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density" />
+
+        <!-- NoCap AI: chats with your server's AI Assistant. -->
+        <activity
+            android:name=".ai.AiActivity"
+            android:exported="false"
+            android:label="@string/ai_label"
+            android:taskAffinity="com.nocap.link.ai"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- "Send to NoCap" in the share sheet. -->
+        <activity
+            android:name=".share.ShareActivity"
+            android:exported="true"
+            android:label="@string/share_label"
+            android:icon="@mipmap/ic_launcher"
+            android:excludeFromRecents="true"
+            android:taskAffinity="com.nocap.link.share"
+            android:theme="@style/Theme.NoCap.Sheet">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Opening server files in other apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- "Ask NoCap AI" widget for any home screen. -->
+        <receiver
+            android:name=".widget.AskWidget"
+            android:exported="false"
+            android:label="@string/ai_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_ask" />
+        </receiver>
+
+        <!-- Notification dots (opt-in: only after you allow notification access). -->
+        <service
+            android:name=".system.DotsService"
+            android:exported="true"
+            android:label="@string/dots_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Double-tap to lock (opt-in), Android 9+. -->
+        <service
+            android:name=".system.LockService"
+            android:exported="true"
+            android:label="@string/lock_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/lock_service" />
+        </service>
+
+        <!-- Double-tap to lock (opt-in), older phones. -->
+        <receiver
+            android:name=".system.LockAdmin"
+            android:exported="true"
+            android:label="@string/lock_admin_label"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/lock_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
