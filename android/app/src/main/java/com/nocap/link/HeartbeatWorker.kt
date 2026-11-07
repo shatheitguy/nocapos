@@ -28,8 +28,11 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
         val vault = Vault.get(applicationContext)
         val link = vault.link ?: return@withContext Result.success()
         try {
-            NoCapApi(link).heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME)
+            val api = NoCapApi(link)
+            api.heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME)
             if (vault.unlinked) vault.unlinked = false
+            Prefs.init(applicationContext)
+            if (Prefs.serverNotices) runCatching { notices(api, link.serverName) }
             Result.success()
         } catch (e: ApiError) {
             if (e.status == 401 && !vault.unlinked) {
@@ -44,6 +47,32 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
         } catch (_: Exception) {
             Result.success() // offline or cert changed: the next run tries again
         }
+    }
+
+    /**
+     * Your server's notifications as phone notifications (opt-in). The first
+     * check only remembers where things are, so turning it on doesn't dump
+     * the whole history on you.
+     */
+    private fun notices(api: NoCapApi, serverName: String) {
+        val last = Prefs.lastNotice
+        val (_, items) = api.notices(last.coerceAtLeast(0))
+        val newest = items.maxOfOrNull { it.id }
+        if (newest == null) {
+            if (last == 0L) Prefs.lastNotice = -1 // checked once: nothing yet
+            return
+        }
+        if (last != 0L) {
+            for (n in items.filter { it.id > last }.sortedBy { it.id }.takeLast(5)) {
+                val title = (if (Prefs.genz) n.genzTitle else null) ?: n.title
+                val body = (if (Prefs.genz) n.genzBody else null) ?: n.body
+                Notices.show(
+                    applicationContext, 1000 + (n.id % 10_000).toInt(), title.ifBlank { serverName.ifBlank { "NoCapOS" } }, body.ifBlank { serverName },
+                    Intent(applicationContext, MainActivity::class.java).setAction(MainActivity.ACTION_HUB), server = true,
+                )
+            }
+        }
+        Prefs.lastNotice = newest
     }
 
     companion object {
