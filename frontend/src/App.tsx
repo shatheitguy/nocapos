@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadAvatar } from './lib/avatar';
 import { Logo } from './components/Logo';
-import { getUser, logout, onSessionChange, refresh, setupRequired } from './api/client';
+import { getUser, linkSignIn, logout, onSessionChange, refresh, setupRequired } from './api/client';
 import type { User } from './api/types';
 import { AuthScreen, type AuthMode } from './shell/AuthScreen';
 import { Desktop } from './shell/Desktop';
@@ -55,6 +55,14 @@ export function App() {
       if (await setupRequired()) {
         setPhase({ kind: 'auth', mode: 'setup' });
         return;
+      }
+      // A NoCap Link ticket from the phone app signs in without the password.
+      if (await linkSignIn()) {
+        const u = getUser();
+        if (u) {
+          setPhase({ kind: 'desktop', user: u });
+          return;
+        }
       }
       if (!(await refresh())) setPhase({ kind: 'auth', mode: 'login' });
       else {

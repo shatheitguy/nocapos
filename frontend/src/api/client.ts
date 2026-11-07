@@ -190,6 +190,23 @@ export async function loginCode(mfaToken: string, code: string): Promise<{ error
   return {};
 }
 
+/**
+ * NoCap Link: the phone app opens the desktop at /?link=<ticket>. The ticket
+ * is single use and short-lived; trading it in signs this tab in like a
+ * password would. The ticket is taken out of the address bar either way.
+ */
+export async function linkSignIn(): Promise<boolean> {
+  const url = new URL(window.location.href);
+  const ticket = url.searchParams.get('link');
+  if (!ticket) return false;
+  url.searchParams.delete('link');
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  const r = await raw<Session>('/api/v1/auth/link', { method: 'POST', auth: false, body: { ticket } });
+  if (!r.ok) return false;
+  setSession(r.data);
+  return true;
+}
+
 export async function setup(setupToken: string, username: string, password: string): Promise<string | null> {
   const r = await raw<Session>('/api/v1/auth/setup', {
     method: 'POST',
