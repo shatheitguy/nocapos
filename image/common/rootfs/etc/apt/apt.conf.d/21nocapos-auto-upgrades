@@ -1,0 +1,4 @@
+// NoCapOS: refresh package lists and run unattended-upgrades daily
+// (which origins it installs from: 52nocapos-unattended-upgrades).
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
