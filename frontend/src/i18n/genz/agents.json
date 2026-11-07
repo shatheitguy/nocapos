@@ -1,0 +1,13 @@
+{
+  "agent.sendFail": "Couldn’t send your answer",
+  "agent.alwaysOk": "{agent} can {tool} without asking now, bet",
+  "agent.approved": "Approved",
+  "agent.wants": "{agent} wants to {tool}",
+  "agent.details": "Details",
+  "agent.timeout": "No answer before the timer runs out counts as a no.",
+  "agent.more": "{n} more in the queue.",
+  "agent.deny": "Nah",
+  "agent.alwaysTitle": "Don’t ask again for this tool and agent",
+  "agent.always": "Always allow",
+  "agent.once": "Approve once"
+}

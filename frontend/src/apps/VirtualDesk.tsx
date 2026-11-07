@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fmtGiB,
@@ -533,7 +534,7 @@ function Settings({ vm, status, onChanged, onDelete, onClone, onRename }: {
     const r = await vmApi.update(vm.name, body);
     setSaving(false);
     if (!r.ok) return setError(r.error ?? 'Couldn’t save');
-    toast('success', 'Bet — settings saved');
+    toast('success', tr('vm.settingsSaved'));
     setGrow({});
     setAddDisk(0);
     onChanged();

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n';
 import { BrandBar, BrandMark } from '../components/BrandLoader';
 import { usePowerState } from '../lib/hostActions';
 import { waitForServer } from '../lib/reconnect';
@@ -14,6 +15,7 @@ export function PowerOverlay() {
   const action = usePowerState((s) => s.action);
   const [gone, setGone] = useState(false);
   const [away, setAway] = useState(0);
+  const t = useT();
 
   useEffect(() => {
     if (!action) return;
@@ -39,17 +41,17 @@ export function PowerOverlay() {
   return (
     <div className="power-overlay" role="status" aria-live="polite">
       <BrandMark size={112} busy={!off} />
-      <h2>{reboot ? (gone ? 'Restarting — be right back' : 'Restarting…') : off ? 'It’s off. Sleep well.' : 'Shutting down…'}</h2>
+      <h2>{reboot ? (gone ? t('power.restartingGone') : t('power.restarting')) : off ? t('power.off') : t('power.shuttingDown')}</h2>
       <p>
         {reboot
           ? away > SLOW_MS
-            ? 'Taking longer than usual. Still trying — check the machine if it stays like this.'
-            : 'This page reconnects by itself when NoCapOS is back.'
+            ? t('power.slow')
+            : t('power.reconnects')
           : off
-            ? 'You can close this tab. If the machine comes back on, this page reconnects.'
-            : 'Closing apps and powering off the machine.'}
+            ? t('power.offSub')
+            : t('power.closing')}
       </p>
-      {!off && <BrandBar label={reboot ? 'Restarting' : 'Shutting down'} />}
+      {!off && <BrandBar label={reboot ? t('power.barRestart') : t('power.barShutdown')} />}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { nativeApi, type NativeApp, type NativeDetails, type NativeJob, type NativeStatus } from '../api/nativeApps';
 import { Icon } from '../components/Icon';
@@ -92,7 +93,7 @@ export function LinuxApps({ initial, q, view = 'discover' }: { initial?: string;
         changed = true;
         if (j.action === 'update') continue; // the Updates tab reports these
         if (j.error) toast('error', j.action === 'install' ? `Couldn't install ${j.name}` : `Couldn't remove ${j.name}`, j.error);
-        else if (j.action === 'install') toast('success', "Big moves: installed — it's in your Launchpad", j.name);
+        else if (j.action === 'install') toast('success', tr('apps.nativeInstalled'), j.name);
         else toast('success', `${j.name} removed`);
       }
     }

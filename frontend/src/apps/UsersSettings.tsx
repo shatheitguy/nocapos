@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { removeAvatar, uploadAvatar, useAvatar } from '../lib/avatar';
 import { UserAvatar } from '../components/UserAvatar';
@@ -25,7 +26,7 @@ function PhotoPicker({ username }: { username: string }) {
     const err = await uploadAvatar(file, username).catch(() => 'That image wouldn’t open. Try a PNG, JPEG, WebP or GIF.');
     setBusy(false);
     if (err) toast('error', 'Couldn’t set your photo', err);
-    else toast('success', 'New pic, who dis? Photo updated', 'It shows on this device’s login screen too.');
+    else toast('success', tr('sp.photoUpdated'), tr('sp.photoUpdatedBody'));
   };
   return (
     <div className="photo-picker">
@@ -71,7 +72,7 @@ export function YourAccount() {
           </span>
         </span>
       </div>
-      <Row label="Close other windows" hint="Clean slate: closes every window except Settings">
+      <Row label={tr('sp.closeOthers')} hint={tr('sp.closeOthersHint')}>
         <button type="button" className="ghost small" onClick={closeOthers}>
           Close windows
         </button>
@@ -193,7 +194,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                   busy={busy === p.username}
                   onCancel={() => setResetFor(null)}
                   onSave={async (pw) => {
-                    if (await act(p.username, () => usersApi.setPassword(p.username, pw), `Bet — new password set for ${p.username}`)) setResetFor(null);
+                    if (await act(p.username, () => usersApi.setPassword(p.username, pw), tr('sp.passwordSet', { name: p.username }))) setResetFor(null);
                   }}
                 />
               )}

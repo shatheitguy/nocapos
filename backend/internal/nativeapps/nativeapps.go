@@ -123,6 +123,17 @@ func RunArgs(id string) []string {
 	return []string{"flatpak", "run", id}
 }
 
+// StreamArgs starts an app inside a NoCapOS window: the window has its own
+// title bar and buttons, so the app is asked not to draw its own (client-side
+// decorations off for GTK, no window decorations for Qt). The stream's window
+// manager also runs it maximized and undecorated (see app-stream.sh).
+func StreamArgs(id string) []string {
+	return []string{"flatpak", "run",
+		"--env=GTK_CSD=0",
+		"--env=QT_WAYLAND_DISABLE_WINDOWDECORATION=1",
+		id}
+}
+
 // --- output parsing ---
 
 // columns splits a `flatpak … --columns=` line: tabs when piped, runs of

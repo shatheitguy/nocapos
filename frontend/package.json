@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "build": "node scripts/check-i18n.mjs && npm test && tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test scripts/wallpapers.test.ts",
+    "check:i18n": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
     "@fontsource/orbitron": "^5.3.0",

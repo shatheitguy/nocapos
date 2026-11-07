@@ -28,6 +28,14 @@ const (
 	defaultListMax = 100
 )
 
+// Variant is a notification's wording in the playful Gen Z voice. Title and
+// Body on the Notification are the plain (Standard) wording; the web desktop
+// shows whichever matches the person's Settings → Language choice.
+type Variant struct {
+	Title string `json:"title"`
+	Body  string `json:"body,omitempty"`
+}
+
 // Action says what clicking a notification opens: a NoCapOS app with props.
 type Action struct {
 	App   string         `json:"app"`
@@ -46,7 +54,9 @@ type Notification struct {
 	Icon   string  `json:"icon,omitempty"`
 	Action *Action `json:"action,omitempty"`
 	// Quiet ones go straight to the Notification Center: no banner, no sound.
-	Quiet     bool       `json:"quiet,omitempty"`
+	Quiet bool `json:"quiet,omitempty"`
+	// GenZ is the optional Gen Z wording (see Variant).
+	GenZ      *Variant   `json:"genz,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	ReadAt    *time.Time `json:"read_at,omitempty"`
 }
@@ -115,9 +125,10 @@ func New(db DB, log *slog.Logger) *Service {
 
 // stored is the action_json column: the action plus the icon.
 type stored struct {
-	Icon   string  `json:"icon,omitempty"`
-	Action *Action `json:"action,omitempty"`
-	Quiet  bool    `json:"quiet,omitempty"`
+	Icon   string   `json:"icon,omitempty"`
+	Action *Action  `json:"action,omitempty"`
+	Quiet  bool     `json:"quiet,omitempty"`
+	GenZ   *Variant `json:"genz,omitempty"`
 }
 
 // Add stores n unless its key was seen before or its kind is switched off,
@@ -130,8 +141,11 @@ func (s *Service) Add(ctx context.Context, n Notification) (added bool, err erro
 		n.Level = "info"
 	}
 	raw := ""
-	if n.Icon != "" || n.Action != nil || n.Quiet {
-		b, _ := json.Marshal(stored{Icon: n.Icon, Action: n.Action, Quiet: n.Quiet})
+	if n.GenZ != nil && n.GenZ.Title == "" {
+		n.GenZ = nil
+	}
+	if n.Icon != "" || n.Action != nil || n.Quiet || n.GenZ != nil {
+		b, _ := json.Marshal(stored{Icon: n.Icon, Action: n.Action, Quiet: n.Quiet, GenZ: n.GenZ})
 		raw = string(b)
 	}
 	row := &store.Notification{Key: n.Key, Kind: n.Kind, Level: n.Level, Title: n.Title, Body: n.Body, Action: raw, CreatedAt: n.CreatedAt}
@@ -150,7 +164,7 @@ func fromRow(r store.Notification) Notification {
 	if r.Action != "" {
 		var st stored
 		if json.Unmarshal([]byte(r.Action), &st) == nil {
-			n.Icon, n.Action, n.Quiet = st.Icon, st.Action, st.Quiet
+			n.Icon, n.Action, n.Quiet, n.GenZ = st.Icon, st.Action, st.Quiet, st.GenZ
 		}
 	}
 	if !r.ReadAt.IsZero() {

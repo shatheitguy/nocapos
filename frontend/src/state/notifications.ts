@@ -26,6 +26,14 @@ export interface Notice {
   quiet?: boolean;
   created_at: string;
   read_at?: string;
+  /** The Gen Z wording, when the server sent one (title/body above are the Standard wording). */
+  genz?: { title: string; body?: string };
+}
+
+/** A notification's title and body in the owner's chosen wording. */
+export function noticeText(n: Notice, lingo: 'genz' | 'standard'): { title: string; body?: string } {
+  if (lingo === 'genz' && n.genz?.title) return { title: n.genz.title, body: n.genz.body ?? n.body };
+  return { title: n.title, body: n.body };
 }
 
 /** The "Notify me about" switches (kept on the server). */

@@ -327,7 +327,9 @@ func securityNotification(ups []syspkg.Update) *notify.Notification {
 	return &notify.Notification{
 		Key: "sysupdate:security:" + hex.EncodeToString(sum[:8]), Kind: notify.KindUpdate, Level: "warning",
 		Title: title,
-		Body:  "Patches for the system packages just landed. Install them in Software Update — takes a minute, no cap.",
-		Icon:  "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "update"}},
+		Body:  "Security patches for the system packages are available. Install them in Software Update; it takes about a minute.",
+		GenZ: &notify.Variant{Title: title + " just landed",
+			Body: "Patches for the system packages just landed. Install them in Glow Up — takes a minute, no cap."},
+		Icon: "settings", Action: &notify.Action{App: "settings", Props: map[string]any{"section": "update"}},
 	}
 }

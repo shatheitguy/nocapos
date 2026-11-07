@@ -7,12 +7,16 @@ import {
   PERSONALIZATION_KEYS,
   UI_THEMES,
   WALLPAPERS,
-  loadCustomWallpaper,
+  customWallpapers,
+  deleteCustomWallpaper,
   saveCustomWallpaper,
+  shownWallpaper,
   usePrefs,
   type PrefValues,
 } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
+import { confirmDialog } from '../state/confirm';
+import { tr, useT } from '../i18n';
 
 // Settings → Personalization pages, plus the layout pieces every settings page
 // shares: a Section (title above a rounded card) holding evenly spaced Rows,
@@ -121,58 +125,60 @@ export function ThemeGallery() {
 
 /** The Transparency slider (0% solid … 100% the most see-through). */
 export function TransparencySlider() {
+  const t = useT();
   const transparency = usePrefs((s) => s.transparency);
   const set = usePrefs((s) => s.set);
   return (
-    <Slider label="Transparency" hint="How see-through windows, the dock, widgets and menus are. Lower is crisper and faster; 0% is fully solid." value={transparency}
-      min={0} max={100} step={5} format={(v) => (v === 0 ? 'Solid' : `${v}%`)} onChange={(v) => set({ transparency: v, reduceTransparency: v === 0 })} />
+    <Slider label={t('pz.transparency')} hint={t('pz.transparencyHint')} value={transparency}
+      min={0} max={100} step={5} format={(v) => (v === 0 ? t('pz.solid') : `${v}%`)} onChange={(v) => set({ transparency: v, reduceTransparency: v === 0 })} />
   );
 }
 
 export function Appearance() {
+  const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
   const classic = prefs.uiTheme === 'classic';
   const current = UI_THEMES.find((t) => t.id === prefs.uiTheme) ?? UI_THEMES[0];
   return (
     <div className="stack settings-page">
-      <Section title="Theme" hint={current.blurb}>
+      <Section title={t('pz.theme')} hint={current.blurb}>
         <Row>
           <ThemeGallery />
         </Row>
         {classic && (
-          <Row label="Light or dark" hint="Auto follows your device's light or dark mode">
+          <Row label={t('pz.lightDark')} hint={t('pz.lightDarkHint')}>
             <Choice value={prefs.theme} onChange={(theme) => set({ theme })} options={[
-              { id: 'auto', label: 'Auto' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' },
+              { id: 'auto', label: t('pz.auto') }, { id: 'light', label: t('pz.light') }, { id: 'dark', label: t('pz.dark') },
             ]} />
           </Row>
         )}
-        <Row label="Accent color" stacked
-          hint={prefs.uiTheme === 'glass' ? 'Follows the wallpaper unless you pick a color' : classic ? 'Highlights, selections, sliders and switches' : 'Recolors the neon glow, highlights and switches'}>
+        <Row label={t('pz.accent')} stacked
+          hint={prefs.uiTheme === 'glass' ? t('pz.accentGlass') : classic ? t('pz.accentClassic') : t('pz.accentFui')}>
           <AccentPicker />
         </Row>
       </Section>
 
 
-      <Section title="Display">
-        <Slider label="Brightness" hint="Dims NoCapOS on this screen — also in the Control Center" value={prefs.brightness}
+      <Section title={t('pz.display')} hint={t('pz.displayHint')}>
+        <Slider label={t('pz.brightness')} hint={t('pz.brightnessHint')} value={prefs.brightness}
           min={30} max={100} step={1} format={(v) => `${v}%`} onChange={(brightness) => set({ brightness })} />
       </Section>
 
-      <Section title="App icons" hint="How NoCapOS's own apps look in the Dock, Launchpad, on the desktop and in Settings. Installed apps keep their own icons.">
-        <Row label="Style">
+      <Section title={t('pz.icons')} hint={t('pz.iconsHint')}>
+        <Row label={t('pz.style')}>
           <Choice value={prefs.iconStyle} onChange={(iconStyle) => set({ iconStyle })} options={ICON_STYLES} />
         </Row>
       </Section>
 
-      <Section title="Effects">
+      <Section title={t('pz.effects')} hint={t('pz.effectsHint')}>
         {prefs.uiTheme === 'cyberdeck' && (
-          <Toggle label="Data grid backdrop" hint="A faint holographic grid behind the desktop" checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
+          <Toggle label={t('pz.grid')} hint={t('pz.gridHint')} checked={prefs.fxGrid} onChange={(fxGrid) => set({ fxGrid })} />
         )}
         <TransparencySlider />
-        <Toggle label="Reduce motion" hint="Turn off animations, scan sweeps and click pulses" checked={prefs.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
+        <Toggle label={t('pz.motion')} hint={t('pz.motionHint')} checked={prefs.reduceMotion} onChange={(reduceMotion) => set({ reduceMotion })} />
         {classic && (
-          <Toggle label="Square corners" hint="Sharper windows and panels" checked={prefs.squareCorners} onChange={(squareCorners) => set({ squareCorners })} />
+          <Toggle label={t('pz.square')} hint={t('pz.squareHint')} checked={prefs.squareCorners} onChange={(squareCorners) => set({ squareCorners })} />
         )}
       </Section>
 
@@ -184,56 +190,67 @@ export function Appearance() {
 // ---- Wallpaper ----
 
 /**
- * Wallpaper thumbnails plus your own photo and an upload tile. Clicking one
- * applies it right away. `strip` = one scrolling row (Settings overview);
- * otherwise a grid; `only` limits it to photos or gradients.
+ * The built-in wallpapers, the pictures you added (each with a trash button)
+ * and an upload tile. Clicking one applies it right away. `strip` = one
+ * scrolling row (the welcome); otherwise a grid.
  */
-export function WallpaperStrip({ strip = false, only }: { strip?: boolean; only?: 'photos' | 'gradients' }) {
+export function WallpaperStrip({ strip = false }: { strip?: boolean }) {
+  const t = useT();
   const wallpaper = usePrefs((s) => s.wallpaper);
   const set = usePrefs((s) => s.set);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [custom, setCustom] = useState<string | null>(loadCustomWallpaper);
+  const [mine, setMine] = useState(customWallpapers);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const list = WALLPAPERS.filter((w) => (only === 'photos' ? w.image : only === 'gradients' ? !w.image : true));
-  const mine = only !== 'gradients';
+  const shown = shownWallpaper(wallpaper);
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
     setBusy(true);
     try {
-      setCustom(await saveCustomWallpaper(file));
-      set({ wallpaper: 'custom' });
+      const id = await saveCustomWallpaper(file);
+      setMine(customWallpapers());
+      set({ wallpaper: id });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That image didn’t work. Try another one?');
+      setError(e instanceof Error && e.message === 'too-large' ? t('pz.tooLarge') : t('pz.badImage'));
     } finally {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
 
+  const remove = async (id: string) => {
+    const ok = await confirmDialog({ title: tr('pz.deletePhotoTitle'), message: tr('pz.deletePhotoMsg'), confirmLabel: tr('common.delete'), danger: true });
+    if (!ok) return;
+    deleteCustomWallpaper(id);
+    setMine(customWallpapers());
+  };
+
   return (
     <>
       <div className={strip ? 'wp-strip' : 'wallpapers'}>
-        {mine && custom && (
-          <button type="button" className={`wp-thumb ${wallpaper === 'custom' ? 'on' : ''}`} onClick={() => set({ wallpaper: 'custom' })} title="Your photo">
-            <span className="wp-preview" style={{ backgroundImage: `url("${custom}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-            {!strip && <span className="small">Your photo</span>}
-          </button>
-        )}
-        {list.map((w) => (
-          <button key={w.id} type="button" className={`wp-thumb ${wallpaper === w.id ? 'on' : ''}`} onClick={() => set({ wallpaper: w.id })} title={w.name}>
+        {WALLPAPERS.map((w) => (
+          <button key={w.id} type="button" className={`wp-thumb ${shown === w.id ? 'on' : ''}`} onClick={() => set({ wallpaper: w.id })} title={w.name}>
             <span className={`wp-preview wp-${w.id}`} />
             {!strip && <span className="small">{w.name}</span>}
           </button>
         ))}
-        {mine && (
-          <button type="button" className="wp-thumb" onClick={() => fileRef.current?.click()} disabled={busy} title="Use your own photo">
-            <span className="wp-preview wp-upload">{busy ? <span className="spinner sm" /> : <Icon name="upload" size={20} />}</span>
-            {!strip && <span className="small">{custom ? 'Change photo' : 'Your photo…'}</span>}
-          </button>
-        )}
+        {mine.map((w) => (
+          <div key={w.id} className={`wp-thumb wp-mine ${shown === w.id ? 'on' : ''}`}>
+            <button type="button" className="wp-pick" onClick={() => set({ wallpaper: w.id })} title={t('pz.yourPhoto')}>
+              <span className="wp-preview" style={{ backgroundImage: `url("${w.url}")`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+              {!strip && <span className="small">{t('pz.yourPhoto')}</span>}
+            </button>
+            <button type="button" className="wp-delete" aria-label={t('pz.deletePhoto')} title={t('pz.deletePhoto')} onClick={() => void remove(w.id)}>
+              <Icon name="trash" size={13} />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="wp-thumb" onClick={() => fileRef.current?.click()} disabled={busy} title={t('pz.addPhotoTitle')}>
+          <span className="wp-preview wp-upload">{busy ? <span className="spinner sm" /> : <Icon name="upload" size={20} />}</span>
+          {!strip && <span className="small">{t('pz.addPhoto')}</span>}
+        </button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onPick(e.target.files?.[0])} />
       </div>
       {error && <p className="error small">{error}</p>}
@@ -242,27 +259,21 @@ export function WallpaperStrip({ strip = false, only }: { strip?: boolean; only?
 }
 
 export function Wallpaper() {
+  const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
+  const custom = shownWallpaper(prefs.wallpaper).startsWith('custom');
   return (
     <div className="stack settings-page">
-      <Section title="Photos" hint={prefs.uiTheme === 'cyberdeck' && prefs.wallpaper !== 'custom'
-        ? 'Cyber-Deck shows its own backdrop. Your own photo still works; switch to Glass or NoCap classic for these wallpapers.'
-        : undefined}>
+      <Section title={t('pz.wallpapers')} hint={prefs.uiTheme === 'cyberdeck' && !custom ? t('pz.cyberWall') : t('pz.wallpapersHint')}>
         <Row>
-          <WallpaperStrip only="photos" />
+          <WallpaperStrip />
         </Row>
       </Section>
 
-      <Section title="Gradients">
-        <Row>
-          <WallpaperStrip only="gradients" />
-        </Row>
-      </Section>
-
-      <Section title="Brightness">
-        <Slider label="Dim wallpaper" hint="Makes icons and widgets easier to read on bright photos" value={prefs.wallpaperDim}
-          min={0} max={60} step={5} format={(v) => (v ? `${v}%` : 'Off')} onChange={(wallpaperDim) => set({ wallpaperDim })} />
+      <Section title={t('pz.dimSection')}>
+        <Slider label={t('pz.dim')} hint={t('pz.dimHint')} value={prefs.wallpaperDim}
+          min={0} max={60} step={5} format={(v) => (v ? `${v}%` : t('pz.off'))} onChange={(wallpaperDim) => set({ wallpaperDim })} />
       </Section>
     </div>
   );
@@ -271,32 +282,33 @@ export function Wallpaper() {
 // ---- Dock ----
 
 export function DockSettings() {
+  const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
   return (
     <div className="stack settings-page">
-      <Section title="Layout">
-        <Row label="Position on screen">
+      <Section title={t('pz.layout')} hint={t('pz.layoutHint')}>
+        <Row label={t('pz.position')}>
           <Choice value={prefs.dockPosition} onChange={(dockPosition) => set({ dockPosition })} options={[
-            { id: 'left', label: 'Left' }, { id: 'bottom', label: 'Bottom' }, { id: 'right', label: 'Right' },
+            { id: 'left', label: t('pz.left') }, { id: 'bottom', label: t('pz.bottom') }, { id: 'right', label: t('pz.right') },
           ]} />
         </Row>
-        <Slider label="Icon size" value={prefs.dockSize} min={32} max={64} step={2} format={(v) => `${v}px`} onChange={(dockSize) => set({ dockSize })} />
-        <Row label="Magnify on hover">
+        <Slider label={t('pz.iconSize')} value={prefs.dockSize} min={32} max={64} step={2} format={(v) => `${v}px`} onChange={(dockSize) => set({ dockSize })} />
+        <Row label={t('pz.magnify')}>
           <Choice value={prefs.dockMagnify} onChange={(dockMagnify) => set({ dockMagnify })} options={[
-            { id: 'off', label: 'Off' }, { id: 'small', label: 'Small' }, { id: 'large', label: 'Large' },
+            { id: 'off', label: t('pz.off') }, { id: 'small', label: t('pz.small') }, { id: 'large', label: t('pz.large') },
           ]} />
         </Row>
       </Section>
 
-      <Section title="Behavior">
-        <Toggle label="Automatically hide the Dock" hint="Move the pointer to the screen edge to show it — windows get the whole screen"
+      <Section title={t('pz.behavior')} hint={t('pz.behaviorHint')}>
+        <Toggle label={t('pz.autoHide')} hint={t('pz.autoHideHint')}
           checked={prefs.dockAutoHide} onChange={(dockAutoHide) => set({ dockAutoHide })} />
-        <Toggle label="Show recent apps" hint="Up to three recently used apps after a divider" checked={prefs.dockRecents} onChange={(dockRecents) => set({ dockRecents })} />
-        <Toggle label="Show dots for open apps" hint="A dot under each app that has a window open" checked={prefs.dockIndicators} onChange={(dockIndicators) => set({ dockIndicators })} />
+        <Toggle label={t('pz.recents')} hint={t('pz.recentsHint')} checked={prefs.dockRecents} onChange={(dockRecents) => set({ dockRecents })} />
+        <Toggle label={t('pz.dots')} hint={t('pz.dotsHint')} checked={prefs.dockIndicators} onChange={(dockIndicators) => set({ dockIndicators })} />
       </Section>
 
-      <p className="settings-tip">Pro tip: drag icons to reorder the Dock, or right-click the Dock to reset it.</p>
+      <p className="settings-tip">{t('pz.dockTip')}</p>
     </div>
   );
 }
@@ -304,28 +316,29 @@ export function DockSettings() {
 // ---- Desktop & Widgets ----
 
 export function DesktopSettings() {
+  const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
   const cleanUp = useDesktopIcons((s) => s.cleanUp);
   const iconCount = useDesktopIcons((s) => s.icons.length);
   return (
     <div className="stack settings-page">
-      <Section title="Widgets">
-        <Toggle label="Show widgets on the desktop" hint="Right-click the desktop and choose Edit widgets to add, move or resize them"
+      <Section title={t('pz.widgets')} hint={t('pz.widgetsHint')}>
+        <Toggle label={t('pz.showWidgets')} hint={t('pz.showWidgetsHint')}
           checked={prefs.widgets} onChange={(widgets) => set({ widgets })} />
       </Section>
 
-      <Section title="Desktop icons">
-        <Row label="Icon size">
+      <Section title={t('pz.desktopIcons')} hint={t('pz.desktopIconsHint')}>
+        <Row label={t('pz.iconSize')}>
           <Choice value={prefs.iconSize} onChange={(iconSize) => set({ iconSize })} options={[
-            { id: 'small', label: 'Small' }, { id: 'medium', label: 'Medium' }, { id: 'large', label: 'Large' },
+            { id: 'small', label: t('pz.small') }, { id: 'medium', label: t('pz.medium') }, { id: 'large', label: t('pz.large') },
           ]} />
         </Row>
-        <Toggle label="Show icon names" checked={prefs.iconLabels} onChange={(iconLabels) => set({ iconLabels })} />
-        <Toggle label="Snap icons to grid" hint="Dropped icons line up clean" checked={prefs.iconSnap} onChange={(iconSnap) => set({ iconSnap })} />
-        <Row label="Clean Up" hint="Line up every desktop icon on the grid">
+        <Toggle label={t('pz.iconNames')} checked={prefs.iconLabels} onChange={(iconLabels) => set({ iconLabels })} />
+        <Toggle label={t('pz.snap')} hint={t('pz.snapHint')} checked={prefs.iconSnap} onChange={(iconSnap) => set({ iconSnap })} />
+        <Row label={t('pz.cleanUp')} hint={t('pz.cleanUpHint')}>
           <button type="button" className="ghost small" disabled={!iconCount} onClick={cleanUp}>
-            Clean Up
+            {t('pz.cleanUp')}
           </button>
         </Row>
       </Section>
@@ -336,38 +349,40 @@ export function DesktopSettings() {
 // ---- Windows ----
 
 export function WindowSettings() {
+  const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
   return (
     <div className="stack settings-page">
-      <Section title="Title bar">
-        <Row label="Window buttons" hint="Close, minimize and maximize">
+      <Section title={t('pz.titleBar')} hint={t('pz.titleBarHint')}>
+        <Row label={t('pz.winButtons')} hint={t('pz.winButtonsHint')}>
           <Choice value={prefs.titleButtons} onChange={(titleButtons) => set({ titleButtons })} options={[
-            { id: 'right', label: 'Right' }, { id: 'left', label: 'Left' },
+            { id: 'right', label: t('pz.right') }, { id: 'left', label: t('pz.left') },
           ]} />
         </Row>
-        <Row label="Double-click a title bar to">
+        <Row label={t('pz.dblClick')}>
           <Choice value={prefs.titleDoubleClick} onChange={(titleDoubleClick) => set({ titleDoubleClick })} options={[
-            { id: 'maximize', label: 'Maximize' }, { id: 'minimize', label: 'Minimize' }, { id: 'none', label: 'Nothing' },
+            { id: 'maximize', label: t('common.maximize') }, { id: 'minimize', label: t('common.minimize') }, { id: 'none', label: t('pz.nothing') },
           ]} />
         </Row>
       </Section>
-      <p className="settings-tip">Pro tip: right-click a title bar or an app icon for New window; drag a window to a screen edge to snap it.</p>
+      <p className="settings-tip">{t('pz.winTip')}</p>
     </div>
   );
 }
 
 function ResetSection() {
+  const t = useT();
   const set = usePrefs((s) => s.set);
   const reset = () => {
     const defaults = Object.fromEntries(PERSONALIZATION_KEYS.map((k) => [k, DEFAULT_PREFS[k]])) as Partial<PrefValues>;
     set(defaults);
   };
   return (
-    <Section title="Reset">
-      <Row label="Reset personalization" hint="Fresh start: theme, colors, wallpaper, Dock, desktop and window settings go back to defaults">
+    <Section title={t('pz.resetSection')} hint={t('pz.resetSectionHint')}>
+      <Row label={t('pz.resetRow')} hint={t('pz.resetHint')}>
         <button type="button" className="ghost small" onClick={reset}>
-          Reset
+          {t('pz.reset')}
         </button>
       </Row>
     </Section>

@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useState, type DragEvent, type MouseEvent } from 'react';
 import { RECYCLE, baseName, inRecycle, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
 import type { NetShare } from '../api/netdrive';
@@ -123,7 +124,7 @@ export function FilesSidebar({
 
   return (
     <nav className="sidebar files-sidebar fs-side">
-      <h2 className="app-title fs-title">Files</h2>
+      <h2 className="app-title fs-title">{tr('files.title')}</h2>
 
       <div className="fs-section">
         {home && (

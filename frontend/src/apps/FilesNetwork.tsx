@@ -1,3 +1,5 @@
+import { tr } from '../i18n';
+import { WinClose } from '../components/WinClose';
 import { useEffect, useState, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { netApi, type GuestMode, type NetDrive, type NetShare, type NetSupport, type Sharing } from '../api/netdrive';
 import type { MenuEntry } from '../components/Dialog';
@@ -32,11 +34,7 @@ export function FilesModal({ title, onClose, children }: { title: string; onClos
       <div className="dialog fn-modal" role="dialog" aria-label={title} onKeyDown={(e) => e.stopPropagation()}>
         <header className="fn-modal-head">
           <h3>{title}</h3>
-          <div className="win-buttons">
-            <button type="button" className="close" aria-label="Close" title="Close" onClick={onClose}>
-              <Icon name="close" size={14} />
-            </button>
-          </div>
+          <WinClose onClick={onClose} label={tr('common.close')} />
         </header>
         <div className="fn-modal-body">{children}</div>
       </div>
@@ -88,7 +86,7 @@ export function NetworkSections({
     setBusy(d.id);
     const r = await netApi.connect(d.id, true);
     setBusy(null);
-    if (!r.ok) return toast('error', `Couldn't connect to ${d.name}`, r.error);
+    if (!r.ok) return toast('error', tr('files.toast.connectFail', { name: d.name }), r.error);
     await onChanged();
     onGo(r.data.root_id);
   };
@@ -96,19 +94,19 @@ export function NetworkSections({
     setBusy(d.id);
     const r = await netApi.connect(d.id, false);
     setBusy(null);
-    if (!r.ok) return toast('error', `Couldn't disconnect ${d.name}`, r.error);
+    if (!r.ok) return toast('error', tr('files.toast.disconnectFail', { name: d.name }), r.error);
     await onChanged();
   };
   const forget = async (d: NetDrive) => {
     const ok = await confirmDialog({
-      title: `Remove “${d.name}”?`,
-      message: 'NoCapOS disconnects it and forgets it. The files stay on the other device.',
-      confirmLabel: 'Remove',
+      title: tr('files.confirm.forgetDrive', { name: d.name }),
+      message: tr('files.confirm.forgetDriveBody'),
+      confirmLabel: tr('files.remove'),
       danger: true,
     });
     if (!ok) return;
     const r = await netApi.remove(d.id);
-    if (!r.ok) toast('error', 'Couldn’t remove it', r.error);
+    if (!r.ok) toast('error', tr('files.toast.removeFail'), r.error);
     await onChanged();
   };
   const shares = sharing?.shares ?? [];
@@ -293,7 +291,7 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
   };
 
   const host = window.location.hostname;
-  const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast('success', 'Copied', text));
+  const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast('success', tr('files.toast.copiedText'), text));
   if (done) {
     const addrs = [
       ...(smb || sharing.smb ? [`\\\\${host}\\${done}`, `smb://${host}/${done}`] : []),
