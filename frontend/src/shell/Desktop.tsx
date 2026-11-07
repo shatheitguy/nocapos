@@ -23,6 +23,7 @@ import { watchStoreApps } from '../state/storeApps';
 import { watchNativeApps } from '../state/nativeApps';
 import { watchNotifications } from '../state/notifications';
 import { NotificationLayer } from './Notifications';
+import { AgentApprovals } from './AgentApprovals';
 import { UpdateReady } from './UpdateReady';
 import { Launcher } from './Launcher';
 import { Spotlight } from './Spotlight';
@@ -245,6 +246,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
           <NotificationLayer />
         </ErrorBoundary>
       )}
+      <ErrorBoundary title="Agent approvals" fallback="hidden">
+        <AgentApprovals />
+      </ErrorBoundary>
       <ErrorBoundary title="Update notice" fallback="hidden">
         <UpdateReady />
       </ErrorBoundary>

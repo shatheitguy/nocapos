@@ -33,6 +33,8 @@ func main() {
 		err = cmdUpdate(context.Background())
 	case "logs":
 		err = cmdLogs(os.Args[2:])
+	case "mcp":
+		err = cmdMCP(os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "web":
 		err = cmdWeb(os.Stdout, hostaccess.DataDir(envFile), os.Args[2:])
 	case "version", "-v", "--version":
@@ -61,6 +63,9 @@ Usage:
   cap web on|off|status
                       Let other devices open NoCapOS (on), keep it to this
                       machine's own screen (off), or show which it is
+  cap mcp             NoCap MCP over stdio, for AI agents on this machine
+                      (needs NOCAP_MCP_TOKEN from Settings → AI Agents;
+                      NOCAP_MCP_URL or --url if NoCapOS isn't on 127.0.0.1:8780)
   cap version         Print the cap version
 
 cap update and cap web on/off need root: sudo cap update, sudo cap web on
