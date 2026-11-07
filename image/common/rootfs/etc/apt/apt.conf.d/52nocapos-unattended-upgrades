@@ -1,0 +1,15 @@
+// NoCapOS: security updates from Debian's security archive install
+// themselves (unattended-upgrades, daily). Everything else (point releases,
+// Raspberry Pi kernels and firmware, NoCapOS itself) waits for you in
+// Settings -> Software Update.
+//
+// To also take every stable update automatically, delete the #clear line
+// and the list below (Debian's defaults in 50unattended-upgrades come back).
+// To turn automatic updates off, set Unattended-Upgrade "0" in
+// 21nocapos-auto-upgrades.
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+  "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+  "origin=Debian,codename=${distro_codename},label=Debian-Security";
+};
+Unattended-Upgrade::Automatic-Reboot "false";

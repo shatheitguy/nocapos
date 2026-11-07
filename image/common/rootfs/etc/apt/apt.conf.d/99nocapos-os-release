@@ -1,0 +1,3 @@
+// NoCapOS: keep /usr/lib/os-release branded after base-files updates
+// (Debian's copy is diverted to /usr/lib/os-release.debian).
+DPkg::Post-Invoke { "if [ -x /usr/lib/nocapos/image/os-release-sync ]; then /usr/lib/nocapos/image/os-release-sync || true; fi"; };

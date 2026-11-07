@@ -1,0 +1,174 @@
+name: OS images
+
+# Builds the NoCapOS OS images from a published NoCapOS release:
+#   nocapos-<version>-amd64.iso          PC: live + installer ISO (Debian base, live-build)
+#   nocapos-<version>-rpi-arm64.img.xz   Raspberry Pi: SD card image (pi-gen, arm64)
+# Each run uploads them as workflow artifacts. On a published release (or a
+# manual run with "attach" ticked) they're also attached to release v<version>.
+#
+# Note: releases published by the Release workflow itself (GITHUB_TOKEN) don't
+# start other workflows, so for those run this one by hand with "attach".
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'NoCapOS release to build from, e.g. 0.8.0 (empty: the VERSION file)'
+        required: false
+        default: ''
+      attach:
+        description: 'Attach the images to release v<version>'
+        type: boolean
+        required: false
+        default: false
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: os-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      attach: ${{ steps.v.outputs.attach }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_ATTACH: ${{ inputs.attach }}
+        run: |
+          if [ "$EVENT" = release ]; then
+            version="${TAG#v}"
+            attach=true
+          else
+            version="${INPUT_VERSION:-$(cat VERSION)}"
+            version="${version#v}"
+            attach="${INPUT_ATTACH:-false}"
+          fi
+          case "$version" in
+            *[!0-9A-Za-z.+-]* | '') echo "bad version: '$version'" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "attach=$attach" >>"$GITHUB_OUTPUT"
+          echo "Building images for NoCapOS $version (attach to release: $attach)"
+
+  amd64:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner's root disk has ~20 GB free; live-build needs more for the
+      # chroot, the squashfs and the ISO. Drop preinstalled SDKs we don't use
+      # and build on the larger /mnt disk.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/.ghcup /usr/share/swift || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          sudo mkdir -p /mnt/nocap-live
+          df -h / /mnt
+
+      - name: Build the ISO (live-build in debian:trixie)
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src" -v /mnt/nocap-live:/build \
+            -e NOCAP_WORK=/build/work -e VERSION \
+            -w /src docker.io/library/debian:trixie \
+            bash -c 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+                       live-build debootstrap curl ca-certificates cpio python3 python3-pil fonts-dejavu-core \
+                     && bash image/amd64/build.sh "$VERSION" /src/out'
+          sudo chown -R "$(id -u):$(id -g)" out
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocapos-${{ needs.meta.outputs.version }}-amd64
+          path: |
+            out/*.iso
+            out/*.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log-amd64
+          path: out/*.log
+          if-no-files-found: ignore
+
+  rpi:
+    needs: meta
+    # Native arm64 runner: pi-gen builds without CPU emulation.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/.ghcup /usr/share/swift || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h /
+
+      - name: Build the Raspberry Pi image (pi-gen)
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: bash image/rpi/build.sh "$VERSION" out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocapos-${{ needs.meta.outputs.version }}-rpi-arm64
+          path: |
+            out/*.img.xz
+            out/*.sha256
+          compression-level: 0
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log-rpi
+          path: |
+            out/*.log
+            .pi-gen/deploy/*.log
+          if-no-files-found: ignore
+
+  attach:
+    needs: [meta, amd64, rpi]
+    if: needs.meta.outputs.attach == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nocapos-${{ needs.meta.outputs.version }}-*
+          merge-multiple: true
+          path: images
+
+      - name: Attach to release v${{ needs.meta.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          cd images
+          cat ./*.sha256 >"nocapos-$VERSION-images.sha256"
+          ls -lh
+          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
+            "nocapos-$VERSION-amd64.iso" "nocapos-$VERSION-amd64.iso.sha256" \
+            "nocapos-$VERSION-rpi-arm64.img.xz" "nocapos-$VERSION-rpi-arm64.img.xz.sha256" \
+            "nocapos-$VERSION-images.sha256"

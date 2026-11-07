@@ -1,0 +1,12 @@
+# NoCapOS image: shows the first-run setup token on the console login screen.
+[Unit]
+Description=NoCapOS setup token on the console
+After=nocapos.service
+Wants=nocapos.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/image/setup-hint.sh
+
+[Install]
+WantedBy=multi-user.target
