@@ -163,6 +163,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/device/heartbeat", s.device(s.deviceHeartbeat))
 	mux.Handle("POST /api/v1/device/session", s.device(s.deviceSession))
 	mux.HandleFunc("POST /api/v1/auth/link", s.authLink) // NoCap Link web sign-in ticket, rate-limited
+	// More for the NoCap OS app: summary, look, Files, Send to NoCap,
+	// home-screen backup, notifications, unlink, NoCap AI.
+	s.deviceRoutes(mux)
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))
