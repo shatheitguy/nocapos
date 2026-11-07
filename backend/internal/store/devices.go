@@ -130,3 +130,10 @@ func (s *Store) TouchDevice(ctx context.Context, id string, at time.Time, batter
 	_, err := s.db.ExecContext(ctx, q+` WHERE id = ? AND revoked_at = 0`, args...)
 	return err
 }
+
+// DeviceByID finds an active (not revoked) device by its ID.
+func (s *Store) DeviceByID(ctx context.Context, id string) (*Device, error) {
+	return scanDevice(s.db.QueryRowContext(ctx,
+		`SELECT `+deviceCols+` FROM devices d LEFT JOIN users u ON u.id = d.user_id
+		 WHERE d.id = ? AND d.revoked_at = 0`, id))
+}

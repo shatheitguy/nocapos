@@ -437,3 +437,29 @@ func truncate(s string, n int) string {
 	}
 	return s
 }
+
+// LinkedSession starts a web session for a person on a device they linked
+// earlier (NoCap Link). The device was linked from a signed-in session, so
+// there is no password or 2FA step here; the account must still be allowed
+// on the desktop.
+func (s *Service) LinkedSession(ctx context.Context, userID string, meta ClientMeta) (*Session, error) {
+	u, err := s.st.UserByID(ctx, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, ErrInvalidToken
+	}
+	if err != nil {
+		return nil, err
+	}
+	if u.Disabled {
+		return nil, ErrInvalidToken
+	}
+	if s.sys != nil {
+		if err := s.checkSystemUser(ctx, u, s.now()); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		return nil, err
+	}
+	return s.startSession(ctx, u, meta)
+}
