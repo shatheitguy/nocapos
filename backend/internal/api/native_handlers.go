@@ -33,6 +33,9 @@ func (s *Server) nativeRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/native-apps/jobs/{job}", s.admin(s.nativeJob))
 	mux.Handle("POST /api/v1/native-apps/{id}/install", s.admin(s.nativeInstall))
 	mux.Handle("POST /api/v1/native-apps/{id}/uninstall", s.admin(s.nativeUninstall))
+	mux.Handle("GET /api/v1/native-apps/updates", s.admin(s.nativeUpdates))
+	mux.Handle("POST /api/v1/native-apps/{id}/update", s.admin(s.nativeUpdate))
+	mux.Handle("POST /api/v1/native-apps/update-all", s.admin(s.nativeUpdateAll))
 	mux.Handle("POST /api/v1/native-apps/{id}/launch", s.authed(s.nativeLaunch))
 	mux.Handle("GET /api/v1/native-apps/streams/{sid}", s.authed(s.nativeStreamStatus))
 	mux.Handle("DELETE /api/v1/native-apps/streams/{sid}", s.authed(s.nativeStreamStop))
@@ -51,7 +54,7 @@ func nativeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 	case errors.Is(err, nativeapps.ErrNotInstalled):
 		writeError(w, http.StatusNotFound, "not_installed", err.Error())
-	case errors.Is(err, nativeapps.ErrBusy):
+	case errors.Is(err, nativeapps.ErrBusy), errors.Is(err, nativeapps.ErrNoUpdates):
 		writeError(w, http.StatusConflict, "busy", err.Error())
 	case errors.Is(err, webapps.ErrNoSlots):
 		writeError(w, http.StatusServiceUnavailable, "busy", err.Error())
@@ -174,8 +177,15 @@ func (s *Server) nativeChange(w http.ResponseWriter, r *http.Request, action str
 		s.auditCtx(ctx, u.ID, "nativeapp."+action+".done", id, ip, j.OK, detail)
 	}
 	start := s.Native.Install
-	if action == "uninstall" {
+	switch action {
+	case "uninstall":
 		start = s.Native.Uninstall
+	case "update":
+		start = func(id, name string, onDone func(nativeapps.Job)) (nativeapps.Job, error) {
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+			defer cancel()
+			return s.Native.Update(ctx, id, name, onDone)
+		}
 	}
 	j, err := start(id, req.Name, onDone)
 	if err != nil {
@@ -195,6 +205,28 @@ func (s *Server) nativeInstall(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) nativeUninstall(w http.ResponseWriter, r *http.Request) {
 	s.nativeChange(w, r, "uninstall")
+}
+
+// nativeUpdates lists installed Linux apps with a newer version (?fresh=1
+// asks Flathub again instead of using the last answer).
+func (s *Server) nativeUpdates(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+	ups, err := s.Native.Updates(ctx, r.URL.Query().Get("fresh") == "1")
+	if err != nil {
+		nativeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"updates": ups})
+}
+
+func (s *Server) nativeUpdate(w http.ResponseWriter, r *http.Request) {
+	s.nativeChange(w, r, "update")
+}
+
+func (s *Server) nativeUpdateAll(w http.ResponseWriter, r *http.Request) {
+	r.SetPathValue("id", nativeapps.AllApps)
+	s.nativeChange(w, r, "update")
 }
 
 func (s *Server) nativeLaunch(w http.ResponseWriter, r *http.Request) {

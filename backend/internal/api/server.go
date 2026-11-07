@@ -239,6 +239,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/appstore/access", s.admin(s.appAccessList))
 	mux.Handle("PUT /api/v1/appstore/{id}/access", s.admin(s.appAccessSet))
 	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
+	mux.Handle("GET /api/v1/appstore/templates/{id}", s.admin(s.appstoreTemplate))
 	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
 
 	// Quick Script Launcher: saved scripts run on the host (admin, audited).
