@@ -16,19 +16,24 @@ import androidx.core.content.ContextCompat
 class NoCapApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        Prefs.init(this)
         Notices.channel(this)
         if (Vault.get(this).link != null) HeartbeatWorker.schedule(this)
     }
 }
 
-/** The app's only notifications: unlinked, and downloads saved. */
+/** The app's notifications: unlinked, downloads saved, and (opt-in) your server's own. */
 object Notices {
     private const val CHANNEL = "nocap_link"
+    private const val SERVER = "nocap_server"
 
     fun channel(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "NoCap Link", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "When your phone gets unlinked, and when a download from your NoCap desktop is saved"
+        })
+        nm.createNotificationChannel(NotificationChannel(SERVER, "NoCap server", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Notifications from your NoCapOS server (if you turned them on)"
         })
     }
 
@@ -36,9 +41,9 @@ object Notices {
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    fun show(ctx: Context, id: Int, title: String, text: String, tap: Intent? = null) {
+    fun show(ctx: Context, id: Int, title: String, text: String, tap: Intent? = null, server: Boolean = false) {
         if (!allowed(ctx)) return
-        val b = NotificationCompat.Builder(ctx, CHANNEL)
+        val b = NotificationCompat.Builder(ctx, if (server) SERVER else CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_fg)
             .setContentTitle(title)
             .setContentText(text)

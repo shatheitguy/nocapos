@@ -83,7 +83,7 @@ export function DevicesSettings() {
       </section>
 
       <Group title={isAdmin ? 'Linked devices (everyone’s)' : 'Your linked devices'}
-        hint="Phones and tablets on NoCap Link, running the NoCap OS app. Unlink one and it’s cut off instantly.">
+        hint="Phones and tablets on NoCap Link, running the NoCap OS app: a full home screen with NoCap AI, server widgets and Send to NoCap right from the share sheet. Unlink one and it’s cut off instantly.">
         {error ? (
           <div className="settings-row full">
             <p className="error">{error}</p>
@@ -269,7 +269,7 @@ function LinkDialog({ known, onClose }: { known: Set<string>; onClose: () => voi
           </button>
         </div>
         <a className="set-link" href={APP_URL} target="_blank" rel="noreferrer">
-          Get the NoCap OS app (Android, NoCap Link) <Icon name="external" size={12} />
+          Get the NoCap OS app: your whole home screen, NoCap AI and Send to NoCap (Android) <Icon name="external" size={12} />
         </a>
       </>
     );

@@ -62,6 +62,7 @@ import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.Pins
+import com.nocap.link.net.ServerTooOld
 import com.nocap.link.ui.GhostButton
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
@@ -167,6 +168,10 @@ class DesktopActivity : ComponentActivity() {
                 val url = withContext(Dispatchers.IO) { NoCapApi(link).webSession() }
                 if (NoCapApi.origin(url) != link.server) throw IllegalStateException("The server sent an address that isn't itself.")
                 web.loadUrl(url)
+            } catch (e: ServerTooOld) {
+                // An older NoCapOS without phone sign-in: say so, with its version.
+                val v = runCatching { withContext(Dispatchers.IO) { NoCapApi(link).pairInfo().version } }.getOrNull()
+                state = DeskState.Failed(MainActivity.needsUpdate(v), canRetry = true)
             } catch (e: CertChanged) {
                 state = DeskState.Failed("Your server's certificate changed. Open NoCap OS on the home screen to check it before signing in.", canRetry = false)
             } catch (e: ApiError) {
