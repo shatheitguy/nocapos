@@ -1,0 +1,9 @@
+{
+  "uuid": "nocapos-brand@shatheitguy.github.io",
+  "name": "NoCapOS",
+  "description": "The NoCapOS look: the logo in the top bar and the NoCap red accent.",
+  "shell-version": ["43", "44"],
+  "session-modes": ["user", "unlock-dialog"],
+  "url": "https://github.com/shatheitguy/nocapos",
+  "version": 1
+}
