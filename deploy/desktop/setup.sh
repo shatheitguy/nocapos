@@ -51,19 +51,21 @@ desk_hold_services() {
 desk_release_services() { if grep -qs 'NoCapOS install.sh' /usr/sbin/policy-rc.d; then rm -f /usr/sbin/policy-rc.d; fi; }
 
 desk_install_packages() { # $1 = family, $2 = manager
-  local line opt alt pick want=() missing=() skipped=() held=0
+  local line alt want=() missing=() skipped=() held=0
+  # The same choice on every architecture (amd64, arm64, armhf): whatever
+  # this distribution's repositories have, newer apps first.
   while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    opt=0
-    case "$line" in \?*) opt=1; line="${line#\?}" ;; esac
-    pick=""
-    for alt in ${line//|/ }; do
-      if pkg_available "$2" "$alt"; then pick="$alt"; break; fi
-    done
-    if [ -n "$pick" ]; then want+=("$pick")
-    elif [ "$opt" -eq 1 ]; then skipped+=("$line")
-    else missing+=("$line"); fi
-  done < <(desktop_packages "$1")
+    case "$line" in
+      '') ;;
+      \!*) missing+=("${line#\!}") ;;
+      \?*) skipped+=("${line#\?}") ;;
+      *) want+=("$line") ;;
+    esac
+  done < <(
+    desktop_packages "$1" | tr -d '?' | tr '|' '\n' | while IFS= read -r alt; do
+      [ -n "$alt" ] && pkg_available "$2" "$alt" && echo "$alt"
+    done | desktop_select "$1"
+  )
   if [ "${#missing[@]}" -gt 0 ]; then
     warn "full desktop: these packages aren't available here: ${missing[*]}"
     return 1
@@ -84,7 +86,7 @@ desk_install_packages() { # $1 = family, $2 = manager
 desk_install_lib() {
   mkdir -p "$DESK_LIB"
   install -m 0644 "$DESK_SRC/lib.sh" "$DESK_LIB/lib.sh"
-  install -m 0755 "$DESK_SRC/uninstall-desktop.sh" "$DESK_SRC/os-release-sync" "$DESK_LIB/"
+  install -m 0755 "$DESK_SRC/uninstall-desktop.sh" "$DESK_SRC/os-release-sync" "$DESK_SRC/nocapos-accent" "$DESK_LIB/"
 }
 
 desk_install_assets() {
@@ -218,7 +220,8 @@ WantedBy=multi-user.target
 EOF
   systemctl daemon-reload
   systemctl enable nocapos-gdm-theme.service >/dev/null 2>&1 || true
-  systemctl enable --now nocapos-desktop-guard.service >/dev/null 2>&1 || warn "full desktop: the remote screen guard didn't start"
+  # Restarted, so an update's port list applies straight away.
+  { systemctl enable nocapos-desktop-guard.service && systemctl restart nocapos-desktop-guard.service; } >/dev/null 2>&1 || warn "full desktop: the remote screen guard didn't start"
   "$DESK_LIB/gdm-theme" || warn "full desktop: the sign-in screen theme couldn't be built; it keeps its own look"
 }
 
@@ -289,18 +292,117 @@ EOF
   chmod 644 "$DESK_CONF"
 }
 
-# install_full_desktop: the whole native desktop. Returns 1 (after saying
-# why) when this machine can't have it; install.sh then offers NoCapOS full
-# screen (the kiosk) instead.
+# ---------------------------------------------------------------- small machines
+desk_mem_kb() { awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null; }
+
+# desk_write FILE: stdin into FILE, keeping the original for uninstall.
+desk_write() { desk_keep "$1"; mkdir -p "$(dirname "$1")"; cat >"$1"; }
+
+# Compressed swap in memory on every machine, plus a swap file and the
+# low-memory profile (no indexing, no calendar store, no animations) on
+# machines with less than 2 GB. Settings already made on this machine (an
+# existing zram or swap setup) are kept.
+desk_tune_memory() {
+  local mem profile mb f fs
+  mem="$(desk_mem_kb)"
+  profile="$(memory_profile "$mem")"
+  printf '    memory: %s MB (%s profile)\n' "$((${mem:-0} / 1024))" "$profile"
+  if grep -qs '^/dev/zram' /proc/swaps; then
+    : # zram is already on (Raspberry Pi OS and Fedora have their own)
+  elif [ -d /usr/lib/systemd/system-generators ] && [ -x /usr/lib/systemd/system-generators/zram-generator ]; then
+    if [ ! -f /etc/systemd/zram-generator.conf ] || grep -qs 'written by install.sh' /etc/systemd/zram-generator.conf; then
+      render_zram_generator "$mem" | desk_write /etc/systemd/zram-generator.conf
+      systemctl daemon-reload >/dev/null 2>&1 || true
+      systemctl start systemd-zram-setup@zram0.service >/dev/null 2>&1 || true
+    fi
+  elif [ -f /etc/default/zramswap ]; then
+    if ! grep -qs '^[[:space:]]*\(SIZE\|PERCENT\)=' /etc/default/zramswap || grep -qs 'written by install.sh' /etc/default/zramswap; then
+      render_zramswap "$mem" | desk_write /etc/default/zramswap
+      systemctl restart zramswap.service >/dev/null 2>&1 || true
+    fi
+  fi
+  if [ "$profile" != low ]; then
+    if [ -f /etc/dconf/db/local.d/10-nocapos-lowmem ]; then rm -f /etc/dconf/db/local.d/10-nocapos-lowmem; has dconf && { dconf update >/dev/null 2>&1 || true; }; fi
+    return 0
+  fi
+  render_lowmem_sysctl | desk_write /etc/sysctl.d/90-nocapos-lowmem.conf
+  sysctl -q -p /etc/sysctl.d/90-nocapos-lowmem.conf >/dev/null 2>&1 || true
+  # A swap file when there's no disk swap at all (not on copy-on-write
+  # file systems, where swap files need special care).
+  mb="$(swapfile_mb "$mem")"
+  fs="$(findmnt -n -o FSTYPE / 2>/dev/null || true)"
+  if [ "$mb" -gt 0 ] && ! grep -v '^/dev/zram' /proc/swaps 2>/dev/null | awk 'NR > 1 {f = 1} END {exit !f}' &&
+    ! has dphys-swapfile && [ ! -e /var/swap.nocapos ]; then
+    case "$fs" in ext4 | ext3 | xfs)
+      if fallocate -l "${mb}M" /var/swap.nocapos 2>/dev/null || dd if=/dev/zero of=/var/swap.nocapos bs=1M count="$mb" status=none 2>/dev/null; then
+        chmod 600 /var/swap.nocapos
+        if mkswap /var/swap.nocapos >/dev/null 2>&1 && swapon -p 10 /var/swap.nocapos 2>/dev/null; then
+          echo '/var/swap.nocapos none swap sw,pri=10 0 0' >>/etc/fstab
+          desk_record "swapfile|/var/swap.nocapos"
+        else
+          rm -f /var/swap.nocapos
+        fi
+      fi
+      ;;
+    esac
+  fi
+  # The heavy background services, for every account.
+  mkdir -p /etc/systemd/user
+  # shellcheck disable=SC2086 # a list of units
+  for f in $LOWMEM_USER_UNITS; do
+    if [ ! -e "/etc/systemd/user/$f" ]; then
+      ln -s /dev/null "/etc/systemd/user/$f" 2>/dev/null && desk_record "usermask|$f"
+    fi
+  done
+  mkdir -p /etc/xdg/autostart
+  # shellcheck disable=SC2086 # a list of files
+  for f in $LOWMEM_AUTOSTART; do
+    if [ ! -e "/etc/xdg/autostart/$f" ] || grep -qs 'Hidden by NoCapOS' "/etc/xdg/autostart/$f"; then
+      [ -e "/etc/xdg/autostart/$f" ] || desk_record "autostart-hidden|/etc/xdg/autostart/$f"
+      render_autostart_hidden >"/etc/xdg/autostart/$f"
+    fi
+  done
+  render_dconf_lowmem >/etc/dconf/db/local.d/10-nocapos-lowmem
+  has dconf && { dconf update >/dev/null 2>&1 || true; }
+}
+
+# ---------------------------------------------------------------- the accent
+# NoCap red in apps: the GNOME 47+ accent setting (dconf) where it exists,
+# plus gtk.css blocks for GTK 3 apps everywhere and libadwaita apps on older
+# GNOME. New accounts get them from /etc/skel, existing ones right away, and
+# nocapos-accent runs at every sign-in to keep them current (after a GNOME
+# upgrade, say).
+desk_accent() {
+  local u home min
+  mkdir -p /etc/xdg/autostart
+  cat >/etc/xdg/autostart/nocapos-accent.desktop <<EOF
+[Desktop Entry]
+# NoCapOS: keeps the NoCap red accent in this account's apps.
+Type=Application
+Name=NoCapOS accent
+Exec=$DESK_LIB/nocapos-accent
+NoDisplay=true
+X-GNOME-Autostart-Phase=Initialization
+X-GNOME-AutoRestart=false
+EOF
+  # /etc/skel: new accounts start with it.
+  HOME=/etc/skel XDG_CONFIG_HOME=/etc/skel/.config "$DESK_LIB/nocapos-accent" || true
+  # Existing accounts, each as itself (never root writing in their home).
+  min="$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs 2>/dev/null)"
+  getent passwd | awk -F: -v min="${min:-1000}" '$3 >= min && $3 < 60000 && $7 !~ /(nologin|false)$/ {print $1 ":" $6}' |
+    while IFS=: read -r u home; do
+      [ -d "$home" ] || continue
+      runuser -u "$u" -- env HOME="$home" "$DESK_LIB/nocapos-accent" >/dev/null 2>&1 || true
+    done
+}
+
+# install_full_desktop: the whole native desktop, the same on every machine
+# (small and 32-bit ones are tuned, see desk_tune_memory). Returns 1 (after
+# saying why) only when this distribution's packages can't provide it.
 install_full_desktop() {
-  local mgr family why mem dm conf
+  local mgr family dm conf
   mgr="$(pkg_manager)"
   family="$(desktop_family "")"
-  mem="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)"
-  if ! why="$(desktop_feasible "$ARCH" "$mem")"; then
-    warn "NoCap Desktop: $why; using NoCapOS full screen instead"
-    return 1
-  fi
   case "$family" in
     debian | ubuntu) ;;
     fedora | arch) info "NoCap Desktop on $(os_field "" PRETTY_NAME): best effort, Debian, Ubuntu and Raspberry Pi OS are what it's tested on" ;;
@@ -312,6 +414,8 @@ install_full_desktop() {
   desk_install_assets
   desk_install_extension
   desk_settings
+  desk_tune_memory
+  desk_accent
   desk_units
   desk_hide_updaters
   desk_identity

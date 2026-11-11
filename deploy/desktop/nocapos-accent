@@ -1,0 +1,45 @@
+#!/bin/bash
+# NoCap red in this account's apps. Runs at every sign-in (autostart) and
+# once per account at install. GTK 3 apps always get the block in
+# ~/.config/gtk-3.0/gtk.css; libadwaita apps get one in gtk-4.0/gtk.css on
+# GNOME 46 and older, which have no accent setting (GNOME 47+ uses
+# accent-color='red' from NoCapOS's defaults, and the block comes out again
+# so a person's own accent choice works). Anything else in those files is
+# left as it is.
+#   nocapos-accent            put the blocks in (or bring them up to date)
+#   nocapos-accent --remove   take them out
+set -u
+LIB=/usr/local/lib/nocapos/desktop
+# shellcheck source=/dev/null
+. "$LIB/lib.sh" || exit 0
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+tmp="$(mktemp)" || exit 0
+trap 'rm -f "$tmp" "$tmp.out"' EXIT
+
+# put DIR RENDER: DIR/gtk.css with the block RENDER prints.
+put() {
+  "$2" >"$tmp"
+  mkdir -p "$cfg/$1" || return 0
+  local f="$cfg/$1/gtk.css"
+  if [ -f "$f" ]; then css_with_accent "$tmp" <"$f" >"$tmp.out"; else cp "$tmp" "$tmp.out"; fi
+  if ! cmp -s "$tmp.out" "$f"; then cat "$tmp.out" >"$f"; fi
+}
+
+# drop DIR: DIR/gtk.css without the block (removed when nothing else is left).
+drop() {
+  local f="$cfg/$1/gtk.css"
+  [ -f "$f" ] || return 0
+  grep -qF "$ACCENT_BEGIN" "$f" || return 0
+  css_without_accent <"$f" >"$tmp.out"
+  if [ -z "$(tr -d ' \t\r\n' <"$tmp.out")" ]; then rm -f "$f"; else cat "$tmp.out" >"$f"; fi
+}
+
+if [ "${1:-}" = --remove ]; then
+  drop gtk-3.0
+  drop gtk-4.0
+  exit 0
+fi
+major="$(gnome_major "$(gnome-shell --version 2>/dev/null)")"
+put gtk-3.0 render_gtk3_accent
+if gtk4_accent_wanted "$major"; then put gtk-4.0 render_gtk4_accent; else drop gtk-4.0; fi
+exit 0
