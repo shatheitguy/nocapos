@@ -18,6 +18,7 @@ import './styles/virtualdesk.css';
 import './styles/notifications.css';
 import './themes.css';
 import './glass.css';
+import './styles/mobile.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

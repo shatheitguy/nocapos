@@ -304,8 +304,8 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 
 /* Search fields are a pill with an icon and a bare input: the input inside
    must not draw its own glass box. */
-:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input,
-:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input) input:focus {
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input, .mac-pill) input,
+:root[data-ui='glass'] :is(.fx-search, .as-search, .set2-search, .search, .sl-input, .mac-pill) input:focus {
   border: 0;
   background: transparent;
   box-shadow: none;
