@@ -17,6 +17,8 @@ export interface DesktopState {
   modes: DesktopMode[] | null;
   /** Signed in on the full desktop right now. */
   session_user?: string;
+  /** The screen shows the sign-in screen (nobody signed in). */
+  sign_in_screen?: boolean;
   autologin: boolean;
   autologin_user?: string;
   autologin_supported: boolean;
@@ -39,7 +41,7 @@ export const hostAccessApi = {
   setDesktop: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { enabled } }),
   setDesktopMode: (mode: DesktopMode) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { mode } }),
   setAutologin: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop/autologin', { method: 'PUT', body: { enabled } }),
-  /** A single-use ticket for the server's own screen (the NoCap Desktop window). */
+  /** A single-use ticket for whatever the server's own screen shows (the NoCap Desktop window); sign_in: it's the sign-in screen. */
   view: (width: number, height: number, dpi: number) =>
-    api<{ ticket: string; protocol: 'rdp' | 'vnc' }>('/api/v1/system/desktop/view', { method: 'POST', body: { width, height, dpi } }),
+    api<{ ticket: string; protocol: 'rdp' | 'vnc'; sign_in?: boolean }>('/api/v1/system/desktop/view', { method: 'POST', body: { width, height, dpi } }),
 };
