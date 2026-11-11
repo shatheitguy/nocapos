@@ -16,6 +16,14 @@ export interface PkgFeature {
   can_install: boolean;
 }
 
+/** A health check (e.g. whether Linux app sandboxes can start), with the fix. */
+export interface PkgCheck {
+  id: string;
+  ok: boolean;
+  problem?: string;
+  fix?: string;
+}
+
 export interface Pkg {
   name: string;
   version: string;
@@ -48,7 +56,7 @@ export interface PkgJob {
 export type PkgAction = 'refresh' | 'upgrade-all' | 'upgrade' | 'install' | 'remove' | 'hold' | 'unhold' | 'autoremove' | 'clean';
 
 export const pkgApi = {
-  status: () => api<{ status: PkgStatus; features: PkgFeature[]; jobs: PkgJob[] }>('/api/v1/packages/status'),
+  status: () => api<{ status: PkgStatus; features: PkgFeature[]; checks?: PkgCheck[]; jobs: PkgJob[] }>('/api/v1/packages/status'),
   list: (q: string, offset: number, limit: number, held = false) =>
     api<{ packages: Pkg[]; total: number; installed: number; size: number }>(
       `/api/v1/packages?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}${held ? '&held=1' : ''}`,
