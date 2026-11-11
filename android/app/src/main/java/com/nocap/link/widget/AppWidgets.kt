@@ -13,20 +13,19 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.nocap.link.MainActivity
-import com.nocap.link.Opt
-import com.nocap.link.Prefs
-import com.nocap.link.R
+import androidx.work.WorkManager
 import com.nocap.link.ai.AiActivity
+import com.nocap.link.data.Opt
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
 import com.nocap.link.desktop.DesktopActivity
+import com.nocap.link.MainActivity
 import com.nocap.link.net.Summary
-import com.nocap.link.nocap.Weather
-import com.nocap.link.t
+import com.nocap.link.R
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 /**
  * NoCap OS widgets for any home screen (including other launchers):
@@ -68,7 +67,7 @@ object AppWidgets {
         Prefs.init(ctx)
         val m = AppWidgetManager.getInstance(ctx)
         val sp = ctx.getSharedPreferences("nocap_widgets", Context.MODE_PRIVATE)
-        val linked = com.nocap.link.Vault.get(ctx).link != null
+        val linked = com.nocap.link.data.Vault.get(ctx).link != null
         val fresh = System.currentTimeMillis() - sp.getLong("at", 0) < 30 * 60_000L
         for (id in ids(ctx, StatusAppWidget::class.java)) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_status)

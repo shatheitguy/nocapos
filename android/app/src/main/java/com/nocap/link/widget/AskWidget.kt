@@ -6,10 +6,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import com.nocap.link.Prefs
-import com.nocap.link.R
 import com.nocap.link.ai.AiActivity
-import com.nocap.link.t
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.R
 
 /** "Ask NoCap AI" for any home screen: one tap opens NoCap AI. */
 class AskWidget : AppWidgetProvider() {

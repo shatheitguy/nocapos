@@ -2,8 +2,8 @@ package com.nocap.link.sync
 
 import android.app.Activity
 import android.app.Notification
-import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -13,27 +13,26 @@ import android.service.notification.StatusBarNotification
 import android.service.quicksettings.TileService
 import android.util.Base64
 import android.widget.Toast
+import com.nocap.link.data.Opt
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
-import com.nocap.link.Notices
-import com.nocap.link.Opt
-import com.nocap.link.Prefs
-import com.nocap.link.Vault
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.system.DotsService
-import com.nocap.link.t
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 
 /**
  * NoCap Link sync: this phone's notifications → your NoCap OS (opt-in, per

@@ -12,34 +12,43 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.nocap.link.sync.Sync
-import com.nocap.link.ui.NoCap
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.nocap.link.ai.AiActivity
+import com.nocap.link.data.BarStyle
+import com.nocap.link.data.CustomIcons
+import com.nocap.link.data.DrawerStyle
+import com.nocap.link.data.Link
+import com.nocap.link.data.Opt
+import com.nocap.link.data.PhoneApp
+import com.nocap.link.data.PhoneApps
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.Rotation
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.desktop.DesktopActivity
-import com.nocap.link.launcher.Cell
-import com.nocap.link.launcher.Home
-import com.nocap.link.launcher.HomeScreen
-import com.nocap.link.launcher.Layout
-import com.nocap.link.launcher.NoCapItem
-import com.nocap.link.launcher.NoCapKinds
-import com.nocap.link.launcher.Page
-import com.nocap.link.launcher.WidgetItem
-import com.nocap.link.launcher.Widgets
-import com.nocap.link.launcher.newId
+import com.nocap.link.home.Cell
+import com.nocap.link.home.Home
+import com.nocap.link.home.HomeScreen
+import com.nocap.link.home.Layout
+import com.nocap.link.home.newId
+import com.nocap.link.home.NoCapItem
+import com.nocap.link.home.NoCapKinds
+import com.nocap.link.home.Page
+import com.nocap.link.home.Wallpapers
+import com.nocap.link.home.WidgetItem
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.FileEntry
@@ -48,18 +57,21 @@ import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.ServerApp
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.net.Summary
-import com.nocap.link.ui.IntroScreen
-import com.nocap.link.ui.LinkScreen
+import com.nocap.link.settings.IntroScreen
+import com.nocap.link.sync.LinkScreen
+import com.nocap.link.sync.ScanScreen
+import com.nocap.link.sync.Sync
+import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
-import com.nocap.link.ui.ScanScreen
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import com.nocap.link.widget.Widgets
+import java.io.File
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.File
 
 /** Where the person is in the app. */
 sealed interface Screen {
@@ -134,7 +146,7 @@ class MainActivity : ComponentActivity() {
         if (uris.isEmpty()) return@registerForActivityResult
         busy = t("Framing your pics…", "Adding photos…")
         lifecycleScope.launch {
-            val names = withContext(Dispatchers.IO) { uris.mapNotNull { com.nocap.link.nocap.Photos.save(this@MainActivity, it) } }
+            val names = withContext(Dispatchers.IO) { uris.mapNotNull { com.nocap.link.widget.Photos.save(this@MainActivity, it) } }
             busy = null
             val cur = Home.find(id)?.second as? NoCapItem ?: return@launch
             val all = (cur.opt("photos").split('|').filter { it.isNotBlank() } + names).takeLast(20)
@@ -274,7 +286,7 @@ class MainActivity : ComponentActivity() {
         resumeTick++
         reloadApps()
         refresh()
-        com.nocap.link.nocap.Media.start(this)
+        com.nocap.link.widget.Media.start(this)
         Sync.start(this)
         liveJob?.cancel()
         liveJob = lifecycleScope.launch {
@@ -306,7 +318,7 @@ class MainActivity : ComponentActivity() {
     private fun prunePhotos() {
         if (!Home.loaded) return
         val keep = Home.layout.pages.flatMap { p -> p.items.filterIsInstance<NoCapItem>().flatMap { it.opt("photos").split('|') } }.filter { it.isNotBlank() }.toSet()
-        lifecycleScope.launch(Dispatchers.IO) { com.nocap.link.nocap.Photos.prune(this@MainActivity, keep) }
+        lifecycleScope.launch(Dispatchers.IO) { com.nocap.link.widget.Photos.prune(this@MainActivity, keep) }
     }
 
     fun askPermission(perm: String, done: (Boolean) -> Unit) {
@@ -714,7 +726,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun addNoCapWidget(kind: String, page: Int, w: Int = NoCapKinds.size(kind).first, h: Int = NoCapKinds.size(kind).second) {
-        if (Opt.lockLayout.v) { toast = com.nocap.link.launcher.lockedMsg(); return }
+        if (Opt.lockLayout.v) { toast = com.nocap.link.home.lockedMsg(); return }
         val id = newId()
         val p = Home.add({ c -> NoCapItem(id, c, kind) }, w.coerceAtMost(Prefs.columns), h.coerceAtMost(Prefs.rows), page)
         layer = Layer.NONE

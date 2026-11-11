@@ -10,13 +10,18 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.WorkManager
+import com.nocap.link.data.Link
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.NoCapApi
+import com.nocap.link.sync.Notices
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.TimeUnit
 
 /**
  * Tells the server this phone is still around (battery + app version), so
