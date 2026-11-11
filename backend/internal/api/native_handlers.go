@@ -37,8 +37,6 @@ func (s *Server) nativeRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/native-apps/{id}/update", s.admin(s.nativeUpdate))
 	mux.Handle("POST /api/v1/native-apps/update-all", s.admin(s.nativeUpdateAll))
 	mux.Handle("POST /api/v1/native-apps/{id}/launch", s.authed(s.nativeLaunch))
-	mux.Handle("POST /api/v1/native-apps/desktop", s.authed(s.nativeDesktop))
-	mux.Handle("POST /api/v1/native-apps/server-screen", s.admin(s.nativeServerScreen))
 	mux.Handle("GET /api/v1/native-apps/streams/{sid}", s.authed(s.nativeStreamStatus))
 	mux.Handle("DELETE /api/v1/native-apps/streams/{sid}", s.authed(s.nativeStreamStop))
 	// The stream itself (noVNC page, assets, VNC WebSocket): gated by a
@@ -55,8 +53,6 @@ func nativeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotImplemented, "unsupported", unsup.Reason)
 	case errors.As(err, &sandbox):
 		writeError(w, http.StatusConflict, "sandbox", err.Error())
-	case errors.Is(err, nativeapps.ErrNoScreen):
-		writeError(w, http.StatusConflict, "no_screen", err.Error())
 	case errors.Is(err, nativeapps.ErrBadID):
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 	case errors.Is(err, nativeapps.ErrNotInstalled):
@@ -263,23 +259,6 @@ func (s *Server) nativeLaunched(w http.ResponseWriter, r *http.Request, got nati
 		s.grantNativeCookie(w, r)
 	}
 	writeJSON(w, http.StatusOK, got)
-}
-
-// nativeDesktop opens the person's full Linux desktop in a window.
-func (s *Server) nativeDesktop(w http.ResponseWriter, r *http.Request) {
-	got, err := s.Native.Desktop(s.nativePerson(r))
-	s.nativeLaunched(w, r, got, err)
-}
-
-// nativeServerScreen streams the server's own screen (admins; audited).
-func (s *Server) nativeServerScreen(w http.ResponseWriter, r *http.Request) {
-	got, err := s.Native.ViewScreen(s.nativePerson(r))
-	detail := ""
-	if err != nil {
-		detail = err.Error()
-	}
-	s.audit(r, userFrom(r.Context()).ID, "nativeapp.server_screen", "", err == nil, detail)
-	s.nativeLaunched(w, r, got, err)
 }
 
 // grantNativeCookie lets this browser's iframe reach its streams (and only
