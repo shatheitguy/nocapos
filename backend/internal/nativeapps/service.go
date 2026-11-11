@@ -19,6 +19,10 @@ type Status struct {
 	Reason    string `json:"reason,omitempty"`
 	// Screen: the server's own screen is on, so apps open there.
 	Screen bool `json:"screen"`
+	// Desktop: the full Linux desktop can open here (native Linux).
+	Desktop bool `json:"desktop"`
+	// Sandbox: whether app sandboxes can start (the kernel allows them).
+	Sandbox webapps.SandboxCheck `json:"sandbox"`
 }
 
 // Unsupported reasons, shown as they are.
@@ -71,9 +75,13 @@ type Service struct {
 	Exists     func(path string) bool
 	// OnScreen starts argv on the local session's screen as its user.
 	OnScreen func(env DesktopEnv, argv []string) error
-	// Account finds a person's Linux account for streamed apps (nil = run as
-	// alfad's own account).
+	// Account finds a person's Linux account for streamed apps (nil = none:
+	// they run as AppsAccount instead).
 	Account func(username string) *webapps.RunAs
+	// AppsAccount is the unprivileged AppsUser (made when missing).
+	AppsAccount func() (*webapps.RunAs, error)
+	// Sandbox checks the kernel lets app sandboxes start.
+	Sandbox func() webapps.SandboxCheck
 
 	EnvPath string
 	DataDir string
@@ -92,15 +100,17 @@ var ErrNoUpdates = errors.New("Everything's already up to date")
 func New(dataDir string, streams Streamer) *Service {
 	s := &Service{
 		Jobs: NewJobs(), Streams: streams,
-		Native:     syspkg.Native,
-		HasFlatpak: func() bool { _, err := exec.LookPath("flatpak"); return err == nil },
-		Run:        runOutput,
-		ReadFile:   os.ReadFile,
-		Exists:     func(p string) bool { _, err := os.Stat(p); return err == nil },
-		OnScreen:   startOnScreen,
-		Account:    lookupAccount,
-		EnvPath:    DesktopEnvPath,
-		DataDir:    dataDir,
+		Native:      syspkg.Native,
+		HasFlatpak:  func() bool { _, err := exec.LookPath("flatpak"); return err == nil },
+		Run:         runOutput,
+		ReadFile:    os.ReadFile,
+		Exists:      func(p string) bool { _, err := os.Stat(p); return err == nil },
+		OnScreen:    startOnScreen,
+		Account:     lookupAccount,
+		AppsAccount: ensureAppsAccount,
+		Sandbox:     webapps.SandboxStatus,
+		EnvPath:     DesktopEnvPath,
+		DataDir:     dataDir,
 	}
 	s.Catalog = NewCatalog(func(ctx context.Context) (string, error) {
 		if !s.supported() {
@@ -126,11 +136,15 @@ func (s *Service) Check() error {
 
 // Status reports support and whether the server's screen is on.
 func (s *Service) Status() Status {
+	sandbox := webapps.SandboxCheck{OK: true}
+	if s.Native() && s.Sandbox != nil {
+		sandbox = s.Sandbox()
+	}
 	if err := s.Check(); err != nil {
-		return Status{Reason: err.Error()}
+		return Status{Reason: err.Error(), Desktop: s.Native(), Sandbox: sandbox}
 	}
 	_, screen := s.screen()
-	return Status{Supported: true, Screen: screen}
+	return Status{Supported: true, Screen: screen, Desktop: true, Sandbox: sandbox}
 }
 
 // screen reads the local session's file and checks it's alive.
@@ -370,6 +384,9 @@ func (s *Service) Launch(ctx context.Context, who Person, id string) (Launched, 
 			return Launched{}, ErrNotInstalled
 		}
 	}
+	if err := s.sandboxErr(); err != nil {
+		return Launched{}, err
+	}
 	if env, on := s.screen(); on {
 		if err := s.OnScreen(env, RunArgs(id)); err == nil {
 			return Launched{Where: "screen"}, nil
@@ -379,13 +396,11 @@ func (s *Service) Launch(ctx context.Context, who Person, id string) (Launched, 
 	if s.Streams == nil {
 		return Launched{}, ErrUnsupported{reasonNotNative}
 	}
-	spec := webapps.StreamSpec{Key: streamKey(id), Title: app.Name, Command: StreamArgs(id)}
-	if a := s.Account(who.Username); a != nil && a.UID != 0 {
-		spec.RunAs = a
-	} else {
-		// alfad's own account, with a home of its own per person.
-		spec.Home = filepath.Join(s.DataDir, "app-homes", safeDir(who.ID))
+	acct, err := s.runAs(who)
+	if err != nil {
+		return Launched{}, err
 	}
+	spec := webapps.StreamSpec{Key: streamKey(id), Title: app.Name, Mode: webapps.ModeApp, Command: StreamArgs(id), RunAs: acct}
 	st, err := s.Streams.Open(who.ID, spec)
 	if err != nil {
 		return Launched{}, err

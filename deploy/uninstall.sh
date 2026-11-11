@@ -50,7 +50,9 @@ done
 
 # ---------------------------------------------------------------- confirm
 echo "This removes $NAME from this server:"
-echo "  - the nocapos service and program, and NoCap Desktop (its service and nocap-desktop user)"
+echo "  - the nocapos service and program, and NoCap Desktop (its services, look and settings, and the"
+echo "    nocap-desktop user); the desktop packages stay installed, the previous sign-in screen comes back"
+echo "  - its boot menu, boot splash and firmware branding (the originals are put back)"
 echo "  - its Samba sharing settings and network-drive mounts"
 echo "  - its console banner, MOTD and nocap.local announcement (the originals are put back)"
 [ "$PURGE" -eq 1 ] && echo "  - its accounts, settings, database and TLS keys ($ETC, $DATA)"
@@ -78,7 +80,20 @@ systemctl daemon-reload 2>/dev/null || true
 rm -f "$BIN" "$BIN.prev" /usr/local/bin/alfad /usr/local/bin/cap
 
 # ---------------------------------------------------------------- NoCap Desktop
-# The session on this machine's own screen: its unit, scripts, run file and
+# The full desktop: NoCapOS's look, settings, app entries and boot menu
+# branding come out, and what install.sh changed is put back (recorded in
+# the data folder). The sign-in screen goes back to what was there before.
+if [ -x /usr/local/lib/nocapos/desktop/uninstall-desktop.sh ]; then
+  info "Removing NoCap Desktop's full desktop and boot branding"
+  desk_data="$DATA"
+  if [ -f "$ETC/nocapos.env" ]; then
+    d="$(sed -n 's/^ALFA_DATA_DIR=//p' "$ETC/nocapos.env" | tail -n1 | tr -d '"'"'"'')"
+    [ -n "$d" ] && desk_data="$d"
+  fi
+  bash /usr/local/lib/nocapos/desktop/uninstall-desktop.sh "$desk_data" || warn "parts of NoCap Desktop couldn't be put back"
+fi
+
+# The full-screen session on this machine's own screen: its unit, scripts, run file and
 # the login-less nocap-desktop user (with its browser profile). The text
 # console gets its login prompt back.
 if [ -f /etc/systemd/system/nocapos-desktop.service ] || id nocap-desktop >/dev/null 2>&1; then
@@ -95,6 +110,16 @@ if [ -f /etc/systemd/system/nocapos-desktop.service ] || id nocap-desktop >/dev/
   fi
   rm -rf /var/lib/nocap-desktop
   systemctl --no-block start getty@tty1.service 2>/dev/null || true
+fi
+
+# Streamed Linux apps: their units, launcher and the login-less nocap-apps
+# account. People's files in /var/lib/nocap-apps/homes are kept.
+systemctl stop 'nocap-app-*.service' 2>/dev/null || true
+rm -f /run/nocapos/app-stream.sh
+if id nocap-apps >/dev/null 2>&1; then
+  shell="$(getent passwd nocap-apps | cut -d: -f7)"
+  case "$shell" in */nologin|*/false) userdel nocap-apps 2>/dev/null || warn "could not delete the nocap-apps user" ;; esac
+  if [ -d /var/lib/nocap-apps ]; then info "Kept the Linux app homes in /var/lib/nocap-apps (delete it if you don't need them)"; fi
 fi
 
 # Docker mode: NoCapOS itself ran as a Compose stack.

@@ -7,6 +7,7 @@ import type { Snapshot, SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { useDocumentVisible, useViewport } from '../lib/hooks';
+import { takeHubApp } from '../lib/hub';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { usePrefs, usePrefsSynced } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
@@ -16,7 +17,7 @@ import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { useWidgets } from '../state/widgets';
 import { ConfirmHost } from '../components/ConfirmHost';
-import { hasMenuBar } from '../state/prefs';
+import { compactSize, hasMenuBar } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
@@ -53,7 +54,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const screensaver = usePrefs((s) => s.screensaver);
   const saverDelay = usePrefs((s) => s.saverDelay);
   const vp = useViewport();
-  const compact = vp.w < 640;
+  const compact = compactSize(vp.w, vp.h);
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
   const [launcher, setLauncher] = useState(false);
   const [saverOn, setSaverOn] = useState(false);
@@ -102,6 +103,12 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
   // NoCap Link, for everyone: the phone's notifications and the shared clipboard.
   useEffect(() => watchLink(user.username), [user.id, user.username]);
+
+  // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
+  useEffect(() => {
+    const app = takeHubApp();
+    if (app) openApp(app);
+  }, [user.id]);
 
   // Installed App Store apps for the home screen and Launchpad (the server
   // lists only the apps this person may use).

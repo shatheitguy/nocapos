@@ -44,9 +44,11 @@ if [ ! -f /etc/nocapos/image.conf ]; then
 # NoCapOS image settings, read by nocapos-firstboot.service.
 # Install Docker (for the App Store) on the first boot: yes | no
 NOCAP_DOCKER=yes
-# Extra options for the bundled installer on the first boot, e.g. "--minimal"
-# or "--no-desktop" (see: bash /usr/lib/nocapos/bundle/install.sh --help).
-NOCAP_FIRSTBOOT_ARGS=""
+# Extra options for the bundled installer on the first boot. "--desktop" sets
+# up NoCap Desktop, the full desktop on the screen; use "--no-desktop" for a
+# headless server or "--desktop=kiosk" for NoCapOS full screen only (see:
+# bash /usr/lib/nocapos/bundle/install.sh --help).
+NOCAP_FIRSTBOOT_ARGS="--desktop"
 EOF
 fi
 install -m 0644 "$BUNDLE/nocapos.service" /etc/systemd/system/nocapos.service
@@ -91,15 +93,26 @@ fi
 for f in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
   [ -f "$f" ] || continue
   line="$(tr -d '\r\n' <"$f")"
-  for t in quiet splash plymouth.ignore-serial-consoles; do
+  for t in quiet splash loglevel=3 logo.nologo plymouth.ignore-serial-consoles; do
     case " $line " in *" $t "*) ;; *) line="$line $t" ;; esac
   done
   printf '%s\n' "$line" >"$f"
   break
 done
+# Raspberry Pi firmware: no rainbow square before the splash.
+for f in /boot/firmware/config.txt /boot/config.txt; do
+  [ -f "$f" ] || continue
+  grep -q '^[[:space:]]*disable_splash=' "$f" || printf '\n[all]\ndisable_splash=1\n' >>"$f"
+  break
+done
 if command -v update-initramfs >/dev/null 2>&1 && ls /boot/initrd.img-* >/dev/null 2>&1; then
   update-initramfs -u -k all || echo "warning: update-initramfs failed; the splash shows later in the boot" >&2
 fi
+
+# ---------------------------------------------------------------- NoCap Desktop
+# The images come with the full desktop: its packages now, the NoCapOS look
+# and the switch-on on the first boot (install.sh --desktop).
+"$IMG/desktop-packages.sh" || echo "warning: the desktop packages didn't install; the first boot installs them" >&2
 
 # ---------------------------------------------------------------- updates
 # Security updates install themselves (52nocapos-unattended-upgrades); the

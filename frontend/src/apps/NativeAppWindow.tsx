@@ -2,6 +2,7 @@ import { tr } from '../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { nativeApi, streamURL, type NativeStream } from '../api/nativeApps';
 import { Icon } from '../components/Icon';
+import { bridgeClipboard } from '../lib/vncClipboard';
 import { NativeAppIcon } from '../shell/NativeTile';
 import { useWM, type WinState } from '../state/windows';
 
@@ -15,6 +16,7 @@ export function NativeAppWindow({ win }: { win: WinState }) {
   const [fatal, setFatal] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const polling = useRef<number | null>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
 
   // Opened again from Launchpad: a new stream id arrives in the props.
   useEffect(() => {
@@ -88,6 +90,12 @@ export function NativeAppWindow({ win }: { win: WinState }) {
   };
 
   const ready = !!status?.ready && !fatal;
+
+  // The app's clipboard and the browser's stay in sync.
+  useEffect(() => {
+    if (!ready || !frame.current) return;
+    return bridgeClipboard(frame.current);
+  }, [ready, sid, nonce]);
   const failed = fatal || status?.phase === 'error' || status?.phase === 'idle';
 
   return (
@@ -111,7 +119,7 @@ export function NativeAppWindow({ win }: { win: WinState }) {
 
       <div className="browser-view">
         {ready ? (
-          <iframe key={`${sid}-${nonce}`} className="browser-frame" src={streamURL(sid)} title={name} allow="clipboard-read; clipboard-write; fullscreen" />
+          <iframe ref={frame} key={`${sid}-${nonce}`} className="browser-frame" src={streamURL(sid)} title={name} allow="clipboard-read; clipboard-write; fullscreen" />
         ) : (
           <div className="brave-boot">
             <div className="brave-logo">

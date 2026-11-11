@@ -1,12 +1,15 @@
 // Settings → General → This Screen & Access (admins): NoCap Desktop on the
 // server's own monitor, and whether other devices may open NoCapOS at all.
 import { useEffect, useState } from 'react';
-import { hostAccessApi, type HostAccess } from '../api/hostaccess';
+import { hostAccessApi, type DesktopMode, type HostAccess } from '../api/hostaccess';
+import { useT } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
-import { Row, Section as Group, Toggle } from './Personalize';
+import { openApp } from './meta';
+import { Choice, Row, Section as Group, Toggle } from './Personalize';
 
 export function HostAccessPage() {
+  const t = useT();
   const [st, setSt] = useState<HostAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'desktop' | 'remote' | null>(null);
@@ -15,13 +18,29 @@ export function HostAccessPage() {
     void hostAccessApi.get().then((r) => (r.ok ? setSt(r.data) : setError(r.error ?? 'Couldn’t load these settings')));
   }, []);
 
-  const setDesktop = async (on: boolean) => {
+  const modeName = (m: DesktopMode) => t(`nd.mode.${m}`);
+
+  const setMode = async (mode: DesktopMode) => {
+    if (!st || mode === st.desktop.mode) return;
+    // Leaving the full desktop signs out whoever is using it.
+    if (st.desktop.mode === 'full' && st.desktop.session_user) {
+      const ok = await confirmDialog({ title: t('nd.confirmTitle'), message: t('nd.confirmBody'), confirmLabel: t('nd.confirmGo'), danger: true });
+      if (!ok) return;
+    }
     setBusy('desktop');
-    const r = await hostAccessApi.setDesktop(on);
+    const r = await hostAccessApi.setDesktopMode(mode);
     setBusy(null);
-    if (!r.ok) return toast('error', on ? 'NoCap Desktop didn’t start' : 'NoCap Desktop didn’t stop', r.error);
+    if (!r.ok) return toast('error', t('nd.switchFailed'), r.error);
     setSt(r.data);
-    toast('success', on ? 'NoCap Desktop is on — check the server’s screen' : 'NoCap Desktop is off');
+    toast('success', t('nd.switched', { mode: modeName(mode) }));
+  };
+
+  const setAutologin = async (on: boolean) => {
+    setBusy('desktop');
+    const r = await hostAccessApi.setAutologin(on);
+    setBusy(null);
+    if (!r.ok) return toast('error', t('nd.autologin.failed'), r.error);
+    setSt(r.data);
   };
 
   const setRemote = async (on: boolean) => {
@@ -54,15 +73,14 @@ export function HostAccessPage() {
   if (!st) return <p className="muted">Loading…</p>;
 
   const d = st.desktop;
-  const desktopHint = !d.available
-    ? (d.reason ?? 'NoCap Desktop isn’t set up on this server.')
-    : d.enabled
-      ? d.active
-        ? 'Running on the server’s screen. It opens NoCapOS’s own sign-in, so nobody skips the password.'
-        : 'On, but not running right now. Check the screen is plugged in, or turn it off and on again.'
-      : d.display
-        ? 'Turns the screen plugged into this server into a full NoCapOS desktop. Sign-in still needed.'
-        : 'No screen detected right now. Plug one in and flip this on to use NoCapOS right on the box.';
+  const modes = d.modes ?? [];
+  const status = d.mode === 'off'
+    ? t('nd.status.off')
+    : !d.active
+      ? t('nd.status.stopped')
+      : d.session_user
+        ? t('nd.status.signedIn', { user: d.session_user })
+        : t('nd.status.running');
 
   const remoteHint = !st.remote.supported
     ? (st.remote.reason ?? 'Not available here.')
@@ -72,9 +90,34 @@ export function HostAccessPage() {
 
   return (
     <div className="stack settings-page">
-      <Group title="This screen" hint="Use the server like a real computer: monitor, keyboard, mouse, done.">
-        <Toggle label="NoCap Desktop on this screen" hint={desktopHint} checked={d.available && d.enabled}
-          disabled={!d.available || busy === 'desktop'} onChange={(on) => void setDesktop(on)} />
+      <Group title={t('nd.screen')} hint={t('nd.screen.hint')}>
+        {!d.available ? (
+          <Row label={t('nd.mode')} hint={d.reason ?? t('nd.notSetUp')}>
+            <span className="settings-value">{t('nd.mode.off')}</span>
+          </Row>
+        ) : (
+          <>
+            <Row label={t('nd.mode')} hint={t(`nd.${d.mode}.hint`)} stacked>
+              <fieldset className="nd-modes" disabled={busy === 'desktop'}>
+                <Choice value={d.mode} options={modes.map((m) => ({ id: m, label: modeName(m) }))} onChange={(m) => void setMode(m)} />
+              </fieldset>
+            </Row>
+            <Row label={t('nd.status')} hint={d.display ? undefined : t('nd.noScreen')}>
+              <span className="settings-value">
+                <span className={`status-dot ${d.active ? 'on' : 'off'}`} /> {status}
+              </span>
+            </Row>
+            {d.mode === 'full' && d.autologin_supported && (
+              <Toggle label={t('nd.autologin')} hint={d.autologin && d.autologin_user ? t('nd.autologin.on', { user: d.autologin_user }) : t('nd.autologin.hint')}
+                checked={d.autologin} disabled={busy === 'desktop'} onChange={(on) => void setAutologin(on)} />
+            )}
+            {d.remote && !st.client_local && (
+              <Row label={t('nd.open')} hint={t('nd.open.hint')}>
+                <button type="button" onClick={() => openApp('nocapdesktop')}>{t('nd.open.button')}</button>
+              </Row>
+            )}
+          </>
+        )}
       </Group>
       <Group title="Access from other devices">
         <Toggle label="Let other devices open NoCapOS" hint={remoteHint} checked={st.remote.enabled}

@@ -26,6 +26,10 @@ for target in amd64 arm64 armv7; do
   cp "$ROOT/deploy/install.sh" "$ROOT/deploy/uninstall.sh" "$ROOT/deploy/nocapos.service" "$ROOT/deploy/docker-compose.yml" \
      "$ROOT/deploy/docker-compose.nvidia.yml" "$ROOT/deploy/Dockerfile.bundle" "$stage/"
   cp -R "$ROOT/deploy/plymouth" "$stage/plymouth" # boot splash theme
+  cp -R "$ROOT/deploy/desktop" "$stage/desktop"   # NoCap Desktop: full desktop + boot branding
+  mkdir -p "$stage/brand" "$stage/wallpapers"
+  cp "$ROOT"/frontend/public/brand/*.png "$stage/brand/"
+  cp "$ROOT"/frontend/public/wallpapers/*.jpg "$stage/wallpapers/"
   printf '%s' "$VERSION" >"$stage/VERSION"
   printf '%s' "$target" >"$stage/ARCH"
   : >"$stage/rootfs/data/.keep"
