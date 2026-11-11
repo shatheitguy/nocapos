@@ -1,18 +1,16 @@
 // Package hostaccess holds the switches for how this machine itself is used:
 // whether other devices may open NoCapOS (a flag file both alfad and the cap
-// CLI read and write), and NoCap Desktop, NoCapOS full screen on the
-// server's own monitor (a systemd unit install.sh sets up).
+// CLI read and write), and NoCap Desktop, what the server's own monitor
+// shows (the full desktop or NoCapOS full screen; see desktop.go).
 package hostaccess
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -127,109 +125,4 @@ func DataDir(envFile string) string {
 		return def
 	}
 	return dir
-}
-
-// ---- NoCap Desktop ----
-
-// DesktopUnit is the systemd unit install.sh writes for NoCap Desktop.
-const DesktopUnit = "nocapos-desktop.service"
-
-// DesktopUnitPath is where it lives.
-const DesktopUnitPath = "/etc/systemd/system/" + DesktopUnit
-
-// DesktopEnvFile is written by the running session: KEY=VALUE lines naming
-// the Wayland display (and X display when there is one) and the user, so
-// native apps can be opened on this screen.
-const DesktopEnvFile = "/run/nocapos/desktop.env"
-
-// Runner runs a command and returns its combined output.
-type Runner func(ctx context.Context, name string, args ...string) ([]byte, error)
-
-// ExecRunner runs real commands.
-func ExecRunner(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).CombinedOutput()
-}
-
-// Desktop controls nocapos-desktop.service.
-type Desktop struct {
-	Run    Runner
-	Exists func(string) bool
-	// Native: NoCapOS runs on Linux as root outside a container.
-	Native bool
-}
-
-// DesktopState is what Settings shows.
-type DesktopState struct {
-	Available bool   `json:"available"`
-	Reason    string `json:"reason,omitempty"`
-	Enabled   bool   `json:"enabled"`
-	Active    bool   `json:"active"`
-	Display   bool   `json:"display"` // a monitor is plugged in
-}
-
-// ErrDesktopUnavailable means NoCap Desktop isn't set up on this server.
-var ErrDesktopUnavailable = errors.New("NoCap Desktop isn't set up on this server")
-
-func (d *Desktop) exists(p string) bool {
-	if d.Exists != nil {
-		return d.Exists(p)
-	}
-	_, err := os.Stat(p)
-	return err == nil
-}
-
-// State reports whether NoCap Desktop is set up, on and running.
-func (d *Desktop) State(ctx context.Context) DesktopState {
-	st := DesktopState{Display: DisplayConnected("/sys/class/drm")}
-	switch {
-	case !d.Native:
-		st.Reason = "NoCap Desktop needs NoCapOS installed straight on Linux (not in Docker)."
-		return st
-	case !d.exists(DesktopUnitPath):
-		st.Reason = "Not set up yet. Plug in a screen, then run on the server: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop"
-		return st
-	}
-	st.Available = true
-	out, _ := d.Run(ctx, "systemctl", "is-enabled", DesktopUnit)
-	st.Enabled = strings.TrimSpace(string(out)) == "enabled"
-	out, _ = d.Run(ctx, "systemctl", "is-active", DesktopUnit)
-	st.Active = strings.TrimSpace(string(out)) == "active"
-	return st
-}
-
-// Set turns NoCap Desktop on (enable + start) or off (disable + stop).
-func (d *Desktop) Set(ctx context.Context, on bool) error {
-	if !d.Native || !d.exists(DesktopUnitPath) {
-		return ErrDesktopUnavailable
-	}
-	args := []string{"disable", "--now", DesktopUnit}
-	if on {
-		args = []string{"enable", "--now", DesktopUnit}
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if out, err := d.Run(ctx, "systemctl", args...); err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			msg = err.Error()
-		}
-		return fmt.Errorf("systemctl %s: %s", args[0], msg)
-	}
-	if !on {
-		// The desktop took over tty1; give the text console its login back.
-		_, _ = d.Run(ctx, "systemctl", "--no-block", "start", "getty@tty1.service")
-	}
-	return nil
-}
-
-// DisplayConnected reports whether any graphics output under drmDir (normally
-// /sys/class/drm) has a monitor plugged in.
-func DisplayConnected(drmDir string) bool {
-	matches, _ := filepath.Glob(filepath.Join(drmDir, "*", "status"))
-	for _, m := range matches {
-		if b, err := os.ReadFile(m); err == nil && strings.TrimSpace(string(b)) == "connected" {
-			return true
-		}
-	}
-	return false
 }

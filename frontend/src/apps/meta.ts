@@ -120,6 +120,16 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Connect to Windows and Linux PCs over RDP',
     adminOnly: true,
   },
+  nocapdesktop: {
+    id: 'nocapdesktop',
+    title: 'NoCap Desktop',
+    icon: 'desktop',
+    tile: ['#e5383b', '#7a0f12'],
+    size: { w: 1280, h: 800 },
+    description: 'The server’s own screen: its full desktop, right here in a window',
+    single: true,
+    adminOnly: true,
+  },
   virtualdesk: {
     id: 'virtualdesk',
     title: 'Virtual Desk',

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api } from '../api/client';
 import { subscribe } from '../api/socket';
 import { openApp } from '../apps/meta';
+import { desktopNotify } from '../lib/hub';
 import { playCue } from '../lib/uiSound';
 import { hasMenuBar, isCompact, usePrefs, type PrefValues } from './prefs';
 
@@ -140,6 +141,9 @@ function arrived(n: Notice) {
   // Focus: no banners or sounds, except errors (as with toasts). They still land in the center.
   if (focus && n.level !== 'error') return;
   if (n.quiet) return;
+  // In NoCap Hub on the server's desktop, the desktop shows it too.
+  const text = noticeText(n, usePrefs.getState().lingo);
+  desktopNotify(text.title, text.body, n.key, () => openNotice(n));
   playCue(n.level === 'error' ? 'error' : n.level === 'success' ? 'success' : 'info');
   if (s.centerOpen) return; // already on screen in the center
   useNotifications.setState({ banners: [...useNotifications.getState().banners, n].slice(-MAX_BANNERS) });

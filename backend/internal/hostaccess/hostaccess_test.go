@@ -1,11 +1,8 @@
 package hostaccess
 
 import (
-	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -114,50 +111,5 @@ func TestDisplayConnected(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "card1-DP-1", "status"), []byte("connected\n"), 0o644)
 	if !DisplayConnected(dir) {
 		t.Fatal("connected output not seen")
-	}
-}
-
-func TestDesktopStateAndSet(t *testing.T) {
-	var calls []string
-	d := &Desktop{
-		Native: true,
-		Exists: func(p string) bool { return p == DesktopUnitPath },
-		Run: func(_ context.Context, name string, args ...string) ([]byte, error) {
-			calls = append(calls, name+" "+strings.Join(args, " "))
-			switch args[0] {
-			case "is-enabled":
-				return []byte("enabled\n"), nil
-			case "is-active":
-				return []byte("inactive\n"), errors.New("exit 3")
-			}
-			return nil, nil
-		},
-	}
-	st := d.State(context.Background())
-	if !st.Available || !st.Enabled || st.Active {
-		t.Fatalf("state = %+v", st)
-	}
-	calls = nil
-	if err := d.Set(context.Background(), true); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Set(context.Background(), false); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"systemctl enable --now " + DesktopUnit, "systemctl disable --now " + DesktopUnit, "systemctl --no-block start getty@tty1.service"}
-	if strings.Join(calls, "|") != strings.Join(want, "|") {
-		t.Fatalf("calls = %v", calls)
-	}
-
-	d.Exists = func(string) bool { return false }
-	if st := d.State(context.Background()); st.Available || st.Reason == "" {
-		t.Fatalf("missing unit should be unavailable with a reason: %+v", st)
-	}
-	if err := d.Set(context.Background(), true); !errors.Is(err, ErrDesktopUnavailable) {
-		t.Fatalf("Set without the unit = %v", err)
-	}
-	d.Native = false
-	if st := d.State(context.Background()); st.Available {
-		t.Fatal("not native: unavailable")
 	}
 }

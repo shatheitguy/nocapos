@@ -1,0 +1,53 @@
+#!/bin/sh
+# Keeps /usr/lib/os-release (what /etc/os-release points to) saying NoCapOS on
+# a machine NoCap Desktop was installed on (the About page, the sign-in
+# screen, boot menus). The distribution's package owns that file and
+# rewrites it on updates, so the first run moves the distribution's copy
+# aside with dpkg-divert (--divert) and an apt hook runs this after every
+# dpkg run to rebuild NoCapOS's file from it. ID, ID_LIKE, VERSION_ID and
+# VERSION_CODENAME stay the distribution's, so apt, Docker's installer and
+# other tools keep recognising the system.
+#   os-release-sync [--divert | --undo]
+# Written by NoCapOS's install.sh; uninstall.sh runs --undo.
+set -eu
+
+TARGET=/usr/lib/os-release
+ORIG=/usr/lib/os-release.nocapos-orig
+
+case "${1:-}" in
+  --divert)
+    if ! dpkg-divert --list "$TARGET" | grep -q "$ORIG"; then
+      cp -p "$TARGET" "$ORIG"
+      dpkg-divert --local --no-rename --divert "$ORIG" --add "$TARGET" >/dev/null
+    fi
+    ;;
+  --undo)
+    if dpkg-divert --list "$TARGET" | grep -q "$ORIG"; then
+      [ -f "$ORIG" ] && cp -p "$ORIG" "$TARGET"
+      dpkg-divert --local --no-rename --remove "$TARGET" >/dev/null
+      rm -f "$ORIG"
+    fi
+    exit 0
+    ;;
+esac
+[ -f "$ORIG" ] || exit 0
+
+field() { sed -n "s/^$1=//p" "$ORIG" | head -1 | sed 's/^"\(.*\)"$/\1/'; }
+tmp="$(mktemp "$TARGET.XXXXXX")"
+{
+  echo 'PRETTY_NAME="NoCapOS"'
+  echo 'NAME="NoCapOS"'
+  for k in VERSION_ID VERSION VERSION_CODENAME UBUNTU_CODENAME DEBIAN_VERSION_FULL ID ID_LIKE; do
+    v="$(field "$k")"
+    [ -z "$v" ] || echo "$k=\"$v\""
+  done
+  echo 'VARIANT="Desktop"'
+  echo 'VARIANT_ID=desktop'
+  echo 'LOGO=nocapos'
+  echo 'HOME_URL="https://github.com/shatheitguy/nocapos"'
+  echo 'SUPPORT_URL="https://github.com/shatheitguy/nocapos"'
+  echo 'BUG_REPORT_URL="https://github.com/shatheitguy/nocapos/issues"'
+} >"$tmp"
+chmod 644 "$tmp"
+if cmp -s "$tmp" "$TARGET"; then rm -f "$tmp"; else mv -f "$tmp" "$TARGET"; fi
+if [ ! -L /etc/os-release ] && [ ! -e /etc/os-release ]; then ln -sf ../usr/lib/os-release /etc/os-release; fi

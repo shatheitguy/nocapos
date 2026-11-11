@@ -1,0 +1,37 @@
+#!/bin/bash
+# NoCap Hub: NoCapOS in a clean app window of its own on this desktop.
+#   nocap-hub              the NoCapOS home screen
+#   nocap-hub APP          straight into one app (appcenter, settings, files, ...)
+# It opens NoCapOS's local listener (plain HTTP on 127.0.0.1 only, so no
+# certificate warning; nothing leaves this machine). Written by NoCapOS's
+# install.sh, removed by uninstall.sh.
+url="${NOCAP_HUB_URL:-http://127.0.0.1:8780/}?hub=1"
+case "${1:-}" in
+  '') ;;
+  *[!a-z0-9-]*) echo "nocap-hub: unknown app: $1" >&2; exit 2 ;;
+  *) url="$url&open=$1" ;;
+esac
+
+pick() {
+  local b
+  for b in brave-browser brave-browser-stable brave chromium chromium-browser google-chrome-stable firefox-esr firefox; do
+    if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
+  done
+  return 1
+}
+if ! b="$(pick)"; then
+  command -v notify-send >/dev/null 2>&1 &&
+    notify-send -i nocapos "NoCap Hub" "No browser engine is installed yet. Run the NoCapOS installer again to add it."
+  exit 1
+fi
+case "$b" in
+  firefox*) exec "$b" --new-window "$url" ;;
+  *)
+    # Its own profile, so it never mixes with someone's own browsing, and
+    # one window per app (Chromium reuses the running hub otherwise).
+    profile="${XDG_CONFIG_HOME:-$HOME/.config}/nocap-hub"
+    mkdir -p "$profile"
+    exec "$b" --app="$url" --class=NoCapHub --user-data-dir="$profile" --no-first-run \
+      --no-default-browser-check --ozone-platform-hint=auto --disable-features=TranslateUI
+    ;;
+esac

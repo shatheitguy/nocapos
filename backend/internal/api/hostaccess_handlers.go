@@ -9,6 +9,7 @@ import (
 
 	"alfaos/alfad/internal/config"
 	"alfaos/alfad/internal/hostaccess"
+	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/syspkg"
 )
 
@@ -150,7 +151,49 @@ func (s *Server) remoteAccessSet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.hostAccessState(r))
 }
 
+// desktopSet switches NoCap Desktop: {"mode": "full"|"kiosk"|"off"}, or the
+// older {"enabled": true|false}.
 func (s *Server) desktopSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Mode    string `json:"mode"`
+		Enabled *bool  `json:"enabled"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	var err error
+	what := req.Mode
+	switch {
+	case req.Mode == hostaccess.ModeFull || req.Mode == hostaccess.ModeKiosk || req.Mode == hostaccess.ModeOff:
+		err = s.desktop.SetMode(r.Context(), req.Mode)
+	case req.Mode == "" && req.Enabled != nil:
+		what = "on"
+		if !*req.Enabled {
+			what = "off"
+		}
+		err = s.desktop.Set(r.Context(), *req.Enabled)
+	default:
+		writeError(w, http.StatusBadRequest, "bad_request", "say mode: full, kiosk or off")
+		return
+	}
+	s.audit(r, userFrom(r.Context()).ID, "system.desktop", what, err == nil, errText(err))
+	if err != nil {
+		switch {
+		case errors.Is(err, hostaccess.ErrDesktopUnavailable):
+			writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
+		case errors.Is(err, hostaccess.ErrBadMode):
+			writeError(w, http.StatusBadRequest, "bad_mode", err.Error())
+		default:
+			writeError(w, http.StatusBadRequest, "desktop_failed", "NoCap Desktop didn't switch: "+err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, s.hostAccessState(r))
+}
+
+// desktopAutologinSet turns the sign-in screen's automatic sign-in on (for
+// the admin's own Linux account) or off.
+func (s *Server) desktopAutologinSet(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled *bool `json:"enabled"`
 	}
@@ -161,19 +204,60 @@ func (s *Server) desktopSet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "say enabled: true or false")
 		return
 	}
-	err := s.desktop.Set(r.Context(), *req.Enabled)
-	what := "on"
-	if !*req.Enabled {
-		what = "off"
+	u := userFrom(r.Context())
+	err := s.desktop.SetAutologin(u.Username, *req.Enabled)
+	what := "off"
+	if *req.Enabled {
+		what = "on for " + u.Username
 	}
-	s.audit(r, userFrom(r.Context()).ID, "system.desktop", what, err == nil, errText(err))
+	s.audit(r, u.ID, "system.desktop_autologin", what, err == nil, errText(err))
+	if err != nil {
+		switch {
+		case errors.Is(err, hostaccess.ErrDesktopUnavailable):
+			writeError(w, http.StatusNotImplemented, "unsupported", "Automatic sign-in needs NoCap Desktop's full desktop.")
+		case errors.Is(err, hostaccess.ErrNotLinuxUser):
+			writeError(w, http.StatusBadRequest, "not_linux_user", err.Error())
+		default:
+			writeError(w, http.StatusInternalServerError, "autologin_failed", "Couldn't change automatic sign-in: "+err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, s.hostAccessState(r))
+}
+
+// desktopView hands out a single-use ticket for the server's own screen.
+// The browser opens the Remote Desktop WebSocket with it; guacd connects to
+// the desktop's RDP (or VNC) server on 127.0.0.1. The credentials stay on
+// the server, inside the ticket.
+func (s *Server) desktopView(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+		DPI    int `json:"dpi"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	t, err := s.desktop.RemoteView(r.Context())
+	uid := userFrom(r.Context()).ID
+	s.audit(r, uid, "system.desktop_view", t.Protocol, err == nil, errText(err))
 	if err != nil {
 		if errors.Is(err, hostaccess.ErrDesktopUnavailable) {
 			writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
 			return
 		}
-		writeError(w, http.StatusBadRequest, "desktop_failed", "NoCap Desktop didn't switch: "+err.Error())
+		writeError(w, http.StatusConflict, "desktop_view_failed", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, s.hostAccessState(r))
+	p := rdp.Params{
+		Protocol: t.Protocol, Hostname: "127.0.0.1", Port: t.Port,
+		Username: t.Username, Password: t.Password,
+		Width: clampRange(req.Width, 640, 7680, 1280), Height: clampRange(req.Height, 480, 4320, 800),
+		DPI: clampRange(req.DPI, 48, 384, 96),
+	}
+	if t.Protocol == "rdp" {
+		p.Security, p.IgnoreCert = "tls", true // NoCapOS's own certificate, on loopback
+	}
+	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: p})
+	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(rdpTicketTTL.Seconds()), "protocol": t.Protocol})
 }
