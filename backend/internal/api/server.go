@@ -182,6 +182,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/update/packages", s.admin(s.sysPkgUpdates))
 	mux.Handle("POST /api/v1/system/update/packages/refresh", s.admin(s.sysPkgRefresh))
 	mux.Handle("POST /api/v1/system/update/packages/install", s.admin(s.sysPkgInstall))
+	mux.Handle("POST /api/v1/system/update/packages/repair", s.admin(s.sysPkgRepair))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))
