@@ -225,10 +225,12 @@ func (s *Server) desktopAutologinSet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.hostAccessState(r))
 }
 
-// desktopView hands out a single-use ticket for the server's own screen.
-// The browser opens the Remote Desktop WebSocket with it; guacd connects to
-// the desktop's RDP (or VNC) server on 127.0.0.1. The credentials stay on
-// the server, inside the ticket.
+// desktopView hands out a single-use ticket for the server's own screen:
+// whatever it shows right now, the sign-in screen included. The browser
+// opens the Remote Desktop WebSocket with it; guacd connects to the screen
+// server on 127.0.0.1. The credentials stay on the server, inside the
+// ticket. When the screen's session changes the connection ends and the
+// browser asks again (sign_in says whether it's the sign-in screen).
 func (s *Server) desktopView(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Width  int `json:"width"`
@@ -246,6 +248,10 @@ func (s *Server) desktopView(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
 			return
 		}
+		if errors.Is(err, hostaccess.ErrScreenStarting) {
+			writeError(w, http.StatusServiceUnavailable, "screen_switching", err.Error())
+			return
+		}
 		writeError(w, http.StatusConflict, "desktop_view_failed", err.Error())
 		return
 	}
@@ -259,5 +265,5 @@ func (s *Server) desktopView(w http.ResponseWriter, r *http.Request) {
 		p.Security, p.IgnoreCert = "tls", true // NoCapOS's own certificate, on loopback
 	}
 	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: p})
-	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(rdpTicketTTL.Seconds()), "protocol": t.Protocol})
+	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(rdpTicketTTL.Seconds()), "protocol": t.Protocol, "sign_in": t.SignIn})
 }

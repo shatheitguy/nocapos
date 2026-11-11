@@ -109,9 +109,9 @@ func TestDesktopPackages(t *testing.T) {
 	// distribution's branding packages.
 	banned := regexp.MustCompile(`(^|[|?])(gnome|gnome-core|task-gnome-desktop|ubuntu-desktop|gnome-games|aisleriot|gnome-software|network-manager|NetworkManager|desktop-base|ubuntu-wallpapers|yaru-theme-gtk|libreoffice\S*|evolution|totem|rhythmbox)($|\|)`)
 	required := map[string][]string{
-		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "?gnome-remote-desktop", "dconf-cli", "libsecret-tools"},
-		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "?gnome-remote-desktop"},
-		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "?gnome-remote-desktop"},
+		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "pipewire", "dconf-cli", "libsecret-tools"},
+		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
+		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
 	}
 	required["ubuntu"] = required["debian"]
 	for family, want := range required {
@@ -137,24 +137,140 @@ func TestDesktopPackages(t *testing.T) {
 	}
 }
 
-func TestDesktopFeasible(t *testing.T) {
-	for _, tc := range []struct {
-		arch, mem string
-		ok        bool
-	}{
-		{"amd64", "8000000", true},
-		{"arm64", "3900000", true},  // Pi 4 4 GB
-		{"arm64", "1900000", true},  // Pi 4 2 GB
-		{"arm64", "900000", false},  // Pi 3
-		{"armv7", "3900000", false}, // 32-bit
-		{"amd64", "", true},         // unknown memory: try
+// Every machine gets the full desktop: there's no hardware check left, only
+// a memory profile that tunes it.
+func TestNoHardwareFallback(t *testing.T) {
+	if _, err := libErr(t, "", "desktop_feasible", "armv7", "900000"); err == nil {
+		t.Fatal("desktop_feasible is back: small and 32-bit machines get the full desktop")
+	}
+	for mem, want := range map[string]string{
+		"8000000": "normal",
+		"3900000": "normal", // Pi 4 4 GB
+		"1900000": "low",    // Pi 4 2 GB
+		"900000":  "low",    // Pi 3, 1 GB
+		"":        "normal",
 	} {
-		out, err := libErr(t, "", "desktop_feasible", tc.arch, tc.mem)
-		if (err == nil) != tc.ok {
-			t.Errorf("%s/%s: ok=%v (%s)", tc.arch, tc.mem, err == nil, out)
+		if got := strings.TrimSpace(lib(t, "", "memory_profile", mem)); got != want {
+			t.Errorf("memory_profile %s = %s, want %s", mem, got, want)
 		}
-		if !tc.ok && strings.TrimSpace(out) == "" {
-			t.Errorf("%s/%s: no reason given", tc.arch, tc.mem)
+	}
+	for mem, want := range map[string]string{"900000": "878", "1900000": "1855", "8000000": "3906", "64000000": "4096", "200000": "256"} {
+		if got := strings.TrimSpace(lib(t, "", "zram_size_mb", mem)); got != want {
+			t.Errorf("zram_size_mb %s = %s, want %s", mem, got, want)
+		}
+	}
+	if got := strings.TrimSpace(lib(t, "", "swapfile_mb", "900000")); got != "1024" {
+		t.Errorf("1 GB machine swap file = %s", got)
+	}
+	if got := strings.TrimSpace(lib(t, "", "swapfile_mb", "8000000")); got != "0" {
+		t.Errorf("8 GB machine swap file = %s", got)
+	}
+	zg := keyfile(t, "zram-generator", strings.ReplaceAll(lib(t, "", "render_zram_generator", "900000"), " = ", "="))
+	if zg["zram0"]["zram-size"] != "878" || zg["zram0"]["compression-algorithm"] != "zstd" {
+		t.Errorf("zram-generator.conf: %v", zg)
+	}
+	if z := lib(t, "", "render_zramswap", "900000"); !strings.Contains(z, "\nSIZE=878\n") || !strings.Contains(z, "ALGO=zstd") {
+		t.Errorf("zramswap: %s", z)
+	}
+	low := keyfile(t, "lowmem", lib(t, "", "render_dconf_lowmem"))
+	if low["org/gnome/desktop/interface"]["enable-animations"] != "false" {
+		t.Error("animations stay on in the low-memory profile")
+	}
+	if low["org/freedesktop/tracker/miner/files"]["crawling-interval"] != "-2" || low["org/freedesktop/localsearch/miner/files"]["enable-monitors"] != "false" {
+		t.Error("file indexing stays on in the low-memory profile")
+	}
+	units := lib(t, "", "eval", `echo "$LOWMEM_USER_UNITS"`)
+	for _, u := range []string{"tracker-miner-fs-3.service", "localsearch-3.service", "evolution-source-registry.service", "evolution-calendar-factory.service"} {
+		if !strings.Contains(units, u) {
+			t.Errorf("%s isn't masked in the low-memory profile", u)
+		}
+	}
+	if hidden := lib(t, "", "render_autostart_hidden"); !strings.Contains(hidden, "Hidden=true") {
+		t.Errorf("autostart: %s", hidden)
+	}
+}
+
+// Package selection on every architecture, armhf included: the same list,
+// picked from what the repositories have.
+func TestDesktopSelect(t *testing.T) {
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join("testdata", "packages", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	for name, want := range map[string][]string{
+		// Debian 12 / Raspberry Pi OS (32-bit): older apps where the new
+		// ones don't exist yet.
+		"debian-12-armhf": {"gdm3", "gnome-console", "gnome-text-editor", "eog", "evince", "gnome-remote-desktop", "x11vnc", "pipewire", "wireplumber", "systemd-zram-generator", "libguac-client-rdp0"},
+		"debian-13-arm64": {"gdm3", "loupe", "papers", "gnome-remote-desktop", "x11vnc", "wayvnc"},
+	} {
+		got := lib(t, read(name), "desktop_select", "debian")
+		picks := map[string]bool{}
+		for _, l := range strings.Split(strings.TrimSpace(got), "\n") {
+			if strings.HasPrefix(l, "!") {
+				t.Errorf("%s: required package missing: %s", name, l)
+			}
+			picks[l] = true
+		}
+		for _, w := range want {
+			if !picks[w] {
+				t.Errorf("%s: %s not picked:\n%s", name, w, got)
+			}
+		}
+		if picks["loupe"] && picks["eog"] {
+			t.Errorf("%s: both alternatives picked", name)
+		}
+	}
+	// Optional lines with nothing available are listed as such; required
+	// ones make the selection fail.
+	got := lib(t, "gdm3\n", "desktop_select", "debian")
+	if !strings.Contains(got, "\n!gnome-shell\n") || !strings.Contains(got, "\n?wayvnc\n") || !strings.HasPrefix(got, "gdm3\n") {
+		t.Errorf("selection with almost nothing:\n%s", got)
+	}
+}
+
+func TestAccentCSS(t *testing.T) {
+	g4 := lib(t, "", "render_gtk4_accent")
+	if !strings.Contains(g4, "@define-color accent_bg_color #e5383b;") || !strings.Contains(g4, "@define-color accent_fg_color #ffffff;") {
+		t.Errorf("gtk4: %s", g4)
+	}
+	g3 := lib(t, "", "render_gtk3_accent")
+	if !strings.Contains(g3, "button.suggested-action") || !strings.Contains(g3, "switch:checked") || !strings.Contains(g3, "#e5383b") {
+		t.Errorf("gtk3: %s", g3)
+	}
+	for _, css := range []string{g4, g3} {
+		if strings.Count(css, "{") != strings.Count(css, "}") {
+			t.Errorf("unbalanced CSS: %s", css)
+		}
+	}
+	block := filepath.Join(t.TempDir(), "block.css")
+	if err := os.WriteFile(block, []byte(g4), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := filepath.ToSlash(block)
+	// Someone's own CSS stays; the block is added once and replaced, not
+	// added again.
+	own := "window { font-size: 12px; }\n"
+	once := lib(t, own, "css_with_accent", b)
+	if !strings.HasPrefix(once, own) || !strings.HasSuffix(once, g4) {
+		t.Fatalf("merge:\n%s", once)
+	}
+	if twice := lib(t, once, "css_with_accent", b); twice != once {
+		t.Fatalf("not idempotent:\n%s", twice)
+	}
+	if fresh := lib(t, "", "css_with_accent", b); fresh != g4 {
+		t.Fatalf("empty file:\n%q", fresh)
+	}
+	if back := lib(t, once, "css_without_accent"); strings.TrimSpace(back) != strings.TrimSpace(own) {
+		t.Fatalf("undo:\n%s", back)
+	}
+	// libadwaita gets the CSS up to GNOME 46; 47+ has the accent setting.
+	for major, want := range map[string]bool{"0": true, "43": true, "46": true, "47": false, "48": false} {
+		_, err := libErr(t, "", "gtk4_accent_wanted", major)
+		if (err == nil) != want {
+			t.Errorf("gtk4_accent_wanted %s = %v", major, err == nil)
 		}
 	}
 }

@@ -1,11 +1,11 @@
 #!/bin/sh
 # Keeps NoCap Desktop's remote screen on this machine only: connections to
-# the desktop's RDP and VNC ports (3389, 3390, 5905) are dropped unless they
+# the desktop's RDP and VNC ports (3389-3391, 5905, 5906) are dropped unless they
 # come over loopback, where NoCapOS's own Remote Desktop engine connects
 # from. The browser reaches the desktop only through NoCapOS (signed in,
 # admins only). Run by nocapos-desktop-guard.service.
 #   remote-guard start | stop
-PORTS="3389,3390,5905"
+PORTS="3389,3390,3391,5905,5906"
 TABLE=nocapos_desktop
 
 start() {
