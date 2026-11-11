@@ -21,6 +21,7 @@ import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
 import { AccountPanel } from './AccountPanel';
 import { NotifyBell } from './Notifications';
+import { useLink } from '../state/link';
 
 type Menu = { x: number; y: number; appId?: string };
 
@@ -138,6 +139,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   const hidden = autoHide && !revealed && !qsOpen && !clockOpen && !menu && !acctMenu;
 
   const isAdmin = user.role === 'admin';
+  const hasPhone = useLink((s) => s.phones.length > 0);
   const allowed = (id: string) => !!APPS[id] && !APPS[id].hidden && (isAdmin || !APPS[id].adminOnly);
 
   const pinned = pins.filter(allowed);
@@ -222,7 +224,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
       {showTray && (
         <div className="tray">
           <TransfersButton className="tray-btn" />
-          {isAdmin && <NotifyBell className="tray-btn" />}
+          {(isAdmin || hasPhone) && <NotifyBell className="tray-btn" />}
           <button
             ref={trayRef}
             type="button"
