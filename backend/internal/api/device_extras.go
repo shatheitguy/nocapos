@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"alfaos/alfad/internal/files"
+	"alfaos/alfad/internal/hardware"
 	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/spaces"
 	"alfaos/alfad/internal/store"
@@ -45,6 +46,10 @@ func (s *Server) deviceRoutes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/v1/device/layout", s.device(s.deviceLayoutPut))
 	mux.Handle("GET /api/v1/device/notifications", s.device(s.deviceNotifications))
 	mux.Handle("DELETE /api/v1/device/me", s.device(s.deviceUnlink))
+	mux.Handle("POST /api/v1/device/phone-notifications", s.device(s.devicePhoneNote))
+	mux.Handle("DELETE /api/v1/device/phone-notifications/{key}", s.device(s.devicePhoneNoteGone))
+	mux.Handle("POST /api/v1/device/clipboard", s.device(s.deviceClipboard))
+	mux.Handle("GET /api/v1/device/events", s.device(s.deviceEvents))
 	mux.Handle("GET /api/v1/device/ai/conversations", s.device(s.withAI(s.aiListConversations)))
 	mux.Handle("POST /api/v1/device/ai/conversations", s.device(s.withAI(s.aiCreateConversation)))
 	mux.Handle("GET /api/v1/device/ai/conversations/{id}", s.device(s.withAI(s.aiGetConversation)))
@@ -87,6 +92,11 @@ type cpuJSON struct {
 	Cores   int     `json:"cores"`
 }
 
+type netJSON struct {
+	RxRate float64 `json:"rx_rate"` // bytes/s, all interfaces but loopback
+	TxRate float64 `json:"tx_rate"`
+}
+
 type deviceSummaryJSON struct {
 	Server  pairInfo  `json:"server"`
 	Ready   bool      `json:"ready"`
@@ -94,7 +104,39 @@ type deviceSummaryJSON struct {
 	CPU     cpuJSON   `json:"cpu"`
 	Memory  usageJSON `json:"memory"`
 	Storage usageJSON `json:"storage"`
+	Network netJSON   `json:"network"`
+	Updates int       `json:"updates"` // pending NoCapOS and system package updates, as last checked
 	Time    time.Time `json:"time"`
+}
+
+// netTotals adds up every interface but loopback.
+func netTotals(list []hardware.NetStat) netJSON {
+	var out netJSON
+	for _, n := range list {
+		if n.Interface != "lo" {
+			out.RxRate += n.RxRate
+			out.TxRate += n.TxRate
+		}
+	}
+	return out
+}
+
+// pendingUpdates counts what the last update checks found.
+func pendingUpdates() int {
+	n := 0
+	updateCache.Lock()
+	if c := updateCache.info; c != nil && c.Available {
+		n++
+	}
+	updateCache.Unlock()
+	sysPkgCache.Lock()
+	for _, u := range sysPkgCache.updates {
+		if !u.Held {
+			n++
+		}
+	}
+	sysPkgCache.Unlock()
+	return n
 }
 
 // deviceSummary is a small, read-only health card for widgets.
@@ -105,9 +147,10 @@ func (s *Server) deviceSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := deviceSummaryJSON{
-		Server: pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version},
-		CPU:    cpuJSON{Cores: runtime.NumCPU()},
-		Time:   time.Now().UTC().Truncate(time.Second),
+		Server:  pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version},
+		CPU:     cpuJSON{Cores: runtime.NumCPU()},
+		Time:    time.Now().UTC().Truncate(time.Second),
+		Updates: pendingUpdates(),
 	}
 	if s.Sampler != nil {
 		if snap := s.Sampler.Latest(); snap != nil {
@@ -128,6 +171,7 @@ func (s *Server) deviceSummary(w http.ResponseWriter, r *http.Request) {
 				}
 				out.Storage = usageJSON{Total: d.Total, Used: d.Used, Percent: d.Percent}
 			}
+			out.Network = netTotals(snap.Network)
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -439,8 +483,9 @@ func writeFileAtomic(p string, data []byte) error {
 
 // ---------- notifications ----------
 
-// deviceNotifications: the server's notifications for administrators
-// (read-only; nothing is marked read), nothing for everyone else.
+// deviceNotifications: the server's notifications (read-only; nothing is
+// marked read). Administrators get them all, everyone else the ones meant
+// for everyone (see noticeForEveryone).
 func (s *Server) deviceNotifications(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
@@ -451,9 +496,9 @@ func (s *Server) deviceNotifications(w http.ResponseWriter, r *http.Request) {
 	after, _ := strconv.ParseInt(q.Get("after"), 10, 64)
 	admin := userFrom(r.Context()).Role == store.RoleAdmin
 	items := []notify.Notification{}
-	if admin && s.notify != nil {
+	if s.notify != nil {
 		want := limit
-		if after > 0 {
+		if after > 0 || !admin {
 			want = 500 // filtered below, so look further back
 		}
 		list, _, err := s.notify.List(r.Context(), want)
@@ -462,7 +507,7 @@ func (s *Server) deviceNotifications(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, n := range list {
-			if n.ID > after {
+			if n.ID > after && (admin || noticeForEveryone(n)) {
 				items = append(items, n)
 			}
 		}
@@ -483,6 +528,7 @@ func (s *Server) deviceUnlink(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	s.link().forgetDevice(d.UserID, d.ID)
 	s.audit(r, d.UserID, "devices.revoke", d.Name, true, "unlinked from the phone")
 	w.WriteHeader(http.StatusNoContent)
 }

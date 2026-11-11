@@ -115,8 +115,9 @@ type Service struct {
 	db  DB
 	log *slog.Logger
 
-	mu   sync.Mutex
-	subs map[chan Event]struct{}
+	mu    sync.Mutex
+	subs  map[chan Event]struct{}
+	added []func(Notification)
 }
 
 func New(db DB, log *slog.Logger) *Service {
@@ -156,7 +157,21 @@ func (s *Service) Add(ctx context.Context, n Notification) (added bool, err erro
 	item := fromRow(*row)
 	unread, _ := s.db.UnreadNotifications(ctx)
 	s.publish(Event{Type: "new", Item: &item, Unread: unread})
+	s.mu.Lock()
+	hooks := append([]func(Notification){}, s.added...)
+	s.mu.Unlock()
+	for _, fn := range hooks {
+		fn(item)
+	}
 	return true, nil
+}
+
+// OnAdd calls fn (synchronously, so keep it quick) with every notification
+// that was stored.
+func (s *Service) OnAdd(fn func(Notification)) {
+	s.mu.Lock()
+	s.added = append(s.added, fn)
+	s.mu.Unlock()
 }
 
 func fromRow(r store.Notification) Notification {
