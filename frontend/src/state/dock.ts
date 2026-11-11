@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { PINNED } from '../apps/meta';
+import { OLD_PINNED, PINNED } from '../apps/meta';
 
 // Per-user dock pins. Falls back to the default PINNED set the first time.
 const keyFor = (userId: string) => `alfa.dock.${userId}`;
@@ -9,7 +9,12 @@ function load(userId: string): string[] {
     const raw = localStorage.getItem(keyFor(userId));
     if (raw === null) return [...PINNED];
     const v = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [...PINNED];
+    if (!Array.isArray(v)) return [...PINNED];
+    const pins = v.filter((x): x is string => typeof x === 'string');
+    // Still an earlier default (never changed, or reset to it): follow the
+    // current default instead.
+    if (OLD_PINNED.some((d) => d.length === pins.length && d.every((id, i) => pins[i] === id))) return [...PINNED];
+    return pins;
   } catch {
     return [...PINNED];
   }

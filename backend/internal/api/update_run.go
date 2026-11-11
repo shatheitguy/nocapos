@@ -288,29 +288,10 @@ func (s *Server) systemUpdateRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	info := releaseFor(s, r, false)
-	if req.Target != "" && info.Error == "" && !sameVersion(req.Target, info.Latest) {
-		info = releaseFor(s, r, true)
-	}
-	if info.Error != "" {
-		writeError(w, http.StatusBadGateway, "check_failed", info.Error)
+	installCmd, to, ok := s.updateTarget(w, r, req.Target)
+	if !ok {
 		return
 	}
-	if req.Target != "" && !sameVersion(req.Target, info.Latest) {
-		writeError(w, http.StatusConflict, "release_changed",
-			"There's a newer release now ("+info.Latest+"). Check again, then update.")
-		return
-	}
-	if !info.Available && !info.Dev {
-		writeError(w, http.StatusConflict, "up_to_date", "You're already on the latest version")
-		return
-	}
-	installCmd, err := updateInstallCommand(info.Latest)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "check_failed", "The latest release has an unexpected version number")
-		return
-	}
-	to := strings.TrimPrefix(info.Latest, "v")
 
 	if err := s.startUpdate(installCmd, to); err != nil {
 		s.internalError(w, r, err)
@@ -318,6 +299,35 @@ func (s *Server) systemUpdateRun(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "", "system.update.run", "", true, s.Version+" -> "+to)
 	writeJSON(w, http.StatusAccepted, map[string]any{"started": true, "from": s.Version, "target": to})
+}
+
+// updateTarget resolves the release to install: the one the UI showed
+// (target, when given), so what gets installed is what was promised. On a
+// problem it writes the error and returns ok=false.
+func (s *Server) updateTarget(w http.ResponseWriter, r *http.Request, target string) (installCmd, to string, ok bool) {
+	info := releaseFor(s, r, false)
+	if target != "" && info.Error == "" && !sameVersion(target, info.Latest) {
+		info = releaseFor(s, r, true)
+	}
+	if info.Error != "" {
+		writeError(w, http.StatusBadGateway, "check_failed", info.Error)
+		return "", "", false
+	}
+	if target != "" && !sameVersion(target, info.Latest) {
+		writeError(w, http.StatusConflict, "release_changed",
+			"There's a newer release now ("+info.Latest+"). Check again, then update.")
+		return "", "", false
+	}
+	if !info.Available && !info.Dev {
+		writeError(w, http.StatusConflict, "up_to_date", "You're already on the latest version")
+		return "", "", false
+	}
+	installCmd, err := updateInstallCommand(info.Latest)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "check_failed", "The latest release has an unexpected version number")
+		return "", "", false
+	}
+	return installCmd, strings.TrimPrefix(info.Latest, "v"), true
 }
 
 func (s *Server) startUpdate(installCmd, to string) error {

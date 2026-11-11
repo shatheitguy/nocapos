@@ -95,7 +95,7 @@ func (a *Admin) Status() Status {
 	case "":
 		return Status{Reason: "No supported package manager was found on this system."}
 	default:
-		return Status{Reason: "This system's package manager (" + m + ") isn't supported by the Packages app yet."}
+		return Status{Reason: "This system's package manager (" + m + ") isn't supported by NoCapOS yet."}
 	}
 }
 

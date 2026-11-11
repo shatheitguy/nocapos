@@ -15,8 +15,8 @@
 #   --no-docker         don't install Docker (the App Store stays off until Docker is present)
 #   --install-docker    install Docker from get.docker.com without asking
 #   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
-#                       engine, Brave, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
-#                       to install each one later, from its app or from Packages
+#                       engine, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
+#                       to install each one later, from its app
 #   --desktop           NoCap Desktop: a full desktop on this machine's own monitor (NoCapOS
 #                       sign-in screen, dock, file manager, terminal, settings, NoCap Hub and
 #                       the App Store's Linux apps; sign in with this machine's Linux accounts).
@@ -474,14 +474,6 @@ enable_host_services() {
   fi
 }
 
-# Brave comes from Brave's official repository, installed by the same script
-# the Brave app runs on first launch (alfad carries it: `nocapos install-brave`).
-install_brave() {
-  case "$(pkg_manager)" in apt | dnf) ;; *) warn "Brave: NoCapOS installs it on apt and dnf systems; skipped"; return 0 ;; esac
-  info "Installing Brave and its stream tools (from Brave's repository)"
-  "$BIN" install-brave >/dev/null 2>&1 || warn "Brave didn't install now; the Brave app installs it on first launch."
-}
-
 # ---------------------------------------------------------------- NoCap Desktop
 # NoCapOS full screen on this machine's own monitor: a small Wayland
 # compositor (labwc, or cage) on tty1 as the login-less system user
@@ -538,17 +530,15 @@ install_desktop() {
   if ! has loginctl && pkg_available "$mgr" seatd && pkg_install "$mgr" seatd; then
     systemctl enable --now seatd >/dev/null 2>&1 || warn "NoCap Desktop: seatd didn't start"
   fi
-  # The browser: the Brave NoCapOS already uses, else Chromium or Firefox.
-  if ! desktop_browser >/dev/null; then
-    "$BIN" install-brave >/dev/null 2>&1 || true
-  fi
+  # The browser: one already on this machine, else Chromium or Firefox from
+  # the system's own packages (no browser is preinstalled by NoCapOS).
   if ! desktop_browser >/dev/null; then
     for p in chromium firefox-esr firefox; do
       if pkg_available "$mgr" "$p" && pkg_install "$mgr" "$p"; then break; fi
     done
   fi
   if ! browser="$(desktop_browser)"; then
-    warn "NoCap Desktop: couldn't install a browser (Brave, Chromium or Firefox); skipped"
+    warn "NoCap Desktop: couldn't install a browser (Chromium or Firefox); skipped"
     return 0
   fi
   printf '    desktop browser: %s\n' "$browser"
@@ -1273,7 +1263,6 @@ EOF
     [ "$can_rollback" -eq 1 ] && rollback_native
     die "$NAME did not start; check: journalctl -u nocapos -e"
   fi
-  [ "$MINIMAL" -eq 1 ] || install_brave
   setup_desktop
   setup_mdns
   if [ "$BRANDING" -eq 1 ]; then
