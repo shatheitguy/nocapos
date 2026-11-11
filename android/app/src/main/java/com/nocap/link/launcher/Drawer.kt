@@ -353,7 +353,7 @@ private fun CategoryStyle(a: MainActivity, apps: List<PhoneApp>, open: (PhoneApp
 }
 
 /**
- * The App Library: the last home page when every app lives on the home
+ * The Stash (app groups): the last home page when every app lives on the home
  * pages. Apps grouped into smart folders, with search on top.
  */
 @Composable
@@ -364,7 +364,7 @@ fun AppLibrary(a: MainActivity, ui: HomeUi) {
     val open: (PhoneApp) -> Unit = { a.launch(it) }
     val menu: (PhoneApp, Rect) -> Unit = { app, r -> ui.menu = Menu(app, null, r, From.DRAWER) }
     Column(Modifier.fillMaxSize().padding(horizontal = 6.dp)) {
-        Text(t("APP LIBRARY", "APP LIBRARY"), Modifier.padding(start = 4.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall, color = androidx.compose.ui.graphics.Color.White)
+        Text(t("THE STASH", "APP GROUPS"), Modifier.padding(start = 4.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineSmall, color = androidx.compose.ui.graphics.Color.White)
         SearchField(q, { q = it }, t("Search the library", "Search apps"))
         Spacer(Modifier.height(10.dp))
         if (q.isNotBlank()) {
