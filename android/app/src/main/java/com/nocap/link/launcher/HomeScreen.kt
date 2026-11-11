@@ -1,7 +1,9 @@
 package com.nocap.link.launcher
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,15 +20,20 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -49,33 +56,43 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.nocap.link.BarStyle
+import com.nocap.link.DockStyle
+import com.nocap.link.DrawerStyle
+import com.nocap.link.Gesture
 import com.nocap.link.Layer
 import com.nocap.link.MainActivity
+import com.nocap.link.Opt
+import com.nocap.link.PageFx
 import com.nocap.link.PhoneApp
 import com.nocap.link.PhoneApps
 import com.nocap.link.Prefs
 import com.nocap.link.R
 import com.nocap.link.ServerState
-import com.nocap.link.SwipeDown
 import com.nocap.link.WallpaperLayer
-import com.nocap.link.system.Phone
 import com.nocap.link.t
 import com.nocap.link.ui.NoCap
+import com.nocap.link.ui.Orbitron
 import com.nocap.link.ui.Toast
 import com.nocap.link.ui.glass
 import kotlinx.coroutines.delay
@@ -120,14 +137,21 @@ class HomeUi {
 fun HomeScreen(a: MainActivity) {
     val ui = remember { HomeUi() }
     val layout = Home.layout
-    val pager = rememberPagerState { Home.layout.pages.size }
+    val library = Opt.drawer.v == DrawerStyle.HOME_PAGES
+    val pageCount = layout.pages.size + if (library) 1 else 0
+    val pager = rememberPagerState { Home.layout.pages.size + if (Opt.drawer.v == DrawerStyle.HOME_PAGES) 1 else 0 }
     val scope = rememberCoroutineScope()
-    val haptics = LocalHapticFeedback.current
+    val view = LocalView.current
     val density = LocalDensity.current
     val byKey = remember(a.phoneApps) { a.phoneApps.associateBy { it.key } }
+    val locked = Opt.lockLayout.v
+    fun firstPage() { scope.launch { pager.animateScrollToPage(0) } }
 
-    BackHandler(a.layer != Layer.NONE || ui.folder != null || ui.menu != null || ui.editAt != null || ui.widgetMenu != null || ui.moving != null) {
+    BackHandler(a.layer != Layer.NONE || ui.folder != null || ui.menu != null || ui.editAt != null || ui.widgetMenu != null || ui.moving != null || a.editing != null || a.weatherFor != null || a.customizing != null) {
         when {
+            a.customizing != null -> a.customizing = null
+            a.editing != null -> a.editing = null
+            a.weatherFor != null -> a.weatherFor = null
             ui.menu != null -> ui.menu = null
             ui.widgetMenu != null -> ui.widgetMenu = null
             ui.moving != null -> ui.moving = null
@@ -138,6 +162,13 @@ fun HomeScreen(a: MainActivity) {
     }
     LaunchedEffect(a.toast) { if (a.toast != null) { delay(3200); a.toast = null } }
     LaunchedEffect(Prefs.columns, Prefs.rows) { if (Home.loaded) Home.refit() }
+    LaunchedEffect(a.homeTick) {
+        if (a.homeTick > 0) {
+            ui.menu = null; ui.folder = null; ui.editAt = null; ui.widgetMenu = null; ui.moving = null
+            runGesture(a, Gesture.HOME, ::firstPage)
+        }
+    }
+    LaunchedEffect(a.libraryTick) { if (a.libraryTick > 0 && library) pager.animateScrollToPage(pageCount - 1) }
 
     // Flip pages while dragging near an edge.
     val edge = ui.drag?.let { d ->
@@ -154,11 +185,13 @@ fun HomeScreen(a: MainActivity) {
         while (edge != 0) {
             delay(650)
             val target = pager.currentPage + edge
-            if (target < 0) break
+            if (target < 0 || target >= Home.layout.pages.size + 1) break
             if (target >= Home.layout.pages.size) Home.addPage()
             pager.animateScrollToPage(target)
         }
     }
+
+    fun onLibrary() = library && pager.currentPage >= Home.layout.pages.size
 
     fun hit(pos: Offset): Hit {
         if (ui.dockRect.contains(pos)) {
@@ -170,7 +203,7 @@ fun HomeScreen(a: MainActivity) {
             }
             return Hit.None
         }
-        if (ui.gridRect.contains(pos)) {
+        if (ui.gridRect.contains(pos) && !onLibrary()) {
             val page = pager.currentPage
             val cx = ((pos.x - ui.gridRect.left) / ui.cellPx.x).toInt().coerceIn(0, Prefs.columns - 1)
             val cy = ((pos.y - ui.gridRect.top) / ui.cellPx.y).toInt().coerceIn(0, Prefs.rows - 1)
@@ -198,7 +231,7 @@ fun HomeScreen(a: MainActivity) {
             }
             is Hit.Dock -> byKey[h.key]?.let(a::launch)
             is Hit.Button -> when (h.id) {
-                "roster" -> a.layer = Layer.DRAWER
+                "roster" -> a.openDrawer()
                 "hub" -> a.layer = Layer.HUB
             }
             else -> {}
@@ -206,7 +239,7 @@ fun HomeScreen(a: MainActivity) {
     }
 
     fun longPress(h: Hit, pos: Offset): Boolean {
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        buzz(view, long = true)
         when (h) {
             is Hit.OnItem -> {
                 val r = ui.itemRects[h.item.id] ?: Rect(pos, pos)
@@ -215,17 +248,19 @@ fun HomeScreen(a: MainActivity) {
                     is WidgetItem -> { ui.widgetMenu = h.page to it; return false }
                     else -> ui.widgetMenu = h.page to it
                 }
+                if (locked) return false
                 ui.drag = Drag(h.item, null, pos, pos - r.topLeft, pos)
                 return true
             }
             is Hit.Dock -> {
                 val r = ui.dockSlots[h.key] ?: Rect(pos, pos)
                 ui.menu = Menu(byKey[h.key], null, r, From.DOCK)
+                if (locked) return false
                 ui.drag = Drag(null, h.key, pos, pos - r.topLeft, pos)
                 return true
             }
             is Hit.Empty -> { ui.editAt = pos; return false }
-            Hit.None -> return false
+            Hit.None -> { if (!onLibrary() && !ui.dockRect.contains(pos)) ui.editAt = pos; return false }
             is Hit.Button -> return false
         }
     }
@@ -243,6 +278,7 @@ fun HomeScreen(a: MainActivity) {
         if (!d.moved) return
         val item = d.item
         val page = pager.currentPage
+        if (page >= Home.layout.pages.size) return
         val dockKey = d.dockKey ?: (item as? AppItem)?.key
         when {
             item != null && ui.removeRect.contains(pos) -> {
@@ -254,7 +290,7 @@ fun HomeScreen(a: MainActivity) {
             ui.dockRect.contains(pos) && dockKey != null && (item == null || item is AppItem) -> {
                 val dock = Home.layout.dock.toMutableList()
                 dock.remove(dockKey)
-                if (dock.size >= 5) { a.toast = t("Dock's full — unpin something first.", "The dock is full."); return }
+                if (dock.size >= Opt.dockCount.v) { a.toast = t("Dock's full — unpin something first.", "The dock is full."); return }
                 val idx = ui.dockSlots.entries.filter { !it.key.startsWith("btn:") && it.key != dockKey }
                     .count { it.value.center.x < pos.x }.coerceIn(0, dock.size)
                 dock.add(idx, dockKey)
@@ -288,10 +324,13 @@ fun HomeScreen(a: MainActivity) {
         }
     }
 
+    val overlay = a.layer == Layer.DRAWER || a.layer == Layer.SETTINGS || a.layer == Layer.SEARCH
+    val blurAmount by animateDpAsState(if (overlay && Opt.drawerBlur.v && Build.VERSION.SDK_INT >= 31) 18.dp else 0.dp, label = "blur")
+
     Box(Modifier.fillMaxSize()) {
-        WallpaperLayer()
+        WallpaperLayer(scroll = { (pager.currentPage + pager.currentPageOffsetFraction) / (pageCount - 1).coerceAtLeast(1) }, extraBlur = blurAmount)
         Box(
-            Modifier.fillMaxSize().pointerInput(byKey) {
+            Modifier.fillMaxSize().then(if (blurAmount > 0.dp) Modifier.blur(blurAmount) else Modifier).pointerInput(byKey, locked) {
                 val slop = viewConfiguration.touchSlop
                 val swipe = 70.dp.toPx()
                 awaitEachGesture {
@@ -301,10 +340,12 @@ fun HomeScreen(a: MainActivity) {
                     if (h is Hit.OnItem && h.item is WidgetItem) return@awaitEachGesture // the widget handles its own touches
                     var upConsumed = false
                     var moved = false
-                    val timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    var multi = false
+                    var timedOut = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
                         var done = false
                         while (!done) {
                             val ev = awaitPointerEvent()
+                            if (ev.changes.count { it.pressed } >= 2) { multi = true; done = true; continue }
                             val ch = ev.changes.firstOrNull { it.id == down.id }
                             if (ch == null) {
                                 done = true
@@ -318,27 +359,60 @@ fun HomeScreen(a: MainActivity) {
                         }
                         true
                     } == null
+                    if (multi) {
+                        // Two fingers: pinch in/out or a two-finger swipe.
+                        timedOut = false
+                        var first: Pair<Offset, Offset>? = null
+                        var last: Pair<Offset, Offset>? = null
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val pressed = ev.changes.filter { it.pressed }
+                            if (pressed.size >= 2) {
+                                val pair = pressed[0].position to pressed[1].position
+                                if (first == null) first = pair
+                                last = pair
+                            }
+                            if (ev.changes.none { it.pressed }) break
+                        }
+                        val f = first
+                        val l = last
+                        if (f != null && l != null && a.layer == Layer.NONE && ui.drag == null) {
+                            val d0 = (f.first - f.second).getDistance()
+                            val d1 = (l.first - l.second).getDistance()
+                            val cy0 = (f.first.y + f.second.y) / 2
+                            val cy1 = (l.first.y + l.second.y) / 2
+                            when {
+                                d0 > 0 && d1 / d0 < 0.72f -> runGesture(a, Gesture.PINCH_IN, ::firstPage)
+                                d0 > 0 && d1 / d0 > 1.35f -> runGesture(a, Gesture.PINCH_OUT, ::firstPage)
+                                cy1 - cy0 < -swipe -> runGesture(a, Gesture.TWO_UP, ::firstPage)
+                                cy1 - cy0 > swipe -> runGesture(a, Gesture.TWO_DOWN, ::firstPage)
+                            }
+                        }
+                        return@awaitEachGesture
+                    }
                     if (timedOut) {
+                        // From here on we own the touch: children (widget buttons) must not also react.
                         if (!longPress(h, start)) {
-                            // Wait for the finger to lift so nothing else reacts.
                             while (true) {
-                                val ev = awaitPointerEvent()
+                                val ev = awaitPointerEvent(PointerEventPass.Initial)
+                                ev.changes.forEach { it.consume() }
                                 if (ev.changes.all { !it.pressed }) break
                             }
                             return@awaitEachGesture
                         }
                         while (true) {
-                            val ev = awaitPointerEvent()
-                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-                            if (ch.changedToUp() || !ch.pressed) { drop(ch.position); break }
-                            ch.consume()
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val ch = ev.changes.firstOrNull { it.id == down.id }
+                            ev.changes.forEach { it.consume() }
+                            if (ch == null) break
+                            if (ch.changedToUpIgnoringConsumed() || !ch.pressed) { drop(ch.position); break }
                             dragTo(ch.position)
                         }
                         if (ui.drag != null) ui.drag = null
                         return@awaitEachGesture
                     }
                     if (moved) {
-                        // A swipe: up = app drawer, down = notifications (or search).
+                        // A swipe: up / down run whatever they're bound to.
                         var last = start
                         var horizontal = false
                         while (true) {
@@ -350,22 +424,17 @@ fun HomeScreen(a: MainActivity) {
                         }
                         val dx = last.x - start.x
                         val dy = last.y - start.y
-                        if (!horizontal && abs(dy) > swipe && abs(dy) > abs(dx) * 1.4f && a.layer == Layer.NONE && ui.drag == null) {
-                            if (dy < 0) a.layer = Layer.DRAWER
-                            else when (Prefs.swipeDown) {
-                                SwipeDown.NOTIFICATIONS -> if (!Phone.expandNotifications(a)) a.layer = Layer.SEARCH
-                                SwipeDown.SEARCH -> a.layer = Layer.SEARCH
-                                SwipeDown.NOTHING -> {}
-                            }
+                        if (!horizontal && abs(dy) > swipe && abs(dy) > abs(dx) * 1.4f && a.layer == Layer.NONE && ui.drag == null && !onLibrary()) {
+                            if (dy < 0) runGesture(a, Gesture.SWIPE_UP, ::firstPage) else runGesture(a, Gesture.SWIPE_DOWN, ::firstPage)
                         }
                         return@awaitEachGesture
                     }
                     if (upConsumed) return@awaitEachGesture
                     val empty = h is Hit.Empty || h is Hit.None
-                    if (empty && Prefs.doubleTapLock && ui.moving == null) {
+                    if (empty && !onLibrary() && Opt.binding(Gesture.DOUBLE_TAP) != com.nocap.link.Act.NONE.name && ui.moving == null) {
                         val second = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitFirstDown(requireUnconsumed = false) }
                         if (second != null && (second.position - start).getDistance() < 60.dp.toPx()) {
-                            if (!Phone.lock(a)) a.toast = t("Turn on the lock helper in Settings → Gestures first.", "Enable the lock helper in Settings → Gestures first.")
+                            runGesture(a, Gesture.DOUBLE_TAP, ::firstPage)
                             return@awaitEachGesture
                         }
                     }
@@ -373,7 +442,8 @@ fun HomeScreen(a: MainActivity) {
                 }
             },
         ) {
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+            val bars = Opt.statusBar.v
+            Column(Modifier.fillMaxSize().then(if (bars == BarStyle.HIDDEN) Modifier.padding(top = 6.dp) else Modifier.statusBarsPadding()).navigationBarsPadding()) {
                 TopStrip(a, ui)
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 8.dp)) {
                     val cw = maxWidth / Prefs.columns
@@ -386,13 +456,23 @@ fun HomeScreen(a: MainActivity) {
                         modifier = Modifier.fillMaxSize().onGloballyPositioned { ui.gridRect = it.boundsInRoot() },
                         key = { it },
                     ) { p ->
-                        PageGrid(a, ui, p, byKey, cw, ch)
+                        Box(Modifier.fillMaxSize().pageFx(pager, p)) {
+                            if (p >= Home.layout.pages.size) AppLibrary(a, ui) else PageGrid(a, ui, p, byKey, cw, ch)
+                        }
                     }
                 }
-                PageDots(pager, layout.pages.size)
+                if (Opt.pageDots.v && pageCount > 1) PageDots(pager, pageCount, library)
                 Dock(a, ui, byKey)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(if (Opt.dockStyle.v == DockStyle.FLOATING) 14.dp else 8.dp))
             }
+        }
+
+        // Status/navigation bar scrims.
+        if (Opt.statusBar.v == BarStyle.TINTED) {
+            Box(Modifier.fillMaxWidth().height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 12.dp).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent))))
+        }
+        if (Opt.navBar.v == BarStyle.TINTED) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)))))
         }
 
         // Remove target while dragging.
@@ -434,9 +514,12 @@ fun HomeScreen(a: MainActivity) {
             SettingsScreen(a)
         }
         if (a.layer == Layer.WIDGETS) {
-            WidgetPicker(a.cellW, a.cellH, onNoCap = { a.addNoCapWidget(it, pager.currentPage) }, onPick = { a.addWidget(it, pager.currentPage) }, onClose = { a.layer = Layer.NONE })
+            WidgetPicker(a, a.cellW, a.cellH, onNoCap = { k, w, h -> a.addNoCapWidget(k, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1), w, h) }, onPick = { a.addWidget(it, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1)) }, onClose = { a.layer = Layer.NONE })
         }
-        ui.menu?.let { m -> AppMenu(a, ui, m, page = pager.currentPage) }
+        ui.menu?.let { m -> AppMenu(a, ui, m, page = pager.currentPage.coerceAtMost(Home.layout.pages.size - 1)) }
+        a.weatherFor?.let { com.nocap.link.nocap.WeatherSheet(a, it) }
+        a.editing?.let { com.nocap.link.nocap.WidgetEditSheet(a, it) }
+        a.customizing?.let { CustomizeApp(a, it) }
         a.busy?.let { msg ->
             Row(
                 Modifier.align(Alignment.Center).glass(RoundedCornerShape(18.dp), strong = true).padding(18.dp),
@@ -450,9 +533,29 @@ fun HomeScreen(a: MainActivity) {
     }
 }
 
+private fun androidx.compose.ui.input.pointer.PointerInputChange.changedToUpIgnoringConsumed() = previousPressed && !pressed
+
+/** Page transition effects from Settings. */
+private fun Modifier.pageFx(pager: PagerState, page: Int): Modifier = graphicsLayer {
+    val off = (pager.currentPage - page) + pager.currentPageOffsetFraction
+    val o = off.coerceIn(-1f, 1f)
+    when (Opt.pageFx.v) {
+        PageFx.SLIDE -> {}
+        PageFx.FADE -> { translationX = o * size.width; alpha = 1f - abs(o) }
+        PageFx.ZOOM -> { val s = 1f - 0.18f * abs(o); scaleX = s; scaleY = s; alpha = 1f - 0.6f * abs(o) }
+        PageFx.CUBE -> {
+            cameraDistance = 12f * density
+            transformOrigin = TransformOrigin(if (o > 0) 1f else 0f, 0.5f)
+            rotationY = -45f * o
+        }
+        PageFx.STACK -> if (o > 0) { translationX = o * size.width; val s = 1f - 0.15f * o; scaleX = s; scaleY = s; alpha = 1f - o }
+        PageFx.CAROUSEL -> { rotationY = -25f * o; cameraDistance = 10f * density; val s = 1f - 0.1f * abs(o); scaleX = s; scaleY = s }
+    }
+}
+
 @Composable
 private fun TopStrip(a: MainActivity, ui: HomeUi) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (Opt.searchBar.v) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.weight(1f).height(44.dp).glass(RoundedCornerShape(22.dp))
                 .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); val up = waitUp(); if (up) a.layer = Layer.SEARCH } }
@@ -468,8 +571,8 @@ private fun TopStrip(a: MainActivity, ui: HomeUi) {
             Modifier.size(44.dp).glass(CircleShape, edge = NoCap.Red.copy(alpha = 0.5f))
                 .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); if (waitUp()) a.openAi() } },
             contentAlignment = Alignment.Center,
-        ) { Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = com.nocap.link.ui.Orbitron), color = NoCap.Red) }
-    }
+        ) { Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = Orbitron), color = NoCap.Red) }
+    } else Spacer(Modifier.height(8.dp))
     if (ui.drag == null && !Prefs.homeAsked && !PhoneApps.isDefaultHome(a)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.4f)).padding(12.dp),
@@ -503,9 +606,14 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.wai
 }
 
 @Composable
-private fun PageGrid(a: MainActivity, ui: HomeUi, p: Int, byKey: Map<String, PhoneApp>, cw: androidx.compose.ui.unit.Dp, ch: androidx.compose.ui.unit.Dp) {
+private fun PageGrid(a: MainActivity, ui: HomeUi, p: Int, byKey: Map<String, PhoneApp>, cw: Dp, ch: Dp) {
     val page = Home.page(p)
     val drag = ui.drag
+    // Icons and labels shrink to fit small cells (small phones, landscape, big grids).
+    val labelRoom = (Opt.labelSize.v + 14).dp
+    val icon = minOf(Opt.iconSize.v.dp, cw - 14.dp, ch - 10.dp).coerceAtLeast(28.dp)
+    val showLabels = Opt.labels.v && ch >= icon + labelRoom + 6.dp
+    val icon2 = if (showLabels) minOf(icon, ch - labelRoom - 8.dp).coerceAtLeast(28.dp) else icon
     Box(Modifier.fillMaxSize()) {
         for (item in page.items) {
             val c = item.cell
@@ -517,12 +625,12 @@ private fun PageGrid(a: MainActivity, ui: HomeUi, p: Int, byKey: Map<String, Pho
                 contentAlignment = Alignment.Center,
             ) {
                 when (item) {
-                    is AppItem -> byKey[item.key]?.let { AppTile(it) } ?: GhostIcon(Prefs.iconSize.dp)
-                    is FolderItem -> FolderTile(item.name, item.keys.mapNotNull { byKey[it] })
+                    is AppItem -> byKey[item.key]?.let { AppTile(it, size = icon2, label = showLabels, labelWidth = cw - 4.dp) } ?: GhostIcon(icon2)
+                    is FolderItem -> FolderTile(item.name, item.keys.mapNotNull { byKey[it] }, size = icon2, label = showLabels, labelWidth = cw - 4.dp)
                     is WidgetItem -> Box(Modifier.fillMaxSize().padding(4.dp)) {
                         AndroidWidget(item, cw * c.w - 8.dp, ch * c.h - 8.dp) { ui.widgetMenu = p to item }
                     }
-                    is NoCapItem -> Box(Modifier.fillMaxSize().padding(4.dp)) { com.nocap.link.nocap.NoCapWidget(a, item.kind) }
+                    is NoCapItem -> Box(Modifier.fillMaxSize().padding(4.dp)) { com.nocap.link.nocap.NoCapWidget(a, item) }
                 }
             }
         }
@@ -562,53 +670,73 @@ private fun DragGhost(d: Drag, byKey: Map<String, PhoneApp>, ui: HomeUi) {
 }
 
 @Composable
-private fun PageDots(pager: PagerState, count: Int) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center) {
+private fun PageDots(pager: PagerState, count: Int, library: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         repeat(count) { i ->
             val on = i == pager.currentPage
-            Box(
-                Modifier.padding(horizontal = 3.dp).height(6.dp).width(if (on) 16.dp else 6.dp).clip(RoundedCornerShape(3.dp))
-                    .background(if (on) NoCap.Red else Color.White.copy(alpha = 0.35f)),
-            )
+            if (library && i == count - 1) {
+                // The App Library's dot is a little grid.
+                Box(Modifier.padding(horizontal = 3.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).border(1.5.dp, if (on) NoCap.Red else Color.White.copy(alpha = 0.5f), RoundedCornerShape(2.dp)))
+            } else {
+                Box(
+                    Modifier.padding(horizontal = 3.dp).height(6.dp).width(if (on) 16.dp else 6.dp).clip(RoundedCornerShape(3.dp))
+                        .background(if (on) NoCap.Red else Color.White.copy(alpha = 0.35f)),
+                )
+            }
         }
     }
 }
 
-/** The dock, like the NoCapOS desktop's: a glass bar with the Roster, your apps and NoCap. */
+/** The dock, like the NoCapOS desktop's: the Roster, your apps and NoCap Link. */
 @Composable
 private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
-    val apps = Home.layout.dock.mapNotNull { k -> byKey[k] }
+    val apps = Home.layout.dock.mapNotNull { k -> byKey[k] }.take(Opt.dockCount.v)
     val drag = ui.drag
     val over = drag != null && drag.moved && ui.dockRect.contains(drag.pos)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-            .onGloballyPositioned { ui.dockRect = it.boundsInRoot() }
-            .glass(RoundedCornerShape(26.dp), edge = if (over) NoCap.Red.copy(alpha = 0.7f) else NoCap.GlassEdge)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val s = (Prefs.iconSize - 6).coerceAtLeast(40).dp
-        Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
-        Box(Modifier.width(1.dp).height(34.dp).background(NoCap.GlassEdge))
-        ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
-        apps.forEach { app ->
-            val hidden = drag?.moved == true && drag.dockKey == app.key
-            Box(Modifier.onGloballyPositioned { ui.dockSlots[app.key] = it.boundsInRoot() }.alpha(if (hidden) 0.25f else 1f)) {
-                AppTile(app, size = s, label = false)
-            }
+    val style = Opt.dockStyle.v
+    val buttons = Opt.dockButtons.v
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = if (style == DockStyle.FLOATING) 20.dp else 12.dp), contentAlignment = Alignment.Center) {
+        // Fit everything on one row, however narrow the screen.
+        val slots = apps.size.coerceAtLeast(1) + if (buttons) 2 else 0
+        val avail = maxWidth - 20.dp - (if (buttons) 18.dp else 0.dp)
+        val s = minOf((Opt.iconSize.v - 4).coerceAtLeast(40).dp, avail / slots - 8.dp).coerceAtLeast(32.dp)
+        val shape = RoundedCornerShape(if (style == DockStyle.FLOATING) 30.dp else 26.dp)
+        val bg = when (style) {
+            DockStyle.GLASS -> Modifier.fillMaxWidth().glass(shape, edge = if (over) NoCap.Red.copy(alpha = 0.7f) else NoCap.GlassEdge)
+            DockStyle.FLOATING -> Modifier.widthIn(max = maxWidth).glass(shape, strong = true, edge = if (over) NoCap.Red.copy(alpha = 0.8f) else NoCap.Red.copy(alpha = 0.35f))
+            DockStyle.NONE -> Modifier.fillMaxWidth().then(if (over) Modifier.border(1.dp, NoCap.Red.copy(alpha = 0.6f), shape) else Modifier)
         }
-        if (apps.isEmpty()) Text(t("Drag apps here", "Drag apps here"), style = MaterialTheme.typography.bodySmall)
-        Box(Modifier.width(1.dp).height(34.dp).background(NoCap.GlassEdge))
-        Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:hub"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
-            Image(painterResource(R.drawable.nocap_mark), t("NoCap Link", "NoCap Link"), Modifier.size(s * 0.8f))
-            val st = a.server
-            val dot = when (st) {
-                is ServerState.Online -> if (a.outdated != null) NoCap.Warn else NoCap.Ok
-                is ServerState.NotLinked -> null
-                is ServerState.Checking -> NoCap.Muted
-                else -> NoCap.Warn
+        Row(
+            bg.onGloballyPositioned { ui.dockRect = it.boundsInRoot() }.padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = if (style == DockStyle.FLOATING) Arrangement.spacedBy(8.dp) else Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
+            if (buttons) {
+                Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(s).nocapTile(iconShape(s, nocapDefault = true)!!, NoCap.Red, NoCap.light), contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
+                }
+                Box(Modifier.width(1.dp).height(s * 0.6f).background(NoCap.GlassEdge))
+            } else ui.dockSlots.remove("btn:roster")
+            apps.forEach { app ->
+                val hidden = drag?.moved == true && drag.dockKey == app.key
+                Box(Modifier.onGloballyPositioned { ui.dockSlots[app.key] = it.boundsInRoot() }.alpha(if (hidden) 0.25f else 1f)) {
+                    AppTile(app, size = s, label = Opt.dockLabels.v, labelWidth = s + 12.dp)
+                }
             }
-            if (dot != null) Box(Modifier.align(Alignment.BottomEnd).size(10.dp).clip(CircleShape).background(dot).border(1.5.dp, Color(0xFF07080B), CircleShape))
+            if (apps.isEmpty()) Text(t("Drag apps here", "Drag apps here"), style = MaterialTheme.typography.bodySmall)
+            if (buttons) {
+                Box(Modifier.width(1.dp).height(s * 0.6f).background(NoCap.GlassEdge))
+                Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:hub"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+                    Image(painterResource(R.drawable.nocap_mark), t("NoCap Link", "NoCap Link"), Modifier.size(s * 0.8f))
+                    val dot = when (a.server) {
+                        is ServerState.Online -> if (a.outdated != null) NoCap.Warn else NoCap.Ok
+                        is ServerState.NotLinked -> null
+                        is ServerState.Checking -> NoCap.Muted
+                        else -> NoCap.Warn
+                    }
+                    if (dot != null) Box(Modifier.align(Alignment.BottomEnd).size(10.dp).clip(CircleShape).background(dot).border(1.5.dp, Color(0xFF07080B), CircleShape))
+                }
+            } else ui.dockSlots.remove("btn:hub")
         }
     }
 }

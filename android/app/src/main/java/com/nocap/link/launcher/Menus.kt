@@ -41,6 +41,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -120,7 +122,8 @@ fun AppMenu(a: MainActivity, ui: HomeUi, m: Menu, page: Int) {
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(NoCap.GlassEdge))
             }
-            if (m.from == From.DRAWER || m.from == From.SEARCH) {
+            val locked = com.nocap.link.Opt.lockLayout.v
+            if (!locked && (m.from == From.DRAWER || m.from == From.SEARCH)) {
                 MenuRow(t("Add to home", "Add to home screen")) {
                     val p = Home.addApp(app.key, page)
                     a.toast = t("Added to page ${p + 1}.", "Added to page ${p + 1}.")
@@ -128,17 +131,18 @@ fun AppMenu(a: MainActivity, ui: HomeUi, m: Menu, page: Int) {
                 }
             }
             val inDock = app.key in Home.layout.dock
-            MenuRow(if (inDock) t("Unpin from dock", "Remove from dock") else t("Pin to dock", "Add to dock")) {
+            if (!locked) MenuRow(if (inDock) t("Unpin from dock", "Remove from dock") else t("Pin to dock", "Add to dock")) {
                 if (inDock) Home.setDock(Home.layout.dock - app.key)
-                else if (Home.layout.dock.size >= 5) a.toast = t("Dock's full — unpin something first.", "The dock is full.")
+                else if (Home.layout.dock.size >= com.nocap.link.Opt.dockCount.v) a.toast = t("Dock's full — unpin something first.", "The dock is full.")
                 else {
                     Home.setDock(Home.layout.dock + app.key)
                     if (m.from == From.HOME) m.item?.let { Home.remove(it.id) }
                 }
                 close()
             }
-            if (m.from == From.HOME) MenuRow(t("Remove from home", "Remove from home screen")) { m.item?.let { Home.remove(it.id) }; close() }
-            if (m.from == From.FOLDER && m.folder != null) {
+            if (!locked && m.from == From.HOME) MenuRow(t("Remove from home", "Remove from home screen")) { m.item?.let { Home.remove(it.id) }; close() }
+            MenuRow(t("Customize icon & name", "Edit icon and label")) { a.customizing = app; close() }
+            if (!locked && m.from == From.FOLDER && m.folder != null) {
                 MenuRow(t("Take out of folder", "Remove from folder")) {
                     val f = m.folder
                     Home.removeFromFolder(f, app.key, page)
@@ -164,6 +168,7 @@ fun WidgetMenu(a: MainActivity, ui: HomeUi, page: Int, item: Item) {
     val info = (item as? WidgetItem)?.let { Widgets.info(a, it.widgetId) }
     val resizable = item is WidgetItem && Widgets.canResize(info)
     fun close() { ui.widgetMenu = null }
+    val locked = com.nocap.link.Opt.lockLayout.v
     AnchoredPopup(Rect(anchor.center, anchor.center), ::close) {
         MenuCard {
             Text(
@@ -172,23 +177,29 @@ fun WidgetMenu(a: MainActivity, ui: HomeUi, page: Int, item: Item) {
                     is WidgetItem -> info?.loadLabel(a.packageManager) ?: t("Widget", "Widget")
                     else -> t("Widget", "Widget")
                 },
-                Modifier.padding(8.dp), style = MaterialTheme.typography.titleMedium,
+                Modifier.padding(8.dp), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
+            if (item is NoCapItem) MenuRow(t("Customize", "Customize")) { a.editing = item; close() }
+            if (locked) {
+                Text(lockedMsg(), Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = MaterialTheme.typography.bodySmall)
+                return@MenuCard
+            }
             if (item is WidgetItem) {
                 MenuRow(t("Move", "Move")) { ui.moving = item; close() }
             } else {
                 Text(t("Hold and drag to move it.", "Long-press and drag to move it."), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
             }
             if (resizable || item is NoCapItem) {
-                val c = item.cell
+                val c = (Home.find(item.id)?.second ?: item).cell
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(t("Size", "Size"), Modifier.width(56.dp), style = MaterialTheme.typography.titleSmall)
+                    Text(t("Size", "Size"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                     Stepper("${c.w}×${c.h}")
-                    Spacer(Modifier.width(8.dp))
-                    SmallBtn("W−") { resize(a, page, item, -1, 0) }
-                    SmallBtn("W+") { resize(a, page, item, 1, 0) }
-                    SmallBtn("H−") { resize(a, page, item, 0, -1) }
-                    SmallBtn("H+") { resize(a, page, item, 0, 1) }
+                }
+                Row(Modifier.padding(horizontal = 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    SmallBtn(t("Narrower", "W −")) { resize(a, page, item, -1, 0) }
+                    SmallBtn(t("Wider", "W +")) { resize(a, page, item, 1, 0) }
+                    SmallBtn(t("Shorter", "H −")) { resize(a, page, item, 0, -1) }
+                    SmallBtn(t("Taller", "H +")) { resize(a, page, item, 0, 1) }
                 }
             }
             MenuRow(t("Yeet it", "Remove"), danger = true) {
@@ -203,8 +214,15 @@ fun WidgetMenu(a: MainActivity, ui: HomeUi, page: Int, item: Item) {
 private fun resize(a: MainActivity, page: Int, item: Item, dw: Int, dh: Int) {
     val now = Home.find(item.id)?.second ?: return
     val c = now.cell
-    val n = Cell(c.x, c.y, (c.w + dw).coerceAtLeast(1), (c.h + dh).coerceAtLeast(1))
-    if (n == c) return
+    var nw = (c.w + dw).coerceAtLeast(1)
+    var nh = (c.h + dh).coerceAtLeast(1)
+    if (now is NoCapItem) {
+        val s = NoCapKinds.spec(now.kind)
+        nw = nw.coerceIn(s.min.first, s.max.first)
+        nh = nh.coerceIn(s.min.second, s.max.second)
+    }
+    val n = Cell(c.x, c.y, nw, nh)
+    if (n == c) { a.toast = t("That's as far as it goes.", "That's the limit for this widget."); return }
     if (Home.isFree(page, n, item.id)) {
         Home.replace(now.at(n))
         // keep the menu showing the new size
@@ -221,8 +239,8 @@ private fun Stepper(text: String) {
 @Composable
 private fun SmallBtn(text: String, onClick: () -> Unit) {
     Text(
-        text, Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(8.dp)).background(Color(0x22FFFFFF)).clickable(onClick = onClick).padding(horizontal = 7.dp, vertical = 5.dp),
-        style = MaterialTheme.typography.labelSmall,
+        text, Modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(8.dp)).background(NoCap.Field).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
+        style = MaterialTheme.typography.labelSmall, maxLines = 1,
     )
 }
 
@@ -233,14 +251,21 @@ fun EditMenu(a: MainActivity, ui: HomeUi, at: Offset, page: Int, goTo: (Int) -> 
     AnchoredPopup(Rect(at, at), ::close) {
         MenuCard {
             Label(t("The Hub", "Home screen"), Modifier.padding(8.dp), color = NoCap.Red)
-            MenuRow(t("Widgets", "Add widgets")) { a.layer = Layer.WIDGETS; close() }
-            MenuRow(t("Change the aesthetic", "Wallpaper")) { a.layer = Layer.SETTINGS; close() }
-            MenuRow(t("Add a page", "Add page")) { Home.addPage(); goTo(Home.layout.pages.size - 1); close() }
-            if (Home.layout.pages.size > 1 && Home.page(page).items.none { it is WidgetItem }) {
-                MenuRow(t("Yeet this page", "Remove this page"), danger = Home.page(page).items.isNotEmpty()) {
-                    Home.removePage(page); goTo((page - 1).coerceAtLeast(0)); close()
+            val locked = com.nocap.link.Opt.lockLayout.v
+            if (locked) {
+                Text(lockedMsg(), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+                MenuRow(t("Unlock layout", "Unlock layout")) { com.nocap.link.Opt.lockLayout.set(false); close() }
+            } else {
+                MenuRow(t("Widgets", "Add widgets")) { a.layer = Layer.WIDGETS; close() }
+                MenuRow(t("Add a page", "Add page")) { Home.addPage(); goTo(Home.layout.pages.size - 1); close() }
+                if (Home.layout.pages.size > 1 && page < Home.layout.pages.size && Home.page(page).items.none { it is WidgetItem }) {
+                    MenuRow(t("Yeet this page", "Remove this page"), danger = Home.page(page).items.isNotEmpty()) {
+                        Home.removePage(page); goTo((page - 1).coerceAtLeast(0)); close()
+                    }
                 }
+                MenuRow(t("Lock layout", "Lock layout")) { com.nocap.link.Opt.lockLayout.set(true); close() }
             }
+            MenuRow(t("Change the aesthetic", "Wallpaper")) { a.settingsQuery = t("Wall", "Wallpaper"); a.layer = Layer.SETTINGS; close() }
             MenuRow(t("Settings", "Settings")) { a.layer = Layer.SETTINGS; close() }
         }
     }
@@ -267,17 +292,18 @@ fun FolderWindow(a: MainActivity, ui: HomeUi, page: Int, f: FolderItem, byKey: M
                 )
             },
             onClose = ::close,
-            modifier = Modifier.padding(24.dp).clickable(remember { MutableInteractionSource() }, null) {},
+            modifier = Modifier.padding(24.dp).widthIn(max = 420.dp).clickable(remember { MutableInteractionSource() }, null) {},
         ) {
             LazyVerticalGrid(GridCells.Fixed(4), Modifier.padding(10.dp).height(((apps.size + 3) / 4 * 96).coerceIn(96, 400).dp)) {
                 items(apps, key = { it.key }) { app ->
+                    var r by remember { mutableStateOf(Rect.Zero) }
                     Box(
-                        Modifier.clip(RoundedCornerShape(14.dp)).combinedClickable(
+                        Modifier.onGloballyPositioned { r = it.boundsInRoot() }.clip(RoundedCornerShape(14.dp)).combinedClickable(
                             onClick = { a.launch(app); close() },
-                            onLongClick = { ui.menu = Menu(app, null, Rect(Offset(300f, 600f), Offset(500f, 700f)), From.FOLDER, current) },
+                            onLongClick = { ui.menu = Menu(app, null, r, From.FOLDER, current) },
                         ),
                         contentAlignment = Alignment.Center,
-                    ) { AppTile(app, size = 50.dp) }
+                    ) { AppTile(app, size = 50.dp, onWallpaper = false, labelWidth = 72.dp) }
                 }
             }
         }
@@ -306,5 +332,41 @@ fun WindowFrame(title: @Composable () -> Unit, onClose: (() -> Unit)?, modifier:
         Box(Modifier.fillMaxWidth().height(1.dp).background(NoCap.GlassEdge))
         content()
     }
+}
+
+/** Per-app custom name and icon. */
+@Composable
+fun CustomizeApp(a: MainActivity, app: PhoneApp) {
+    var label by remember(app.key) { mutableStateOf(com.nocap.link.Opt.customLabels.v[app.key] ?: app.label) }
+    fun close() { a.customizing = null }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = ::close,
+        containerColor = NoCap.GlassStrong,
+        title = { Text(t("Make it yours", "Customize app"), style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(app, 52.dp)
+                    Spacer(Modifier.width(12.dp))
+                    com.nocap.link.nocap.Field(label, { label = it.take(40) }, app.label, modifier = Modifier.weight(1f))
+                }
+                MenuRow(t("Pick an icon from my pics", "Choose icon from gallery")) { a.pickIcon(app) }
+                if (app.custom) MenuRow(t("Back to the original icon", "Reset icon")) {
+                    com.nocap.link.Opt.customIcons.put(app.key, null); com.nocap.link.CustomIcons.prune(a); a.reloadApps()
+                }
+                if (com.nocap.link.Opt.customLabels.v.containsKey(app.key)) MenuRow(t("Back to the original name", "Reset name")) {
+                    com.nocap.link.Opt.customLabels.put(app.key, null); a.reloadApps(); close()
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val l = label.trim()
+                com.nocap.link.Opt.customLabels.put(app.key, l.takeIf { it.isNotBlank() && (it != app.label || app.key in com.nocap.link.Opt.customLabels.v) })
+                a.reloadApps(); close()
+            }) { Text(t("Save", "Save"), color = NoCap.Red) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = ::close) { Text(t("Nah", "Cancel"), color = NoCap.Text) } },
+    )
 }
 

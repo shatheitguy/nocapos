@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextClock
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="@font/orbitron_black"
+        android:format12Hour="h:mm"
+        android:format24Hour="HH:mm"
+        android:maxLines="1"
+        android:shadowColor="#FFFF2A2A"
+        android:shadowRadius="18"
+        android:textColor="#FFFFFFFF"
+        android:textSize="52sp" />
+
+    <View
+        android:layout_width="64dp"
+        android:layout_height="2dp"
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="2dp"
+        android:background="#FFFF2A2A" />
+
+    <TextClock
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="4dp"
+        android:fontFamily="@font/rajdhani_bold"
+        android:format12Hour="EEEE, d MMMM"
+        android:format24Hour="EEEE, d MMMM"
+        android:letterSpacing="0.1"
+        android:maxLines="1"
+        android:shadowColor="#AA000000"
+        android:shadowDy="1"
+        android:shadowRadius="4"
+        android:textAllCaps="true"
+        android:textColor="#FFFF2A2A"
+        android:textSize="14sp" />
+</LinearLayout>

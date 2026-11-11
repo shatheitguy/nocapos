@@ -18,4 +18,51 @@
         <item name="android:windowNoTitle">true</item>
         <item name="android:backgroundDimEnabled">false</item>
     </style>
+
+    <!-- Home-screen widgets for other launchers. -->
+    <style name="WidgetMeterLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:fontFamily">@font/rajdhani_semibold</item>
+        <item name="android:textColor">#FF959AA5</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="WidgetMeter" parent="android:Widget.Material.ProgressBar.Horizontal">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">5dp</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:max">100</item>
+        <item name="android:progressDrawable">@drawable/widget_bar</item>
+    </style>
+
+    <style name="WidgetAction">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="WidgetGlyph">
+        <item name="android:layout_width">38dp</item>
+        <item name="android:layout_height">38dp</item>
+        <item name="android:background">@drawable/widget_chip</item>
+        <item name="android:fontFamily">@font/orbitron_bold</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">#FFFF2A2A</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="WidgetActionLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:fontFamily">@font/rajdhani_semibold</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textColor">#FFECEEF2</item>
+        <item name="android:textSize">12sp</item>
+    </style>
 </resources>

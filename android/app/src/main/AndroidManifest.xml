@@ -15,7 +15,21 @@
     <!-- Long-press an app → Uninstall (Android still asks you). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Weather widget: rough location, only if you allow it (otherwise pick a city). -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Calendar widget, only if you allow it. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Quick toggles widget: Do not disturb (you allow it in Android's settings) and Wi-Fi/Bluetooth on/off state. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <!-- Timer widget: "ring with the clock app". -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <queries>
         <!-- The launcher lists every app that has a launcher icon. -->
@@ -134,6 +148,48 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_ask" />
         </receiver>
+
+        <!-- NoCap OS widgets for any home screen. -->
+        <receiver android:name=".widget.ClockAppWidget" android:exported="false" android:label="@string/w_clock">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_clock" />
+        </receiver>
+        <receiver android:name=".widget.WeatherAppWidget" android:exported="false" android:label="@string/w_weather">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_weather" />
+        </receiver>
+        <receiver android:name=".widget.StatusAppWidget" android:exported="false" android:label="@string/w_status">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_status" />
+        </receiver>
+        <receiver android:name=".widget.LinkAppWidget" android:exported="false" android:label="@string/w_link">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_link" />
+        </receiver>
+        <receiver android:name=".widget.SearchAppWidget" android:exported="false" android:label="@string/w_search">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_search" />
+        </receiver>
+
+        <!-- In-app timer finished (when not handed to the clock app). -->
+        <receiver android:name=".nocap.TimerReceiver" android:exported="false" />
+
+        <!-- "Send clipboard to NoCap": quick-settings tile + a see-through moment in front. -->
+        <service
+            android:name=".sync.ClipTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_fg"
+            android:label="@string/clip_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+        </service>
+        <activity
+            android:name=".sync.ClipActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="com.nocap.link.clip"
+            android:theme="@style/Theme.NoCap.Sheet" />
 
         <!-- Notification dots (opt-in: only after you allow notification access). -->
         <service

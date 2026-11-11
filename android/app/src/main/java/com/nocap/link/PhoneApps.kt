@@ -14,14 +14,74 @@ import android.provider.MediaStore
 import android.provider.Settings
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.graphics.drawable.toBitmap
 
 /** An app on this phone with a launcher icon. */
 data class PhoneApp(
     val label: String, val pkg: String, val activity: String, val icon: ImageBitmap,
     val category: Int, val system: Boolean,
+    /** Adaptive icons: both layers full-bleed (no mask), for our own shapes. */
+    val full: ImageBitmap? = null,
+    /** Adaptive icons: just the foreground layer, for NoCap tiles. */
+    val fg: ImageBitmap? = null,
+    /** Android 13+ themed (monochrome) layer, full-bleed. */
+    val mono: ImageBitmap? = null,
+    val installed: Long = 0,
+    val custom: Boolean = false,
 ) {
     val key get() = "$pkg/$activity"
+}
+
+/** How often and how recently each app was opened (for drawer sort and the recents row). */
+object Usage {
+    private var sp: android.content.SharedPreferences? = null
+    var tick by mutableIntStateOf(0)
+        private set
+
+    private fun sp(ctx: Context) = sp ?: ctx.applicationContext.getSharedPreferences("nocap_usage", Context.MODE_PRIVATE).also { sp = it }
+
+    fun record(ctx: Context, key: String) {
+        val s = sp(ctx)
+        s.edit().putInt("n:$key", s.getInt("n:$key", 0) + 1).putLong("t:$key", System.currentTimeMillis()).apply()
+        tick++
+    }
+
+    fun count(ctx: Context, key: String) = sp(ctx).getInt("n:$key", 0)
+    fun last(ctx: Context, key: String) = sp(ctx).getLong("t:$key", 0)
+
+    fun recent(ctx: Context, apps: List<PhoneApp>, n: Int): List<PhoneApp> =
+        apps.map { it to last(ctx, it.key) }.filter { it.second > 0 }.sortedByDescending { it.second }.take(n).map { it.first }
+}
+
+/** Per-app custom icons picked from the gallery, kept in app storage. */
+object CustomIcons {
+    private fun dir(ctx: Context) = java.io.File(ctx.filesDir, "icons").apply { mkdirs() }
+
+    fun load(ctx: Context, name: String, px: Int): ImageBitmap? = runCatching {
+        val f = java.io.File(dir(ctx), name)
+        if (!f.exists()) return null
+        val b = android.graphics.BitmapFactory.decodeFile(f.path) ?: return null
+        android.graphics.Bitmap.createScaledBitmap(b, px, px, true).asImageBitmap()
+    }.getOrNull()
+
+    /** Copies a picked picture in as a square icon; returns the file name. */
+    fun save(ctx: Context, key: String, uri: Uri): String? = runCatching {
+        val src = ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it) } ?: return null
+        val side = minOf(src.width, src.height)
+        val sq = android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
+        val out = android.graphics.Bitmap.createScaledBitmap(sq, 256, 256, true)
+        val name = "i" + Integer.toHexString(key.hashCode()) + "_" + (System.currentTimeMillis() % 100000) + ".png"
+        java.io.File(dir(ctx), name).outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        name
+    }.getOrNull()
+
+    fun prune(ctx: Context) {
+        val keep = Opt.customIcons.v.values.toSet()
+        dir(ctx).listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
+    }
 }
 
 /** A long-press shortcut an app offers ("New message", "Scan"…). */
@@ -32,23 +92,62 @@ object PhoneApps {
     fun load(ctx: Context): List<PhoneApp> {
         val pm = ctx.packageManager
         val px = (64 * ctx.resources.displayMetrics.density).toInt()
+        val labels = Opt.customLabels.v
+        val icons = Opt.customIcons.v
         return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != ctx.packageName }
             .map {
                 val ai = it.activityInfo
                 val app = ai.applicationInfo
-                PhoneApp(
-                    it.loadLabel(pm).toString(), ai.packageName, ai.name, it.loadIcon(pm).toBitmap(px, px).asImageBitmap(),
-                    app.category, app.flags and ApplicationInfo.FLAG_SYSTEM != 0,
-                )
+                val key = "${ai.packageName}/${ai.name}"
+                val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0
+                val installed = runCatching { pm.getPackageInfo(ai.packageName, 0).firstInstallTime }.getOrDefault(0L)
+                val label = labels[key]?.takeIf { l -> l.isNotBlank() } ?: it.loadLabel(pm).toString()
+                val customBmp = icons[key]?.let { f -> CustomIcons.load(ctx, f, px) }
+                if (customBmp != null) {
+                    PhoneApp(label, ai.packageName, ai.name, customBmp, app.category, system, full = customBmp, installed = installed, custom = true)
+                } else {
+                    val d = it.loadIcon(pm)
+                    val l = layers(d, px)
+                    PhoneApp(
+                        label, ai.packageName, ai.name, d.toBitmap(px, px).asImageBitmap(), app.category, system,
+                        full = l?.first, fg = l?.second, mono = l?.third, installed = installed,
+                    )
+                }
             }
             .distinctBy { it.key }
             .sortedBy { it.label.lowercase() }
     }
 
+    /** Draws an adaptive icon's layers full-bleed (the visible 72 of 108 units fill the bitmap). */
+    private fun layers(d: android.graphics.drawable.Drawable, px: Int): Triple<ImageBitmap?, ImageBitmap?, ImageBitmap?>? {
+        if (d !is android.graphics.drawable.AdaptiveIconDrawable) return null
+        return runCatching {
+            val inset = px / 4
+            fun draw(vararg ds: android.graphics.drawable.Drawable?): ImageBitmap {
+                val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
+                val c = android.graphics.Canvas(b)
+                for (x in ds) {
+                    if (x == null) continue
+                    x.setBounds(-inset, -inset, px + inset, px + inset)
+                    x.draw(c)
+                }
+                return b.asImageBitmap()
+            }
+            // Only the layers the current icon style uses (they're big): reloaded when it changes.
+            val theme = Opt.iconTheme.v
+            val wantFull = Opt.iconShape.v != IconShape.ORIGINAL && theme != IconTheme.NOCAP && theme != IconTheme.THEMED
+            val wantFg = theme == IconTheme.NOCAP
+            val wantMono = theme == IconTheme.THEMED || (theme == IconTheme.NOCAP && Opt.nocapGlyph.v)
+            val mono = if (wantMono && Build.VERSION.SDK_INT >= 33) d.monochrome?.let { m -> draw(m) } else null
+            Triple(if (wantFull) draw(d.background, d.foreground) else null, if (wantFg) draw(d.foreground) else null, mono)
+        }.getOrNull()
+    }
+
     fun launch(ctx: Context, app: PhoneApp) = launch(ctx, app.pkg, app.activity)
 
     fun launch(ctx: Context, pkg: String, activity: String) {
+        Usage.record(ctx, "$pkg/$activity")
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             .setComponent(ComponentName(pkg, activity))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
