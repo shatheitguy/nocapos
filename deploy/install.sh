@@ -17,12 +17,11 @@
 #   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
 #                       engine, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
 #                       to install each one later, from its app
-#   --desktop           NoCap Desktop: a full desktop on this machine's own monitor (NoCapOS
-#                       sign-in screen, dock, file manager, terminal, settings, NoCap Hub and
-#                       the App Store's Linux apps; sign in with this machine's Linux accounts).
-#                       On by default when a monitor is plugged in; with no monitor nothing
-#                       desktop-related is installed unless you pass this.
-#   --desktop=kiosk     NoCap Desktop as NoCapOS full screen only (a small compositor + browser).
+#   --desktop           NoCap Desktop: a native desktop on this machine's own monitor (NoCapOS
+#                       sign-in screen, dock, Files, Settings, Software, terminal, text editor,
+#                       a web browser and the App Store's Linux apps; sign in with this
+#                       machine's Linux accounts). On by default when a monitor is plugged in;
+#                       with no monitor nothing desktop-related is installed unless you pass this.
 #   --no-desktop        don't set up NoCap Desktop (and turn it off if it was on)
 #   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
 #   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
@@ -76,13 +75,13 @@ while [ $# -gt 0 ]; do
     --minimal) MINIMAL=1 ;;
     --no-branding) BRANDING=0 ;;
     --desktop | --desktop=full) DESKTOP=full ;;
-    --desktop=kiosk | --desktop=web) DESKTOP=kiosk ;;
+    --desktop=kiosk | --desktop=web) DESKTOP=full; warn "--desktop=kiosk is gone: the screen always gets the native NoCap Desktop" ;;
     --no-desktop | --desktop=off) DESKTOP=no ;;
     --mdns-name) MDNS_NAME="${2:?--mdns-name needs a name}"; shift ;;
     --yes | -y) ASSUME_YES=1 ;;
     --uninstall) UNINSTALL=1 ;;
     --purge) PURGE=1 ;;
-    -h | --help) sed -n '2,32p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
+    -h | --help) sed -n '2,30p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -475,195 +474,18 @@ enable_host_services() {
 }
 
 # ---------------------------------------------------------------- NoCap Desktop
-# NoCapOS full screen on this machine's own monitor: a small Wayland
-# compositor (labwc, or cage) on tty1 as the login-less system user
-# nocap-desktop, running a browser in kiosk mode at NoCapOS's own sign-in.
-# The browser opens http://127.0.0.1:8780, a plain-HTTP listener alfad binds
-# to loopback only (ALFA_DESKTOP_ADDR), so there's no certificate warning and
-# TLS stays as it is for every other device. Turned on and off from
-# Settings → General → This Screen & Access. uninstall.sh removes it all.
-DESKTOP_UNIT=/etc/systemd/system/nocapos-desktop.service
-DESKTOP_USER=nocap-desktop
-DESKTOP_HOME=/var/lib/nocap-desktop
-DESKTOP_LIB=/usr/local/lib/nocapos
+# NoCap Desktop is a native desktop on this machine's own monitor: NoCapOS's
+# GDM sign-in with the machine's Linux accounts, then the NoCapOS session
+# (GNOME Shell with NoCapOS's look and native apps). There is no web UI on
+# the screen. Turned on and off from Settings → General → NoCap Desktop.
+# The helpers ship in the bundle's desktop/ folder.
 
 display_connected() { grep -qsx connected /sys/class/drm/*/status; }
-
-desktop_browser() {
-  local b
-  for b in brave-browser brave-browser-stable brave chromium chromium-browser firefox-esr firefox; do
-    if has "$b"; then echo "$b"; return 0; fi
-  done
-  return 1
-}
 
 # Someone logged in on tty1 right now (maybe running this installer there):
 # starting the desktop would take that console away from them.
 tty1_in_use() { has who && who 2>/dev/null | awk '$2 == "tty1" {found=1} END {exit !found}'; }
 
-disable_desktop() {
-  [ -f "$DESKTOP_UNIT" ] || return 0
-  info "Turning NoCap Desktop off"
-  systemctl disable --now nocapos-desktop >/dev/null 2>&1 || true
-  systemctl --no-block start getty@tty1.service >/dev/null 2>&1 || true
-}
-
-install_desktop() {
-  local mgr comp="" p g browser
-  mgr="$(pkg_manager)"
-  if [ "$mgr" = none ]; then warn "NoCap Desktop: no supported package manager here; skipped"; return 0; fi
-  info "Setting up NoCap Desktop (NoCapOS on this machine's own screen)"
-  [ "$MINIMAL" -eq 0 ] || pkg_refresh "$mgr" || true
-  for p in labwc cage; do
-    if has "$p" || { pkg_available "$mgr" "$p" && pkg_install "$mgr" "$p"; }; then comp="$p"; break; fi
-  done
-  if [ -z "$comp" ]; then
-    warn "NoCap Desktop: neither labwc nor cage is available for this system; skipped"
-    return 0
-  fi
-  printf '    desktop: %s\n' "$comp"
-  # Xwayland (for X11 apps opened on this screen later) and a font set.
-  for p in xwayland xorg-xwayland xorg-x11-server-Xwayland fonts-dejavu-core; do
-    if pkg_available "$mgr" "$p"; then pkg_install "$mgr" "$p" || true; fi
-  done
-  # The compositor gets the screen through logind; seatd only where there's no logind.
-  if ! has loginctl && pkg_available "$mgr" seatd && pkg_install "$mgr" seatd; then
-    systemctl enable --now seatd >/dev/null 2>&1 || warn "NoCap Desktop: seatd didn't start"
-  fi
-  # The browser: one already on this machine, else Chromium or Firefox from
-  # the system's own packages (no browser is preinstalled by NoCapOS).
-  if ! desktop_browser >/dev/null; then
-    for p in chromium firefox-esr firefox; do
-      if pkg_available "$mgr" "$p" && pkg_install "$mgr" "$p"; then break; fi
-    done
-  fi
-  if ! browser="$(desktop_browser)"; then
-    warn "NoCap Desktop: couldn't install a browser (Chromium or Firefox); skipped"
-    return 0
-  fi
-  printf '    desktop browser: %s\n' "$browser"
-
-  if ! id "$DESKTOP_USER" >/dev/null 2>&1; then
-    useradd --system --create-home --home-dir "$DESKTOP_HOME" --shell /usr/sbin/nologin \
-      --user-group --comment "NoCap Desktop" "$DESKTOP_USER" ||
-      { warn "NoCap Desktop: couldn't create the $DESKTOP_USER user; skipped"; return 0; }
-  fi
-  mkdir -p "$DESKTOP_HOME"
-  chown "$DESKTOP_USER:$DESKTOP_USER" "$DESKTOP_HOME"
-  chmod 700 "$DESKTOP_HOME"
-  for g in video render input audio seat _seatd; do
-    if getent group "$g" >/dev/null; then usermod -aG "$g" "$DESKTOP_USER" 2>/dev/null || true; fi
-  done
-
-  mkdir -p "$DESKTOP_LIB"
-  # The session: starts the compositor, which runs nocap-desktop-session.
-  cat >"$DESKTOP_LIB/nocap-desktop" <<'EOF'
-#!/bin/bash
-# NoCap Desktop session (written by NoCapOS's install.sh, removed by uninstall.sh).
-export XDG_SESSION_TYPE=wayland
-# logind's runtime folder; systemd's own (RuntimeDirectory=) if logind gave none.
-if [ -z "${XDG_RUNTIME_DIR:-}" ] || [ ! -w "${XDG_RUNTIME_DIR:-/nonexistent}" ]; then
-  export XDG_RUNTIME_DIR=/run/nocap-desktop
-fi
-session=/usr/local/lib/nocapos/nocap-desktop-session
-if command -v labwc >/dev/null 2>&1; then exec labwc -s "$session"; fi
-if command -v cage >/dev/null 2>&1; then exec cage -- "$session"; fi
-echo "NoCap Desktop: no compositor (labwc or cage) found" >&2
-exit 1
-EOF
-  # Runs inside the compositor: tells NoCapOS where this screen is, then
-  # keeps the browser open at NoCapOS's sign-in (reopened if it closes).
-  cat >"$DESKTOP_LIB/nocap-desktop-session" <<'EOF'
-#!/bin/bash
-# NoCap Desktop browser (written by NoCapOS's install.sh, removed by uninstall.sh).
-url="${NOCAP_DESKTOP_URL:-http://127.0.0.1:8780/}"
-# Where NoCapOS can open native apps on this screen (simple KEY=VALUE lines).
-env_file=/run/nocapos/desktop.env
-if [ -w "$env_file" ]; then
-  {
-    echo "USER=$(id -un)"
-    echo "WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-}"
-    echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-}"
-    if [ -n "${DISPLAY:-}" ]; then echo "DISPLAY=$DISPLAY"; fi
-  } >"$env_file"
-fi
-pick() {
-  local b
-  for b in brave-browser brave-browser-stable brave chromium chromium-browser firefox-esr firefox; do
-    if command -v "$b" >/dev/null 2>&1; then echo "$b"; return 0; fi
-  done
-  return 1
-}
-profile="$HOME/.config/nocap-desktop-browser"
-mkdir -p "$profile"
-while :; do
-  # Wait (up to 2 minutes) for NoCapOS's local listener.
-  for _ in $(seq 1 120); do
-    (exec 3<>/dev/tcp/127.0.0.1/8780) 2>/dev/null && break
-    sleep 1
-  done
-  b="$(pick)" || { echo "NoCap Desktop: no browser found" >&2; sleep 10; continue; }
-  case "$b" in
-    firefox*) MOZ_ENABLE_WAYLAND=1 "$b" --kiosk --profile "$profile" "$url" ;;
-    *) "$b" --kiosk --no-first-run --noerrdialogs --disable-session-crashed-bubble --disable-infobars \
-      --password-store=basic --ozone-platform=wayland --user-data-dir="$profile" "$url" ;;
-  esac
-  sleep 2
-done
-EOF
-  chmod 755 "$DESKTOP_LIB/nocap-desktop" "$DESKTOP_LIB/nocap-desktop-session"
-
-  cat >"$DESKTOP_UNIT" <<EOF
-# NoCap Desktop: NoCapOS full screen on this machine's own monitor.
-# Written by NoCapOS's install.sh; switch it in Settings → General → This Screen & Access.
-[Unit]
-Description=NoCap Desktop (NoCapOS on this screen)
-After=nocapos.service systemd-user-sessions.service plymouth-quit-wait.service getty@tty1.service
-Wants=nocapos.service
-Conflicts=getty@tty1.service
-
-[Service]
-Type=simple
-User=$DESKTOP_USER
-# A real login session on seat0/tty1 (logind hands the compositor the screen and input).
-PAMName=login
-TTYPath=/dev/tty1
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
-StandardInput=tty-fail
-StandardOutput=journal
-StandardError=journal
-UtmpIdentifier=tty1
-UtmpMode=user
-Environment=XDG_SESSION_TYPE=wayland XDG_SESSION_CLASS=user
-RuntimeDirectory=nocap-desktop
-RuntimeDirectoryMode=0700
-# The session writes its display details to /run/nocapos/desktop.env.
-ExecStartPre=+/bin/sh -c 'install -d -m 0755 /run/nocapos && install -m 0644 -o $DESKTOP_USER -g $DESKTOP_USER /dev/null /run/nocapos/desktop.env'
-ExecStart=$DESKTOP_LIB/nocap-desktop
-ExecStopPost=+/bin/rm -f /run/nocapos/desktop.env
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  if [ "${1:-1}" -eq 0 ]; then
-    # Update of a machine where it was switched off in Settings: keep it off.
-    if systemctl is-active --quiet nocapos-desktop; then systemctl restart nocapos-desktop >/dev/null 2>&1 || true; fi
-    return 0
-  fi
-  systemctl enable nocapos-desktop >/dev/null 2>&1 || warn "NoCap Desktop: couldn't enable its service"
-  if tty1_in_use; then
-    echo "   NoCap Desktop starts on the next boot (someone is signed in on tty1 right now)."
-  else
-    systemctl restart nocapos-desktop >/dev/null 2>&1 || warn "NoCap Desktop didn't start; check: journalctl -u nocapos-desktop -e"
-  fi
-}
-
-# The full desktop's helpers ship in the bundle's desktop/ folder.
 DESKTOP_FULL_OK=0
 if [ -f "$BUNDLE_DIR/desktop/lib.sh" ] && [ -f "$BUNDLE_DIR/desktop/setup.sh" ]; then
   # shellcheck source=/dev/null
@@ -673,15 +495,18 @@ if [ -f "$BUNDLE_DIR/desktop/lib.sh" ] && [ -f "$BUNDLE_DIR/desktop/setup.sh" ];
   DESKTOP_FULL_OK=1
 fi
 
-# NoCap Desktop has three modes, switched in Settings → General → This
-# Screen & Access: full (the native desktop), kiosk (NoCapOS full screen)
-# and off. The last choice is kept in $ETC/desktop-mode.
+# NoCap Desktop is on or off; the last choice is kept in $ETC/desktop-mode
+# and updates keep it. Updates also move machines off what earlier versions
+# put on the screen (NoCapOS full screen in a browser, NoCap Hub) and off a
+# distribution's own desktop (Raspberry Pi OS's, say) onto NoCap Desktop.
 setup_desktop() {
   local want="" chosen
+  [ "$DESKTOP_FULL_OK" -eq 1 ] || { warn "this bundle has no NoCap Desktop files; skipped"; return 0; }
+  desk_remove_kiosk
   case "$DESKTOP" in
-    full | kiosk) want="$DESKTOP" ;;
+    full) want=full ;;
     no)
-      if [ "$DESKTOP_FULL_OK" -eq 1 ] && [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode off; else disable_desktop; fi
+      if [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode off; fi
       echo off >"$ETC/desktop-mode"
       return 0
       ;;
@@ -689,13 +514,15 @@ setup_desktop() {
       # An update keeps what Settings (or an earlier install) chose.
       chosen="$(cat "$ETC/desktop-mode" 2>/dev/null || true)"
       case "$chosen" in
-        full | kiosk) want="$chosen" ;;
+        full) want=full ;;
         off) return 0 ;;
         *)
-          if [ -f "$DESKTOP_UNIT" ]; then
-            # The full-screen-only NoCap Desktop of earlier versions: on
-            # becomes the full desktop, off stays off.
-            if systemctl is-enabled --quiet nocapos-desktop 2>/dev/null; then want=full; else return 0; fi
+          if [ "$DESK_KIOSK_WAS" = on ]; then
+            # The browser on the screen of earlier versions becomes the desktop.
+            want=full
+          elif [ "$DESK_KIOSK_WAS" = off ]; then
+            echo off >"$ETC/desktop-mode"
+            return 0
           elif display_connected; then
             want=full
           else
@@ -706,19 +533,11 @@ setup_desktop() {
       esac
       ;;
   esac
-  if [ "$want" = full ]; then
-    if [ "$DESKTOP_FULL_OK" -eq 1 ] && install_full_desktop; then
-      # NoCapOS full screen stays available as a switch in Settings.
-      install_desktop 0 || true
-      apply_desktop_mode full
-      echo full >"$ETC/desktop-mode"
-      return 0
-    fi
+  if install_full_desktop; then
+    apply_desktop_mode full
+    echo full >"$ETC/desktop-mode"
   fi
-  # The sign-in screen (if the full desktop was on) steps aside first.
-  if [ "$DESKTOP_FULL_OK" -eq 1 ] && [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode kiosk; fi
-  install_desktop 1
-  if [ -f "$DESKTOP_UNIT" ]; then echo kiosk >"$ETC/desktop-mode"; fi
+  return 0
 }
 
 # ---------------------------------------------------------------- console

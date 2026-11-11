@@ -61,38 +61,6 @@ func TestSandboxProblemStopsLaunchWithFix(t *testing.T) {
 	}
 }
 
-func TestDesktopAndServerScreen(t *testing.T) {
-	s, h := newFakeService(t, true)
-	got, err := s.Desktop(Person{ID: "u1"})
-	if err != nil || got.Stream == nil {
-		t.Fatalf("desktop = %+v %v", got, err)
-	}
-	fs := s.Streams.(*fakeStreams)
-	if sp := fs.specs[0]; sp.Mode != webapps.ModeDesktop || sp.Key != DesktopKey || sp.RunAs.Username != AppsUser {
-		t.Fatalf("spec = %+v", sp)
-	}
-	if _, err := s.ViewScreen(Person{ID: "u1"}); !errors.Is(err, ErrNoScreen) {
-		t.Fatalf("screen off: %v", err)
-	}
-	h.mu.Lock()
-	h.envFile = "USER=nocap-desktop\nWAYLAND_DISPLAY=wayland-0\nXDG_RUNTIME_DIR=/run/user/991\n"
-	h.sockets["/run/user/991/wayland-0"] = true
-	h.mu.Unlock()
-	s.Account = func(n string) *webapps.RunAs {
-		if n == "nocap-desktop" {
-			return &webapps.RunAs{Username: n, UID: 991, GID: 991, Home: "/var/lib/nocap-desktop"}
-		}
-		return nil
-	}
-	if _, err := s.ViewScreen(Person{ID: "u1"}); err != nil {
-		t.Fatal(err)
-	}
-	sp := fs.specs[len(fs.specs)-1]
-	if sp.Mode != webapps.ModeScreen || sp.RunAs.Username != "nocap-desktop" || sp.RunAs.Runtime != "/run/user/991" || !slices.Contains(sp.Env, "WAYLAND_DISPLAY=wayland-0") {
-		t.Fatalf("screen spec = %+v", sp)
-	}
-}
-
 func TestScreenUnitAndAppsAccountArgs(t *testing.T) {
 	env := DesktopEnv{User: "nocap-desktop", WaylandDisplay: "wayland-0", XDGRuntimeDir: "/run/user/991"}
 	a := &webapps.RunAs{Username: "nocap-desktop", UID: 991, GID: 991, Home: "/var/lib/nocap-desktop"}

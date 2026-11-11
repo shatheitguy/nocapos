@@ -82,8 +82,11 @@ type updateResult struct {
 	RolledBack bool      `json:"rolled_back"`
 	// NoCapOS itself is as it was: the run failed before replacing it, or it
 	// was rolled back.
-	Unchanged bool   `json:"unchanged"`
-	Error     string `json:"error,omitempty"`
+	Unchanged bool `json:"unchanged"`
+	// RestartNeeded: the update finished, and the machine needs a restart
+	// for all of it to apply (the screen switching to NoCap Desktop, say).
+	RestartNeeded bool   `json:"restart_needed,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 // updateRunStatus is GET /api/v1/system/update/run.
@@ -484,6 +487,7 @@ func (s *Server) updateRunStatus() updateRunStatus {
 		if res.To == "" && lock != nil {
 			res.To = lock.To
 		}
+		res.RestartNeeded = res.OK && s.restartNeeded()
 	}
 	switch {
 	case running:

@@ -1,6 +1,7 @@
 // Window manager state: stacking, focus, minimize/maximize, snapping, and a
 // per-user layout that survives reloads and sign-out/sign-in.
 import { create } from 'zustand';
+import { APPS } from '../apps/meta';
 import { saveLater, flushSaves } from '../lib/saveLater';
 import { workArea } from './prefs';
 
@@ -154,9 +155,10 @@ export const useWM = create<WM>((set, get) => {
         saved = [];
       }
       // One window per id: a layout saved twice over (two tabs, an old bug) must not show a window twice.
+      // Windows of apps NoCapOS doesn't have any more are dropped.
       const ids = new Set<string>();
       const windows = (Array.isArray(saved) ? saved : [])
-        .filter((w) => w && typeof w.id === 'string' && !ids.has(w.id) && !!ids.add(w.id))
+        .filter((w) => w && typeof w.id === 'string' && !!APPS[w.appId] && !ids.has(w.id) && !!ids.add(w.id))
         .map((w) => ({ ...w, ...clampRect(w) }));
       const topZ = windows.reduce((m, w) => Math.max(m, w.z), 1);
       set({ windows, topZ, focused: topVisible(windows) });

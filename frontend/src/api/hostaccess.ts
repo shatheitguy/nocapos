@@ -1,7 +1,7 @@
 import { api } from './client';
 
-/** What the server's own monitor shows: the full desktop, NoCapOS full screen, or the console. */
-export type DesktopMode = 'full' | 'kiosk' | 'off';
+/** What the server's own monitor shows: the native NoCap Desktop, or the console. */
+export type DesktopMode = 'full' | 'off';
 
 /** NoCap Desktop on the server's own monitor. */
 export interface DesktopState {
@@ -13,7 +13,7 @@ export interface DesktopState {
   /** A monitor is plugged into the server. */
   display: boolean;
   mode: DesktopMode;
-  /** The modes this server has (always ending in "off" when any). */
+  /** The modes this server has: full and off once NoCap Desktop is set up. */
   modes: DesktopMode[] | null;
   /** Signed in on the full desktop right now. */
   session_user?: string;

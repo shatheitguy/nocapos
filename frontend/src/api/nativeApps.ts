@@ -90,10 +90,6 @@ export const nativeApi = {
   updateAll: () => api<NativeJob>('/api/v1/native-apps/update-all', { method: 'POST' }),
   launch: (id: string) => api<Launched>(`/api/v1/native-apps/${enc(id)}/launch`, { method: 'POST' }),
   stream: (sid: string) => api<NativeStream>(`/api/v1/native-apps/streams/${enc(sid)}`),
-  /** Opens this person's full Linux desktop (a stream). */
-  desktop: () => api<Launched>('/api/v1/native-apps/desktop', { method: 'POST' }),
-  /** Streams the server's own screen (admins). */
-  serverScreen: () => api<Launched>('/api/v1/native-apps/server-screen', { method: 'POST' }),
   stopStream: (sid: string) => api<void>(`/api/v1/native-apps/streams/${enc(sid)}`, { method: 'DELETE' }),
 };
 
