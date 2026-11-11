@@ -23,6 +23,7 @@ import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
 import { watchNativeApps } from '../state/nativeApps';
 import { watchNotifications } from '../state/notifications';
+import { watchLink } from '../state/link';
 import { NotificationLayer } from './Notifications';
 import { AgentApprovals } from './AgentApprovals';
 import { UpdateReady } from './UpdateReady';
@@ -99,6 +100,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // System notifications (admins): updates, app problems, disk health, failed backups.
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
+  // NoCap Link, for everyone: the phone's notifications and the shared clipboard.
+  useEffect(() => watchLink(user.username), [user.id, user.username]);
 
   // Installed App Store apps for the home screen and Launchpad (the server
   // lists only the apps this person may use).
@@ -245,11 +248,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       )}
       <ConfirmHost />
       <PowerOverlay />
-      {isAdmin && (
-        <ErrorBoundary title="Notifications" fallback="hidden">
-          <NotificationLayer />
-        </ErrorBoundary>
-      )}
+      <ErrorBoundary title="Notifications" fallback="hidden">
+        <NotificationLayer />
+      </ErrorBoundary>
       <ErrorBoundary title="Agent approvals" fallback="hidden">
         <AgentApprovals />
       </ErrorBoundary>

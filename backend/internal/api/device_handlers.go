@@ -315,6 +315,7 @@ func (s *Server) devicesRevoke(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	s.link().forgetDevice(d.UserID, d.ID)
 	s.audit(r, u.ID, "devices.revoke", d.Name, true, "owner "+d.Username)
 	w.WriteHeader(http.StatusNoContent)
 }
