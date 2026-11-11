@@ -12,6 +12,7 @@ import { folderKey, ungroup, useFolders, type AppFolder } from '../state/folders
 import { FolderView } from './FolderView';
 import { StoreTile, useWiggleEscape } from './StoreAppGrid';
 import { launchStoreApp, shownOnHome, storeKey, useStoreApps } from '../state/storeApps';
+import { isCompact } from '../state/prefs';
 import type { NativeApp } from '../api/nativeApps';
 import { launchNativeApp, nativeKey, useNativeApps } from '../state/nativeApps';
 import { NativeTile } from './NativeTile';
@@ -39,7 +40,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /** Rows × columns that fit the page area, like a phone's home screen. */
 function gridFor(w: number, h: number) {
-  const phone = window.innerWidth < 640;
+  const phone = isCompact();
   const cellW = phone ? 78 : 112;
   const cellH = phone ? 96 : 112;
   return { cols: clamp(Math.floor(w / cellW), 3, 8), rows: clamp(Math.floor(h / cellH), 2, 7) };

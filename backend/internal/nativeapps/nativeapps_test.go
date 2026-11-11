@@ -236,6 +236,10 @@ func newFakeService(t *testing.T, native bool) (*Service, *fakeHost) {
 		return nil
 	}
 	s.Account = func(string) *webapps.RunAs { return nil }
+	s.AppsAccount = func() (*webapps.RunAs, error) {
+		return &webapps.RunAs{Username: AppsUser, UID: 990, GID: 990, Home: "/var/lib/nocap-apps"}, nil
+	}
+	s.Sandbox = func() webapps.SandboxCheck { return webapps.SandboxCheck{OK: true} }
 	s.Jobs.Exec = func(_ context.Context, args []string, out io.Writer) error {
 		h.mu.Lock()
 		h.ran = append(h.ran, args)
@@ -325,7 +329,7 @@ func TestLaunchPrefersServerScreen(t *testing.T) {
 		t.Fatalf("stream launch = %+v %v", got, err)
 	}
 	fs := s.Streams.(*fakeStreams)
-	if sp := fs.specs[0]; !reflect.DeepEqual(sp.Command, StreamArgs("org.gimp.GIMP")) || sp.Title != "GIMP" || sp.RunAs != nil || !strings.Contains(sp.Home, "u1") {
+	if sp := fs.specs[0]; !reflect.DeepEqual(sp.Command, StreamArgs("org.gimp.GIMP")) || sp.Title != "GIMP" || sp.RunAs == nil || sp.RunAs.Username != AppsUser || sp.RunAs.Home != AppsHomeBase+"/u1" || !sp.RunAs.OwnHome {
 		t.Fatalf("spec = %+v", sp)
 	}
 	// The file exists but the session is gone: still streamed.

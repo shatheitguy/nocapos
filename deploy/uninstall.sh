@@ -112,6 +112,16 @@ if [ -f /etc/systemd/system/nocapos-desktop.service ] || id nocap-desktop >/dev/
   systemctl --no-block start getty@tty1.service 2>/dev/null || true
 fi
 
+# Streamed Linux apps: their units, launcher and the login-less nocap-apps
+# account. People's files in /var/lib/nocap-apps/homes are kept.
+systemctl stop 'nocap-app-*.service' 2>/dev/null || true
+rm -f /run/nocapos/app-stream.sh
+if id nocap-apps >/dev/null 2>&1; then
+  shell="$(getent passwd nocap-apps | cut -d: -f7)"
+  case "$shell" in */nologin|*/false) userdel nocap-apps 2>/dev/null || warn "could not delete the nocap-apps user" ;; esac
+  if [ -d /var/lib/nocap-apps ]; then info "Kept the Linux app homes in /var/lib/nocap-apps (delete it if you don't need them)"; fi
+fi
+
 # Docker mode: NoCapOS itself ran as a Compose stack.
 if [ -f "$PREFIX/docker-compose.yml" ] && has docker; then
   info "Stopping the Docker stack"

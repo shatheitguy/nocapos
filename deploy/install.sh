@@ -227,6 +227,7 @@ zfs|zfsutils-linux|-|-|-
 media|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
 backup|restic rclone|restic rclone|restic rclone|restic rclone
 flatpak|flatpak|flatpak|flatpak|flatpak
+linux-desktop|xvfb x11vnc novnc websockify openbox lxpanel pcmanfm lxterminal dbus-x11 dbus-user-session wayvnc|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox lxpanel pcmanfm lxterminal dbus-x11 wayvnc|xorg-server-xvfb x11vnc novnc websockify openbox lxpanel pcmanfm lxterminal wayvnc|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox lxpanel pcmanfm lxterminal dbus-1-x11 wayvnc
 '
 
 pkg_manager() {
@@ -432,6 +433,24 @@ install_host_packages() {
   done <<<"$PKG_TABLE"
   enable_host_services
   setup_flathub
+  setup_apps_account
+}
+
+# Streamed Linux apps run as the person's own Linux account; people without
+# one (or signed in as root) use this unprivileged, login-less account, with
+# a home per person under /var/lib/nocap-apps/homes. Never fatal: NoCapOS
+# makes it on the first launch too.
+APPS_USER=nocap-apps
+setup_apps_account() {
+  if ! id "$APPS_USER" >/dev/null 2>&1; then
+    useradd --system --user-group --create-home --home-dir /var/lib/nocap-apps \
+      --shell /usr/sbin/nologin --comment "NoCapOS apps" "$APPS_USER" >/dev/null 2>&1 ||
+      { warn "Couldn't create the $APPS_USER account; NoCapOS makes it on the first Linux app launch."; return 0; }
+  fi
+  mkdir -p /var/lib/nocap-apps/homes 2>/dev/null || true
+  chown "$APPS_USER:$APPS_USER" /var/lib/nocap-apps /var/lib/nocap-apps/homes 2>/dev/null || true
+  chmod 0755 /var/lib/nocap-apps 2>/dev/null || true
+  chmod 0711 /var/lib/nocap-apps/homes 2>/dev/null || true
 }
 
 # Linux apps: the App Store installs desktop apps from Flathub, system-wide.
