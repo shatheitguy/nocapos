@@ -129,5 +129,22 @@
   "upd.reload": "Reload page",
   "upd.ready": "NoCapOS was updated",
   "upd.readyReload": "Reload",
-  "upd.later": "Later"
+  "upd.later": "Later",
+  "link.noteTitle": "{app}: {title}",
+  "link.from": "From {device}",
+  "link.phoneTitle": "From your phone",
+  "link.clipTitle": "Shared clipboard",
+  "link.sendClip": "Send clipboard to phone",
+  "link.pastePlaceholder": "Paste or type the text to send to your phone",
+  "link.sendTo": "Send to",
+  "link.allPhones": "All my phones",
+  "link.cancel": "Cancel",
+  "link.send": "Send",
+  "link.sent": "Sent to your phone",
+  "link.sendFailed": "Couldn't send to your phone",
+  "link.copied": "Copied to clipboard",
+  "link.copyFailed": "The browser blocked copying",
+  "link.copy": "Copy",
+  "link.pasteFrom": "Paste from {device}",
+  "link.sentFromHere": "Sent from NoCap OS"
 }
