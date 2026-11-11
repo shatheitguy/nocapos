@@ -320,3 +320,14 @@
 .link-banner .nb-body { -webkit-line-clamp: 2; }
 .link-banner-copy { flex: none !important; height: 30px; font-size: 13px; }
 .nb.windows .link-banner-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 22px; }
+
+/* Sign-in alerts: a security heads-up with "Not you? Sign it out". */
+.nb.signin-banner { flex-wrap: wrap; align-items: flex-start; }
+.signin-banner .nb-text { flex: 1 1 0; min-width: 0; }
+.signin-banner .nb-body { -webkit-line-clamp: 3; }
+.signin-banner .signin-out { flex: 1 0 100% !important; height: 30px; }
+.signin-card { cursor: default; }
+.signin-actions { display: flex; gap: 6px; margin-top: 8px; }
+.signin-actions .nb-btn { flex: none; height: 26px; font-size: 12.5px; padding: 0 10px; }
+.nb-btn.signin-out { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.nb-btn.signin-out:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 14%, transparent); }

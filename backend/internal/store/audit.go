@@ -37,3 +37,11 @@ func (s *Store) PurgeAudit(ctx context.Context, before time.Time) (int64, error)
 	}
 	return res.RowsAffected()
 }
+
+// CountAudit counts a person's audit entries for one action.
+func (s *Store) CountAudit(ctx context.Context, userID, action string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = ?`, userID, action).Scan(&n)
+	return n, err
+}

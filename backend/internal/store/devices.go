@@ -20,16 +20,17 @@ type Device struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time // zero = never
 	RevokedAt  time.Time // zero = active
+	LastIP     string    // the address it last called from
 }
 
-const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at`
+const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at, d.last_ip`
 
 func scanDevice(row scanner) (*Device, error) {
 	var (
 		d                      Device
 		created, seen, revoked int64
 	)
-	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked); err != nil {
+	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked, &d.LastIP); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -128,6 +129,12 @@ func (s *Store) TouchDevice(ctx context.Context, id string, at time.Time, batter
 	}
 	args = append(args, id)
 	_, err := s.db.ExecContext(ctx, q+` WHERE id = ? AND revoked_at = 0`, args...)
+	return err
+}
+
+// SetDeviceIP records the address a device last called from.
+func (s *Store) SetDeviceIP(ctx context.Context, id, ip string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE devices SET last_ip = ? WHERE id = ? AND revoked_at = 0`, ip, id)
 	return err
 }
 

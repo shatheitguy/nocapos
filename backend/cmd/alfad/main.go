@@ -475,6 +475,9 @@ func purgeTokens(ctx context.Context, st *store.Store, log *slog.Logger) {
 			} else if n > 0 {
 				log.Debug("purged old audit entries", "count", n)
 			}
+			if _, err := st.PurgeSessionInfo(ctx, time.Now().Add(-store.SessionInfoRetention), time.Now()); err != nil {
+				log.Error("purge old session details", "err", err)
+			}
 		}
 	}
 }

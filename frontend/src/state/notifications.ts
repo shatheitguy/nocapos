@@ -16,7 +16,7 @@ export type NoticeLevel = 'info' | 'success' | 'warning' | 'error';
 export interface Notice {
   id: number;
   key: string;
-  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'device' | 'agent' | 'test';
+  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'device' | 'agent' | 'security' | 'test';
   level: NoticeLevel;
   title: string;
   body?: string;
