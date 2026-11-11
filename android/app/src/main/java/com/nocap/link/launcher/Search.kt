@@ -126,7 +126,7 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
     }
 
     Column(
-        Modifier.fillMaxSize().background(Color(0xF007080B)).clickable(remember { MutableInteractionSource() }, null) {}
+        Modifier.fillMaxSize().background(NoCap.Sheet).clickable(remember { MutableInteractionSource() }, null) {}
             .statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 14.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {

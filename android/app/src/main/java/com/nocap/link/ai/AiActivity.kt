@@ -260,7 +260,7 @@ class AiActivity : ComponentActivity() {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
                     Box(
                         Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(16.dp))
-                            .background(if (mine) NoCap.Red.copy(alpha = 0.85f) else Color(0xCC15171C))
+                            .background(if (mine) NoCap.Red.copy(alpha = 0.85f) else NoCap.Card)
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                     ) {
                         val text = when {
@@ -277,7 +277,7 @@ class AiActivity : ComponentActivity() {
 
     @Composable
     private fun ChatList() {
-        Column(Modifier.fillMaxSize().background(Color(0xF007080B)).padding(12.dp)) {
+        Column(Modifier.fillMaxSize().background(NoCap.Sheet).padding(12.dp)) {
             Label(t("Your chats", "Conversations"))
             Spacer(Modifier.height(8.dp))
             if (conversations.isEmpty()) Text(t("No chats yet.", "No conversations yet."), style = MaterialTheme.typography.bodyMedium)
