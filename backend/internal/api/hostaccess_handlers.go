@@ -151,7 +151,7 @@ func (s *Server) remoteAccessSet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.hostAccessState(r))
 }
 
-// desktopSet switches NoCap Desktop: {"mode": "full"|"kiosk"|"off"}, or the
+// desktopSet switches NoCap Desktop: {"mode": "full"|"off"}, or the
 // older {"enabled": true|false}.
 func (s *Server) desktopSet(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -164,7 +164,7 @@ func (s *Server) desktopSet(w http.ResponseWriter, r *http.Request) {
 	var err error
 	what := req.Mode
 	switch {
-	case req.Mode == hostaccess.ModeFull || req.Mode == hostaccess.ModeKiosk || req.Mode == hostaccess.ModeOff:
+	case req.Mode == hostaccess.ModeFull || req.Mode == hostaccess.ModeOff:
 		err = s.desktop.SetMode(r.Context(), req.Mode)
 	case req.Mode == "" && req.Enabled != nil:
 		what = "on"
@@ -173,7 +173,7 @@ func (s *Server) desktopSet(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.desktop.Set(r.Context(), *req.Enabled)
 	default:
-		writeError(w, http.StatusBadRequest, "bad_request", "say mode: full, kiosk or off")
+		writeError(w, http.StatusBadRequest, "bad_request", "say mode: full or off")
 		return
 	}
 	s.audit(r, userFrom(r.Context()).ID, "system.desktop", what, err == nil, errText(err))

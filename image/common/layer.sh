@@ -45,9 +45,8 @@ if [ ! -f /etc/nocapos/image.conf ]; then
 # Install Docker (for the App Store) on the first boot: yes | no
 NOCAP_DOCKER=yes
 # Extra options for the bundled installer on the first boot. "--desktop" sets
-# up NoCap Desktop, the full desktop on the screen; use "--no-desktop" for a
-# headless server or "--desktop=kiosk" for NoCapOS full screen only (see:
-# bash /usr/lib/nocapos/bundle/install.sh --help).
+# up NoCap Desktop, the native desktop on the screen; use "--no-desktop" for
+# a headless server (see: bash /usr/lib/nocapos/bundle/install.sh --help).
 NOCAP_FIRSTBOOT_ARGS="--desktop"
 EOF
 fi

@@ -1,12 +1,13 @@
-// Settings → General → This Screen & Access (admins): NoCap Desktop on the
-// server's own monitor, and whether other devices may open NoCapOS at all.
+// Settings → General → This Screen & Access (admins): NoCap Desktop, the
+// native desktop on the server's own monitor (on or off), and whether other
+// devices may open NoCapOS at all.
 import { useEffect, useState } from 'react';
-import { hostAccessApi, type DesktopMode, type HostAccess } from '../api/hostaccess';
+import { hostAccessApi, type HostAccess } from '../api/hostaccess';
 import { useT } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { openApp } from './meta';
-import { Choice, Row, Section as Group, Toggle } from './Personalize';
+import { Row, Section as Group, Toggle } from './Personalize';
 
 export function HostAccessPage() {
   const t = useT();
@@ -18,21 +19,19 @@ export function HostAccessPage() {
     void hostAccessApi.get().then((r) => (r.ok ? setSt(r.data) : setError(r.error ?? 'Couldn’t load these settings')));
   }, []);
 
-  const modeName = (m: DesktopMode) => t(`nd.mode.${m}`);
-
-  const setMode = async (mode: DesktopMode) => {
-    if (!st || mode === st.desktop.mode) return;
-    // Leaving the full desktop signs out whoever is using it.
-    if (st.desktop.mode === 'full' && st.desktop.session_user) {
+  const setDesktop = async (on: boolean) => {
+    if (!st || on === (st.desktop.mode === 'full')) return;
+    // Turning it off signs out whoever is using it.
+    if (!on && st.desktop.session_user) {
       const ok = await confirmDialog({ title: t('nd.confirmTitle'), message: t('nd.confirmBody'), confirmLabel: t('nd.confirmGo'), danger: true });
       if (!ok) return;
     }
     setBusy('desktop');
-    const r = await hostAccessApi.setDesktopMode(mode);
+    const r = await hostAccessApi.setDesktopMode(on ? 'full' : 'off');
     setBusy(null);
     if (!r.ok) return toast('error', t('nd.switchFailed'), r.error);
     setSt(r.data);
-    toast('success', t('nd.switched', { mode: modeName(mode) }));
+    toast('success', t(on ? 'nd.switched.on' : 'nd.switched.off'));
   };
 
   const setAutologin = async (on: boolean) => {
@@ -73,7 +72,6 @@ export function HostAccessPage() {
   if (!st) return <p className="muted">Loading…</p>;
 
   const d = st.desktop;
-  const modes = d.modes ?? [];
   const status = d.mode === 'off'
     ? t('nd.status.off')
     : !d.active
@@ -99,11 +97,8 @@ export function HostAccessPage() {
           </Row>
         ) : (
           <>
-            <Row label={t('nd.mode')} hint={t(`nd.${d.mode}.hint`)} stacked>
-              <fieldset className="nd-modes" disabled={busy === 'desktop'}>
-                <Choice value={d.mode} options={modes.map((m) => ({ id: m, label: modeName(m) }))} onChange={(m) => void setMode(m)} />
-              </fieldset>
-            </Row>
+            <Toggle label={t('nd.mode')} hint={t(d.mode === 'full' ? 'nd.full.hint' : 'nd.off.hint')}
+              checked={d.mode === 'full'} disabled={busy === 'desktop'} onChange={(on) => void setDesktop(on)} />
             <Row label={t('nd.status')} hint={d.display ? undefined : t('nd.noScreen')}>
               <span className="settings-value">
                 <span className={`status-dot ${d.active ? 'on' : 'off'}`} /> {status}
