@@ -74,9 +74,9 @@ run in the ISO's live session. Progress: `journalctl -u nocapos-firstboot -f`.
 put into the image at build time (`desktop-packages.sh`, using the
 installer's own list from `deploy/desktop/lib.sh`), and the first boot runs
 the installer with `--desktop` (`NOCAP_FIRSTBOOT_ARGS`), which adds the
-NoCapOS look (sign-in screen, wallpaper, dock, NoCap Hub) and switches it
-on. Set `NOCAP_FIRSTBOOT_ARGS="--no-desktop"` for a headless server, or
-`--desktop=kiosk` for NoCapOS full screen only. Every machine gets the same
+NoCapOS look (sign-in screen, wallpaper, dock of native apps) and switches
+it on. Set `NOCAP_FIRSTBOOT_ARGS="--no-desktop"` for a headless server.
+Every machine gets the same
 full desktop; ones with less than 2 GB of memory run it with compressed
 swap in memory, no file indexing or calendar store, and no animations.
 

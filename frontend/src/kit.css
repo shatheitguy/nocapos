@@ -23,5 +23,3 @@ button.urow:active:not(:disabled) { transform: none; }
 .ulist > .urow:last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
 
 /* Settings -> This screen: the NoCap Desktop mode switch (disabled while it switches). */
-.nd-modes { border: 0; padding: 0; margin: 0; min-width: 0; }
-.nd-modes:disabled { opacity: 0.6; }

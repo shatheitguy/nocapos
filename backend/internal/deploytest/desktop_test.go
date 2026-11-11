@@ -107,9 +107,9 @@ func TestDesktopPackages(t *testing.T) {
 	// Never the full GNOME meta packages (games, office, ...), never
 	// NetworkManager (it would take over a server's network), never the
 	// distribution's branding packages.
-	banned := regexp.MustCompile(`(^|[|?])(gnome|gnome-core|task-gnome-desktop|ubuntu-desktop|gnome-games|aisleriot|gnome-software|network-manager|NetworkManager|desktop-base|ubuntu-wallpapers|yaru-theme-gtk|libreoffice\S*|evolution|totem|rhythmbox)($|\|)`)
+	banned := regexp.MustCompile(`(^|[|?])(gnome|gnome-core|task-gnome-desktop|ubuntu-desktop|gnome-games|aisleriot|network-manager|NetworkManager|desktop-base|ubuntu-wallpapers|yaru-theme-gtk|libreoffice\S*|evolution|totem|rhythmbox)($|\|)`)
 	required := map[string][]string{
-		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "pipewire", "dconf-cli", "libsecret-tools"},
+		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-software", "?gnome-software-plugin-flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "pipewire", "dconf-cli", "libsecret-tools"},
 		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
 		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
 	}
@@ -399,12 +399,13 @@ func keyfile(t *testing.T, name, s string) map[string]map[string]string {
 
 func TestSettingsFiles(t *testing.T) {
 	const uuid = "nocapos-brand@shatheitguy.github.io"
-	exts := []string{"org.gnome.Console.desktop", uuid, "dash-to-dock@micxgx.gmail.com", "appindicatorsupport@rgcjonas.gmail.com"}
+	favs := "['org.gnome.Nautilus.desktop', 'firefox-esr.desktop', 'org.gnome.Console.desktop', 'org.gnome.Settings.desktop']"
+	exts := []string{favs, uuid, "dash-to-dock@micxgx.gmail.com", "appindicatorsupport@rgcjonas.gmail.com"}
 	gs := keyfile(t, "gschema", lib(t, "", "render_gschema_override", exts...))
 	if gs["org.gnome.shell"]["enabled-extensions"] != "['"+uuid+"', 'dash-to-dock@micxgx.gmail.com', 'appindicatorsupport@rgcjonas.gmail.com']" {
 		t.Errorf("extensions = %s", gs["org.gnome.shell"]["enabled-extensions"])
 	}
-	if fav := gs["org.gnome.shell"]["favorite-apps"]; !strings.HasPrefix(fav, "['nocap-hub.desktop', ") || !strings.Contains(fav, "'org.gnome.Console.desktop'") {
+	if fav := gs["org.gnome.shell"]["favorite-apps"]; fav != favs {
 		t.Errorf("dock = %s", fav)
 	}
 	if gs["org.gnome.desktop.interface"]["color-scheme"] != "'prefer-dark'" || !strings.Contains(gs["org.gnome.desktop.background"]["picture-uri"], "/usr/share/backgrounds/nocapos/") {
@@ -422,7 +423,7 @@ func TestSettingsFiles(t *testing.T) {
 	}
 
 	// Older Ubuntu: its dock, no app indicators, the older terminal.
-	db := keyfile(t, "dconf", lib(t, "", "render_dconf_local", "org.gnome.Terminal.desktop", uuid, "ubuntu-dock@ubuntu.com"))
+	db := keyfile(t, "dconf", lib(t, "", "render_dconf_local", "['org.gnome.Terminal.desktop', 'org.gnome.Settings.desktop']", uuid, "ubuntu-dock@ubuntu.com"))
 	if db["org/gnome/desktop/interface"]["accent-color"] != "'red'" {
 		t.Error("NoCap red accent missing")
 	}
@@ -438,8 +439,11 @@ func TestSettingsFiles(t *testing.T) {
 	if db["org/gnome/software"]["allow-updates"] != "false" {
 		t.Error("updates come from NoCapOS")
 	}
-	if !strings.Contains(db["org/gnome/desktop/app-folders/folders/NoCapOS"]["apps"], "nocap-appstore.desktop") {
-		t.Error("NoCapOS app folder")
+	// No web apps on the desktop: nothing anywhere opens NoCapOS's web UI.
+	for _, out := range []string{lib(t, "", "render_dconf_local", "['org.gnome.Nautilus.desktop']", uuid), lib(t, "", "render_gschema_override", "['org.gnome.Nautilus.desktop']", uuid)} {
+		if strings.Contains(out, "nocap-") || strings.Contains(out, "127.0.0.1") {
+			t.Errorf("web app in the desktop's settings:\n%s", out)
+		}
 	}
 	locks := strings.Split(strings.TrimSpace(lib(t, "", "render_dconf_locks")), "\n")
 	for _, l := range locks[1:] {
@@ -489,5 +493,71 @@ func TestGDMHelpers(t *testing.T) {
 	got := lib(t, "[daemon]\n#WaylandEnable=false\n\n[security]\n", "ini_set", "daemon", "WaylandEnable", "false")
 	if got != "[daemon]\nWaylandEnable=false\n\n[security]\n" {
 		t.Errorf("ini_set: %q", got)
+	}
+}
+
+// The dock: native apps only, whichever of each the machine has.
+func TestDockApps(t *testing.T) {
+	r := root(t, map[string]string{
+		"usr/share/applications/org.gnome.Nautilus.desktop":   "",
+		"usr/share/applications/org.gnome.Settings.desktop":   "",
+		"usr/share/applications/org.gnome.Software.desktop":   "",
+		"usr/share/applications/org.gnome.Terminal.desktop":   "",
+		"usr/share/applications/org.gnome.TextEditor.desktop": "",
+		"usr/share/applications/chromium.desktop":             "",
+		"usr/share/applications/firefox-esr.desktop":          "",
+	})
+	want := "org.gnome.Nautilus.desktop\nfirefox-esr.desktop\norg.gnome.Software.desktop\norg.gnome.Terminal.desktop\norg.gnome.TextEditor.desktop\norg.gnome.Settings.desktop\n"
+	if got := lib(t, "", "dock_apps", r); got != want {
+		t.Errorf("dock_apps:\n%s", got)
+	}
+	// Raspberry Pi OS: its own Chromium, Console, gedit, an older Settings.
+	pi := root(t, map[string]string{
+		"usr/share/applications/chromium-browser.desktop":     "",
+		"usr/share/applications/org.gnome.Console.desktop":    "",
+		"usr/share/applications/org.gnome.gedit.desktop":      "",
+		"usr/share/applications/gnome-control-center.desktop": "",
+	})
+	want = "org.gnome.Nautilus.desktop\nchromium-browser.desktop\norg.gnome.Console.desktop\norg.gnome.gedit.desktop\ngnome-control-center.desktop\n"
+	if got := lib(t, "", "dock_apps", pi); got != want {
+		t.Errorf("dock_apps on a Pi:\n%s", got)
+	}
+}
+
+// The screen's session: NoCapOS's, never a distribution's own desktop.
+func TestNoCapSession(t *testing.T) {
+	for _, kind := range []string{"wayland", "x11"} {
+		f := lib(t, "", "render_session_desktop", kind)
+		if !strings.Contains(f, "\nExec=gnome-session\n") || !strings.Contains(f, "\nDesktopNames=GNOME\n") || !strings.HasPrefix(f, "[Desktop Entry]\n") {
+			t.Errorf("%s session:\n%s", kind, f)
+		}
+	}
+	r := root(t, map[string]string{
+		"usr/share/wayland-sessions/LXDE-pi-labwc.desktop": "",
+		"usr/share/wayland-sessions/nocapos.desktop":       "",
+		"usr/share/wayland-sessions/gnome.desktop":         "",
+		"usr/share/xsessions/LXDE-pi-x.desktop":            "",
+		"usr/share/xsessions/nocapos.desktop":              "",
+	})
+	if got := lib(t, "", "other_sessions", r); got != "/usr/share/wayland-sessions/LXDE-pi-labwc.desktop\n/usr/share/wayland-sessions/gnome.desktop\n/usr/share/xsessions/LXDE-pi-x.desktop\n" {
+		t.Errorf("other_sessions:\n%s", got)
+	}
+	// An account lightdm left on the Pi's desktop moves to NoCapOS's.
+	pi := "[User]\nSession=LXDE-pi-labwc\nXSession=LXDE-pi-labwc\nIcon=/home/pi/.face\nSystemAccount=false\n"
+	if _, err := libErr(t, pi, "session_file_wants_change"); err != nil {
+		t.Error("the Pi desktop's session should change")
+	}
+	got := lib(t, pi, "session_file_with", "User")
+	if got != "[User]\nSession=nocapos\nXSession=nocapos\nIcon=/home/pi/.face\nSystemAccount=false\n" {
+		t.Errorf("session_file_with:\n%s", got)
+	}
+	if _, err := libErr(t, got, "session_file_wants_change"); err == nil {
+		t.Error("already NoCapOS's: nothing to change")
+	}
+	if _, err := libErr(t, "[User]\nSystemAccount=false\n", "session_file_wants_change"); err == nil {
+		t.Error("no session saved: nothing to change")
+	}
+	if got := lib(t, "[User]\nIcon=x\n", "session_file_with", "User"); got != "[User]\nIcon=x\nSession=nocapos\nXSession=nocapos\n" {
+		t.Errorf("session_file_with (none saved):\n%s", got)
 	}
 }

@@ -14,6 +14,8 @@ export interface UpdateResult {
   finished_at: string;
   rolled_back: boolean;
   unchanged: boolean;
+  /** Finished, but the server needs a restart for all of it to apply. */
+  restart_needed?: boolean;
   error?: string;
 }
 

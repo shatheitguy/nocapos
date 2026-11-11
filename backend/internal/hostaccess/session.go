@@ -48,7 +48,7 @@ func ParseLoginctlProps(s string) map[string]string {
 
 // SessionFromProps turns a session's properties into a Session when it's a
 // person's own graphical session (not the sign-in screen, not remote, not
-// NoCapOS full screen, never root).
+// the web full screen account of earlier versions, never root).
 func SessionFromProps(id string, p map[string]string) (Session, bool) {
 	s := Session{ID: id, User: p["Name"], Type: p["Type"], Display: p["Display"]}
 	uid, err := strconv.Atoi(p["User"])
@@ -252,7 +252,7 @@ func waylandSocket(dir string) string {
 }
 
 // envMarker starts desktop.env when alfad wrote it (for the full desktop),
-// so it never removes the kiosk's own file.
+// so it never removes a file it didn't write.
 const envMarker = "# NoCap Desktop session (written by NoCapOS)"
 
 // SessionEnvFile renders desktop.env for a full-desktop session.
@@ -272,7 +272,7 @@ func SessionEnvFile(s Session, runtimeDir, wayland string) string {
 
 // SyncSessionEnv keeps desktop.env pointing at whoever is signed in on the
 // full desktop, so the App Store's Linux apps (and approved AI agents) open
-// on this screen. The kiosk writes its own file; that one is left alone.
+// on this screen. A file alfad didn't write is left alone.
 func (d *Desktop) SyncSessionEnv(ctx context.Context, envFile string) {
 	if !d.Native || !d.conf().Full {
 		return
@@ -280,7 +280,7 @@ func (d *Desktop) SyncSessionEnv(ctx context.Context, envFile string) {
 	cur, _ := d.readFile(envFile)
 	ours := strings.HasPrefix(string(cur), envMarker)
 	if len(cur) > 0 && !ours {
-		return // the kiosk's
+		return // not alfad's
 	}
 	s, ok := d.ActiveSession(ctx)
 	if !ok {
