@@ -45,7 +45,20 @@ fi
 # Settings, extension, app entries, artwork.
 rm -f /usr/share/glib-2.0/schemas/90_nocapos.gschema.override
 has glib-compile-schemas && glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1
-rm -f /etc/dconf/db/local.d/00-nocapos /etc/dconf/db/local.d/locks/nocapos /etc/dconf/db/gdm.d/90-nocapos
+rm -f /etc/dconf/db/local.d/00-nocapos /etc/dconf/db/local.d/10-nocapos-lowmem /etc/dconf/db/local.d/locks/nocapos /etc/dconf/db/gdm.d/90-nocapos
+# The NoCap red accent: out of every account's gtk.css and /etc/skel.
+if [ -x "$LIB/nocapos-accent" ]; then
+  rm -f /etc/xdg/autostart/nocapos-accent.desktop
+  HOME=/etc/skel XDG_CONFIG_HOME=/etc/skel/.config "$LIB/nocapos-accent" --remove || true
+  getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/ {print $1 ":" $6}' |
+    while IFS=: read -r u home; do
+      [ -d "$home" ] || continue
+      runuser -u "$u" -- env HOME="$home" "$LIB/nocapos-accent" --remove >/dev/null 2>&1 || true
+    done
+fi
+# The remote screen follower's leftovers.
+systemctl stop nocapos-screen.service >/dev/null 2>&1 || true
+rm -rf /run/nocapos/screen
 rm -rf "/usr/share/gnome-shell/extensions/$UUID"
 rm -f /usr/local/share/applications/nocap-hub.desktop /usr/local/share/applications/nocap-appstore.desktop \
   /usr/local/share/applications/nocap-settings.desktop /usr/local/share/applications/nocap-files.desktop
@@ -91,6 +104,14 @@ if [ -f "$BK/edits" ]; then
       grub-cfg) rm -f /etc/default/grub.d/nocapos.cfg; grub=1 ;;
       divert) if has dpkg-divert; then dpkg-divert --local --rename --remove "$a" >/dev/null 2>&1 || true; fi ;;
       os-release) [ -x "$LIB/os-release-sync" ] && "$LIB/os-release-sync" --undo ;;
+      usermask) [ "$(readlink "/etc/systemd/user/$a" 2>/dev/null)" = /dev/null ] && rm -f "/etc/systemd/user/$a" ;;
+      autostart-hidden) grep -qs 'Hidden by NoCapOS' "$a" && rm -f "$a" ;;
+      swapfile)
+        swapoff "$a" >/dev/null 2>&1 || true
+        rm -f "$a"
+        [ -f /etc/fstab ] && grep -v "^$a " /etc/fstab >/etc/fstab.nocap.tmp && cat /etc/fstab.nocap.tmp >/etc/fstab
+        rm -f /etc/fstab.nocap.tmp
+        ;;
     esac
   done <"$BK/edits"
   if [ "$grub" -eq 1 ]; then

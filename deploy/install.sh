@@ -22,8 +22,7 @@
 #                       the App Store's Linux apps; sign in with this machine's Linux accounts).
 #                       On by default when a monitor is plugged in; with no monitor nothing
 #                       desktop-related is installed unless you pass this.
-#   --desktop=kiosk     NoCap Desktop as NoCapOS full screen only (a small compositor + browser,
-#                       for small or 32-bit boards)
+#   --desktop=kiosk     NoCap Desktop as NoCapOS full screen only (a small compositor + browser).
 #   --no-desktop        don't set up NoCap Desktop (and turn it off if it was on)
 #   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
 #   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
