@@ -1,4 +1,5 @@
 import { api, getAccessToken, refresh, type ApiResult } from './client';
+import type { PkgHealth } from '../apps/PackagesRepair';
 
 export interface PkgStatus {
   supported: boolean;
@@ -31,6 +32,10 @@ export interface PkgUpdate {
   available: string;
   arch?: string;
   held: boolean;
+  security?: boolean;
+  kernel?: boolean;
+  /** "kernel": updated together with the kernel as one row. */
+  group?: string;
 }
 
 export interface PkgJob {
@@ -45,7 +50,7 @@ export interface PkgJob {
   error?: string;
 }
 
-export type PkgAction = 'refresh' | 'upgrade-all' | 'upgrade' | 'install' | 'remove' | 'hold' | 'unhold' | 'autoremove' | 'clean';
+export type PkgAction = 'refresh' | 'upgrade-all' | 'upgrade' | 'install' | 'remove' | 'hold' | 'unhold' | 'autoremove' | 'clean' | 'repair';
 
 export const pkgApi = {
   status: () => api<{ status: PkgStatus; features: PkgFeature[]; jobs: PkgJob[] }>('/api/v1/packages/status'),
@@ -53,8 +58,14 @@ export const pkgApi = {
     api<{ packages: Pkg[]; total: number; installed: number; size: number }>(
       `/api/v1/packages?q=${encodeURIComponent(q)}&offset=${offset}&limit=${limit}${held ? '&held=1' : ''}`,
     ),
-  updates: () => api<{ updates: PkgUpdate[] }>('/api/v1/packages/updates'),
+  updates: () => api<{ updates: PkgUpdate[]; health?: PkgHealth }>('/api/v1/packages/updates'),
   act: (action: PkgAction, name?: string, confirm?: string) => api<{ job: PkgJob }>('/api/v1/packages/actions', { method: 'POST', body: { action, name, confirm } }),
+  /** Repair, update all, or update packages together, with the removals confirmed in the preview. */
+  change: (action: 'repair' | 'upgrade-all' | 'upgrade', names: string[], allowRemove: string[]) =>
+    api<{ job: PkgJob }>('/api/v1/packages/actions', {
+      method: 'POST',
+      body: { action, names: names.length ? names : undefined, allow_remove: allowRemove.length ? allowRemove : undefined },
+    }),
   installFeature: (id: string) => api<{ job: PkgJob }>(`/api/v1/packages/features/${encodeURIComponent(id)}/install`, { method: 'POST' }),
   job: (id: string) => api<PkgJob>(`/api/v1/packages/jobs/${encodeURIComponent(id)}`),
   upload: async (file: File, onProgress: (pct: number) => void): Promise<ApiResult<{ job: PkgJob }>> => {
