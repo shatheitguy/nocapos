@@ -1,0 +1,250 @@
+/* Phone layout. Everything here is scoped to :root[data-compact], which
+   applyPrefs() sets on phone-sized screens (narrow, or short and not wide
+   like a phone held sideways), so desktop and tablet layouts are untouched.
+   Loaded last so it wins over the theme files. */
+
+/* ---------- page: real visible height, no sideways scroll ---------- */
+@supports (height: 100dvh) {
+  :root[data-compact], :root[data-compact] body, :root[data-compact] #root { height: 100dvh; }
+}
+:root[data-compact] body { overflow: hidden; overscroll-behavior: none; }
+
+/* Text fields at 16px so phones don't zoom the page when one is focused. */
+:root[data-compact] :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea) {
+  font-size: 16px !important;
+}
+/* Touch screens of any size: same reason (tablets keep the desktop layout). */
+@media (pointer: coarse) {
+  :is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']), select, textarea) { font-size: max(16px, 1em); }
+}
+
+/* ---------- windows: full-screen sheets ---------- */
+/* Fill the window layer whatever size the window manager computed, so the
+   sheet follows the browser bars and the on-screen keyboard. */
+:root[data-compact] .window-layer {
+  top: env(safe-area-inset-top, 0px);
+  left: env(safe-area-inset-left, 0px);
+  right: env(safe-area-inset-right, 0px);
+}
+:root[data-compact] .window {
+  left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important;
+  border-radius: 0; border: 0; box-shadow: none; animation-name: win-sheet-in;
+}
+@keyframes win-sheet-in { from { opacity: 0; transform: translateY(18px); } }
+:root[data-compact] .resize { display: none; }
+:root[data-compact] .titlebar { height: 48px; padding: 0 4px 0 14px; touch-action: manipulation; }
+:root[data-compact] .titlebar .title { font-size: 15px; }
+:root[data-compact] .win-buttons { gap: 4px; }
+:root[data-compact] .win-buttons button,
+:root[data-compact][data-title-buttons='left'] .win-buttons button {
+  width: 40px !important; height: 40px !important; border-radius: 50%;
+}
+:root[data-compact][data-title-buttons='left'] .win-buttons button { background: color-mix(in srgb, var(--text) 9%, transparent) !important; color: var(--muted); box-shadow: none; filter: none !important; }
+:root[data-compact][data-title-buttons='left'] .win-buttons button svg { width: 14px; height: 14px; }
+:root[data-compact][data-title-buttons='left'] .win-buttons { order: 0; }
+:root[data-compact][data-title-buttons='left'] .win-buttons button.close { order: 1; }
+:root[data-compact][data-title-buttons='left'] .titlebar > .app-icon { display: inline-flex; }
+:root[data-compact][data-title-buttons='left'] .titlebar .title { text-align: left; padding-right: 0; }
+:root[data-compact] .window-body { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* ---------- dock: a bottom bar ---------- */
+/* Phones use one compact dock size whatever the desktop dock size is. */
+:root[data-compact] { --dock-thick: 62px !important; --res-bottom: 62px !important; }
+:root[data-compact] .shelf {
+  height: calc(var(--dock-thick, 76px) + env(safe-area-inset-bottom, 0px));
+  padding: 0 max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-left, 0px));
+  gap: 8px;
+}
+:root[data-compact] .window-layer { bottom: calc(var(--res-bottom, 76px) + env(safe-area-inset-bottom, 0px)); }
+:root[data-compact] .dock {
+  position: static; transform: none; flex: 0 1 auto; min-width: 0; max-width: none;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+  padding: 4px 6px; gap: 2px; align-items: center; touch-action: pan-x;
+}
+:root[data-compact] .dock::-webkit-scrollbar { display: none; }
+:root[data-compact] .dock-item { flex: none; min-width: 42px; min-height: 42px; display: grid; place-items: center; padding: 3px; }
+:root[data-compact] .dock-item .app-icon,
+:root[data-compact] .launchpad-icon { width: 36px !important; height: 36px !important; }
+:root[data-compact] .dock-item:hover:not(:disabled) { transform: none; }
+:root[data-compact] .dock-item:hover:not(:disabled) .app-icon { transform: none; }
+:root[data-compact] .dock-sep { height: 28px; margin: 0 3px; flex: none; }
+/* No drag-to-trash on a touch screen: the trash lives in Files. */
+:root[data-compact] .dock-item.trash, :root[data-compact] .dock-sep:has(+ .dock-item.trash), :root[data-compact] .dock > .dock-sep:last-child { display: none; }
+:root[data-compact] .tray { flex: none; padding: 0 4px; gap: 0; margin-left: auto; }
+:root[data-compact] .tray-btn { min-width: 40px; height: 44px; padding: 0 6px; justify-content: center; }
+:root[data-compact] .tray svg { display: inline-block; }
+:root[data-compact] .tray-status svg + svg { display: none; }
+:root[data-compact] .tray-status .status-dot { display: none; }
+:root[data-compact] .tray-clock { white-space: nowrap; font-size: 13px; }
+:root[data-compact] .tray-date { display: none; }
+@media (max-width: 419.98px) {
+  :root[data-compact] .tray-clock { display: none !important; }
+}
+
+/* Tablets and small desktop windows: a centred dock would slide under the
+   tray, so it sits beside it and scrolls when it runs out of room. */
+@media (max-width: 1099.98px) {
+  :root[data-dock='bottom']:not([data-compact]) .dock {
+    position: static; transform: none; flex: 0 1 auto; min-width: 0; margin-inline: auto;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  }
+  :root[data-dock='bottom']:not([data-compact]) .dock::-webkit-scrollbar { display: none; }
+  :root[data-dock='bottom']:not([data-compact]) .dock > * { flex: none; }
+  :root[data-dock='bottom']:not([data-compact]) .shelf { gap: 8px; }
+  .tray-clock { white-space: nowrap; }
+}
+
+/* ---------- panels from the dock: fit the screen ---------- */
+:root[data-compact] .popover {
+  max-height: calc(100% - var(--res-bottom, 76px) - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px) - 20px);
+  overflow-y: auto; overscroll-behavior: contain;
+}
+:root[data-compact] .quick-settings,
+:root[data-compact] .quick-settings.control-center {
+  left: 8px; right: 8px; width: auto; max-width: none;
+  bottom: calc(var(--res-bottom, 76px) + env(safe-area-inset-bottom, 0px) + 8px);
+}
+:root[data-compact] .cc-tile-more { width: 40px; }
+:root[data-compact] .cc-slider-icon { width: 40px; height: 40px; }
+:root[data-compact] .acct-item { min-height: 44px; }
+:root[data-compact] .context-menu { max-width: calc(100vw - 16px); max-height: calc(100% - 16px); overflow-y: auto; }
+:root[data-compact] .context-menu button { min-height: 42px; }
+
+/* notification centre */
+:root[data-compact] .nc.mac, :root[data-compact] .nc.windows {
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  bottom: calc(var(--res-bottom, 76px) + env(safe-area-inset-bottom, 0px) + 8px);
+}
+:root[data-compact] .nb-stack.mac, :root[data-compact] .nb-stack.windows { top: calc(env(safe-area-inset-top, 0px) + 8px); }
+:root[data-compact] .nb-tool { min-width: 40px; min-height: 40px; }
+:root[data-compact] .nc-clear { min-height: 36px; }
+:root[data-compact] .nb-x { min-width: 32px; min-height: 32px; }
+
+/* toasts: full width along the top */
+:root[data-compact] .toasts { top: calc(env(safe-area-inset-top, 0px) + 8px); left: 8px; right: 8px; width: auto; }
+
+/* ---------- dialogs and overlays: fit the visible viewport ---------- */
+:root[data-compact] .dialog-backdrop { padding: 12px; align-items: end; overflow: auto; }
+:root[data-compact] .dialog {
+  width: 100% !important; max-width: none; max-height: calc(100% - 8px); overflow: auto;
+  border-radius: 18px; padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+:root[data-compact] .dialog.fn-modal { padding: 0; }
+:root[data-compact] .dialog-actions { flex-wrap: wrap; }
+:root[data-compact] .dialog-actions button { min-height: 42px; flex: 1 1 auto; }
+:root[data-compact] .upd-overlay { padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px)); }
+:root[data-compact] .upd-card { max-height: 100%; padding: 24px 18px 20px; }
+:root[data-compact] .upd-steps { flex-wrap: wrap; justify-content: center; }
+:root[data-compact] .update-ready { top: calc(env(safe-area-inset-top, 0px) + 8px); max-width: calc(100vw - 16px); }
+:root[data-compact] .update-ready button { height: 36px; }
+
+/* ---------- touch targets inside apps ---------- */
+:root[data-compact] .window button.icon-btn { min-width: 40px; min-height: 40px; }
+:root[data-compact] .window button.small { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+:root[data-compact] .window .pill { min-height: 36px; }
+:root[data-compact] .sidebar button { min-height: 44px; }
+:root[data-compact] .fs-add { min-width: 36px; min-height: 36px; }
+:root[data-compact] .files.fx .sidebar button.fs-item { min-height: 42px; }
+
+/* Files: toolbar fits, drawer sidebar gets a backdrop-free full height */
+:root[data-compact] .fx-pill, :root[data-compact] .fx-crumb { min-height: 36px; }
+
+/* Assistant: chat list is a drawer under the top bar */
+:root[data-compact] .assistant { position: relative; }
+:root[data-compact] .ai-sidebar { position: absolute; top: 57px; bottom: 0; left: 0; height: auto; width: min(280px, 85%); z-index: 5; box-shadow: var(--shadow-win); }
+:root[data-compact] .ai-topbar { padding: 8px; gap: 6px; }
+:root[data-compact] .ai-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+:root[data-compact] .ai-tabs button { flex: none; min-height: 36px; padding: 6px 10px; }
+:root[data-compact] .ai-topbar > .spacer, :root[data-compact] .ai-provider-pill { display: none; }
+:root[data-compact] .ai-conv .icon-btn { min-width: 40px; min-height: 40px; }
+:root[data-compact] .ai-compose { padding-bottom: 10px; }
+:root[data-compact] .ai-send { min-width: 44px; min-height: 44px; }
+
+/* Terminal: tools on their own scrollable row */
+:root[data-compact] .terminal-bar { flex-wrap: wrap; row-gap: 6px; padding: 6px 10px; }
+:root[data-compact] .terminal-bar > .spacer { display: none; }
+:root[data-compact] .term-badge { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+:root[data-compact] .terminal-bar > .muted.small { flex: 1 1 100%; order: 3; }
+:root[data-compact] .term-tools { flex: 1 1 100%; order: 4; overflow-x: auto; scrollbar-width: none; }
+:root[data-compact] .term-tools button { flex: none; min-height: 36px; padding: 4px 10px; }
+:root[data-compact] .term-size { flex: none; }
+:root[data-compact] .term-history { position: absolute; right: 0; top: 0; bottom: 0; width: min(300px, 88%); z-index: 3; box-shadow: var(--shadow-win); }
+:root[data-compact] .terminal-body { position: relative; }
+
+/* App Store: lighter padding, editor scrolls with the page */
+:root[data-compact] .as { padding: 12px 14px 24px; gap: 16px; }
+:root[data-compact] .as-family button, :root[data-compact] .as-tabs button { min-height: 38px; }
+:root[data-compact] .as-gallery-nav { width: 40px; height: 40px; }
+:root[data-compact] .as-link { min-height: 36px; }
+:root[data-compact] .as-editor { min-height: 0; overflow: visible; flex: none; }
+:root[data-compact] .as-editor .ce { height: auto; }
+:root[data-compact] .as-editor .ce-body { overflow: visible; padding: 12px 12px 16px; }
+:root[data-compact] .as-editor .ce-foot { position: sticky; bottom: -24px; z-index: 2; background: rgba(16, 18, 24, 0.86) !important; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); padding-bottom: calc(10px + 24px); margin-bottom: -24px; }
+:root[data-compact] .ce-grid { grid-template-columns: 1fr !important; }
+:root[data-compact] .sf-cap-input { width: 100%; }
+
+/* Photos: chip row without a scrollbar */
+:root[data-compact] .pg-side { scrollbar-width: none; }
+:root[data-compact] .pg-side::-webkit-scrollbar { display: none; }
+:root[data-compact] .pg-nav { min-height: 40px; }
+
+/* Settings */
+:root[data-compact] .set-back { min-width: 40px; min-height: 40px; }
+:root[data-compact] .set2.compact .set2-cat { min-height: 44px; }
+:root[data-compact] .set-notes { overflow-x: auto; }
+
+/* Terminal-ish logs and tables never push the window sideways */
+:root[data-compact] .window table { max-width: 100%; }
+:root[data-compact] .window pre { max-width: 100%; overflow-x: auto; }
+
+/* Remote Desktop / Virtual Desk headers wrap */
+:root[data-compact] .rdp-head, :root[data-compact] .vd-head { flex-wrap: wrap; }
+
+/* ---------- sign-in, lock and setup ---------- */
+:root[data-compact] .auth-screen { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); overflow-y: auto; }
+:root[data-compact] .mac-pill { min-height: 44px; }
+:root[data-compact] .mac-eye, :root[data-compact] .mac-go { width: 36px; height: 36px; flex: none; }
+:root[data-compact] .mac-link { min-height: 36px; padding: 8px 12px; }
+/* Short screens (sideways, or the keyboard is up): clock beside the sign-in,
+   buttons in the flow so nothing overlaps the password field. */
+@media (max-height: 479.98px) {
+  :root[data-compact] .auth-screen.mac {
+    flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center;
+    gap: 12px 48px; padding: max(12px, env(safe-area-inset-top, 0px)) 16px 12px;
+  }
+  :root[data-compact] .mac-time { font-size: 56px; }
+  :root[data-compact] .mac-date { font-size: 15px; }
+  :root[data-compact] .mac-login { margin: 0; padding-bottom: 0; gap: 8px; }
+  :root[data-compact] .mac-login .avatar.xxl { width: 56px; height: 56px; font-size: 22px; }
+  :root[data-compact] .mac-actions { position: static; transform: none; flex-basis: 100%; justify-content: center; gap: 24px; }
+  :root[data-compact] .mac-action span { width: 40px; height: 40px; }
+}
+:root[data-compact] .welcome-skip { min-height: 36px; }
+
+/* ---------- home screen: widgets stack (two columns sideways) ---------- */
+:root[data-compact] .desktop-surface {
+  flex-direction: column; gap: 16px;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px));
+  overscroll-behavior: contain;
+}
+:root[data-compact] .desktop-surface > .clock-widget { flex: none; color: #fff; padding: 6px 4px 0; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35); }
+:root[data-compact] .clock-widget .clock-time { font-size: 48px; }
+:root[data-compact] .widget-stack { width: 100%; }
+@media (orientation: landscape) {
+  :root[data-compact] .widget-stack { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; }
+}
+
+/* Launchpad: tighter cells so the names fit (also when held sideways) */
+:root[data-compact] .launcher-app { padding: 6px 2px; gap: 6px; font-size: 12px; }
+:root[data-compact] .launcher-app > span:last-child { flex: none; }
+@media (max-height: 479.98px) {
+  :root[data-compact] .launcher-app { padding: 2px; gap: 4px; }
+  :root[data-compact] .launcher-app :is(.app-icon, .folder-icon) { width: 44px !important; height: 44px !important; border-radius: 11px !important; }
+  :root[data-compact] .launcher-app .app-icon > :is(svg, img) { width: 100%; height: 100%; }
+}
+
+/* ---------- more touch targets ---------- */
+:root[data-compact] .window .segmented button,
+:root[data-compact] .window .ct-seg button { min-height: 38px; min-width: 40px; }
+:root[data-compact] .ct-filter, :root[data-compact] .ce-add { min-height: 36px; }
+:root[data-compact] .accent-swatch { width: 34px; height: 34px; }
