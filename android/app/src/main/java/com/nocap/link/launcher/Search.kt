@@ -64,15 +64,21 @@ import kotlinx.coroutines.withContext
 /** A setting you can jump to from search: the launcher's own, or Android's. */
 private class SettingHit(val title: String, val words: String, val go: (MainActivity) -> Unit)
 
+private val openMine: (MainActivity) -> Unit = { it.layer = Layer.SETTINGS }
+
 private fun settingHits(): List<SettingHit> {
     fun sys(action: String): (MainActivity) -> Unit = { a -> runCatching { a.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
-    val mine: (MainActivity) -> Unit = { it.layer = Layer.SETTINGS }
+    val mine = openMine
     return listOf(
         SettingHit(t("Wall Aesthetic", "Wallpaper"), "wallpaper background aesthetic picture theme", mine),
         SettingHit(t("The Lingo", "Language"), "language lingo gen z standard words", mine),
         SettingHit(t("Roster style", "App drawer style"), "drawer launchpad roster grid list categories", mine),
-        SettingHit(t("Icons & grid", "Icons and grid"), "icon size grid columns rows labels theme monochrome tinted", mine),
-        SettingHit(t("Gestures", "Gestures"), "gesture swipe double tap lock", mine),
+        SettingHit(t("Icons & grid", "Icons and grid"), "icon size grid columns rows labels theme monochrome tinted shape", mine),
+        SettingHit(t("Gestures", "Gestures"), "gesture swipe double tap lock pinch", mine),
+        SettingHit(t("Theme & accent", "Theme and accent color"), "theme dark light accent color font", mine),
+        SettingHit(t("Dock", "Dock"), "dock floating glass", mine),
+        SettingHit(t("NoCap Link sync", "NoCap Link sync"), "sync clipboard notifications forward", mine),
+        SettingHit(t("Status bar & rotation", "Status bar and rotation"), "status navigation bar rotation haptics", mine),
         SettingHit(t("Notification dots", "Notification dots"), "dots badges notifications", mine),
         SettingHit(t("Hidden apps", "Hidden apps"), "hide hidden unhide", mine),
         SettingHit(t("Backup & restore", "Backup and restore"), "backup restore layout export import", mine),
@@ -159,7 +165,7 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
             if (settings.isNotEmpty()) item {
                 Section(t("Settings", "Settings")) {
                     settings.take(6).forEach { s ->
-                        Text(s.title, Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { a.layer = Layer.NONE; s.go(a) }.padding(vertical = 9.dp, horizontal = 4.dp), style = MaterialTheme.typography.titleSmall)
+                        Text(s.title, Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { a.layer = Layer.NONE; if (s.go === openMine) a.settingsQuery = s.words.substringBefore(' '); s.go(a) }.padding(vertical = 9.dp, horizontal = 4.dp), style = MaterialTheme.typography.titleSmall)
                     }
                 }
             }

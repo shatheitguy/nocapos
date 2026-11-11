@@ -21,10 +21,26 @@ import androidx.core.app.NotificationManagerCompat
  * Nothing is stored or sent anywhere — it only counts.
  */
 class DotsService : NotificationListenerService() {
-    override fun onListenerConnected() = recount()
-    override fun onNotificationPosted(sbn: StatusBarNotification?) = recount()
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) = recount()
-    override fun onListenerDisconnected() { counts.clear() }
+    override fun onListenerConnected() {
+        instance = this
+        recount()
+        com.nocap.link.nocap.Media.start(this)
+    }
+
+    override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        recount()
+        if (sbn != null) runCatching { com.nocap.link.sync.Sync.posted(this, sbn) }
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        recount()
+        if (sbn != null) runCatching { com.nocap.link.sync.Sync.removed(this, sbn) }
+    }
+
+    override fun onListenerDisconnected() {
+        counts.clear()
+        if (instance === this) instance = null
+    }
 
     private fun recount() {
         val now = runCatching { activeNotifications }.getOrNull() ?: return
@@ -36,6 +52,9 @@ class DotsService : NotificationListenerService() {
     companion object {
         /** package → number of notifications, read by the home screen. */
         val counts = mutableStateMapOf<String, Int>()
+
+        @SuppressLint("StaticFieldLeak")
+        @Volatile var instance: DotsService? = null
 
         fun allowed(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 
@@ -70,6 +89,13 @@ object Phone {
     fun expandNotifications(ctx: Context): Boolean = runCatching {
         val sb = ctx.getSystemService("statusbar")
         Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel").invoke(sb)
+    }.isSuccess
+
+    /** Pulls down quick settings. */
+    @SuppressLint("WrongConstant")
+    fun expandQuickSettings(ctx: Context): Boolean = runCatching {
+        val sb = ctx.getSystemService("statusbar")
+        Class.forName("android.app.StatusBarManager").getMethod("expandSettingsPanel").invoke(sb)
     }.isSuccess
 
     fun canLock(ctx: Context): Boolean =

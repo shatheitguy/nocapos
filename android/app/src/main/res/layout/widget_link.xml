@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_glass"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="6dp">
+
+    <LinearLayout android:id="@+id/w_b1" style="@style/WidgetAction">
+        <TextView style="@style/WidgetGlyph" android:text="▣" />
+        <TextView android:id="@+id/w_a1" style="@style/WidgetActionLabel" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/w_b2" style="@style/WidgetAction">
+        <TextView style="@style/WidgetGlyph" android:text="AI" />
+        <TextView android:id="@+id/w_a2" style="@style/WidgetActionLabel" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/w_b3" style="@style/WidgetAction">
+        <TextView style="@style/WidgetGlyph" android:text="↑" />
+        <TextView android:id="@+id/w_a3" style="@style/WidgetActionLabel" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/w_b4" style="@style/WidgetAction">
+        <TextView style="@style/WidgetGlyph" android:text="▤" />
+        <TextView android:id="@+id/w_a4" style="@style/WidgetActionLabel" />
+    </LinearLayout>
+</LinearLayout>

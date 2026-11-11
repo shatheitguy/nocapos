@@ -12,7 +12,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.nocap.link.sync.Sync
+import com.nocap.link.ui.NoCap
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,6 +101,64 @@ class MainActivity : ComponentActivity() {
     /** Grid cell size in dp, measured by the home screen (for widget spans). */
     var cellW = 80f
     var cellH = 100f
+    /** The NoCap widget whose edit sheet is open. */
+    var editing by mutableStateOf<NoCapItem?>(null)
+    /** The weather widget whose forecast sheet is open. */
+    var weatherFor by mutableStateOf<NoCapItem?>(null)
+    /** The app whose name/icon is being customized. */
+    var customizing by mutableStateOf<PhoneApp?>(null)
+    /** Opens Settings already searching for this. */
+    var settingsQuery by mutableStateOf("")
+    /** Bumped when Home is pressed on the home screen / the App Library is asked for / we come back. */
+    var homeTick by mutableIntStateOf(0)
+    var libraryTick by mutableIntStateOf(0)
+    var resumeTick by mutableIntStateOf(0)
+    /** Server CPU % and network (bytes/s) history for sparklines, newest last. */
+    val cpuHist = mutableStateListOf<Float>()
+    val netHist = mutableStateListOf<Float>()
+    private var permCallback: ((Boolean) -> Unit)? = null
+    private var photoFor: String? = null
+    private var iconFor: String? = null
+
+    private val askPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        resumeTick++
+        permCallback?.invoke(ok)
+        permCallback = null
+    }
+
+    private val photoPicker = registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        val id = photoFor ?: return@registerForActivityResult
+        photoFor = null
+        if (uris.isEmpty()) return@registerForActivityResult
+        busy = t("Framing your pics…", "Adding photos…")
+        lifecycleScope.launch {
+            val names = withContext(Dispatchers.IO) { uris.mapNotNull { com.nocap.link.nocap.Photos.save(this@MainActivity, it) } }
+            busy = null
+            val cur = Home.find(id)?.second as? NoCapItem ?: return@launch
+            val all = (cur.opt("photos").split('|').filter { it.isNotBlank() } + names).takeLast(20)
+            Home.replace(cur.with("photos" to all.joinToString("|")))
+            prunePhotos()
+        }
+    }
+
+    private val iconPicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val key = iconFor ?: return@registerForActivityResult
+        iconFor = null
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val name = withContext(Dispatchers.IO) { CustomIcons.save(this@MainActivity, key, uri) }
+            if (name == null) { toast = t("Couldn't read that pic.", "Couldn't open that picture."); return@launch }
+            Opt.customIcons.put(key, name)
+            withContext(Dispatchers.IO) { CustomIcons.prune(this@MainActivity) }
+            customizing = null
+            reloadApps()
+        }
+    }
+
+    private val voice = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val text = r.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+        if (r.resultCode == RESULT_OK && !text.isNullOrBlank()) { searchStart = text; layer = Layer.SEARCH }
+    }
     private var refreshJob: Job? = null
     private var liveJob: Job? = null
     private var pendingWidget: Int = -1
@@ -135,6 +200,31 @@ class MainActivity : ComponentActivity() {
         if (!vault.introDone) screen = Screen.Intro
         handle(intent)
         setContent {
+            // Rotation, and the status bar on the home screen, from Settings.
+            val rot = Opt.rotation.v
+            LaunchedEffect(rot) {
+                requestedOrientation = when (rot) {
+                    Rotation.AUTO -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    Rotation.PORTRAIT -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    Rotation.LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
+            }
+            val hideBar = Opt.statusBar.v == BarStyle.HIDDEN && screen == Screen.Home && layer == Layer.NONE
+            val lightBars = NoCap.light && (layer != Layer.NONE || screen != Screen.Home)
+            LaunchedEffect(hideBar, lightBars) {
+                val c = WindowCompat.getInsetsController(window, window.decorView)
+                c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                if (hideBar) c.hide(WindowInsetsCompat.Type.statusBars()) else c.show(WindowInsetsCompat.Type.statusBars())
+                c.isAppearanceLightStatusBars = lightBars
+                c.isAppearanceLightNavigationBars = lightBars
+            }
+            // "All apps on home pages": new apps land on the last page.
+            val apps = phoneApps
+            LaunchedEffect(Opt.drawer.v, apps, Opt.hidden.v) {
+                if (Opt.drawer.v == DrawerStyle.HOME_PAGES && Home.loaded && apps.isNotEmpty()) Home.placeAll(apps.filter { it.key !in Opt.hidden.v }.map { it.key })
+            }
+            // Icon layers depend on the icon style: reload when it changes.
+            LaunchedEffect(Opt.iconTheme.v, Opt.iconShape.v, Opt.nocapGlyph.v) { if (phoneApps.isNotEmpty()) reloadApps() }
             NoCapTheme {
                 when (val s = screen) {
                     Screen.Home -> HomeScreen(this)
@@ -168,28 +258,95 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (!handle(intent) && intent.hasCategory(Intent.CATEGORY_HOME)) {
-            // Home pressed while already home: close whatever's open.
+            // Home pressed while already home: close whatever's open, or run the Home gesture.
+            val clean = screen == Screen.Home && layer == Layer.NONE && editing == null && weatherFor == null && customizing == null
             if (screen != Screen.Intro) screen = Screen.Home
             layer = Layer.NONE
+            editing = null; weatherFor = null; customizing = null
+            if (clean) homeTick++
         }
     }
 
     override fun onResume() {
         super.onResume()
+        resumeTick++
+        reloadApps()
+        refresh()
+        com.nocap.link.nocap.Media.start(this)
+        Sync.start(this)
+        liveJob?.cancel()
+        liveJob = lifecycleScope.launch {
+            while (isActive) {
+                val fast = Home.layout.pages.any { p -> p.items.any { it is NoCapItem && (it.kind == NoCapKinds.STATUS || it.kind == NoCapKinds.SERVER) } }
+                delay(if (fast) 10_000 else 30_000)
+                refreshLive()
+            }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Android only lets the app in front read the clipboard: this is that moment.
+        if (hasFocus && Opt.clipSync.v && vault.link != null) Sync.sendClipboard(this, force = false)
+    }
+
+    /** Reloads the app list (after installs, custom icons/names, or a new icon style). */
+    fun reloadApps() {
         lifecycleScope.launch {
             val apps = withContext(Dispatchers.IO) { PhoneApps.load(this@MainActivity) }
             phoneApps = apps
             Home.load(this@MainActivity) { firstRun(apps) }
             Home.prune(apps.map { it.key }.toSet())
+            prunePhotos()
         }
-        refresh()
-        liveJob?.cancel()
-        liveJob = lifecycleScope.launch {
-            while (isActive) {
-                delay(30_000)
-                refreshLive()
-            }
-        }
+    }
+
+    private fun prunePhotos() {
+        if (!Home.loaded) return
+        val keep = Home.layout.pages.flatMap { p -> p.items.filterIsInstance<NoCapItem>().flatMap { it.opt("photos").split('|') } }.filter { it.isNotBlank() }.toSet()
+        lifecycleScope.launch(Dispatchers.IO) { com.nocap.link.nocap.Photos.prune(this@MainActivity, keep) }
+    }
+
+    fun askPermission(perm: String, done: (Boolean) -> Unit) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED) { done(true); return }
+        permCallback = done
+        askPerm.launch(perm)
+    }
+
+    fun pickPhotos(item: NoCapItem) {
+        photoFor = item.id
+        photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    fun pickIcon(app: PhoneApp) {
+        iconFor = app.key
+        iconPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    fun voiceSearch() {
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, t("Spill it…", "Speak now"))
+        runCatching { voice.launch(i) }.onFailure { toast = t("No voice input on this phone.", "Voice input isn't available.") }
+    }
+
+    /** Starts a timer in the phone's clock app (rings even when asleep). */
+    fun clockTimer(seconds: Int, title: String) {
+        val i = Intent(android.provider.AlarmClock.ACTION_SET_TIMER)
+            .putExtra(android.provider.AlarmClock.EXTRA_LENGTH, seconds.coerceAtLeast(1))
+            .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, title)
+            .putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+        runCatching { startActivity(i) }.onFailure { toast = t("No clock app took the timer.", "No clock app could start the timer.") }
+    }
+
+    fun openSystem(action: String) {
+        runCatching { startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+    }
+
+    /** The drawer, or (with all apps on home pages) the App Library page. */
+    fun openDrawer() {
+        if (Opt.drawer.v == DrawerStyle.HOME_PAGES) libraryTick++ else layer = Layer.DRAWER
     }
 
     override fun onPause() {
@@ -202,7 +359,7 @@ class MainActivity : ComponentActivity() {
         val first = Page(
             listOf(
                 NoCapItem(newId(), Cell(0, 0, 4, 2), NoCapKinds.CLOCK),
-                NoCapItem(newId(), Cell(0, 2, 4, 2), NoCapKinds.SERVER),
+                NoCapItem(newId(), Cell(0, 2, 4, 2), NoCapKinds.STATUS),
                 NoCapItem(newId(), Cell(0, 4, 4, 1), NoCapKinds.AI),
             ),
         )
@@ -214,6 +371,8 @@ class MainActivity : ComponentActivity() {
         when (intent?.action) {
             ACTION_HUB -> { screen = Screen.Home; layer = Layer.HUB; return true }
             ACTION_SEARCH -> { screen = Screen.Home; layer = Layer.SEARCH; return true }
+            ACTION_SEND_FILE -> { screen = Screen.Home; layer = Layer.NONE; window.decorView.post { pickToSend() }; return true }
+            ACTION_SETTINGS -> { screen = Screen.Home; layer = Layer.SETTINGS; return true }
         }
         val uri: Uri = intent?.data ?: return false
         if (uri.scheme != "nocap" || uri.host != "pair") return false
@@ -290,8 +449,14 @@ class MainActivity : ComponentActivity() {
         val s = server as? ServerState.Online ?: return
         val api = api() ?: return
         try {
-            summary = withContext(Dispatchers.IO) { api.summary() }
+            val sum = withContext(Dispatchers.IO) { api.summary() }
+            summary = sum
             outdated = null
+            if (sum.ready) {
+                cpuHist.add(sum.cpuPercent.toFloat()); while (cpuHist.size > 40) cpuHist.removeAt(0)
+                sum.net?.let { (rx, tx) -> netHist.add((rx + tx).toFloat()); while (netHist.size > 40) netHist.removeAt(0) }
+            }
+            com.nocap.link.widget.AppWidgets.saveServer(this, sum, s.me.server.name.ifBlank { link?.serverName ?: "" })
             recentFiles = withContext(Dispatchers.IO) { runCatching { api.recent(6) }.getOrDefault(recentFiles) }
         } catch (e: ServerTooOld) {
             outdated = s.me.server.version.ifBlank { "?" }
@@ -431,6 +596,7 @@ class MainActivity : ComponentActivity() {
                     t("Your desktop uses your own pic, and that lives in your browser. Pick one here instead.", "Your desktop uses a custom picture stored in the browser; choose one here instead.")
                 }
                 if (p.lingo == "genz" || p.lingo == "standard") Prefs.setGenz(p.lingo == "genz")
+                if (Regex("^#[0-9a-fA-F]{6}$").matches(p.accent)) Opt.accent.set(p.accent)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -441,7 +607,7 @@ class MainActivity : ComponentActivity() {
 
     // ---------- backup ----------
 
-    fun backupJson(): JSONObject = JSONObject().put("app", "nocap-os").put("layout", Home.toJson(portable = true)).put("settings", JSONObject(Prefs.export()))
+    fun backupJson(): JSONObject = JSONObject().put("app", "nocap-os").put("layout", Home.toJson(portable = true)).put("settings", Prefs.export())
 
     fun restore(o: JSONObject) {
         val l = o.optJSONObject("layout") ?: error("no layout")
@@ -540,10 +706,15 @@ class MainActivity : ComponentActivity() {
         pendingWidget = -1
     }
 
-    fun addNoCapWidget(kind: String, page: Int) {
-        val (w, h) = NoCapKinds.size(kind)
-        Home.add({ c -> NoCapItem(newId(), c, kind) }, w.coerceAtMost(Prefs.columns), h, page)
+    fun addNoCapWidget(kind: String, page: Int, w: Int = NoCapKinds.size(kind).first, h: Int = NoCapKinds.size(kind).second) {
+        if (Opt.lockLayout.v) { toast = com.nocap.link.launcher.lockedMsg(); return }
+        val id = newId()
+        val p = Home.add({ c -> NoCapItem(id, c, kind) }, w.coerceAtMost(Prefs.columns), h.coerceAtMost(Prefs.rows), page)
         layer = Layer.NONE
+        if (p != page) toast = t("No room there, so it went to page ${p + 1}.", "Added to page ${p + 1}.")
+        // Widgets that need a choice first open their edit sheet.
+        if (kind in setOf(NoCapKinds.APPS, NoCapKinds.WEATHER, NoCapKinds.NOTES, NoCapKinds.TIMER)) editing = Home.find(id)?.second as? NoCapItem
+        if (kind == NoCapKinds.PHOTO) (Home.find(id)?.second as? NoCapItem)?.let(::pickPhotos)
     }
 
     /** A friendly line for anything that went wrong talking to the server. */
@@ -555,6 +726,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         const val ACTION_HUB = "com.nocap.link.HUB"
         const val ACTION_SEARCH = "com.nocap.link.SEARCH"
+        const val ACTION_SEND_FILE = "com.nocap.link.SEND_FILE"
+        const val ACTION_SETTINGS = "com.nocap.link.SETTINGS"
         private const val REQ_CONFIGURE = 4242
 
         fun needsUpdate(version: String?): String {

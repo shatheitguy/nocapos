@@ -19,6 +19,7 @@ class NoCapApp : Application() {
         Prefs.init(this)
         Notices.channel(this)
         if (Vault.get(this).link != null) HeartbeatWorker.schedule(this)
+        com.nocap.link.sync.Sync.start(this)
     }
 }
 
