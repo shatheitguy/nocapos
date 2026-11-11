@@ -19,6 +19,7 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   assistant: app(() => import('./assistant/Assistant').then((m) => m.Assistant)),
   browser: app(() => import('./Browser').then((m) => m.Browser)),
   nativeapp: app(() => import('./NativeAppWindow').then((m) => m.NativeAppWindow)),
+  linuxdesktop: app(() => import('./LinuxDesktop').then((m) => m.LinuxDesktop)),
   backups: app(() => import('./Backups').then((m) => m.Backups)),
   remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
   files: app(() => import('./Files').then((m) => m.Files)),

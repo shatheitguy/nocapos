@@ -3,6 +3,7 @@ import { getUser } from '../../api/client';
 import { aiApi, sendMessage, type Conversation, type Message, type Provider } from '../../api/ai';
 import { Icon } from '../../components/Icon';
 import { fmtAgo } from '../../lib/format';
+import { isCompact } from '../../state/prefs';
 import { toast } from '../../state/toasts';
 import { renderMarkdown } from './markdown';
 import { Models } from './Models';
@@ -23,7 +24,8 @@ export function Assistant() {
   const [draft, setDraft] = useState('');
   const [streaming, setStreaming] = useState('');
   const [busy, setBusy] = useState(false);
-  const [sidebar, setSidebar] = useState(true);
+  // Phones start with the chat list tucked away; it opens as a drawer.
+  const [sidebar, setSidebar] = useState(() => !isCompact());
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +56,7 @@ export function Assistant() {
   }, [messages, streaming]);
 
   const openConversation = async (id: string) => {
+    if (isCompact()) setSidebar(false);
     setActiveId(id);
     setTab('chat');
     const r = await aiApi.conversation(id);
@@ -65,6 +68,7 @@ export function Assistant() {
   };
 
   const newChat = () => {
+    if (isCompact()) setSidebar(false);
     setActiveId(null);
     setMessages([]);
     setStreaming('');

@@ -111,6 +111,15 @@ export const APPS: Record<string, AppMeta> = {
     description: 'A Linux app installed on this server, streamed into a window',
     hidden: true,
   },
+  linuxdesktop: {
+    id: 'linuxdesktop',
+    title: 'Linux Desktop',
+    icon: 'desktop',
+    tile: ['#5c7cfa', '#2b3a8f'],
+    size: { w: 1240, h: 800 },
+    description: 'A full Linux desktop on this server, in a window',
+    single: true,
+  },
   remotedesktop: {
     id: 'remotedesktop',
     title: 'Remote Desktop',

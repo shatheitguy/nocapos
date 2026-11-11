@@ -84,6 +84,19 @@ var Features = []Feature{
 		ID: "flatpak", Title: "Linux apps (Flatpak, apps from Flathub)", Bins: []string{"flatpak"},
 		Packages: Names{"apt": {"flatpak"}, "dnf": {"flatpak"}, "pacman": {"flatpak"}, "zypper": {"flatpak"}},
 	},
+	{
+		// Linux apps streamed into windows, the Linux Desktop app and
+		// viewing the server's own screen: a virtual display, a window
+		// manager, a panel with an app menu, a file manager, a terminal,
+		// a session bus and the VNC/noVNC stream.
+		ID: "linux-desktop", Title: "Full Linux desktop and app streams", Bins: []string{"Xvfb", "openbox", "x11vnc", "websockify"},
+		Packages: Names{
+			"apt":    {"xvfb", "x11vnc", "novnc", "websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-x11", "dbus-user-session", "wayvnc"},
+			"dnf":    {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-x11", "wayvnc"},
+			"pacman": {"xorg-server-xvfb", "x11vnc", "novnc", "websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "wayvnc"},
+			"zypper": {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-1-x11", "wayvnc"},
+		},
+	},
 }
 
 // FeatureState is a feature as the Packages app shows it.

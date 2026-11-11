@@ -1,7 +1,7 @@
-import { tr } from '../i18n';
+import { tr, useT } from '../i18n';
 import { WinClose } from '../components/WinClose';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { pkgApi, type Pkg, type PkgAction, type PkgFeature, type PkgJob, type PkgStatus, type PkgUpdate } from '../api/packages';
+import { pkgApi, type Pkg, type PkgAction, type PkgCheck, type PkgFeature, type PkgJob, type PkgStatus, type PkgUpdate } from '../api/packages';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
 import { toast } from '../state/toasts';
@@ -34,6 +34,7 @@ const ACTION_LABEL: Record<string, string> = {
 export function Packages() {
   const [status, setStatus] = useState<PkgStatus | null>(null);
   const [features, setFeatures] = useState<PkgFeature[]>([]);
+  const [checks, setChecks] = useState<PkgCheck[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('overview');
   const [job, setJob] = useState<PkgJob | null>(null);
@@ -46,6 +47,7 @@ export function Packages() {
     setError(null);
     setStatus(r.data.status);
     setFeatures(r.data.features);
+    setChecks(r.data.checks ?? []);
     const running = r.data.jobs.find((j) => j.running);
     if (running) follow(running.id);
   }, []);
@@ -135,7 +137,7 @@ export function Packages() {
       </nav>
       <main className="app-content pk-main">
         {job && <JobPanel job={job} onClose={() => !job.running && setJob(null)} />}
-        {view === 'overview' && <Overview status={status} features={features} busy={busy} start={start} />}
+        {view === 'overview' && <Overview status={status} features={features} checks={checks} busy={busy} start={start} />}
         {view === 'installed' && <Installed key={reloadKey} status={status} busy={busy} start={start} />}
         {view === 'updates' && <Updates key={reloadKey} busy={busy} start={start} />}
       </main>
@@ -169,7 +171,8 @@ function JobPanel({ job, onClose }: { job: PkgJob; onClose: () => void }) {
   );
 }
 
-function Overview({ status, features, busy, start }: { status: PkgStatus; features: PkgFeature[]; busy: boolean; start: Start }) {
+function Overview({ status, features, checks, busy, start }: { status: PkgStatus; features: PkgFeature[]; checks: PkgCheck[]; busy: boolean; start: Start }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -218,6 +221,33 @@ function Overview({ status, features, busy, start }: { status: PkgStatus; featur
           </div>
         ))}
       </div>
+
+      {checks.length > 0 && (
+        <>
+          <span className="section-label">{t('pk.checks')}</span>
+          <div className="ucard ulist">
+            {checks.map((c) => (
+              <div key={c.id} className="urow">
+                <span className="urow-icon">
+                  <Icon name={c.ok ? 'check' : 'wrench'} size={16} />
+                </span>
+                <span className="urow-text">
+                  <span className="urow-title">{c.id === 'app-sandbox' ? t('pk.checkSandbox') : c.id}</span>
+                  <span className="urow-desc">
+                    {c.ok ? (
+                      t('pk.checkOk')
+                    ) : (
+                      <>
+                        {c.problem} {t('pk.checkFix')} <code>{c.fix}</code>
+                      </>
+                    )}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <span className="section-label">Maintenance</span>
       <div className="ucard ulist">
