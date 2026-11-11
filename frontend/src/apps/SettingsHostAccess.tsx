@@ -80,7 +80,9 @@ export function HostAccessPage() {
       ? t('nd.status.stopped')
       : d.session_user
         ? t('nd.status.signedIn', { user: d.session_user })
-        : t('nd.status.running');
+        : d.sign_in_screen
+          ? t('nd.status.signInScreen')
+          : t('nd.status.running');
 
   const remoteHint = !st.remote.supported
     ? (st.remote.reason ?? 'Not available here.')

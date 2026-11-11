@@ -72,7 +72,10 @@ xwayland
 flatpak
 ?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock
 ?gnome-shell-extension-appindicator
-?gnome-remote-desktop
+gnome-remote-desktop
+pipewire
+wireplumber|pipewire-media-session
+dbus-user-session
 ?libglib2.0-dev-bin
 ?guacd
 ?libguac-client-rdp0|libguac-client-rdp
@@ -80,7 +83,8 @@ flatpak
 ?xserver-xorg-core
 ?xserver-xorg-input-libinput
 ?wayvnc
-?x11vnc
+x11vnc
+?systemd-zram-generator|zram-tools
 EOF
       ;;
     fedora)
@@ -108,12 +112,15 @@ xorg-x11-server-Xwayland
 flatpak
 ?gnome-shell-extension-dash-to-dock
 ?gnome-shell-extension-appindicator
-?gnome-remote-desktop
+gnome-remote-desktop
+pipewire
+wireplumber
 ?guacd
 ?libguac-client-rdp
 ?libguac-client-vnc
 ?wayvnc
-?x11vnc
+x11vnc
+?zram-generator
 EOF
       ;;
     arch)
@@ -140,28 +147,209 @@ cantarell-fonts
 xorg-xwayland
 flatpak
 ?gnome-shell-extension-appindicator
-?gnome-remote-desktop
+gnome-remote-desktop
+pipewire
+wireplumber
 ?wayvnc
-?x11vnc
+x11vnc
+?zram-generator
 EOF
       ;;
   esac
 }
 
-# desktop_feasible ARCH MEM_KB: prints why the full desktop isn't a good
-# idea on this hardware (and returns 1), or nothing (returns 0).
-desktop_feasible() {
-  case "$1" in
-    amd64 | arm64) ;;
-    *) echo "the full desktop needs a 64-bit system (this one is $1)"; return 1 ;;
-  esac
-  case "$2" in '' | *[!0-9]*) return 0 ;; esac
-  if [ "$2" -lt 1800000 ]; then
-    echo "the full desktop needs at least 2 GB of memory (this machine has $(($2 / 1024)) MB)"
-    return 1
-  fi
-  return 0
+# desktop_select FAMILY: picks the desktop's packages. stdin lists the
+# package names this distribution has (one per line). Prints the picks, one
+# per line, "!LINE" for each required line it has none of, and "?LINE" for
+# each optional line it has none of.
+desktop_select() {
+  awk '
+    FILENAME == ARGV[1] { gsub(/[ \t\r]/, ""); if ($0 != "") have[$0] = 1; next }
+    $0 == "" { next }
+    {
+      line = $0; opt = 0
+      if (substr(line, 1, 1) == "?") { opt = 1; line = substr(line, 2) }
+      m = split(line, alt, "|"); pick = ""
+      for (i = 1; i <= m; i++) if (alt[i] in have) { pick = alt[i]; break }
+      if (pick != "") print pick
+      else if (opt) print "?" line
+      else print "!" line
+    }
+  ' /dev/stdin <(desktop_packages "$1")
 }
+
+# ---------------------------------------------------------------- small machines
+# NoCap Desktop is the same full desktop on every machine: 64-bit or 32-bit
+# (armhf), 1 GB or 64 GB. Small machines are tuned instead of getting a
+# different desktop: compressed swap in memory (zram), a swap file when
+# there's little memory and no swap, the heavy background services (file
+# indexing, the calendar and contacts store, the software updater) off, and
+# no animations.
+
+# LOW_MEM_KB: below this (2 GB; boards sold as 2 GB report a little less)
+# the desktop runs in its low-memory profile.
+LOW_MEM_KB=2097152
+
+# memory_profile MEM_KB: low or normal (unknown = normal).
+memory_profile() {
+  case "$1" in '' | *[!0-9]*) echo normal; return ;; esac
+  if [ "$1" -lt "$LOW_MEM_KB" ]; then echo low; else echo normal; fi
+}
+
+# zram_size_mb MEM_KB: the compressed swap's size: as big as the memory on
+# low-memory machines (it compresses about 3:1), half of it otherwise; 256
+# MB to 4 GB.
+zram_size_mb() {
+  local mb
+  case "$1" in '' | *[!0-9]*) echo 1024; return ;; esac
+  mb=$(($1 / 1024))
+  [ "$(memory_profile "$1")" = low ] || mb=$((mb / 2))
+  [ "$mb" -le 4096 ] || mb=4096
+  [ "$mb" -ge 256 ] || mb=256
+  echo "$mb"
+}
+
+# render_zram_generator MEM_KB: /etc/systemd/zram-generator.conf.
+render_zram_generator() {
+  cat <<EOF
+# NoCapOS: compressed swap in memory (written by install.sh).
+[zram0]
+zram-size = $(zram_size_mb "$1")
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+}
+
+# render_zramswap MEM_KB: /etc/default/zramswap (zram-tools).
+render_zramswap() {
+  cat <<EOF
+# NoCapOS: compressed swap in memory (written by install.sh).
+ALGO=zstd
+SIZE=$(zram_size_mb "$1")
+PRIORITY=100
+EOF
+}
+
+# render_lowmem_sysctl: swap to zram early instead of dropping file cache.
+render_lowmem_sysctl() {
+  cat <<'EOF'
+# NoCapOS low-memory profile (written by install.sh).
+vm.swappiness=100
+vm.page-cluster=0
+EOF
+}
+
+# swapfile_mb MEM_KB: the disk swap file a machine gets when it has no disk
+# swap (0 = none): low-memory machines only.
+swapfile_mb() {
+  if [ "$(memory_profile "$1")" = low ]; then echo 1024; else echo 0; fi
+}
+
+# LOWMEM_USER_UNITS: the per-person background services the low-memory
+# profile masks: file indexing (tracker, called localsearch from GNOME 47)
+# and the calendar and contacts store. GNOME works without them: search
+# still finds apps and settings, and the clock menu shows no events.
+LOWMEM_USER_UNITS="tracker-miner-fs-3.service tracker-extract-3.service tracker-miner-fs-control-3.service tracker-miner-rss-3.service tracker-writeback-3.service localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service localsearch-writeback-3.service evolution-source-registry.service evolution-calendar-factory.service evolution-addressbook-factory.service evolution-user-prompter.service"
+
+# LOWMEM_AUTOSTART: autostart entries hidden in the low-memory profile.
+LOWMEM_AUTOSTART="tracker-miner-fs-3.desktop localsearch-3.desktop org.gnome.Evolution-alarm-notify.desktop evolution-alarm-notify.desktop gnome-software-service.desktop org.gnome.Software.desktop"
+
+# render_dconf_lowmem: /etc/dconf/db/local.d/10-nocapos-lowmem.
+render_dconf_lowmem() {
+  cat <<'EOF'
+# NoCapOS low-memory profile (written by install.sh).
+[org/gnome/desktop/interface]
+enable-animations=false
+
+[org/gnome/desktop/search-providers]
+disable-external=true
+
+[org/freedesktop/tracker/miner/files]
+enable-monitors=false
+crawling-interval=-2
+index-recursive-directories=@as []
+index-single-directories=@as []
+
+[org/freedesktop/localsearch/miner/files]
+enable-monitors=false
+crawling-interval=-2
+index-recursive-directories=@as []
+index-single-directories=@as []
+EOF
+}
+
+# render_autostart_hidden: an autostart entry that hides the system one.
+render_autostart_hidden() {
+  printf '[Desktop Entry]\n# Hidden by NoCapOS (low-memory profile).\nType=Application\nName=Hidden\nHidden=true\n'
+}
+
+# ---------------------------------------------------------------- the accent
+# NoCap red in apps on every GNOME version. GNOME 47 and newer have an
+# accent setting (accent-color='red' in render_dconf_local). Older GNOME
+# (Debian 12 is 43) and every GTK 3 app don't, so each person's
+# ~/.config/gtk-4.0/gtk.css and gtk-3.0/gtk.css get a NoCapOS block. It's a
+# marked block, so a person's own CSS around it stays as it is.
+
+NOCAP_RED=#e5383b
+ACCENT_BEGIN='/* NoCapOS accent: begin (kept up to date by NoCapOS) */'
+ACCENT_END='/* NoCapOS accent: end */'
+
+# render_gtk4_accent: libadwaita's accent colours (GNOME 43-46).
+render_gtk4_accent() {
+  cat <<EOF
+$ACCENT_BEGIN
+@define-color accent_color #ff6b6e;
+@define-color accent_bg_color $NOCAP_RED;
+@define-color accent_fg_color #ffffff;
+$ACCENT_END
+EOF
+}
+
+# render_gtk3_accent: GTK 3's Adwaita (its colours are built in, so the
+# widgets that show the accent are styled directly).
+render_gtk3_accent() {
+  cat <<EOF
+$ACCENT_BEGIN
+@define-color theme_selected_bg_color $NOCAP_RED;
+@define-color theme_selected_fg_color #ffffff;
+@define-color accent_bg_color $NOCAP_RED;
+button.suggested-action, button.suggested-action:hover, button.suggested-action:active, button.suggested-action:checked {
+  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+}
+switch:checked, progressbar progress, scale highlight, levelbar block.filled, check:checked, radio:checked, check:indeterminate, radio:indeterminate {
+  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+}
+row:selected, .view:selected, iconview:selected, treeview.view:selected, flowboxchild:selected, entry selection, textview text selection, label selection, calendar:selected {
+  background-color: $NOCAP_RED; color: #ffffff;
+}
+entry:focus, spinbutton:focus { border-color: $NOCAP_RED; box-shadow: inset 0 0 0 1px $NOCAP_RED; }
+link, *:link, button.link > label { color: #ff6b6e; }
+$ACCENT_END
+EOF
+}
+
+# css_without_accent: a gtk.css on stdin without NoCapOS's block.
+css_without_accent() {
+  awk -v b="$ACCENT_BEGIN" -v e="$ACCENT_END" '
+    $0 == b { skip = 1; next }
+    skip && $0 == e { skip = 0; next }
+    !skip { print }
+  '
+}
+
+# css_with_accent BLOCK_FILE: a gtk.css on stdin with NoCapOS's block (the
+# file's contents) in place of any earlier one, at the end.
+css_with_accent() {
+  local rest
+  rest="$(css_without_accent)"
+  if [ -n "$rest" ]; then printf '%s\n\n' "$rest"; fi
+  cat "$1"
+}
+
+# gtk4_accent_wanted GNOME_MAJOR: libadwaita needs the CSS block (GNOME 46
+# and older; 0 = unknown, which gets it too). GNOME 47+ uses the setting,
+# so a person's own accent choice in Settings works there.
+gtk4_accent_wanted() { [ "$1" -lt 47 ]; }
 
 # boot_methods ROOT: how this machine boots, one per line (more than one is
 # possible): pi (Raspberry Pi firmware: cmdline.txt/config.txt), grub,

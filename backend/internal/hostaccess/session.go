@@ -23,12 +23,16 @@ type Session struct {
 	UID     int
 	Type    string // wayland | x11
 	Display string // X display (x11 sessions)
+	// Greeter: the sign-in screen's own session (GDM's account).
+	Greeter bool
 }
 
 var (
 	sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 	userNameRe  = regexp.MustCompile(`^[a-z_][a-z0-9_.-]*[$]?$`)
-	xDisplayRe  = regexp.MustCompile(`^:\d{1,4}(\.\d+)?$`)
+	// GDM's own accounts: gdm, Debian-gdm, gdm-greeter-2 (GNOME 49).
+	greeterNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
+	xDisplayRe    = regexp.MustCompile(`^:\d{1,4}(\.\d+)?$`)
 )
 
 // ParseLoginctlProps reads `loginctl show-session` KEY=VALUE output.
@@ -67,20 +71,163 @@ func SessionFromProps(id string, p map[string]string) (Session, bool) {
 	return s, true
 }
 
-// ActiveSession is the person signed in on the screen right now, if any.
-func (d *Desktop) ActiveSession(ctx context.Context) (Session, bool) {
+// ScreenSessionFromProps is SessionFromProps that also takes the sign-in
+// screen's own session (Class=greeter: GDM's account, never root).
+func ScreenSessionFromProps(id string, p map[string]string) (Session, bool) {
+	if p["Class"] != "greeter" {
+		return SessionFromProps(id, p)
+	}
+	s := Session{ID: id, User: p["Name"], Type: p["Type"], Display: p["Display"], Greeter: true}
+	uid, err := strconv.Atoi(p["User"])
+	if err != nil || uid <= 0 || p["Remote"] == "yes" || (p["State"] != "" && p["State"] != "active" && p["State"] != "online") {
+		return Session{}, false
+	}
+	s.UID = uid
+	if (s.Type != "wayland" && s.Type != "x11") || !greeterNameRe.MatchString(s.User) || len(s.User) > 32 {
+		return Session{}, false
+	}
+	if s.Display != "" && !xDisplayRe.MatchString(s.Display) {
+		s.Display = ""
+	}
+	return s, true
+}
+
+// seatProps is seat0's active session: its ID and properties.
+func (d *Desktop) seatProps(ctx context.Context) (string, map[string]string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	out, err := d.Run(ctx, "loginctl", "show-seat", "seat0", "-p", "ActiveSession", "--value")
 	id := strings.TrimSpace(string(out))
 	if err != nil || !sessionIDRe.MatchString(id) {
-		return Session{}, false
+		return "", nil, false
 	}
 	out, err = d.Run(ctx, "loginctl", "show-session", id, "-p", "Name", "-p", "User", "-p", "Type", "-p", "Class", "-p", "Display", "-p", "Remote", "-p", "State")
 	if err != nil {
+		return "", nil, false
+	}
+	return id, ParseLoginctlProps(string(out)), true
+}
+
+// ActiveSession is the person signed in on the screen right now, if any.
+func (d *Desktop) ActiveSession(ctx context.Context) (Session, bool) {
+	id, p, ok := d.seatProps(ctx)
+	if !ok {
 		return Session{}, false
 	}
-	return SessionFromProps(id, ParseLoginctlProps(string(out)))
+	return SessionFromProps(id, p)
+}
+
+// ScreenSession is what the screen shows right now: a person's session or
+// the sign-in screen.
+func (d *Desktop) ScreenSession(ctx context.Context) (Session, bool) {
+	id, p, ok := d.seatProps(ctx)
+	if !ok {
+		return Session{}, false
+	}
+	return ScreenSessionFromProps(id, p)
+}
+
+// FindSessionEnv reads the environment of the GNOME Shell that runs uid's
+// session (the one whose XDG_SESSION_ID is sessionID when it says), from
+// procRoot (normally /proc). Empty when there's none.
+func FindSessionEnv(procRoot string, uid int, sessionID string) map[string]string {
+	entries, err := os.ReadDir(procRoot)
+	if err != nil {
+		return nil
+	}
+	var found map[string]string
+	for _, e := range entries {
+		if _, err := strconv.Atoi(e.Name()); err != nil {
+			continue
+		}
+		dir := filepath.Join(procRoot, e.Name())
+		comm, err := os.ReadFile(filepath.Join(dir, "comm"))
+		if err != nil || strings.TrimSpace(string(comm)) != "gnome-shell" || procUID(filepath.Join(dir, "status")) != uid {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, "environ"))
+		if err != nil {
+			continue
+		}
+		env := map[string]string{}
+		for _, kv := range strings.Split(string(b), "\x00") {
+			if k, v, ok := strings.Cut(kv, "="); ok && k != "" {
+				env[k] = v
+			}
+		}
+		if env["XDG_SESSION_ID"] == sessionID {
+			return env
+		}
+		if found == nil {
+			found = env
+		}
+	}
+	return found
+}
+
+// procUID is a process's real UID from its status file (-1 if unknown).
+func procUID(status string) int {
+	b, err := os.ReadFile(status)
+	if err != nil {
+		return -1
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if rest, ok := strings.CutPrefix(line, "Uid:"); ok {
+			f := strings.Fields(rest)
+			if len(f) > 0 {
+				if n, err := strconv.Atoi(f[0]); err == nil {
+					return n
+				}
+			}
+		}
+	}
+	return -1
+}
+
+var (
+	dbusAddrRe = regexp.MustCompile(`^unix:path=/[A-Za-z0-9_./-]+$`)
+	waylandRe  = regexp.MustCompile(`^wayland-\d+$`)
+)
+
+func safePath(p string) bool {
+	return strings.HasPrefix(p, "/") && !strings.Contains(p, "..") && !strings.ContainsAny(p, "\n\x00")
+}
+
+// screenEnv is what a screen server needs to attach to session s: its
+// runtime folder and D-Bus, and its Wayland or X display. Values from the
+// session's own processes are checked; the rest are the usual defaults.
+func (d *Desktop) screenEnv(s Session) map[string]string {
+	root := d.ProcRoot
+	if root == "" {
+		root = "/proc"
+	}
+	found := FindSessionEnv(root, s.UID, s.ID)
+	rt := d.runtimeDir(s.UID)
+	if v := found["XDG_RUNTIME_DIR"]; safePath(v) {
+		rt = v
+	}
+	env := map[string]string{"XDG_RUNTIME_DIR": filepath.ToSlash(rt), "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + filepath.ToSlash(rt) + "/bus"}
+	if v := found["DBUS_SESSION_BUS_ADDRESS"]; dbusAddrRe.MatchString(v) {
+		env["DBUS_SESSION_BUS_ADDRESS"] = v
+	}
+	if v := found["WAYLAND_DISPLAY"]; waylandRe.MatchString(v) {
+		env["WAYLAND_DISPLAY"] = v
+	}
+	if s.Type == "x11" {
+		disp := s.Display
+		if disp == "" {
+			disp = found["DISPLAY"]
+		}
+		if xDisplayRe.MatchString(disp) {
+			env["DISPLAY"] = disp
+		}
+		xa := found["XAUTHORITY"]
+		if !safePath(xa) {
+			xa = filepath.ToSlash(filepath.Join(rt, "gdm", "Xauthority"))
+		}
+		env["XAUTHORITY"] = xa
+	}
+	return env
 }
 
 func (d *Desktop) runtimeDir(uid int) string {
@@ -149,12 +296,15 @@ func (d *Desktop) SyncSessionEnv(ctx context.Context, envFile string) {
 	}
 }
 
-// WatchSession runs SyncSessionEnv every few seconds until ctx ends.
+// WatchSession keeps up with the screen's session every couple of seconds
+// until ctx ends: desktop.env (SyncSessionEnv) and the browser window's
+// screen server (FollowScreen).
 func (d *Desktop) WatchSession(ctx context.Context, envFile string) {
-	t := time.NewTicker(4 * time.Second)
+	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
 	for {
 		d.SyncSessionEnv(ctx, envFile)
+		d.FollowScreen(ctx)
 		select {
 		case <-ctx.Done():
 			return

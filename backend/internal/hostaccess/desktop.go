@@ -130,6 +130,13 @@ type Desktop struct {
 	// LookupAccount and Chown: Linux accounts (real ones when nil).
 	LookupAccount func(string) (Account, error)
 	Chown         func(path string, uid, gid int) error
+	// ProcRoot is /proc (finding a session's environment).
+	ProcRoot string
+	// SessionWait: how long RemoteView waits for the screen to have a
+	// session (0 = 15 seconds).
+	SessionWait time.Duration
+
+	mirror screenMirror
 }
 
 // NewDesktop wires the real machine.
@@ -150,6 +157,8 @@ type DesktopState struct {
 	Modes []string `json:"modes"`
 	// Signed in on the screen right now (full desktop), if anyone.
 	SessionUser string `json:"session_user,omitempty"`
+	// SignInScreen: the screen shows the sign-in screen (nobody signed in).
+	SignInScreen bool `json:"sign_in_screen"`
 	// Autologin: the sign-in screen opens this account without a password.
 	Autologin          bool   `json:"autologin"`
 	AutologinUser      string `json:"autologin_user,omitempty"`
@@ -246,8 +255,12 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 	}
 	st.Enabled = st.Mode != ModeOff
 	if c.Full {
-		if s, ok := d.ActiveSession(ctx); ok {
-			st.SessionUser = s.User
+		if s, ok := d.ScreenSession(ctx); ok {
+			if s.Greeter {
+				st.SignInScreen = true
+			} else {
+				st.SessionUser = s.User
+			}
 		}
 		if c.GDMConf != "" {
 			st.AutologinSupported = true
@@ -311,6 +324,9 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	if mode != ModeFull {
+		d.StopScreen(ctx)
+	}
 	for _, args := range ModeCommands(mode, d.conf(), d.hasKiosk()) {
 		out, err := d.Run(ctx, "systemctl", args...)
 		if err != nil && args[0] != "--no-block" {
