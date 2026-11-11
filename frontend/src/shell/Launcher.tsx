@@ -1,3 +1,4 @@
+import { focusUnlessTouch } from '../lib/touch';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent, type WheelEvent as RWheelEvent } from 'react';
 import { tr } from '../i18n';
 import type { StoreApp } from '../api/appstore';
@@ -118,7 +119,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   useEffect(() => setPage(0), [needle]);
 
   useEffect(() => {
-    input.current?.focus();
+    focusUnlessTouch(input.current);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose(); // wiggle mode catches Esc first

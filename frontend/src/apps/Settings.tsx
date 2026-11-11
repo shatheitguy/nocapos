@@ -12,13 +12,11 @@ import { LANGUAGES, usePrefs } from '../state/prefs';
 import { notifyApi, type NotifySettings } from '../state/notifications';
 import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
-import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
 import type { WinState } from '../state/windows';
 import type { Snapshot, SystemInfo } from '../api/types';
-import { openApp } from './meta';
 import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
 import { HostAccessPage } from './SettingsHostAccess';
-import { SystemPackagesUpdate } from './SettingsSystemUpdates';
+import { SoftwareUpdate } from './GlowUp';
 import { FocusSettings } from './SystemPages';
 import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
@@ -63,7 +61,7 @@ export function Settings({ win }: { win: WinState }) {
   const isAdmin = user?.role === 'admin';
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const [compact, setCompact] = useState(false);
+  const [compact, setCompact] = useState(() => window.innerWidth < 700);
   const wanted = resolve(win.props?.section);
   const [cat, setCat] = useState<Cat | null>(wanted?.cat ?? 'general');
   const [sub, setSub] = useState<Sub | null>(wanted?.sub ?? null);
@@ -432,184 +430,6 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
         <Toggle label={t('sp.alertSound')} hint={prefs.uiSounds ? t('sp.alertSoundOn') : t('sp.alertSoundOff')}
           checked={prefs.soundAlerts} disabled={!prefs.uiSounds} onChange={(soundAlerts) => prefs.set({ soundAlerts })} />
       </Group>
-    </div>
-  );
-}
-
-// ---------------- Software Update ----------------
-
-interface UpdateInfo {
-  current: string;
-  latest?: string;
-  available: boolean;
-  dev: boolean;
-  name?: string;
-  notes?: string;
-  url?: string;
-  published?: string;
-  checked: string;
-  command: string;
-  error?: string;
-}
-
-/** Release notes are Markdown; show them as plain, readable text. */
-function plainNotes(md: string) {
-  return md
-    .replace(/\r/g, '')
-    .split('\n')
-    .filter((l) => !/^\s*```/.test(l))
-    .map((l) => l.replace(/^#{1,6}\s*/, '').replace(/^\s*[-*]\s+/, '• ').replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function SoftwareUpdate() {
-  const [u, setU] = useState<UpdateInfo | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [run, setRun] = useState<UpdateRunStatus | null>(null);
-  const [starting, setStarting] = useState(false);
-  const updating = useUpdate((s) => s.phase !== 'idle');
-  const t = useT();
-  const check = (refresh: boolean) => {
-    setBusy(true);
-    void api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`).then((r) => {
-      setBusy(false);
-      if (r.ok) setU(r.data);
-      else toast('error', tr('sp.updCheckFail'), r.error);
-    });
-  };
-  const loadRun = () =>
-    void api<UpdateRunStatus>('/api/v1/system/update/run').then((r) => {
-      if (!r.ok) return;
-      setRun(r.data);
-      // Opened mid-update (another tab started it): follow along full-screen.
-      if (r.data.running && useUpdate.getState().phase === 'idle') void resumeRunningUpdate();
-    });
-  useEffect(() => {
-    check(false);
-  }, []);
-  useEffect(() => {
-    if (!updating) loadRun();
-  }, [updating]);
-  const copy = () => u && void navigator.clipboard?.writeText(u.command).then(() => toast('success', tr('sp.cmdCopied')));
-  const updateNow = () => {
-    if (!u?.latest) return;
-    setStarting(true);
-    void api<{ started: boolean; from: string; target: string }>('/api/v1/system/update/run', {
-      method: 'POST',
-      body: { target: u.latest },
-    }).then((r) => {
-      setStarting(false);
-      if (r.ok) {
-        openUpdate(r.data.from, r.data.target);
-        return;
-      }
-      const code = (r.data as unknown as { error?: { code?: string } } | null)?.error?.code;
-      if (code === 'already_running') {
-        void resumeRunningUpdate();
-        return;
-      }
-      if (code === 'release_changed') check(true);
-      toast('error', tr('sp.updStartFail'), r.error);
-    });
-  };
-  const last = run && !run.running ? run.result : null;
-  const canUpdate = !!u && (u.available || u.dev) && !u.error && !!run?.supported;
-  return (
-    <div className="stack settings-page">
-      <h3 className="settings-section-title set-update-part">NoCapOS</h3>
-      <div className="ucard set-update">
-        <Logo size={40} />
-        <div className="set-update-text">
-          {!u ? (
-            <b>{t('sp.updChecking')}</b>
-          ) : u.error ? (
-            <>
-              <b>{t('sp.updCantCheck')}</b>
-              <span>{u.error}</span>
-            </>
-          ) : u.available ? (
-            <>
-              <b>{t('sp.updAvailable', { from: vtag(u.current), to: vtag(u.latest) })}</b>
-              <span>
-                {u.published ? t('sp.updPublished', { date: new Date(u.published).toLocaleDateString() }) : t('sp.updFresh')} {t('sp.updKeep')}
-              </span>
-            </>
-          ) : u.dev ? (
-            <>
-              <b>{t('sp.updDev')}</b>
-              <span>{t('sp.updDevBody', { current: u.current, latest: u.latest ? vtag(u.latest) : t('sp.unknown') })}</span>
-            </>
-          ) : (
-            <>
-              <b>{t('sp.updLatest')}</b>
-              <span>{t('sp.updLatestBody', { version: vtag(u.current) })}</span>
-            </>
-          )}
-          {u && <small>{t('sp.updChecked', { time: new Date(u.checked).toLocaleTimeString() })}</small>}
-        </div>
-        <div className="btn-group">
-          {canUpdate && (
-            <button type="button" className="pill small" disabled={starting || run?.running} onClick={updateNow}>
-              {starting ? <span className="spinner sm" /> : <Icon name="download" size={13} />} {t('sp.updTo', { version: vtag(u.latest) })}
-            </button>
-          )}
-          <button type="button" className="pill ghost small" disabled={busy} onClick={() => check(true)}>
-            {busy ? <span className="spinner sm" /> : <Icon name="restart" size={13} />} {t('sp.checkNow')}
-          </button>
-        </div>
-      </div>
-      {last && (
-        <Group title={t('sp.lastUpdate')} hint={t('sp.lastUpdateHint')}>
-          <div className="settings-row full set-update-last">
-            <div className={`set-update-result ${last.ok ? 'ok' : 'bad'}`}>
-              <Icon name={last.ok ? 'check' : 'alert'} size={15} />
-              <span>
-                {last.ok
-                  ? t('sp.updDone', { from: vtag(last.from), to: vtag(last.to) })
-                  : `${last.to ? t('sp.updFailedTo', { to: vtag(last.to) }) : t('sp.updFailed')}${last.rolled_back && last.from ? t('sp.updRolledBack', { from: vtag(last.from) }) : last.unchanged ? t('sp.updUnchanged') : ''}`}
-                {last.finished_at && ` · ${new Date(last.finished_at).toLocaleString()}`}
-              </span>
-            </div>
-            {!last.ok && last.error && <p className="set-update-err">{last.error}</p>}
-            {run?.log && (
-              <details className="set-update-log">
-                <summary>{t('sp.showDetails')}</summary>
-                <pre className="set-logs">{run.log}</pre>
-              </details>
-            )}
-          </div>
-        </Group>
-      )}
-      {u && (u.available || u.dev) && !u.error && run && !run.supported && (
-        <Group title={t('sp.howUpdate')} hint={t('sp.howUpdateHint')}>
-          <div className="settings-row full">
-            <pre className="set-logs set-cmd">{u.command}</pre>
-            <div className="btn-group set-logs-actions">
-              <button type="button" className="ghost small" onClick={copy}>
-                <Icon name="copy" size={13} /> {t('sp.copyCmd')}
-              </button>
-              <button type="button" className="ghost small" onClick={() => openApp('terminal')}>
-                <Icon name="terminal" size={13} /> {t('sp.openTerminal')}
-              </button>
-            </div>
-          </div>
-        </Group>
-      )}
-      {u?.notes && !u.error && (
-        <Group title={t('sp.whatsNew', { version: vtag(u.latest) })} hint={t('sp.whatsNewHint')}>
-          <div className="settings-row full">
-            <pre className="set-notes">{plainNotes(u.notes)}</pre>
-            {u.url && (
-              <a className="set-link" href={u.url} target="_blank" rel="noreferrer">
-                {t('sp.viewGithub')} <Icon name="external" size={12} />
-              </a>
-            )}
-          </div>
-        </Group>
-      )}
-      <SystemPackagesUpdate />
     </div>
   );
 }
