@@ -76,8 +76,9 @@ installer's own list from `deploy/desktop/lib.sh`), and the first boot runs
 the installer with `--desktop` (`NOCAP_FIRSTBOOT_ARGS`), which adds the
 NoCapOS look (sign-in screen, wallpaper, dock, NoCap Hub) and switches it
 on. Set `NOCAP_FIRSTBOOT_ARGS="--no-desktop"` for a headless server, or
-`--desktop=kiosk` for NoCapOS full screen only. Machines with less than
-2 GB of memory get NoCapOS full screen instead.
+`--desktop=kiosk` for NoCapOS full screen only. Every machine gets the same
+full desktop; ones with less than 2 GB of memory run it with compressed
+swap in memory, no file indexing or calendar store, and no animations.
 
 **Users.** No default account exists in either image.
 - PC: debian-installer asks for your name, user name and password; there is no

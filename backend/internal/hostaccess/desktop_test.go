@@ -52,13 +52,20 @@ func (f *fakeHost) run(_ context.Context, name string, args ...string) ([]byte, 
 		if f.session == "" {
 			return []byte("\n"), nil
 		}
+		if strings.Contains(f.session, "Class=greeter") {
+			return []byte("c1\n"), nil
+		}
 		return []byte("7\n"), nil
 	case name == "loginctl" && args[0] == "show-session":
 		return []byte(f.session), nil
-	case strings.Contains(line, "systemctl --user restart gnome-remote-desktop"):
-		f.open[SharePort] = true
-	case name == "systemctl" && len(args) > 2 && args[2] == "gnome-remote-desktop.service":
-		f.open[RemoteLoginPort] = true
+	case name == "systemctl" && args[0] == "stop" && args[1] == ScreenUnit:
+		f.open[ScreenRDPPort], f.open[ScreenVNCPort] = false, false
+	case name == "systemd-run" && strings.Contains(line, "--unit=nocapos-screen "):
+		if strings.Contains(line, " x11vnc ") {
+			f.open[ScreenVNCPort] = true
+		} else {
+			f.open[ScreenRDPPort] = true
+		}
 	case name == "systemd-run":
 		f.open[VNCPort] = true
 	}
@@ -304,10 +311,77 @@ func TestSetINIKeyAndAutologin(t *testing.T) {
 	}
 }
 
-// The remote screen's password reaches programs on stdin or in files only,
-// never in their arguments (which anyone on the machine can read in ps).
-func TestRemoteViewKeepsPasswordOutOfArgv(t *testing.T) {
-	check := func(f *fakeHost, pw string) {
+const (
+	samSession     = "Name=sam\nUser=1000\nType=wayland\nClass=user\nRemote=no\nState=active\n"
+	greeterSession = "Name=Debian-gdm\nUser=116\nType=wayland\nClass=greeter\nRemote=no\nState=active\n"
+)
+
+func fullHost() (*fakeHost, *Desktop) {
+	f := newFakeHost()
+	d := f.desktop()
+	f.files[DesktopConfPath] = fullConf
+	f.enabled["gdm3.service"], f.active["gdm3.service"] = true, true
+	f.files["/usr/libexec/gnome-remote-desktop-daemon"] = ""
+	f.tools["x11vnc"] = true
+	d.SessionWait = time.Millisecond
+	d.ProcRoot = "/nonexistent"
+	return f, d
+}
+
+func TestScreenSessionFromProps(t *testing.T) {
+	g := ParseLoginctlProps(greeterSession)
+	s, ok := ScreenSessionFromProps("c1", g)
+	if !ok || !s.Greeter || s.User != "Debian-gdm" || s.UID != 116 {
+		t.Fatalf("greeter = %+v %v", s, ok)
+	}
+	if _, ok := SessionFromProps("c1", g); ok {
+		t.Fatal("the sign-in screen isn't a person's session")
+	}
+	for name, change := range map[string][2]string{"root": {"User", "0"}, "tty": {"Type", "tty"}, "remote": {"Remote", "yes"}, "bad": {"Name", "../x"}} {
+		p := ParseLoginctlProps(greeterSession)
+		p[change[0]] = change[1]
+		if _, ok := ScreenSessionFromProps("c1", p); ok {
+			t.Errorf("%s greeter accepted", name)
+		}
+	}
+	if s, ok := ScreenSessionFromProps("3", ParseLoginctlProps(samSession)); !ok || s.Greeter || s.User != "sam" {
+		t.Fatalf("user = %+v", s)
+	}
+}
+
+func TestFindSessionEnv(t *testing.T) {
+	root := t.TempDir()
+	proc := func(pid, comm string, uid int, env ...string) {
+		dir := filepath.Join(root, pid)
+		_ = os.MkdirAll(dir, 0o755)
+		_ = os.WriteFile(filepath.Join(dir, "comm"), []byte(comm+"\n"), 0o644)
+		_ = os.WriteFile(filepath.Join(dir, "status"), []byte("Name:\t"+comm+"\nUid:\t"+strconv.Itoa(uid)+"\t"+strconv.Itoa(uid)+"\t0\t0\n"), 0o644)
+		_ = os.WriteFile(filepath.Join(dir, "environ"), []byte(strings.Join(env, "\x00")+"\x00"), 0o644)
+	}
+	proc("10", "bash", 1000, "XDG_SESSION_ID=3")
+	proc("11", "gnome-shell", 1001, "XDG_SESSION_ID=3")
+	proc("12", "gnome-shell", 1000, "XDG_SESSION_ID=2", "DISPLAY=:1")
+	proc("13", "gnome-shell", 1000, "XDG_SESSION_ID=3", "DISPLAY=:0", "XAUTHORITY=/run/user/1000/gdm/Xauthority")
+	_ = os.MkdirAll(filepath.Join(root, "self"), 0o755)
+	env := FindSessionEnv(root, 1000, "3")
+	if env["DISPLAY"] != ":0" || env["XAUTHORITY"] != "/run/user/1000/gdm/Xauthority" {
+		t.Fatalf("env = %v", env)
+	}
+	if env := FindSessionEnv(root, 1000, "9"); env["DISPLAY"] == "" {
+		t.Fatal("any shell of the account when no session matches")
+	}
+	if env := FindSessionEnv(root, 1002, "3"); env != nil {
+		t.Fatalf("other account: %v", env)
+	}
+}
+
+// The browser window always shows the real screen: the sign-in screen when
+// nobody is signed in, the person's session after. Passwords only ever
+// reach programs in files, never in their arguments (which anyone on the
+// machine can read in ps).
+func TestRemoteViewFollowsTheScreen(t *testing.T) {
+	f, d := fullHost()
+	noArgv := func(pw string) {
 		t.Helper()
 		for _, c := range f.calls {
 			if strings.Contains(c, pw) {
@@ -316,77 +390,121 @@ func TestRemoteViewKeepsPasswordOutOfArgv(t *testing.T) {
 		}
 	}
 
-	// Somebody signed in: their session is shared.
-	f := newFakeHost()
-	d := f.desktop()
-	f.files[DesktopConfPath] = fullConf
-	f.enabled["gdm3.service"], f.active["gdm3.service"] = true, true
-	f.tools["grdctl"] = true
-	f.session = "Name=sam\nUser=1000\nType=wayland\nClass=user\nRemote=no\nState=active\n"
+	// Nobody signed in: the sign-in screen, as GDM's account.
+	f.session = greeterSession
 	tgt, err := d.RemoteView(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tgt.Protocol != "rdp" || tgt.Port != SharePort || tgt.Username != "nocap" || len(tgt.Password) != 32 {
+	if tgt.Protocol != "rdp" || tgt.Port != ScreenRDPPort || !tgt.SignIn || tgt.Username != "nocap" || len(tgt.Password) != 32 {
 		t.Fatalf("target = %+v", tgt)
 	}
-	check(f, tgt.Password)
-	if len(f.stdins) == 0 || !strings.Contains(f.stdins[0], tgt.Password) {
-		t.Fatalf("password not given on stdin: %q", f.stdins)
-	}
-	if !strings.Contains(f.files["/var/lib/nocapos/desktop-remote/credentials.json"], tgt.Password) {
-		t.Fatal("credentials not kept")
-	}
-	if !strings.Contains(f.files["/home/sam/.local/share/nocapos-remote/nocapos-tls.key"], "PRIVATE KEY") {
-		t.Fatal("TLS key not placed for the session")
-	}
+	noArgv(tgt.Password)
 	joined := strings.Join(f.calls, "\n")
-	for _, want := range []string{"runuser -u sam -- env XDG_RUNTIME_DIR=/run/user/1000", "grdctl rdp enable", "grdctl rdp disable-view-only", "grdctl rdp set-credentials"} {
+	for _, want := range []string{
+		"systemd-run --unit=nocapos-screen --collect --quiet --property=KillMode=mixed --uid=Debian-gdm --setenv=XDG_RUNTIME_DIR=/run/user/116 --setenv=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/116/bus",
+		"--setenv=GSETTINGS_BACKEND=keyfile",
+		"/usr/libexec/gnome-remote-desktop-daemon --headless",
+	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}
 	}
+	creds := f.files["/run/nocapos/screen/116/data/gnome-remote-desktop/credentials.ini"]
+	if !strings.Contains(creds, "'password': <'"+tgt.Password+"'>") {
+		t.Fatalf("credentials = %q", creds)
+	}
+	kf := f.files["/run/nocapos/screen/116/config/glib-2.0/settings/keyfile"]
+	for _, want := range []string{"[org/gnome/desktop/remote-desktop/rdp]", "port=3391", "view-only=false", "screen-share-mode='mirror-primary'", "tls-key='/run/nocapos/screen/116/tls.key'"} {
+		if !strings.Contains(kf, want) {
+			t.Errorf("settings missing %q:\n%s", want, kf)
+		}
+	}
+	if !strings.Contains(f.files["/run/nocapos/screen/116/tls.key"], "PRIVATE KEY") {
+		t.Fatal("no TLS key")
+	}
 
-	// Older GNOME: grdctl won't read stdin, so the keyring gets it (stdin too).
-	remoteMu.shared = nil
-	f2 := newFakeHost()
-	d2 := f2.desktop()
-	f2.files = f.files
-	f2.enabled, f2.active, f2.tools, f2.session = f.enabled, f.active, f.tools, f.session
-	f2.failRun["grdctl rdp set-credentials"] = true
-	tgt2, err := d2.RemoteView(context.Background())
+	// Still the sign-in screen: the same server.
+	f.calls = nil
+	if again, err := d.RemoteView(context.Background()); err != nil || again.Password != tgt.Password {
+		t.Fatalf("again = %+v, %v", again, err)
+	}
+	if strings.Contains(strings.Join(f.calls, "\n"), "systemd-run") {
+		t.Fatal("restarted for the same session")
+	}
+
+	// Someone signs in (on the screen or through the window): the old
+	// server stops, so the window reconnects to the new session.
+	f.session = samSession
+	f.calls = nil
+	d.FollowScreen(context.Background())
+	if !strings.Contains(strings.Join(f.calls, "\n"), "systemctl stop nocapos-screen.service") {
+		t.Fatalf("not stopped: %v", f.calls)
+	}
+	tgt2, err := d.RemoteView(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tgt2.Password != tgt.Password {
-		t.Fatal("credentials should be kept between views")
+	if tgt2.SignIn || tgt2.Password == tgt.Password {
+		t.Fatalf("new session target = %+v", tgt2)
 	}
-	check(f2, tgt2.Password)
-	if len(f2.stdins) < 2 || !strings.Contains(f2.stdins[1], "'password': <'"+tgt.Password+"'>") {
-		t.Fatalf("keyring fallback stdin = %q", f2.stdins)
+	noArgv(tgt2.Password)
+	if !strings.Contains(strings.Join(f.calls, "\n"), "--uid=sam") {
+		t.Fatalf("calls = %v", f.calls)
+	}
+	// Following a session that didn't change does nothing.
+	f.calls = nil
+	d.FollowScreen(context.Background())
+	if strings.Contains(strings.Join(f.calls, "\n"), "stop") {
+		t.Fatalf("stopped the current session's server: %v", f.calls)
 	}
 
-	// Nobody signed in, GNOME 46+: remote sign-in through the system daemon.
-	remoteMu.shared = nil
-	f3 := newFakeHost()
-	d3 := f3.desktop()
-	f3.files = f.files
-	f3.files["/usr/lib/systemd/system/gnome-remote-desktop.service"] = "[Unit]"
-	f3.enabled, f3.active, f3.tools = f.enabled, f.active, f.tools
-	tgt3, err := d3.RemoteView(context.Background())
+	// An Xorg session: x11vnc on its display, password in a file.
+	f.session = "Name=sam\nUser=1000\nType=x11\nClass=user\nRemote=no\nState=active\nDisplay=:1\n"
+	f.calls = nil
+	tgt3, err := d.RemoteView(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tgt3.Port != RemoteLoginPort {
-		t.Fatalf("remote sign-in port = %d", tgt3.Port)
+	if tgt3.Protocol != "vnc" || tgt3.Port != ScreenVNCPort || len(tgt3.Password) != 8 {
+		t.Fatalf("x11 target = %+v", tgt3)
 	}
-	check(f3, tgt3.Password)
+	noArgv(tgt3.Password)
+	if !strings.Contains(strings.Join(f.calls, "\n"), "x11vnc -display :1 -auth /run/user/1000/gdm/Xauthority -localhost -rfbport 5906") {
+		t.Fatalf("calls = %v", f.calls)
+	}
+	if f.files["/run/nocapos/screen/vnc.pass"] != tgt3.Password+"\n" {
+		t.Fatal("vnc password file")
+	}
 
-	// Nobody signed in and no remote sign-in: say so.
-	delete(f3.files, "/usr/lib/systemd/system/gnome-remote-desktop.service")
-	f3.open = map[int]bool{}
-	if _, err := d3.RemoteView(context.Background()); !errors.Is(err, ErrSignInFirst) {
+	// Nobody on the screen for a moment (between sign-in and desktop).
+	f.session = ""
+	d.FollowScreen(context.Background())
+	if _, err := d.RemoteView(context.Background()); !errors.Is(err, ErrScreenStarting) {
 		t.Fatalf("no session = %v", err)
+	}
+
+	// Switching to another mode stops the screen server.
+	f.session = samSession
+	if _, err := d.RemoteView(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	f.files[DesktopUnitPath] = "[Unit]"
+	f.calls = nil
+	if err := d.SetMode(context.Background(), ModeOff); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(f.calls, "\n"), "systemctl stop nocapos-screen.service") {
+		t.Fatalf("calls = %v", f.calls)
+	}
+}
+
+func TestStateShowsSignInScreen(t *testing.T) {
+	f, d := fullHost()
+	f.session = greeterSession
+	st := d.State(context.Background())
+	if !st.SignInScreen || st.SessionUser != "" || !st.Remote {
+		t.Fatalf("state = %+v", st)
 	}
 }
 

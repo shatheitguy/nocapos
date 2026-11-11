@@ -5,18 +5,28 @@ import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
 import { Guacamole, type GuacamoleTypes } from '../lib/guacamole';
 
-// NoCap Desktop in a window: exactly what the server's own monitor shows.
-// alfad gets the desktop's remote screen ready (RDP for the full desktop,
-// VNC for NoCapOS full screen, both on 127.0.0.1 only) and hands out a
-// single-use ticket; the Remote Desktop engine (guacd) does the rest over
-// the same WebSocket as Remote Desktop and Virtual Desk.
+// NoCap Desktop in a window: always exactly what the server's own monitor
+// shows, the sign-in screen included. Signing in here signs in on the
+// monitor (it's the same sign-in screen), so the window and the monitor are
+// one session. alfad attaches a screen server to whatever session the
+// monitor has (RDP for Wayland sessions, VNC for X11 and NoCapOS full
+// screen, all on 127.0.0.1 only) and hands out a single-use ticket; the
+// Remote Desktop engine (guacd) does the rest over the same WebSocket as
+// Remote Desktop and Virtual Desk. When the monitor's session changes (a
+// sign-in or sign-out), that server stops and this window follows the
+// screen to the new session on its own.
 
-type Phase = 'engine' | 'connecting' | 'connected' | 'closed' | 'error';
+type Phase = 'engine' | 'connecting' | 'switching' | 'connected' | 'closed' | 'error';
+
+/** How many times in a row the window follows the screen before giving up. */
+const MAX_FOLLOW = 30;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function NocapDesktop() {
   const t = useT();
   const box = useRef<HTMLDivElement>(null);
   const clientRef = useRef<GuacamoleTypes.Client | null>(null);
+  const follows = useRef(0);
   const [phase, setPhase] = useState<Phase>('engine');
   const [message, setMessage] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -28,8 +38,10 @@ export function NocapDesktop() {
     let client: GuacamoleTypes.Client | null = null;
     let keyboard: GuacamoleTypes.Keyboard | null = null;
     let wasConnected = false;
+    let followed = false;
     let ro: ResizeObserver | null = null;
     let resizeTimer: number | undefined;
+    let followTimer: number | undefined;
 
     const fit = () => {
       if (!client) return;
@@ -40,9 +52,24 @@ export function NocapDesktop() {
       d.scale(Math.min(el.clientWidth / w, el.clientHeight / h, 1));
     };
 
+    // The screen's session changed (or is changing): connect again, to
+    // whatever the screen shows now.
+    const follow = () => {
+      if (cancelled || followed) return false;
+      if (follows.current >= MAX_FOLLOW) return false;
+      followed = true;
+      follows.current += 1;
+      setPhase('switching');
+      setMessage(t('nd.win.switching'));
+      followTimer = window.setTimeout(() => setAttempt((a) => a + 1), 1500);
+      return true;
+    };
+
     (async () => {
-      setPhase('engine');
-      setMessage(t('nd.win.engine'));
+      if (follows.current === 0) {
+        setPhase('engine');
+        setMessage(t('nd.win.engine'));
+      }
       // 1. The Remote Desktop engine (the first run may install it).
       for (;;) {
         const s = await rdpStatus();
@@ -58,12 +85,21 @@ export function NocapDesktop() {
           setMessage(s.data.message);
           return;
         }
-        await new Promise((r) => setTimeout(r, 1500));
+        await sleep(1500);
       }
-      // 2. The desktop's remote screen and a ticket for it.
+      // 2. A screen server on whatever the screen shows, and a ticket for it.
       const width = Math.max(640, Math.round(el.clientWidth));
       const height = Math.max(480, Math.round(el.clientHeight));
-      const v = await hostAccessApi.view(width, height, Math.round(96 * (window.devicePixelRatio || 1)));
+      let v = await hostAccessApi.view(width, height, Math.round(96 * (window.devicePixelRatio || 1)));
+      // 503: the screen is between sessions for a moment (signing in or out).
+      while (!cancelled && !v.ok && v.status === 503 && follows.current < MAX_FOLLOW) {
+        follows.current += 1;
+        setPhase('switching');
+        setMessage(t('nd.win.switching'));
+        await sleep(2000);
+        if (cancelled) return;
+        v = await hostAccessApi.view(width, height, Math.round(96 * (window.devicePixelRatio || 1)));
+      }
       if (cancelled) return;
       if (!v.ok) {
         setPhase('error');
@@ -85,17 +121,22 @@ export function NocapDesktop() {
         if (cancelled) return;
         if (state === 3) {
           wasConnected = true;
+          follows.current = 0;
           setPhase('connected');
-          setMessage(t('nd.win.connected'));
+          setMessage(t(v.data.sign_in ? 'nd.win.signIn' : 'nd.win.connected'));
           el.focus();
           fit();
         } else if (state === 5) {
-          setPhase((p) => (p === 'error' ? p : 'closed'));
+          // The screen server stops when the screen's session changes.
+          if (wasConnected && follow()) return;
+          setPhase((p) => (p === 'error' || p === 'switching' ? p : 'closed'));
           if (wasConnected) setMessage(t('nd.win.closedBody'));
         }
       };
       client.onerror = (status) => {
         if (cancelled) return;
+        if (wasConnected && follow()) return;
+        if (followed) return;
         setPhase('error');
         setMessage(status.message || '');
       };
@@ -109,7 +150,7 @@ export function NocapDesktop() {
         return false;
       };
       keyboard.onkeyup = (keysym) => client?.sendKeyEvent(0, keysym);
-      // The full desktop follows the window's size (RDP); VNC is scaled.
+      // RDP follows the window's size; VNC is scaled.
       ro = new ResizeObserver(() => {
         fit();
         window.clearTimeout(resizeTimer);
@@ -125,6 +166,7 @@ export function NocapDesktop() {
       cancelled = true;
       ro?.disconnect();
       window.clearTimeout(resizeTimer);
+      window.clearTimeout(followTimer);
       if (keyboard) {
         keyboard.onkeydown = null;
         keyboard.onkeyup = null;
@@ -138,6 +180,10 @@ export function NocapDesktop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
 
+  const reconnect = () => {
+    follows.current = 0;
+    setAttempt((a) => a + 1);
+  };
   const ctrlAltDel = () => {
     const c = clientRef.current;
     if (!c) return;
@@ -146,7 +192,7 @@ export function NocapDesktop() {
     [...keys].reverse().forEach((k) => c.sendKeyEvent(0, k));
   };
   const fullscreen = () => box.current?.parentElement?.requestFullscreen?.();
-  const busy = phase === 'engine' || phase === 'connecting';
+  const busy = phase === 'engine' || phase === 'connecting' || phase === 'switching';
 
   return (
     <div className="rdp vd-screen">
@@ -159,7 +205,7 @@ export function NocapDesktop() {
         <button type="button" className="small" onClick={ctrlAltDel} disabled={phase !== 'connected'} title={t('nd.win.cad')}>
           Ctrl+Alt+Del
         </button>
-        <button type="button" className="small" onClick={() => setAttempt((a) => a + 1)} title={t('nd.win.reconnect')}>
+        <button type="button" className="small" onClick={reconnect} title={t('nd.win.reconnect')}>
           <Icon name="restart" size={15} />
         </button>
         <button type="button" className="small" onClick={fullscreen} title={t('nd.win.fullscreen')}>
@@ -175,7 +221,7 @@ export function NocapDesktop() {
             {!busy && <p className="muted small">{message}</p>}
             {!busy && (
               <div className="rdp-actions">
-                <button type="button" onClick={() => setAttempt((a) => a + 1)}>
+                <button type="button" onClick={reconnect}>
                   <Icon name="restart" size={14} /> {t('nd.win.reconnect')}
                 </button>
               </div>
