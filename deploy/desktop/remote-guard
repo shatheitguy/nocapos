@@ -1,0 +1,45 @@
+#!/bin/sh
+# Keeps NoCap Desktop's remote screen on this machine only: connections to
+# the desktop's RDP and VNC ports (3389, 3390, 5905) are dropped unless they
+# come over loopback, where NoCapOS's own Remote Desktop engine connects
+# from. The browser reaches the desktop only through NoCapOS (signed in,
+# admins only). Run by nocapos-desktop-guard.service.
+#   remote-guard start | stop
+PORTS="3389,3390,5905"
+TABLE=nocapos_desktop
+
+start() {
+  stop
+  if command -v nft >/dev/null 2>&1; then
+    nft -f - <<EOF && return 0
+table inet $TABLE {
+  chain input {
+    type filter hook input priority -10; policy accept;
+    iifname != "lo" tcp dport { $PORTS } drop
+  }
+}
+EOF
+  fi
+  ok=1
+  for t in iptables ip6tables; do
+    command -v "$t" >/dev/null 2>&1 || continue
+    "$t" -I INPUT ! -i lo -p tcp -m multiport --dports "$PORTS" -m comment --comment "$TABLE" -j DROP && ok=0
+  done
+  [ "$ok" -eq 0 ] || echo "remote-guard: neither nft nor iptables is available; the desktop's RDP port is only protected by its own password" >&2
+  return 0
+}
+
+stop() {
+  if command -v nft >/dev/null 2>&1; then nft delete table inet "$TABLE" >/dev/null 2>&1 || true; fi
+  for t in iptables ip6tables; do
+    command -v "$t" >/dev/null 2>&1 || continue
+    while "$t" -D INPUT ! -i lo -p tcp -m multiport --dports "$PORTS" -m comment --comment "$TABLE" -j DROP >/dev/null 2>&1; do :; done
+  done
+  return 0
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop) stop ;;
+  *) echo "usage: remote-guard start|stop" >&2; exit 2 ;;
+esac

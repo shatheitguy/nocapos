@@ -12,7 +12,7 @@ set -u
 DONE=/var/lib/nocapos/.image-firstboot-done
 BUNDLE=/usr/lib/nocapos/bundle
 NOCAP_DOCKER=yes
-NOCAP_FIRSTBOOT_ARGS=""
+NOCAP_FIRSTBOOT_ARGS="--desktop"
 # shellcheck source=/dev/null
 [ -f /etc/nocapos/image.conf ] && . /etc/nocapos/image.conf
 

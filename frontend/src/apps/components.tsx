@@ -21,6 +21,7 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   nativeapp: app(() => import('./NativeAppWindow').then((m) => m.NativeAppWindow)),
   backups: app(() => import('./Backups').then((m) => m.Backups)),
   remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
+  nocapdesktop: app(() => import('./NocapDesktop').then((m) => m.NocapDesktop)),
   files: app(() => import('./Files').then((m) => m.Files)),
   terminal: app(() => import('./Terminal').then((m) => m.Terminal)),
   monitor: app(() => import('./Monitor').then((m) => m.Monitor)),

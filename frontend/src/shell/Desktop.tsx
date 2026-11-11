@@ -7,6 +7,7 @@ import type { Snapshot, SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { useDocumentVisible, useViewport } from '../lib/hooks';
+import { takeHubApp } from '../lib/hub';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { usePrefs, usePrefsSynced } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
@@ -99,6 +100,12 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // System notifications (admins): updates, app problems, disk health, failed backups.
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
+
+  // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
+  useEffect(() => {
+    const app = takeHubApp();
+    if (app) openApp(app);
+  }, [user.id]);
 
   // Installed App Store apps for the home screen and Launchpad (the server
   // lists only the apps this person may use).
