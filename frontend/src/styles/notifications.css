@@ -294,3 +294,29 @@
 @keyframes update-in { from { transform: translate(-50%, -24px); opacity: 0; } }
 .update-ready button { height: 26px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .update-ready .update-ready-x { width: 26px; padding: 0; background: transparent; color: var(--muted); display: grid; place-items: center; }
+
+/* ---------- NoCap Link: phone notifications and the shared clipboard ---------- */
+.link-card { cursor: default; gap: 10px; }
+.nc-card.windows.link-card { align-items: flex-start; }
+.link-from { font-size: 11.5px; color: var(--mac-dim, var(--muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.nc-card .nb-text > .link-from { flex: none; }
+.link-clip-text { -webkit-line-clamp: 2 !important; white-space: pre-wrap; }
+.link-copy { flex: none; color: var(--mac-ink, var(--text)); opacity: 0.75; }
+.link-copy:hover:not(:disabled) { opacity: 1; }
+.link-group .nc-ghead b, .link-group .nc-app b { flex: 1; font-weight: 600; }
+.nc.windows .link-group .nc-app b { font-weight: 500; }
+.link-compose { flex-direction: column; align-items: stretch; }
+.link-compose textarea {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px; font: inherit; font-size: 13px;
+  padding: 8px 10px; border-radius: 10px; color: inherit;
+  background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+}
+.link-compose-row { display: flex; align-items: center; gap: 8px; }
+.link-compose-row .nb-btn { flex: none; height: 28px; font-size: 13px; }
+.link-compose-row .nb-btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.link-compose-row select { max-width: 150px; height: 28px; font-size: 12px; }
+.nb.link-banner { flex-direction: row; align-items: center; gap: 10px; }
+.nb.windows.link-banner { padding: 12px 14px; }
+.link-banner .nb-body { -webkit-line-clamp: 2; }
+.link-banner-copy { flex: none !important; height: 30px; font-size: 13px; }
+.nb.windows .link-banner-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 22px; }
