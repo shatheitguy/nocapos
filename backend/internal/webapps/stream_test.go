@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -24,7 +23,8 @@ func newTestStreams(t *testing.T) (*Streams, *fakeStarts) {
 	t.Helper()
 	f := &fakeStarts{done: map[string]chan struct{}{}}
 	m := NewStreams(slog.New(slog.NewTextHandler(io.Discard, nil)), t.TempDir())
-	m.start = func(_ context.Context, s *streamSession, _ string) (*os.Process, <-chan struct{}, error) {
+	m.cleanup = nil
+	m.start = func(_ context.Context, s *streamSession, _ string) (func(), <-chan struct{}, error) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		if f.fail != nil {
@@ -33,12 +33,11 @@ func newTestStreams(t *testing.T) (*Streams, *fakeStarts) {
 		f.started = append(f.started, s)
 		d := make(chan struct{})
 		f.done[s.id] = d
-		return &os.Process{Pid: 1}, d, nil
-	}
-	m.stop = func(*os.Process) {
-		f.mu.Lock()
-		f.stopped++
-		f.mu.Unlock()
+		return func() {
+			f.mu.Lock()
+			f.stopped++
+			f.mu.Unlock()
+		}, d, nil
 	}
 	t.Cleanup(m.Close)
 	return m, f

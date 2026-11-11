@@ -48,6 +48,16 @@ export interface NativeStatus {
   reason?: string;
   /** The server's own screen is on: apps open there. */
   screen: boolean;
+  /** The full Linux desktop can open here. */
+  desktop: boolean;
+  /** Whether app sandboxes can start (the kernel allows them), with the fix. */
+  sandbox: SandboxCheck;
+}
+
+export interface SandboxCheck {
+  ok: boolean;
+  problem?: string;
+  fix?: string;
 }
 
 export interface NativeStream {
@@ -80,12 +90,17 @@ export const nativeApi = {
   updateAll: () => api<NativeJob>('/api/v1/native-apps/update-all', { method: 'POST' }),
   launch: (id: string) => api<Launched>(`/api/v1/native-apps/${enc(id)}/launch`, { method: 'POST' }),
   stream: (sid: string) => api<NativeStream>(`/api/v1/native-apps/streams/${enc(sid)}`),
+  /** Opens this person's full Linux desktop (a stream). */
+  desktop: () => api<Launched>('/api/v1/native-apps/desktop', { method: 'POST' }),
+  /** Streams the server's own screen (admins). */
+  serverScreen: () => api<Launched>('/api/v1/native-apps/server-screen', { method: 'POST' }),
   stopStream: (sid: string) => api<void>(`/api/v1/native-apps/streams/${enc(sid)}`, { method: 'DELETE' }),
 };
 
 /** The noVNC page for a stream, proxied same-origin by alfad. */
-export const streamURL = (sid: string) =>
-  `/apps/native/${sid}/vnc.html?autoconnect=1&reconnect=1&resize=scale&show_dot=1&path=apps/native/${sid}/websockify`;
+export const streamURL = (sid: string, opts: { remoteResize?: boolean; viewOnly?: boolean } = {}) =>
+  `/apps/native/${sid}/vnc.html?autoconnect=1&reconnect=1&resize=${opts.remoteResize ? 'remote' : 'scale'}&show_dot=1` +
+  `${opts.viewOnly ? '&view_only=1' : ''}&path=apps/native/${sid}/websockify`;
 
 /** Fetches an app's icon (with this session's token) as a blob: URL, or null. */
 export async function fetchNativeIcon(id: string): Promise<string | null> {

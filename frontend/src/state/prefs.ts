@@ -429,8 +429,12 @@ export const shownWallpaper = (chosen: string) =>
 /** Dock thickness (icon + padding) — the strip it reserves at a screen edge. */
 export const dockThickness = (p: Pick<PrefValues, 'dockSize'>) => p.dockSize + 32;
 
-/** Phones always get a bottom dock that never hides. */
-export const isCompact = () => (window.innerWidth || 1280) < 640;
+/**
+ * Phone-sized screens: narrow (portrait) or short and not wide (a phone held
+ * sideways). They get full-screen windows and a bottom dock that never hides.
+ */
+export const compactSize = (w: number, h: number) => w < 640 || (h < 480 && w < 1000);
+export const isCompact = () => compactSize(window.innerWidth || 1280, window.innerHeight || 800);
 
 export function effectiveDock(p: PrefValues): { position: DockPosition; autoHide: boolean } {
   return isCompact() ? { position: 'bottom', autoHide: false } : { position: p.dockPosition, autoHide: p.dockAutoHide };
@@ -480,6 +484,8 @@ export function applyPrefs(p: PrefValues) {
   const d = effectiveDock(p);
   const r = reserved(p);
   root.dataset.dock = d.position;
+  // Phone layout switch for CSS (see styles/mobile.css).
+  root.toggleAttribute('data-compact', isCompact());
   root.toggleAttribute('data-autohide', d.autoHide);
   root.style.setProperty('--res-top', `${r.top}px`);
   root.toggleAttribute('data-menubar', r.top > 0);
