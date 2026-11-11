@@ -180,7 +180,7 @@ export function UpdateOverlay() {
       break;
     case 'success':
       title = tr('upd.successTitle', { version: vtag(status?.version || target) });
-      sub = tr('upd.reloading', { n: countdown });
+      sub = res?.restart_needed ? tr('upd.reloadingRestart', { n: countdown }) : tr('upd.reloading', { n: countdown });
       break;
     case 'signin':
       title = tr('upd.backTitle');

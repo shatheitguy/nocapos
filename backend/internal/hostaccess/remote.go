@@ -52,7 +52,6 @@ import (
 const (
 	ScreenRDPPort = 3391 // the screen, Wayland sessions
 	ScreenVNCPort = 5906 // the screen, X11 sessions
-	VNCPort       = 5905 // NoCapOS full screen (kiosk)
 )
 
 // ScreenUnit is the transient unit the screen server runs in.
@@ -144,13 +143,7 @@ func (d *Desktop) grdDaemon() string {
 }
 
 func (d *Desktop) remoteSupported(mode string) bool {
-	switch mode {
-	case ModeFull:
-		return d.grdDaemon() != "" || d.lookPath("x11vnc")
-	case ModeKiosk:
-		return d.lookPath("wayvnc") || d.lookPath("x11vnc")
-	}
-	return false
+	return mode == ModeFull && (d.grdDaemon() != "" || d.lookPath("x11vnc"))
 }
 
 const pwChars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -441,36 +434,6 @@ func (d *Desktop) FollowScreen(ctx context.Context) {
 	d.stopMirrorLocked(ctx)
 }
 
-// vncKiosk starts a VNC server on NoCapOS full screen's display.
-func (d *Desktop) vncKiosk(ctx context.Context) (int, error) {
-	if d.portOpen(VNCPort) {
-		return VNCPort, nil
-	}
-	b, err := d.readFile(DesktopEnvFile)
-	if err != nil {
-		return 0, errors.New("NoCapOS full screen isn't running on the server's screen right now")
-	}
-	env := ParseLoginctlProps(string(b))
-	who := env["USER"]
-	if !userNameRe.MatchString(who) || who == "root" || !strings.HasPrefix(env["XDG_RUNTIME_DIR"], "/") || strings.Contains(env["XDG_RUNTIME_DIR"], "..") {
-		return 0, errors.New("the screen's session file isn't usable")
-	}
-	args := []string{"--unit=nocapos-desktop-vnc", "--collect", "--quiet", "--uid=" + who, "--setenv=XDG_RUNTIME_DIR=" + env["XDG_RUNTIME_DIR"]}
-	switch {
-	case env["WAYLAND_DISPLAY"] != "" && d.lookPath("wayvnc"):
-		args = append(args, "--setenv=WAYLAND_DISPLAY="+env["WAYLAND_DISPLAY"], "wayvnc", "127.0.0.1", strconv.Itoa(VNCPort))
-	case xDisplayRe.MatchString(env["DISPLAY"]) && d.lookPath("x11vnc"):
-		args = append(args, "x11vnc", "-display", env["DISPLAY"], "-localhost", "-rfbport", strconv.Itoa(VNCPort), "-forever", "-shared", "-nopw", "-quiet")
-	default:
-		return 0, ErrNoRemoteTool
-	}
-	_ = d.run(ctx, "systemctl", "reset-failed", "nocapos-desktop-vnc.service")
-	if err := d.run(ctx, "systemd-run", args...); err != nil {
-		return 0, err
-	}
-	return VNCPort, d.waitPort(VNCPort, 10*time.Second)
-}
-
 // RemoteView gets the screen ready to show in the browser and says where
 // guacd should connect.
 func (d *Desktop) RemoteView(ctx context.Context) (RemoteTarget, error) {
@@ -501,12 +464,6 @@ func (d *Desktop) RemoteView(ctx context.Context) (RemoteTarget, error) {
 			}
 			time.Sleep(time.Second)
 		}
-	case ModeKiosk:
-		port, err := d.vncKiosk(ctx)
-		if err != nil {
-			return RemoteTarget{}, err
-		}
-		return RemoteTarget{Protocol: "vnc", Port: port}, nil
 	}
 	return RemoteTarget{}, ErrRemoteOff
 }

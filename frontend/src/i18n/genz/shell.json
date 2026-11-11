@@ -111,6 +111,7 @@
   "upd.restartingSub": "NoCapOS is restarting into the new version. This page reconnects on its own.",
   "upd.successTitle": "You're on {version}. That's the Glow Up, no cap.",
   "upd.reloading": "Reloading in {n}…",
+  "upd.reloadingRestart": "Restart the server to finish: its screen switches to NoCap Desktop. Reloading in {n}…",
   "upd.backTitle": "NoCapOS is back",
   "upd.backSub": "Your session ended while it restarted. Sign back in to keep going — Settings shows how the update went.",
   "upd.failedUnchanged": "Update flopped — nothing changed, your stuff is safe.",
