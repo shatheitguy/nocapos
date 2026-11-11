@@ -7,6 +7,7 @@ import { fmtBytes } from '../lib/format';
 import { toast } from '../state/toasts';
 import { confirmDialog } from '../state/confirm';
 import { TypeConfirm } from './StorageParts';
+import { confirmChange, confirmRepair, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
 
 // Packages: this server's own system packages (apt, dnf, pacman or zypper).
 // Admin only. Every change runs as a background task on the server, one at a
@@ -18,6 +19,7 @@ const PAGE = 100;
 const ACTION_LABEL: Record<string, string> = {
   refresh: 'Checking for updates',
   'upgrade-all': 'Installing all updates',
+  repair: 'Repairing packages',
   upgrade: 'Updating',
   install: 'Installing',
   remove: 'Removing',
@@ -264,7 +266,12 @@ function Overview({ status, features, checks, busy, start }: { status: PkgStatus
                 className="small ghost"
                 disabled={busy}
                 onClick={async () => {
-                  if (m.action === 'upgrade-all' || m.action === 'autoremove') {
+                  if (m.action === 'upgrade-all') {
+                    const allow = await confirmChange('upgrade-all', [], { title: `${m.label}?`, message: m.desc, confirmLabel: m.label });
+                    if (allow !== null) void start(pkgApi.change('upgrade-all', [], allow));
+                    return;
+                  }
+                  if (m.action === 'autoremove') {
                     const ok = await confirmDialog({ title: `${m.label}?`, message: m.desc, confirmLabel: m.label });
                     if (!ok) return;
                   }
@@ -459,13 +466,22 @@ function Installed({ status, busy, start }: { status: PkgStatus; busy: boolean; 
 
 function Updates({ busy, start }: { busy: boolean; start: Start }) {
   const [ups, setUps] = useState<PkgUpdate[] | null>(null);
+  const [health, setHealth] = useState<PkgHealth | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     void pkgApi.updates().then((r) => {
-      if (r.ok) setUps(r.data.updates);
-      else setErr(r.error ?? 'Couldn’t read updates');
+      if (r.ok) {
+        setUps(r.data.updates);
+        setHealth(r.data.health ?? null);
+      } else setErr(r.error ?? 'Couldn’t read updates');
     });
   }, []);
+  const { kernel, rest } = splitKernel(ups ?? []);
+  const kernelNames = kernel.filter((u) => !u.held).map((u) => u.name);
+  const upgrade = async (names: string[]) => {
+    const allow = await confirmChange('upgrade', names, null);
+    if (allow !== null) void start(pkgApi.change('upgrade', names, allow));
+  };
   return (
     <div className="st-page">
       <div className="pk-head">
@@ -478,13 +494,24 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
           className="small"
           disabled={busy || !ups?.length}
           onClick={async () => {
-            if (await confirmDialog({ title: 'Install all updates?', message: `${ups?.length ?? 0} packages will be updated.`, confirmLabel: 'Update all' })) void start(pkgApi.act('upgrade-all'));
+            const allow = await confirmChange('upgrade-all', [], { title: 'Install all updates?', message: tr('pkg.updateAllMsg', { n: ups?.length ?? 0 }), confirmLabel: 'Update all' });
+            if (allow !== null) void start(pkgApi.change('upgrade-all', [], allow));
           }}
         >
           <Icon name="download" size={14} /> Update all
         </button>
       </div>
       {err && <div className="st-note bad">{err}</div>}
+      {health && (
+        <RepairCard
+          health={health}
+          busy={busy}
+          onRepair={async () => {
+            const allow = await confirmRepair();
+            if (allow !== null) void start(pkgApi.change('repair', [], allow));
+          }}
+        />
+      )}
       {!ups ? (
         !err && <p className="muted">Loading…</p>
       ) : ups.length === 0 ? (
@@ -501,7 +528,25 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
               </tr>
             </thead>
             <tbody>
-              {ups.map((u) => (
+              {kernel.length > 0 && (
+                <tr className="pk-kernel">
+                  <td className="name">
+                    {tr('pkg.kernelRow')}
+                    <span className="chip tiny warn">{tr('pkg.kernelRestart')}</span>
+                    <div className="muted small mono">{kernel.map((u) => u.name).join(', ')}</div>
+                  </td>
+                  <td className="mono small">{[...new Set(kernel.map((u) => u.current || '–'))].join(', ')}</td>
+                  <td className="mono small">{[...new Set(kernel.map((u) => u.available))].join(', ')}</td>
+                  <td>
+                    <div className="pk-row-actions">
+                      <button type="button" className="ghost small" disabled={busy || kernelNames.length === 0} onClick={() => void upgrade(kernelNames)}>
+                        Update
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {rest.map((u) => (
                 <tr key={u.name}>
                   <td className="name">
                     {u.name}
@@ -511,7 +556,7 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
                   <td className="mono small">{u.available}</td>
                   <td>
                     <div className="pk-row-actions">
-                      <button type="button" className="ghost small" disabled={busy || u.held} onClick={() => void start(pkgApi.act('upgrade', u.name))}>
+                      <button type="button" className="ghost small" disabled={busy || u.held} onClick={() => void upgrade([u.name])}>
                         Update
                       </button>
                     </div>

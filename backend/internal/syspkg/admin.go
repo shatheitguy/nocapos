@@ -28,6 +28,8 @@ type Admin struct {
 	mu       sync.Mutex
 	cached   []Package
 	cachedAt time.Time
+	health   *Health
+	healthAt time.Time
 }
 
 func NewAdmin() *Admin { return &Admin{Run: runQuiet} }
@@ -54,7 +56,7 @@ func (a *Admin) InstalledCached(ctx context.Context, maxAge time.Duration) ([]Pa
 // Invalidate drops the cached list (after a package task).
 func (a *Admin) Invalidate() {
 	a.mu.Lock()
-	a.cached = nil
+	a.cached, a.health = nil, nil
 	a.mu.Unlock()
 }
 
@@ -209,8 +211,7 @@ func (a *Admin) Updates(ctx context.Context) ([]Update, error) {
 	for i := range ups {
 		ups[i].Held = ups[i].Held || held[ups[i].Name]
 	}
-	MarkKernels(ups)
-	return ups, nil
+	return MarkKernels(ups), nil
 }
 
 // CheckRemove refuses removals that would take away a protected package,
