@@ -109,13 +109,16 @@ object Sync {
 
     // ---------- NoCap OS → phone (long-poll while the app runs) ----------
 
-    /** Starts (or restarts) listening to your server, if anything needs it. */
+    /**
+     * Starts (or restarts) listening to your server while linked: sign-in
+     * alerts always come this way (they're about your account's safety), plus
+     * notices and the clipboard when those are on.
+     */
     fun start(ctx: Context) {
         val app = ctx.applicationContext
         Prefs.init(app)
         loop?.cancel()
         if (Vault.get(app).link == null) return
-        if (!wantsNotices() && !Opt.clipSync.v && !Opt.forward.v) return
         loop = scope.launch { listen(app) }
     }
 
@@ -154,6 +157,7 @@ object Sync {
     private suspend fun isActiveSafe() = kotlin.coroutines.coroutineContext.isActive
 
     private suspend fun handle(ctx: Context, ev: NoCapApi.Events) {
+        if (ev.signins.isNotEmpty()) Signins.deliver(ctx, ev.signins, live = true)
         if (wantsNotices()) {
             val last = Prefs.lastNotice
             for (n in ev.notices.filter { it.id > last }.sortedBy { it.id }.takeLast(5)) {

@@ -226,6 +226,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, u.ID, "devices.claim", d.Name, true, d.Platform)
+	s.devicePaired(r, u, d)
 	writeJSON(w, http.StatusCreated, claimResponse{
 		DeviceID: d.ID, Token: token, NocapID: nocapID, ServerName: s.serverName(),
 		User: map[string]string{"username": u.Username},
@@ -316,6 +317,7 @@ func (s *Server) devicesRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.link().forgetDevice(d.UserID, d.ID)
+	s.sessionsChanged(d.UserID)
 	s.audit(r, u.ID, "devices.revoke", d.Name, true, "owner "+d.Username)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -360,6 +362,11 @@ func (s *Server) device(h http.HandlerFunc) http.Handler {
 				s.Log.Warn("device last seen not saved", "device", d.ID, "err", err)
 			} else {
 				d.LastSeenAt = now.UTC()
+			}
+		}
+		if ip := clientIP(r, s.Config.TrustedProxies); ip != d.LastIP {
+			if err := s.Store.SetDeviceIP(ctx, d.ID, ip); err == nil {
+				d.LastIP = ip
 			}
 		}
 		ctx = context.WithValue(context.WithValue(ctx, deviceKey, d), userKey, u)

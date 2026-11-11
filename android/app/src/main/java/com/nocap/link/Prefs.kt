@@ -279,6 +279,11 @@ object Prefs {
         get() = sp?.getLong("last_notice", 0) ?: 0
         set(v) { sp?.edit()?.putLong("last_notice", v)?.apply() }
 
+    /** The newest sign-in alert already shown (0 = never checked). */
+    var lastSignin: Long
+        get() = sp?.getLong("last_signin", 0) ?: 0
+        set(v) { sp?.edit()?.putLong("last_signin", v)?.apply() }
+
     fun init(ctx: Context) {
         Opt.init(ctx)
         if (sp == null) sp = ctx.applicationContext.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE)

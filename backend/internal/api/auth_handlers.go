@@ -94,6 +94,7 @@ func (s *Server) authSetup(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.setup", sess.User.Username, true, "")
 		s.Log.Info("administrator account created", "username", sess.User.Username)
+		s.signedIn(r, sess, nil)
 		s.writeSession(w, r, http.StatusCreated, sess)
 	case errors.Is(err, auth.ErrSetupDone):
 		writeError(w, http.StatusConflict, "setup_done", err.Error())
@@ -134,6 +135,7 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "")
 		s.keepSharingPassword(sess.User.Username, req.Password)
+		s.signedIn(r, sess, nil)
 		s.writeSession(w, r, http.StatusOK, sess)
 	case errors.As(err, &challenge):
 		// The password was right; the session waits for the 2FA code.
@@ -175,6 +177,7 @@ func (s *Server) authLoginTOTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		s.audit(r, sess.User.ID, "auth.login", sess.User.Username, true, "with 2FA code")
+		s.signedIn(r, sess, nil)
 		s.writeSession(w, r, http.StatusOK, sess)
 	case errors.Is(err, auth.ErrTOTPBadCode):
 		s.audit(r, "", "auth.login.totp", "", false, "wrong or reused code")
@@ -252,6 +255,9 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 		}
 		// Terminals, remote desktops and Brave opened from this session end too.
 		s.live.closeSession(userID, sid)
+		if userID != "" {
+			s.sessionsChanged(userID)
+		}
 	}
 	s.clearSessionCookie(w, r)
 	w.WriteHeader(http.StatusNoContent)

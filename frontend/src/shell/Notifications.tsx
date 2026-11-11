@@ -9,6 +9,8 @@ import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
 import { useLink, useLinkUnseen } from '../state/link';
 import { ClipBanner, ClipboardSection, PhoneSection } from './LinkSync';
+import { SigninBanners, SigninSection } from './Signins';
+import { useSignins } from '../state/signins';
 import { toast } from '../state/toasts';
 import {
   noticeText,
@@ -159,9 +161,11 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
 function Banners({ look }: { look: Look }) {
   const banners = useNotifications((s) => s.banners);
   const clip = useLink((s) => s.clipBanner);
-  if (!banners.length && !clip) return null;
+  const signins = useSignins((s) => s.banners.length);
+  if (!banners.length && !clip && !signins) return null;
   return (
     <div className={`nb-stack ${look}`} aria-live="polite">
+      <SigninBanners look={look} />
       {banners.map((n) => (
         <Banner key={n.id} n={n} look={look} />
       ))}
@@ -296,10 +300,11 @@ function MacCenter({ items }: { items: Notice[] }) {
       window.removeEventListener('blur', off);
     };
   }, []);
-  const phoneNotes = useLink((s) => s.notes.length);
+  const phoneNotes = useLink((s) => s.notes.length) + useSignins((s) => s.alerts.length);
   return (
     <div className="nc-scroll">
       {!items.length && !phoneNotes && <div className="nc-none">No Notifications</div>}
+      <SigninSection look="mac" />
       <PhoneSection look="mac" />
       <ClipboardSection look="mac" />
       {byApp(items).map(([k, list]) => (
@@ -342,7 +347,7 @@ function byApp(items: Notice[]) {
 function WinCenter({ items }: { items: Notice[] }) {
   const clear = useNotifications((s) => s.clear);
   const focus = usePrefs((s) => s.focusMode);
-  const phoneNotes = useLink((s) => s.notes.length);
+  const phoneNotes = useLink((s) => s.notes.length) + useSignins((s) => s.alerts.length);
   return (
     <>
       <div className="nc-head">
@@ -365,6 +370,7 @@ function WinCenter({ items }: { items: Notice[] }) {
       </div>
       <div className="nc-scroll">
         {!items.length && !phoneNotes && <Empty />}
+        <SigninSection look="windows" />
         <PhoneSection look="windows" />
         <ClipboardSection look="windows" />
         {byApp(items).map(([k, list]) => (
@@ -386,6 +392,7 @@ function Center({ look }: { look: Look }) {
     if (open) {
       setShown(true);
       useLink.getState().markSeen();
+      useSignins.getState().markSeen();
       return;
     }
     const t = window.setTimeout(() => setShown(false), 220);
@@ -417,7 +424,7 @@ function Center({ look }: { look: Look }) {
   );
 }
 
-/** Banners and the Notification Center (system notifications for admins; phone notifications and the clipboard for everyone). */
+/** Banners and the Notification Center (system notifications for admins; sign-ins, phone notifications and the clipboard for everyone). */
 export function NotificationLayer() {
   const look = useNotifyStyle();
   return (
@@ -430,7 +437,7 @@ export function NotificationLayer() {
 
 /** The bell in the tray / menu bar, with the unread count. */
 export function NotifyBell({ className, size = 16 }: { className: string; size?: number }) {
-  const unread = useNotifications((s) => s.unread) + useLinkUnseen();
+  const unread = useNotifications((s) => s.unread) + useLinkUnseen() + useSignins((s) => s.unseen);
   const open = useNotifications((s) => s.centerOpen);
   const label = unread ? tr('nc.bellUnread', { n: unread }) : tr('nc.bell');
   return (

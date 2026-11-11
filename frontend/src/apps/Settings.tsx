@@ -313,7 +313,11 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
     case 'lock':
       return <LockScreen />;
     case 'account':
-      return <YourAccount />;
+      return (
+        <div className="stack settings-page">
+          <YourAccount />
+        </div>
+      );
     case 'users':
       return <UsersSettings isAdmin={isAdmin} withAccount={false} />;
     case 'devices':

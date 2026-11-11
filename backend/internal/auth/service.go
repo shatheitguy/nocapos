@@ -42,6 +42,7 @@ type ClientMeta struct {
 }
 
 type Session struct {
+	ID             string // the login session (refresh token family)
 	AccessToken    string
 	AccessExpires  time.Time
 	RefreshToken   string
@@ -407,6 +408,7 @@ func (s *Service) issue(ctx context.Context, u *store.User, family string, famil
 		return nil, err
 	}
 	return &Session{
+		ID:             family,
 		AccessToken:    access,
 		AccessExpires:  accessExp,
 		RefreshToken:   raw,

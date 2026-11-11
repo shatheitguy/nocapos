@@ -2699,3 +2699,14 @@ button.ce-add-line { align-self: flex-start; }
 .win-close-solo { flex: none; margin-left: auto; }
 :root[data-title-buttons='left'] .win-close-solo { margin-left: 0; margin-right: 0; }
 .win-close-solo.flb-close { margin-left: 0; }
+
+/* Signed-in devices widget */
+.sessions-widget { text-align: left; }
+.sessions-widget-count { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.sessions-widget-count b { font-size: 26px; line-height: 1; font-weight: 700; font-family: var(--display, var(--font)); color: var(--accent); text-shadow: 0 0 12px var(--glow, transparent); font-variant-numeric: tabular-nums; }
+.sessions-everyone { margin-left: auto; }
+.sessions-widget-sub { margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessions-widget .widget-aside.sessions-here { color: var(--ok); }
+@container widget (max-height: 139px) {
+  .sessions-widget .widget-list { display: none; }
+}

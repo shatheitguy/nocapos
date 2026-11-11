@@ -25,6 +25,7 @@ import { watchStoreApps } from '../state/storeApps';
 import { watchNativeApps } from '../state/nativeApps';
 import { watchNotifications } from '../state/notifications';
 import { watchLink } from '../state/link';
+import { watchSignins } from '../state/signins';
 import { NotificationLayer } from './Notifications';
 import { AgentApprovals } from './AgentApprovals';
 import { UpdateReady } from './UpdateReady';
@@ -103,6 +104,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
   // NoCap Link, for everyone: the phone's notifications and the shared clipboard.
   useEffect(() => watchLink(user.username), [user.id, user.username]);
+  // Where you're signed in, and a heads-up when your account signs in somewhere else.
+  useEffect(() => watchSignins(user.id), [user.id]);
 
   // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
   useEffect(() => {

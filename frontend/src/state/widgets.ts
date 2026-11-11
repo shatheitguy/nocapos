@@ -21,11 +21,14 @@ export type WidgetType =
   | 'gauges'
   | 'containerGrid'
   | 'scripts'
-  | 'transfers';
+  | 'transfers'
+  | 'sessions';
 
 export interface WidgetDef {
   type: WidgetType;
   name: string;
+  /** i18n key for the name (widgets added since the two voices). */
+  nameKey?: string;
   icon: string;
   min: { w: number; h: number };
   max: { w: number; h: number };
@@ -53,6 +56,7 @@ export const WIDGETS: WidgetDef[] = [
   { type: 'containerGrid', name: 'Container cards', icon: 'containers', min: { w: 200, h: 130 }, max: { w: 860, h: 640 }, default: { w: 420, h: 280 }, adminOnly: true },
   { type: 'scripts', name: 'Quick scripts', icon: 'fileCode', min: { w: 180, h: 110 }, max: { w: 640, h: 560 }, default: { w: 320, h: 230 }, adminOnly: true },
   { type: 'transfers', name: 'Transfers', icon: 'swap', min: { w: 200, h: 110 }, max: { w: 560, h: 560 }, default: { w: 320, h: 220 }, adminOnly: true },
+  { type: 'sessions', name: 'Signed-in devices', nameKey: 'ses.widgetTitle', icon: 'shield', min: { w: 170, h: 110 }, max: { w: 520, h: 520 }, default: { w: 300, h: 230 } },
   { type: 'accelerators', name: 'AI accelerators', icon: 'gpu', min: { w: 160, h: 100 }, max: { w: 520, h: 320 }, default: { w: 320, h: 180 } },
 ];
 

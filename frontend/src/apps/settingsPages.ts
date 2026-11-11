@@ -110,7 +110,7 @@ export const ENTRIES: Entry[] = [
   { id: 'security', cat: 'security', label: 'Privacy & Security', icon: 'shield', desc: 'Two-factor authentication and your password', keywords: '2fa two-factor totp otp authenticator security password privacy',
     options: ['Two-factor authentication', 'Change password'] },
   { id: 'lock', cat: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
-  { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out', options: ['Profile photo', 'Close other windows', 'Sign out'] },
+  { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out sessions signed in devices sign-in alerts', options: ['Profile photo', 'Close other windows', 'Sign out'] },
   { id: 'users', cat: 'users', admin: true, label: 'Users & Groups', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role', 'Access', 'Desktop or file sharing only', 'Shared folders', 'Apps'] },
 ];
 
