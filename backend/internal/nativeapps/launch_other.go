@@ -13,3 +13,5 @@ func startOnScreen(DesktopEnv, []string) error {
 }
 
 func lookupAccount(string) *webapps.RunAs { return nil }
+
+func ensureAppsAccount() (*webapps.RunAs, error) { return nil, webapps.ErrNoAccount }

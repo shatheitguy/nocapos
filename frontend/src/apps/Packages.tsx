@@ -1,12 +1,13 @@
-import { tr } from '../i18n';
+import { tr, useT } from '../i18n';
 import { WinClose } from '../components/WinClose';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { pkgApi, type Pkg, type PkgAction, type PkgFeature, type PkgJob, type PkgStatus, type PkgUpdate } from '../api/packages';
+import { pkgApi, type Pkg, type PkgAction, type PkgCheck, type PkgFeature, type PkgJob, type PkgStatus, type PkgUpdate } from '../api/packages';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
 import { toast } from '../state/toasts';
 import { confirmDialog } from '../state/confirm';
 import { TypeConfirm } from './StorageParts';
+import { confirmChange, confirmRepair, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
 
 // Packages: this server's own system packages (apt, dnf, pacman or zypper).
 // Admin only. Every change runs as a background task on the server, one at a
@@ -18,6 +19,7 @@ const PAGE = 100;
 const ACTION_LABEL: Record<string, string> = {
   refresh: 'Checking for updates',
   'upgrade-all': 'Installing all updates',
+  repair: 'Repairing packages',
   upgrade: 'Updating',
   install: 'Installing',
   remove: 'Removing',
@@ -32,6 +34,7 @@ const ACTION_LABEL: Record<string, string> = {
 export function Packages() {
   const [status, setStatus] = useState<PkgStatus | null>(null);
   const [features, setFeatures] = useState<PkgFeature[]>([]);
+  const [checks, setChecks] = useState<PkgCheck[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>('overview');
   const [job, setJob] = useState<PkgJob | null>(null);
@@ -44,6 +47,7 @@ export function Packages() {
     setError(null);
     setStatus(r.data.status);
     setFeatures(r.data.features);
+    setChecks(r.data.checks ?? []);
     const running = r.data.jobs.find((j) => j.running);
     if (running) follow(running.id);
   }, []);
@@ -133,7 +137,7 @@ export function Packages() {
       </nav>
       <main className="app-content pk-main">
         {job && <JobPanel job={job} onClose={() => !job.running && setJob(null)} />}
-        {view === 'overview' && <Overview status={status} features={features} busy={busy} start={start} />}
+        {view === 'overview' && <Overview status={status} features={features} checks={checks} busy={busy} start={start} />}
         {view === 'installed' && <Installed key={reloadKey} status={status} busy={busy} start={start} />}
         {view === 'updates' && <Updates key={reloadKey} busy={busy} start={start} />}
       </main>
@@ -167,7 +171,8 @@ function JobPanel({ job, onClose }: { job: PkgJob; onClose: () => void }) {
   );
 }
 
-function Overview({ status, features, busy, start }: { status: PkgStatus; features: PkgFeature[]; busy: boolean; start: Start }) {
+function Overview({ status, features, checks, busy, start }: { status: PkgStatus; features: PkgFeature[]; checks: PkgCheck[]; busy: boolean; start: Start }) {
+  const t = useT();
   const [name, setName] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
@@ -217,6 +222,33 @@ function Overview({ status, features, busy, start }: { status: PkgStatus; featur
         ))}
       </div>
 
+      {checks.length > 0 && (
+        <>
+          <span className="section-label">{t('pk.checks')}</span>
+          <div className="ucard ulist">
+            {checks.map((c) => (
+              <div key={c.id} className="urow">
+                <span className="urow-icon">
+                  <Icon name={c.ok ? 'check' : 'wrench'} size={16} />
+                </span>
+                <span className="urow-text">
+                  <span className="urow-title">{c.id === 'app-sandbox' ? t('pk.checkSandbox') : c.id}</span>
+                  <span className="urow-desc">
+                    {c.ok ? (
+                      t('pk.checkOk')
+                    ) : (
+                      <>
+                        {c.problem} {t('pk.checkFix')} <code>{c.fix}</code>
+                      </>
+                    )}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <span className="section-label">Maintenance</span>
       <div className="ucard ulist">
         {maint.map((m) => (
@@ -234,7 +266,12 @@ function Overview({ status, features, busy, start }: { status: PkgStatus; featur
                 className="small ghost"
                 disabled={busy}
                 onClick={async () => {
-                  if (m.action === 'upgrade-all' || m.action === 'autoremove') {
+                  if (m.action === 'upgrade-all') {
+                    const allow = await confirmChange('upgrade-all', [], { title: `${m.label}?`, message: m.desc, confirmLabel: m.label });
+                    if (allow !== null) void start(pkgApi.change('upgrade-all', [], allow));
+                    return;
+                  }
+                  if (m.action === 'autoremove') {
                     const ok = await confirmDialog({ title: `${m.label}?`, message: m.desc, confirmLabel: m.label });
                     if (!ok) return;
                   }
@@ -429,13 +466,22 @@ function Installed({ status, busy, start }: { status: PkgStatus; busy: boolean; 
 
 function Updates({ busy, start }: { busy: boolean; start: Start }) {
   const [ups, setUps] = useState<PkgUpdate[] | null>(null);
+  const [health, setHealth] = useState<PkgHealth | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     void pkgApi.updates().then((r) => {
-      if (r.ok) setUps(r.data.updates);
-      else setErr(r.error ?? 'Couldn’t read updates');
+      if (r.ok) {
+        setUps(r.data.updates);
+        setHealth(r.data.health ?? null);
+      } else setErr(r.error ?? 'Couldn’t read updates');
     });
   }, []);
+  const { kernel, rest } = splitKernel(ups ?? []);
+  const kernelNames = kernel.filter((u) => !u.held).map((u) => u.name);
+  const upgrade = async (names: string[]) => {
+    const allow = await confirmChange('upgrade', names, null);
+    if (allow !== null) void start(pkgApi.change('upgrade', names, allow));
+  };
   return (
     <div className="st-page">
       <div className="pk-head">
@@ -448,13 +494,24 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
           className="small"
           disabled={busy || !ups?.length}
           onClick={async () => {
-            if (await confirmDialog({ title: 'Install all updates?', message: `${ups?.length ?? 0} packages will be updated.`, confirmLabel: 'Update all' })) void start(pkgApi.act('upgrade-all'));
+            const allow = await confirmChange('upgrade-all', [], { title: 'Install all updates?', message: tr('pkg.updateAllMsg', { n: ups?.length ?? 0 }), confirmLabel: 'Update all' });
+            if (allow !== null) void start(pkgApi.change('upgrade-all', [], allow));
           }}
         >
           <Icon name="download" size={14} /> Update all
         </button>
       </div>
       {err && <div className="st-note bad">{err}</div>}
+      {health && (
+        <RepairCard
+          health={health}
+          busy={busy}
+          onRepair={async () => {
+            const allow = await confirmRepair();
+            if (allow !== null) void start(pkgApi.change('repair', [], allow));
+          }}
+        />
+      )}
       {!ups ? (
         !err && <p className="muted">Loading…</p>
       ) : ups.length === 0 ? (
@@ -471,7 +528,25 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
               </tr>
             </thead>
             <tbody>
-              {ups.map((u) => (
+              {kernel.length > 0 && (
+                <tr className="pk-kernel">
+                  <td className="name">
+                    {tr('pkg.kernelRow')}
+                    <span className="chip tiny warn">{tr('pkg.kernelRestart')}</span>
+                    <div className="muted small mono">{kernel.map((u) => u.name).join(', ')}</div>
+                  </td>
+                  <td className="mono small">{[...new Set(kernel.map((u) => u.current || '–'))].join(', ')}</td>
+                  <td className="mono small">{[...new Set(kernel.map((u) => u.available))].join(', ')}</td>
+                  <td>
+                    <div className="pk-row-actions">
+                      <button type="button" className="ghost small" disabled={busy || kernelNames.length === 0} onClick={() => void upgrade(kernelNames)}>
+                        Update
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {rest.map((u) => (
                 <tr key={u.name}>
                   <td className="name">
                     {u.name}
@@ -481,7 +556,7 @@ function Updates({ busy, start }: { busy: boolean; start: Start }) {
                   <td className="mono small">{u.available}</td>
                   <td>
                     <div className="pk-row-actions">
-                      <button type="button" className="ghost small" disabled={busy || u.held} onClick={() => void start(pkgApi.act('upgrade', u.name))}>
+                      <button type="button" className="ghost small" disabled={busy || u.held} onClick={() => void upgrade([u.name])}>
                         Update
                       </button>
                     </div>

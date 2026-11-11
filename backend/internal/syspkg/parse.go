@@ -34,6 +34,9 @@ type Update struct {
 	Security bool `json:"security"`
 	// Kernel: a kernel (or boot firmware) update; it takes effect after a restart.
 	Kernel bool `json:"kernel"`
+	// Group: "kernel" for the kernel, its headers, modules and
+	// meta-packages, which are updated together as one "Kernel update".
+	Group string `json:"group,omitempty"`
 }
 
 func lines(out string) []string {
@@ -156,9 +159,12 @@ func parseSize(s string) int64 {
 	return int64(v * mult)
 }
 
-var aptUpgradableRe = regexp.MustCompile(`^(\S+?)/(\S+)\s+(\S+)\s+(\S+)(?:\s+\[upgradable from:\s*([^\]]+)\])?`)
+var aptUpgradableRe = regexp.MustCompile(`^(\S+?)/(\S+)\s+(\S+)\s+(\S+)\s+\[upgradable from:\s*([^\]]+)\]`)
 
-// parseAptUpgradable reads `apt list --upgradable`.
+// parseAptUpgradable reads `apt list --upgradable`. Only "[upgradable from:
+// …]" lines are updates; a line whose new version is the installed one
+// (a package dpkg left half-configured shows up like that) isn't, and
+// neither are "[residual-config]" or "[installed…]" lines.
 func parseAptUpgradable(out string) []Update {
 	var ups []Update
 	for _, l := range lines(out) {
@@ -166,8 +172,12 @@ func parseAptUpgradable(out string) []Update {
 		if m == nil {
 			continue
 		}
-		ups = append(ups, Update{Name: m[1], Origin: m[2], Available: m[3], Arch: m[4], Current: strings.TrimSpace(m[5]),
-			Security: AptSecuritySuite(m[2]), Kernel: IsKernelPackage(m[1])})
+		cur := strings.TrimSpace(m[5])
+		if cur == m[3] {
+			continue
+		}
+		ups = append(ups, Update{Name: m[1], Origin: m[2], Available: m[3], Arch: m[4], Current: cur,
+			Security: AptSecuritySuite(m[2]), Kernel: IsKernelPackage(m[1]), Group: groupOf(m[1])})
 	}
 	return ups
 }
@@ -203,11 +213,38 @@ func IsKernelPackage(name string) bool {
 	return false
 }
 
-// MarkKernels sets Kernel on updates whose package needs a restart.
-func MarkKernels(ups []Update) {
-	for i := range ups {
-		ups[i].Kernel = ups[i].Kernel || IsKernelPackage(ups[i].Name)
+// kernelFamily: name prefixes of packages that belong with the kernel
+// (headers and build tools follow its version) besides kernelPackages.
+var kernelFamily = []string{"linux-headers-", "linux-kbuild-", "linux-image-", "linux-modules-"}
+
+// groupOf returns "kernel" for packages updated together with the kernel.
+func groupOf(name string) string {
+	if IsKernelPackage(name) {
+		return "kernel"
 	}
+	for _, p := range kernelFamily {
+		if strings.HasPrefix(name, p) {
+			return "kernel"
+		}
+	}
+	return ""
+}
+
+// MarkKernels sets Kernel (and the kernel Group) on updates whose package
+// needs a restart, and drops "updates" to the version already installed.
+func MarkKernels(ups []Update) []Update {
+	out := ups[:0]
+	for _, u := range ups {
+		if u.Current != "" && u.Current == u.Available {
+			continue
+		}
+		u.Kernel = u.Kernel || IsKernelPackage(u.Name)
+		if u.Group == "" {
+			u.Group = groupOf(u.Name)
+		}
+		out = append(out, u)
+	}
+	return out
 }
 
 // CountSecurity counts the security updates.
@@ -389,12 +426,17 @@ func Plan(mgr, action, arg string) ([][]string, error) {
 		switch action {
 		case ActRefresh:
 			return [][]string{cmd("apt-get", "update")}, nil
+		// The API runs these through AptSteps (with the removal check);
+		// this is the same without it, never removing anything.
 		case ActUpgradeAll:
-			// --with-new-pkgs: a new kernel arrives as a new package, which a
-			// plain "upgrade" holds back (with its meta-package).
-			return [][]string{cmd("apt-get", "update"), apt("-y", "--with-new-pkgs", "upgrade")}, nil
+			_, repair := aptRepairCmds(true)
+			return append([][]string{cmd("apt-get", "update")}, append(repair, aptCmd(true, "dist-upgrade"))...), nil
 		case ActUpgrade:
-			return [][]string{apt("-y", "install", "--only-upgrade", arg)}, nil
+			_, repair := aptRepairCmds(true)
+			return append(repair, aptCmd(true, "install", arg)), nil
+		case ActRepair:
+			_, repair := aptRepairCmds(true)
+			return repair, nil
 		case ActInstall:
 			return [][]string{cmd("apt-get", "update"), apt("-y", "install", arg)}, nil
 		case ActRemove:

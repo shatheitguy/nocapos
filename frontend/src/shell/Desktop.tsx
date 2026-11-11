@@ -17,7 +17,7 @@ import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { useWidgets } from '../state/widgets';
 import { ConfirmHost } from '../components/ConfirmHost';
-import { hasMenuBar } from '../state/prefs';
+import { compactSize, hasMenuBar } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
@@ -53,7 +53,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const screensaver = usePrefs((s) => s.screensaver);
   const saverDelay = usePrefs((s) => s.saverDelay);
   const vp = useViewport();
-  const compact = vp.w < 640;
+  const compact = compactSize(vp.w, vp.h);
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
   const [launcher, setLauncher] = useState(false);
   const [saverOn, setSaverOn] = useState(false);
