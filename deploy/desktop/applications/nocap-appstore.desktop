@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=NoCap App Store
+Comment=Install apps on this server
+Exec=/usr/local/lib/nocapos/nocap-hub appcenter
+Icon=nocapos
+Terminal=false
+Categories=System;PackageManager;
+Keywords=apps;store;install;nocapos;
+StartupNotify=true
+StartupWMClass=NoCapHub

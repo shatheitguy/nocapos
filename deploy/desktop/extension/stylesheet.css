@@ -1,0 +1,12 @@
+/* NoCapOS look for the desktop: the logo in the top bar and the NoCap red
+   accent on GNOME versions without an accent colour setting. */
+.nocapos-logo-button { -natural-hpadding: 10px; -minimum-hpadding: 6px; }
+.nocapos-logo { icon-size: 18px; }
+
+#panel { background-color: #050508; }
+
+.toggle-switch:checked { background-color: #e5383b; }
+.quick-toggle:checked { background-color: #e5383b; color: #ffffff; }
+.slider { -barlevel-active-background-color: #e5383b; }
+.button.default, .modal-dialog-button.default { background-color: #e5383b; color: #ffffff; }
+.unlock-dialog .login-dialog-button.default-button { background-color: #e5383b; color: #ffffff; }

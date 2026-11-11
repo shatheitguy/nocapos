@@ -17,9 +17,13 @@
 #   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
 #                       engine, Brave, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
 #                       to install each one later, from its app or from Packages
-#   --desktop           NoCap Desktop: NoCapOS full screen on this machine's own monitor
-#                       (a small Wayland compositor + browser on tty1, still behind the sign-in).
-#                       On by default when a monitor is plugged in.
+#   --desktop           NoCap Desktop: a full desktop on this machine's own monitor (NoCapOS
+#                       sign-in screen, dock, file manager, terminal, settings, NoCap Hub and
+#                       the App Store's Linux apps; sign in with this machine's Linux accounts).
+#                       On by default when a monitor is plugged in; with no monitor nothing
+#                       desktop-related is installed unless you pass this.
+#   --desktop=kiosk     NoCap Desktop as NoCapOS full screen only (a small compositor + browser,
+#                       for small or 32-bit boards)
 #   --no-desktop        don't set up NoCap Desktop (and turn it off if it was on)
 #   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
 #   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
@@ -72,13 +76,14 @@ while [ $# -gt 0 ]; do
     --install-docker) INSTALL_DOCKER=yes ;;
     --minimal) MINIMAL=1 ;;
     --no-branding) BRANDING=0 ;;
-    --desktop) DESKTOP=yes ;;
-    --no-desktop) DESKTOP=no ;;
+    --desktop | --desktop=full) DESKTOP=full ;;
+    --desktop=kiosk | --desktop=web) DESKTOP=kiosk ;;
+    --no-desktop | --desktop=off) DESKTOP=no ;;
     --mdns-name) MDNS_NAME="${2:?--mdns-name needs a name}"; shift ;;
     --yes | -y) ASSUME_YES=1 ;;
     --uninstall) UNINSTALL=1 ;;
     --purge) PURGE=1 ;;
-    -h | --help) sed -n '2,31p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
+    -h | --help) sed -n '2,32p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "see https://github.com/shatheitguy/nocapos"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
   shift
@@ -669,23 +674,62 @@ EOF
   fi
 }
 
+# The full desktop's helpers ship in the bundle's desktop/ folder.
+DESKTOP_FULL_OK=0
+if [ -f "$BUNDLE_DIR/desktop/lib.sh" ] && [ -f "$BUNDLE_DIR/desktop/setup.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$BUNDLE_DIR/desktop/lib.sh"
+  # shellcheck source=/dev/null
+  . "$BUNDLE_DIR/desktop/setup.sh"
+  DESKTOP_FULL_OK=1
+fi
+
+# NoCap Desktop has three modes, switched in Settings → General → This
+# Screen & Access: full (the native desktop), kiosk (NoCapOS full screen)
+# and off. The last choice is kept in $ETC/desktop-mode.
 setup_desktop() {
-  local want=0
+  local want="" chosen
   case "$DESKTOP" in
-    yes) want=1 ;;
-    no) disable_desktop; return 0 ;;
-    auto) if display_connected; then want=1; fi ;;
+    full | kiosk) want="$DESKTOP" ;;
+    no)
+      if [ "$DESKTOP_FULL_OK" -eq 1 ] && [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode off; else disable_desktop; fi
+      echo off >"$ETC/desktop-mode"
+      return 0
+      ;;
+    auto)
+      # An update keeps what Settings (or an earlier install) chose.
+      chosen="$(cat "$ETC/desktop-mode" 2>/dev/null || true)"
+      case "$chosen" in
+        full | kiosk) want="$chosen" ;;
+        off) return 0 ;;
+        *)
+          if [ -f "$DESKTOP_UNIT" ]; then
+            # The full-screen-only NoCap Desktop of earlier versions: on
+            # becomes the full desktop, off stays off.
+            if systemctl is-enabled --quiet nocapos-desktop 2>/dev/null; then want=full; else return 0; fi
+          elif display_connected; then
+            want=full
+          else
+            echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop)."
+            return 0
+          fi
+          ;;
+      esac
+      ;;
   esac
-  if [ "$want" -eq 0 ]; then
-    [ -f "$DESKTOP_UNIT" ] || echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop)."
-    return 0
+  if [ "$want" = full ]; then
+    if [ "$DESKTOP_FULL_OK" -eq 1 ] && install_full_desktop; then
+      # NoCapOS full screen stays available as a switch in Settings.
+      install_desktop 0 || true
+      apply_desktop_mode full
+      echo full >"$ETC/desktop-mode"
+      return 0
+    fi
   fi
-  # On an update, "auto" keeps whatever Settings last chose.
-  if [ "$DESKTOP" = auto ] && [ -f "$DESKTOP_UNIT" ] && ! systemctl is-enabled --quiet nocapos-desktop 2>/dev/null; then
-    install_desktop 0
-    return 0
-  fi
+  # The sign-in screen (if the full desktop was on) steps aside first.
+  if [ "$DESKTOP_FULL_OK" -eq 1 ] && [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode kiosk; fi
   install_desktop 1
+  if [ -f "$DESKTOP_UNIT" ]; then echo kiosk >"$ETC/desktop-mode"; fi
 }
 
 # ---------------------------------------------------------------- console
@@ -920,11 +964,15 @@ setup_bootsplash() {
     fi
   fi
 
-  # The kernel needs "quiet splash" for Plymouth to draw instead of boot text.
-  local f add
+  # The kernel needs "quiet splash" for Plymouth to draw instead of boot
+  # text; the rest of the tokens hide firmware logos and boot messages.
+  local f add BOOT_TOKENS="${SPLASH_TOKENS:-quiet splash} ${EXTRA_BOOT_TOKENS:-}"
+  BOOT_GRUB_CHANGED=0
+  # Boot menus and firmware: GRUB theme, systemd-boot, U-Boot, Raspberry Pi.
+  if [ "$DESKTOP_FULL_OK" -eq 1 ]; then brand_boot || warn "some boot menus couldn't be branded"; fi
   if f="$(pi_cmdline)"; then
     # A serial console (enabled on many Pi images) makes Plymouth fall back to text.
-    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" quiet splash plymouth.ignore-serial-consoles)"
+    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" $BOOT_TOKENS plymouth.ignore-serial-consoles)"
     if [ -n "$add" ]; then
       [ -f "$SPLASH_DIR/cmdline.txt" ] || cp -p "$f" "$SPLASH_DIR/cmdline.txt"
       # shellcheck disable=SC2086 # add is a list of tokens
@@ -934,17 +982,20 @@ setup_bootsplash() {
   elif [ -f /etc/default/grub ]; then
     local cur
     cur="$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | head -1 | tr -d "\"'")"
-    add="$(tokens_missing "$cur" quiet splash)"
+    add="$(tokens_missing "$cur" $BOOT_TOKENS)"
     if [ -n "$add" ]; then
       [ -f "$SPLASH_DIR/grub" ] || cp -p /etc/default/grub "$SPLASH_DIR/grub"
       # shellcheck disable=SC2086
       grub_default_with $add </etc/default/grub >/etc/default/grub.nocap.tmp && cat /etc/default/grub.nocap.tmp >/etc/default/grub
       rm -f /etc/default/grub.nocap.tmp
       echo "$add" >>"$SPLASH_DIR/grub-added"
-      if has update-grub; then update-grub >/dev/null 2>&1 || warn "update-grub failed; the splash shows after the next GRUB update"
-      elif has grub2-mkconfig && [ -f /boot/grub2/grub.cfg ]; then grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1 || true
-      elif has grub-mkconfig && [ -f /boot/grub/grub.cfg ]; then grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
-      fi
+      BOOT_GRUB_CHANGED=1
+    fi
+  fi
+  if [ "$BOOT_GRUB_CHANGED" -eq 1 ]; then
+    if has update-grub; then update-grub >/dev/null 2>&1 || warn "update-grub failed; the splash shows after the next GRUB update"
+    elif has grub2-mkconfig && [ -f /boot/grub2/grub.cfg ]; then grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1 || true
+    elif has grub-mkconfig && [ -f /boot/grub/grub.cfg ]; then grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
     fi
   fi
 }

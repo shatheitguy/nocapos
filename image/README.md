@@ -64,11 +64,20 @@ the same places `install.sh` uses (`/usr/local/bin/nocapos`,
 **First boot.** `nocapos-firstboot.service` runs the bundled `install.sh --yes`
 once, which does everything that needs a running system and the network:
 Docker (for the App Store), the host packages (virtual machines, sharing,
-remote desktop, media, ZFS), NoCap Desktop when a screen is plugged in,
-mDNS (`nocap.local`), the console banner and boot splash. Without network it
+remote desktop, media, ZFS), NoCap Desktop, mDNS (`nocap.local`), the
+console banner and boot splash. Without network it
 does a minimal setup and tries again on the next boot. Settings in
 `/etc/nocapos/image.conf` (`NOCAP_DOCKER`, `NOCAP_FIRSTBOOT_ARGS`). It doesn't
 run in the ISO's live session. Progress: `journalctl -u nocapos-firstboot -f`.
+
+**NoCap Desktop.** Both images come with the full desktop: its packages are
+put into the image at build time (`desktop-packages.sh`, using the
+installer's own list from `deploy/desktop/lib.sh`), and the first boot runs
+the installer with `--desktop` (`NOCAP_FIRSTBOOT_ARGS`), which adds the
+NoCapOS look (sign-in screen, wallpaper, dock, NoCap Hub) and switches it
+on. Set `NOCAP_FIRSTBOOT_ARGS="--no-desktop"` for a headless server, or
+`--desktop=kiosk` for NoCapOS full screen only. Machines with less than
+2 GB of memory get NoCapOS full screen instead.
 
 **Users.** No default account exists in either image.
 - PC: debian-installer asks for your name, user name and password; there is no
@@ -101,7 +110,7 @@ image/
     stage-overlay.sh   assembles the NoCapOS layer tree (downloads + verifies the bundle)
     layer.sh           runs inside the image: installs NoCapOS, identity, splash
     make-art.py        boot menu / installer / GRUB artwork from the brand files
-    grub-theme.txt     GRUB theme for installed PCs
+    (GRUB theme: deploy/desktop/grub-theme.txt, shared with install.sh)
     rootfs/            files copied as-is (units, apt settings, scripts)
   amd64/
     build.sh           lb config + lb build

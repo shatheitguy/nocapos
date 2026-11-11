@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=NoCap Files
+Comment=Your NoCap Drive and shared folders
+Exec=/usr/local/lib/nocapos/nocap-hub files
+Icon=nocapos
+Terminal=false
+Categories=System;FileManager;
+Keywords=files;drive;nocapos;
+StartupNotify=true
+StartupWMClass=NoCapHub

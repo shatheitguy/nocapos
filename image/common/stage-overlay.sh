@@ -85,7 +85,7 @@ cp "$ROOT/frontend/public/brand/mark-256.png" "$DEST/usr/share/pixmaps/nocapos.p
 if [ -n "$ART" ] && [ "$PLATFORM" = pc ]; then
   mkdir -p "$DEST/usr/share/grub/themes/nocapos"
   cp "$ART/grub-background.png" "$DEST/usr/share/grub/themes/nocapos/background.png"
-  cp "$HERE/grub-theme.txt" "$DEST/usr/share/grub/themes/nocapos/theme.txt"
+  cp "$ROOT/deploy/desktop/grub-theme.txt" "$DEST/usr/share/grub/themes/nocapos/theme.txt"
 else
   rm -f "$DEST/etc/default/grub.d/nocapos.cfg"
 fi

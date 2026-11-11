@@ -246,6 +246,7 @@ const ICONS: Record<string, Draw> = {
 
 // A virtual machine's screen window wears Virtual Desk's icon.
 ICONS.vmscreen = ICONS.virtualdesk;
+ICONS.nocapdesktop = ICONS.remotedesktop;
 
 // The "Shapes" style: each app as a simple composition of shapes on its colour.
 const bg = (c: string) => <rect width="64" height="64" rx="15" fill={c} />;
@@ -269,6 +270,7 @@ const SHAPES: Record<string, () => ReactNode> = {
   logs: () => (<>{bg('#111827')}{[16, 25, 34, 43].map((y, i) => <rect key={y} x="14" y={y} width={[36, 26, 32, 18][i]} height="5" rx="2.5" fill={['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][i]} />)}</>),
 };
 SHAPES.vmscreen = SHAPES.virtualdesk;
+SHAPES.nocapdesktop = () => (<>{bg('#7a0f12')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#e5383b" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#fecaca" /></>);
 
 /**
  * A NoCapOS app's icon in the chosen style, or null when it has none:

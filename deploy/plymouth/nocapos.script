@@ -1,5 +1,7 @@
 # NoCapOS boot splash (Plymouth script theme): the logo centred on near-black
-# with a slow red glow, three loading dots and a thin progress bar.
+# with a slow red glow, three loading dots and a thin progress bar. The same
+# splash shows at shutdown, restart and while updates install, with a line
+# saying which.
 
 Window.SetBackgroundTopColor(0.02, 0.02, 0.03);
 Window.SetBackgroundBottomColor(0.02, 0.02, 0.03);
@@ -54,6 +56,22 @@ fun progress_cb(duration, progress) {
   fill.SetImage(fill_src.Scale(w, bar_h));
 }
 Plymouth.SetBootProgressFunction(progress_cb);
+
+# ---- shutting down, restarting or installing updates: say so, no bar
+mode = Plymouth.GetMode();
+status_text = "";
+if (mode == "shutdown") status_text = "Shutting down";
+if (mode == "reboot") status_text = "Restarting";
+if (mode == "updates" || mode == "system-upgrade") status_text = "Installing updates. Keep the power on.";
+if (mode == "firmware-upgrade") status_text = "Updating firmware. Keep the power on.";
+status = Sprite();
+if (status_text != "") {
+  track.SetOpacity(0);
+  fill.SetOpacity(0);
+  status_img = Image.Text(status_text, 0.92, 0.93, 0.96);
+  status.SetImage(status_img);
+  status.SetPosition(Math.Int(Window.GetX() + sw / 2 - status_img.GetWidth() / 2), bar_y - 6, 10);
+}
 
 # ---- animation: the glow breathes, the dots run a wave
 t = 0;

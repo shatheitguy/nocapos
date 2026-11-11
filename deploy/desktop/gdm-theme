@@ -1,0 +1,54 @@
+#!/bin/bash
+# Builds the NoCapOS sign-in screen theme: the system's own GNOME Shell theme
+# with NoCapOS's background and red accent added, registered as the
+# gdm-theme.gresource alternative (Debian, Ubuntu, Raspberry Pi OS). Run by
+# install.sh and, before every start of the sign-in screen, by
+# nocapos-gdm-theme.service, which rebuilds it only when GNOME Shell was
+# updated. Written by NoCapOS's install.sh, removed by uninstall.sh.
+#   gdm-theme [--if-stale]
+set -eu
+LIB=/usr/local/lib/nocapos/desktop
+OUT=/usr/share/nocapos/desktop/gdm-theme.gresource
+SRC=/usr/share/gnome-shell/gnome-shell-theme.gresource
+LINK=/usr/share/gnome-shell/gdm-theme.gresource
+ART=/usr/share/nocapos/desktop/login-background.jpg
+# shellcheck source=/dev/null
+. "$LIB/lib.sh"
+
+command -v update-alternatives >/dev/null 2>&1 || exit 0
+[ -f "$SRC" ] || exit 0
+if [ "${1:-}" = --if-stale ] && [ -f "$OUT" ] && [ "$OUT" -nt "$SRC" ] && [ "$OUT" -nt "$LIB/lib.sh" ]; then exit 0; fi
+for tool in gresource glib-compile-resources; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "gdm-theme: $tool is missing; sign-in screen keeps its own look" >&2; exit 0; }
+done
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+prefix=/org/gnome/shell/theme
+xml="$work/theme.gresource.xml"
+{
+  echo '<?xml version="1.0" encoding="UTF-8"?>'
+  echo "<gresources><gresource prefix=\"$prefix\">"
+} >"$xml"
+for r in $(gresource list "$SRC"); do
+  rel="${r#"$prefix"/}"
+  [ "$rel" != "$r" ] || continue
+  mkdir -p "$work/files/$(dirname "$rel")"
+  gresource extract "$SRC" "$r" >"$work/files/$rel"
+  echo "<file>$rel</file>" >>"$xml"
+done
+found=0
+for css in gdm.css gdm-dark.css gdm-light.css gnome-shell.css gnome-shell-dark.css gnome-shell-light.css; do
+  if [ -f "$work/files/$css" ]; then render_gdm_css >>"$work/files/$css"; found=1; fi
+done
+[ "$found" -eq 1 ] || { echo "gdm-theme: no stylesheet found in $SRC" >&2; exit 0; }
+cp "$ART" "$work/files/nocapos-login.jpg"
+echo "<file>nocapos-login.jpg</file>" >>"$xml"
+echo '</gresource></gresources>' >>"$xml"
+
+mkdir -p "$(dirname "$OUT")"
+glib-compile-resources --sourcedir="$work/files" --target="$OUT.tmp" "$xml"
+mv -f "$OUT.tmp" "$OUT"
+chmod 644 "$OUT"
+update-alternatives --install "$LINK" gdm-theme.gresource "$OUT" 90 >/dev/null 2>&1 || true
+update-alternatives --set gdm-theme.gresource "$OUT" >/dev/null 2>&1 || true
