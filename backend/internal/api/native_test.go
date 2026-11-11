@@ -54,6 +54,10 @@ func newNativeWorld(t *testing.T, native bool) *nativeWorld {
 	}
 	svc.ReadFile = func(string) ([]byte, error) { return nil, errors.New("none") }
 	svc.Account = func(string) *webapps.RunAs { return nil }
+	svc.AppsAccount = func() (*webapps.RunAs, error) {
+		return &webapps.RunAs{Username: nativeapps.AppsUser, UID: 990, GID: 990, Home: "/var/lib/nocap-apps"}, nil
+	}
+	svc.Sandbox = func() webapps.SandboxCheck { return webapps.SandboxCheck{OK: true} }
 	svc.Jobs.Exec = func(_ context.Context, args []string, out io.Writer) error {
 		w.ran <- args
 		return nil

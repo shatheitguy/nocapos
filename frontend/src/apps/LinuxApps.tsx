@@ -29,7 +29,7 @@ export function LinuxApps({ initial, q, view = 'discover' }: { initial?: string;
   const loadInstalled = useCallback(async () => {
     const r = await nativeApi.installed();
     if (!r.ok) {
-      setStatus({ supported: false, screen: false, reason: r.error });
+      setStatus({ supported: false, screen: false, desktop: false, sandbox: { ok: true }, reason: r.error });
       return;
     }
     setStatus(r.data.status);
@@ -148,6 +148,14 @@ export function LinuxApps({ initial, q, view = 'discover' }: { initial?: string;
 
   return (
     <>
+      {status.sandbox && !status.sandbox.ok && (
+        <div className="as-callout">
+          <Icon name="wrench" size={15} />
+          <span>
+            {tr('apps.sandboxBlocked', { problem: status.sandbox.problem ?? '' })} <code>{status.sandbox.fix}</code>
+          </span>
+        </div>
+      )}
       {status.screen && (
         <div className="as-callout">
           <Icon name="desktop" size={15} />
