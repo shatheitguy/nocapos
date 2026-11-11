@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
     var customizing by mutableStateOf<PhoneApp?>(null)
     /** Opens Settings already searching for this. */
     var settingsQuery by mutableStateOf("")
-    /** Bumped when Home is pressed on the home screen / the App Library is asked for / we come back. */
+    /** Bumped when Home is pressed on the home screen / the Stash page is asked for / we come back. */
     var homeTick by mutableIntStateOf(0)
     var libraryTick by mutableIntStateOf(0)
     var resumeTick by mutableIntStateOf(0)
@@ -344,7 +344,7 @@ class MainActivity : ComponentActivity() {
             .onFailure { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
-    /** The drawer, or (with all apps on home pages) the App Library page. */
+    /** The drawer, or (with all apps on home pages) the Stash page (app groups). */
     fun openDrawer() {
         if (Opt.drawer.v == DrawerStyle.HOME_PAGES) libraryTick++ else layer = Layer.DRAWER
     }

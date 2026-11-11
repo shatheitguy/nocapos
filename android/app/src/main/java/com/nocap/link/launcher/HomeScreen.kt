@@ -675,7 +675,7 @@ private fun PageDots(pager: PagerState, count: Int, library: Boolean) {
         repeat(count) { i ->
             val on = i == pager.currentPage
             if (library && i == count - 1) {
-                // The App Library's dot is a little grid.
+                // The Stash page's dot is a little grid.
                 Box(Modifier.padding(horizontal = 3.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).border(1.5.dp, if (on) NoCap.Red else Color.White.copy(alpha = 0.5f), RoundedCornerShape(2.dp)))
             } else {
                 Box(

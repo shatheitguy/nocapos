@@ -509,7 +509,7 @@ private fun DrawerStylePicker() {
     }
     Hint(
         when (Opt.drawer.v) {
-            DrawerStyle.HOME_PAGES -> t("Every app lives on your pages; new ones land on the last page. Swipe to the end for the App Library.", "All apps are on the home pages; new apps go to the last page. The App Library is the last page.")
+            DrawerStyle.HOME_PAGES -> t("Every app lives on your pages; new ones land on the last page. Swipe to the end for The Stash, your apps grouped by vibe.", "All apps are on the home pages; new apps go to the last page. The last page groups apps by type.")
             DrawerStyle.CLASSIC -> t("Swipe up: search, suggestions, then everything A–Z, with All / Fresh / Hidden tabs.", "Swipe up for a scrolling drawer with search, suggestions, A–Z and tabs.")
             else -> t("Swipe up opens it.", "Swipe up to open it.")
         },
