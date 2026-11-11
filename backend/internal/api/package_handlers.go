@@ -39,7 +39,22 @@ func (s *Server) pkgStatus(w http.ResponseWriter, r *http.Request) {
 	features := syspkg.FeatureStates()
 	features = append(features, syspkg.FeatureState{Feature: browserFeature, Installed: webapps.NativeInstalled(),
 		CanInstall: st.Supported && (st.Manager == "apt" || st.Manager == "dnf")})
-	writeJSON(w, http.StatusOK, map[string]any{"status": st, "features": features, "jobs": s.pkgJobs.Recent()})
+	writeJSON(w, http.StatusOK, map[string]any{"status": st, "features": features, "checks": s.pkgChecks(st), "jobs": s.pkgJobs.Recent()})
+}
+
+// pkgCheck is one health check the Packages app shows.
+type pkgCheck struct {
+	ID string `json:"id"`
+	webapps.SandboxCheck
+}
+
+// pkgChecks: whether the kernel lets Linux app sandboxes start (Flatpak's
+// bubblewrap needs user namespaces).
+func (s *Server) pkgChecks(st syspkg.Status) []pkgCheck {
+	if !st.Supported {
+		return []pkgCheck{}
+	}
+	return []pkgCheck{{ID: "app-sandbox", SandboxCheck: webapps.SandboxStatus()}}
 }
 
 func (s *Server) pkgSupported(w http.ResponseWriter) (syspkg.Status, bool) {
