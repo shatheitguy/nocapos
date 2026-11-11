@@ -461,7 +461,11 @@ private fun DrawerStylePicker() {
             val on = Opt.drawer.v == s
             Column(
                 Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).border(if (on) 2.dp else 1.dp, if (on) accent else NoCap.GlassEdge, RoundedCornerShape(14.dp))
-                    .clickable { Opt.drawer.set(s) }.padding(8.dp),
+                    .clickable {
+                        Opt.drawer.set(s)
+                        // With every app on the home pages, swipe down is for search.
+                        if (s == DrawerStyle.HOME_PAGES && Opt.binding(Gesture.SWIPE_DOWN) == Act.NOTIFICATIONS.name) Opt.bind(Gesture.SWIPE_DOWN, Act.SEARCH.name)
+                    }.padding(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Canvas(Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF0E1015))) {

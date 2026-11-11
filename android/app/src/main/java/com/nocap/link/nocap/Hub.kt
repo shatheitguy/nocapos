@@ -87,7 +87,7 @@ fun Hub(a: MainActivity) {
         if (ok) { Prefs.setServerNotices(true); HeartbeatWorker.now(a) }
     }
     Column(
-        Modifier.fillMaxSize().background(Color(0xF207080B)).clickable(remember { MutableInteractionSource() }, null) {}
+        Modifier.fillMaxSize().background(NoCap.Sheet).clickable(remember { MutableInteractionSource() }, null) {}
             .statusBarsPadding().navigationBarsPadding(),
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {

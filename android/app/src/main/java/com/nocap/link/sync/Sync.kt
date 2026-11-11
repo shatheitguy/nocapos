@@ -115,16 +115,21 @@ object Sync {
         Prefs.init(app)
         loop?.cancel()
         if (Vault.get(app).link == null) return
-        if (!Opt.liveNotices.v && !Opt.clipSync.v && !Opt.forward.v) return
+        if (!wantsNotices() && !Opt.clipSync.v && !Opt.forward.v) return
         loop = scope.launch { listen(app) }
     }
 
     fun stop() { loop?.cancel(); loop = null }
 
+    private fun wantsNotices() = Opt.liveNotices.v && Opt.serverNotices.v
+
     private suspend fun listen(ctx: Context) {
         var cursor = 0L
         var backoff = 5_000L
+        val power = ctx.getSystemService(android.os.PowerManager::class.java)
         while (isActiveSafe()) {
+            // Screen off: rest (the 15-minute heartbeat still checks for server notices).
+            if (power != null && !power.isInteractive) { delay(60_000); continue }
             val api = api(ctx) ?: return
             try {
                 val ev = api.events(cursor, 25)
@@ -149,7 +154,7 @@ object Sync {
     private suspend fun isActiveSafe() = kotlin.coroutines.coroutineContext.isActive
 
     private suspend fun handle(ctx: Context, ev: NoCapApi.Events) {
-        if (Opt.liveNotices.v) {
+        if (wantsNotices()) {
             val last = Prefs.lastNotice
             for (n in ev.notices.filter { it.id > last }.sortedBy { it.id }.takeLast(5)) {
                 val title = (if (Prefs.genz) n.genzTitle else null) ?: n.title

@@ -70,7 +70,7 @@ abstract class Pref<T>(val key: String, val def: T, val backup: Boolean = true) 
 
     fun reset() = set(def)
 
-    init { @Suppress("LeakingThis") Opt.all += this }
+    init { @Suppress("LeakingThis") PrefRegistry.all += this }
 }
 
 class IntPref(key: String, def: Int, val range: IntRange) : Pref<Int>(key, def) {
@@ -126,10 +126,15 @@ class MapPref(key: String, def: Map<String, String> = emptyMap(), backup: Boolea
     fun put(k: String, value: String?) = set(if (value == null) v - k else v + (k to value))
 }
 
+/** Every [Pref] made, so backup/restore and reset cover them all. */
+object PrefRegistry {
+    val all = mutableListOf<Pref<*>>()
+}
+
 /** Every launcher option. Read with `.v`, change with `.set(…)`. */
 object Opt {
     internal var sp: SharedPreferences? = null
-    val all = mutableListOf<Pref<*>>()
+    val all get() = PrefRegistry.all
 
     // Look
     val lingo = StrPref("lingo", "genz")
