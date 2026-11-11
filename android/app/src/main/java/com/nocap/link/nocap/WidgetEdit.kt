@@ -89,6 +89,7 @@ fun widgetName(kind: String) = when (kind) {
     NoCapKinds.AI -> t("Ask NoCap AI", "NoCap AI")
     NoCapKinds.FILES -> t("Fresh Files", "Recent files")
     NoCapKinds.TIMER -> t("Countdown & Timer", "Countdown and timer")
+    NoCapKinds.SIGNINS -> t("Who's Signed In", "Signed-in devices")
     else -> kind
 }
 
@@ -110,6 +111,7 @@ fun widgetBlurb(kind: String) = when (kind) {
     NoCapKinds.AI -> t("Type and ask, right here", "Ask the server's AI Assistant")
     NoCapKinds.FILES -> t("What changed lately on your server", "Recently changed files on your server")
     NoCapKinds.TIMER -> t("Count down to the big day or time stuff", "Count down to a date or run a timer")
+    NoCapKinds.SIGNINS -> t("Every device on your NoCap account rn", "Devices signed in to your NoCap account")
     else -> ""
 }
 

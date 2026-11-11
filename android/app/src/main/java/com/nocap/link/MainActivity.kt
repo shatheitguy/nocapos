@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
     var phoneApps by mutableStateOf<List<PhoneApp>>(emptyList())
     var summary by mutableStateOf<Summary?>(null)
     var recentFiles by mutableStateOf<List<FileEntry>>(emptyList())
+    /** Where the account is signed in (null = unknown, or the server is too old). */
+    var signedIn by mutableStateOf<List<com.nocap.link.net.SignedIn>?>(null)
     var layer by mutableStateOf(Layer.NONE)
     var searchStart by mutableStateOf("")
     var toast by mutableStateOf<String?>(null)
@@ -402,6 +404,7 @@ class MainActivity : ComponentActivity() {
             serverApps.clear()
             summary = null
             recentFiles = emptyList()
+            signedIn = null
             return
         }
         if (vault.unlinked) {
@@ -458,6 +461,10 @@ class MainActivity : ComponentActivity() {
             }
             com.nocap.link.widget.AppWidgets.saveServer(this, sum, s.me.server.name.ifBlank { link?.serverName ?: "" })
             recentFiles = withContext(Dispatchers.IO) { runCatching { api.recent(6) }.getOrDefault(recentFiles) }
+            withContext(Dispatchers.IO) { runCatching { api.sessions() } }.onSuccess { (list, alerts) ->
+                signedIn = list
+                com.nocap.link.sync.Signins.deliver(this, alerts, live = false)
+            }.onFailure { if (it is ServerTooOld) signedIn = null }
         } catch (e: ServerTooOld) {
             outdated = s.me.server.version.ifBlank { "?" }
         } catch (e: kotlinx.coroutines.CancellationException) {

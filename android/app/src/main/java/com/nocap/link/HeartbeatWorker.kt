@@ -33,6 +33,8 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
             if (vault.unlinked) vault.unlinked = false
             Prefs.init(applicationContext)
             if (Prefs.serverNotices) runCatching { notices(api, link.serverName) }
+            // Sign-in alerts always (a server without them answers ServerTooOld: skip).
+            runCatching { com.nocap.link.sync.Signins.deliver(applicationContext, api.sessions().second, live = false) }
             Result.success()
         } catch (e: ApiError) {
             if (e.status == 401 && !vault.unlinked) {

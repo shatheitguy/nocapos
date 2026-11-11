@@ -45,6 +45,19 @@ data class FileEntry(val root: String, val path: String, val name: String, val d
 
 data class ServerNotice(val id: Long, val level: String, val title: String, val body: String, val genzTitle: String?, val genzBody: String?)
 
+/** A new sign-in to your account (title/body are the server's Standard wording, genz* the Gen Z one). */
+data class SigninAlert(
+    val id: Long, val sessionId: String, val source: String, val kind: String, val deviceName: String,
+    val browser: String, val os: String, val ip: String, val network: String, val at: String,
+    val title: String, val body: String, val genzTitle: String?, val genzBody: String?,
+)
+
+/** One place your account is signed in. */
+data class SignedIn(
+    val id: String, val source: String, val kind: String, val deviceName: String, val browser: String,
+    val os: String, val ip: String, val network: String, val lastSeen: String, val current: Boolean,
+)
+
 data class Conversation(val id: String, val title: String, val preview: String, val updatedAt: String)
 
 data class ChatMessage(val role: String, val content: String, val error: String = "")
@@ -302,7 +315,10 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
     fun postClip(text: String): Long = JSONObject(call("POST", "/api/v1/device/clipboard", JSONObject().put("text", text))).optLong("id")
 
     data class Clip(val id: Long, val text: String, val from: String)
-    data class Events(val cursor: Long, val notices: List<ServerNotice>, val clips: List<Clip>, val dismissed: List<String>)
+    data class Events(
+        val cursor: Long, val notices: List<ServerNotice>, val clips: List<Clip>, val dismissed: List<String>,
+        val signins: List<SigninAlert> = emptyList(),
+    )
 
     private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
@@ -317,7 +333,45 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
             (0 until na.length()).map { notice(na.getJSONObject(it)) },
             (0 until ca.length()).map { val c = ca.getJSONObject(it); Clip(c.optLong("id"), c.optString("text"), c.optString("from")) },
             (0 until da.length()).map { da.getString(it) },
+            alerts(o.optJSONArray("signins")),
         )
+    }
+
+    // ---------- sign-ins ----------
+
+    /** Where your account is signed in right now, and the day's sign-in alerts. */
+    fun sessions(): Pair<List<SignedIn>, List<SigninAlert>> {
+        val o = JSONObject(call("GET", "/api/v1/device/sessions"))
+        val a = o.optJSONArray("sessions") ?: JSONArray()
+        return (0 until a.length()).map {
+            val s = a.getJSONObject(it)
+            SignedIn(
+                s.optString("id"), s.optString("source"), s.optString("kind"), s.optString("device_name"), s.optString("browser"),
+                s.optString("os"), s.optString("ip"), s.optString("network"), s.optString("last_seen_at"), s.optBoolean("current"),
+            )
+        } to alerts(o.optJSONArray("alerts"))
+    }
+
+    /** Ends one of your sessions (or unlinks one of your devices). False when it had already ended. */
+    fun endSession(id: String): Boolean = try {
+        call("DELETE", "/api/v1/device/sessions/${enc(id)}")
+        true
+    } catch (e: ApiError) {
+        if (e.status == 404) false else throw e
+    }
+
+    private fun alerts(a: JSONArray?): List<SigninAlert> {
+        if (a == null) return emptyList()
+        return (0 until a.length()).map {
+            val s = a.getJSONObject(it)
+            val g = s.optJSONObject("genz")
+            SigninAlert(
+                s.optLong("id"), s.optString("session_id"), s.optString("source"), s.optString("kind"), s.optString("device_name"),
+                s.optString("browser"), s.optString("os"), s.optString("ip"), s.optString("network"), s.optString("at"),
+                s.optString("title"), s.optString("body"),
+                g?.optString("title")?.takeIf { x -> x.isNotBlank() }, g?.optString("body")?.takeIf { x -> x.isNotBlank() },
+            )
+        }
     }
 
     private fun notice(n: JSONObject): ServerNotice {

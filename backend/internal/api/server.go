@@ -95,7 +95,8 @@ type Server struct {
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
 	linkOnce         sync.Once
-	linkSync         *linkHub // NoCap Link: phone notifications, clipboard, events
+	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
+	sessions         sessionFeed // sign-in alerts and session list changes, live
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -175,6 +176,8 @@ func (s *Server) Handler() http.Handler {
 	// home-screen backup, notifications, unlink, NoCap AI.
 	s.deviceRoutes(mux)
 	s.linkRoutes(mux) // NoCap Link sync, NoCap OS's side
+	// Where each account is signed in; sign-in alerts; ending sessions.
+	s.sessionRoutes(mux)
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))

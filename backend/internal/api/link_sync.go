@@ -24,6 +24,7 @@ const (
 	linkMaxClips      = 20  // per person
 	linkMaxDismissed  = 500 // per person
 	linkMaxNotices    = 200 // server notifications remembered for the long-poll
+	linkMaxAlerts     = 50  // sign-in alerts per person
 	linkMaxKey        = 200
 	linkMaxTitle      = 300
 	linkMaxText       = 2000
@@ -76,6 +77,7 @@ type linkUser struct {
 	notes     map[string]*phoneNote // by device id + "\x00" + key
 	clips     []linkClip            // oldest first
 	dismissed []linkDismissal       // oldest first
+	alerts    []signinAlert         // new sign-ins, oldest first
 }
 
 // linkHub holds everyone's synced state and the event sequence the
@@ -131,7 +133,41 @@ func (h *linkHub) user(uid string) *linkUser {
 		i++
 	}
 	u.dismissed = u.dismissed[i:]
+	i = 0
+	for i < len(u.alerts) && u.alerts[i].At.Before(cut) {
+		i++
+	}
+	u.alerts = u.alerts[i:]
 	return u
+}
+
+// addAlert remembers a sign-in alert for uid's phones and returns its ID
+// (its place in the event sequence).
+func (h *linkHub) addAlert(uid string, a signinAlert) int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	u := h.user(uid)
+	a.ID = h.bump()
+	u.alerts = append(u.alerts, a)
+	if len(u.alerts) > linkMaxAlerts {
+		u.alerts = u.alerts[len(u.alerts)-linkMaxAlerts:]
+	}
+	return a.ID
+}
+
+// alerts lists uid's sign-in alerts from the last day, newest first,
+// leaving out the ones about exceptDevice itself.
+func (h *linkHub) alerts(uid, exceptDevice string) []signinAlert {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	u := h.user(uid)
+	out := make([]signinAlert, 0, len(u.alerts))
+	for i := len(u.alerts) - 1; i >= 0; i-- {
+		if exceptDevice == "" || u.alerts[i].deviceID != exceptDevice {
+			out = append(out, u.alerts[i])
+		}
+	}
+	return out
 }
 
 func noteKey(deviceID, key string) string { return deviceID + "\x00" + key }
@@ -255,15 +291,16 @@ type linkEvents struct {
 	Notices   []notify.Notification `json:"notices"`
 	Clipboard []linkClip            `json:"clipboard"`
 	Dismissed []string              `json:"dismissed"`
+	Signins   []signinAlert         `json:"signins"`
 }
 
 func (e linkEvents) empty() bool {
-	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0
+	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0 && len(e.Signins) == 0
 }
 
 // events is what one phone hasn't seen since after. Call with mu held.
 func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEvents {
-	out := linkEvents{Cursor: h.seq, Notices: []notify.Notification{}, Clipboard: []linkClip{}, Dismissed: []string{}}
+	out := linkEvents{Cursor: h.seq, Notices: []notify.Notification{}, Clipboard: []linkClip{}, Dismissed: []string{}, Signins: []signinAlert{}}
 	if after <= 0 || after > h.seq {
 		return out // a fresh start (or a cursor from another run): no history dump
 	}
@@ -281,6 +318,11 @@ func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEven
 	for _, d := range u.dismissed {
 		if d.seq > after && d.deviceID == deviceID {
 			out.Dismissed = append(out.Dismissed, d.key)
+		}
+	}
+	for _, a := range u.alerts {
+		if a.ID > after && a.deviceID != deviceID {
+			out.Signins = append(out.Signins, a)
 		}
 	}
 	return out

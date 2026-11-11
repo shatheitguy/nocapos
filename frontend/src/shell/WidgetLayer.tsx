@@ -8,6 +8,8 @@ import { AcceleratorWidget, ClockWidget, NetworkWidget, SystemWidget } from './W
 import { AnalogClock, CalendarWidget, ContainersWidget, NotesWidget, StorageWidget, UptimeWidget } from './WidgetExtras';
 import { ContainerGridWidget, ScriptLauncherWidget } from './OpsWidgets';
 import { getUser } from '../api/client';
+import { tr } from '../i18n';
+import { SessionsWidget } from './Signins';
 import { CoreHeatmapWidget, MemoryRingsWidget, NetWaveWidget, StorageGaugesWidget } from './HoloWidgets';
 
 export function WidgetLayer({ username, compact }: { username: string; compact: boolean }) {
@@ -90,7 +92,7 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
       {editing && (
         <>
           <div className="widget-grip">
-            <Icon name="menu" size={14} /> {widgetDef(w.type).name}
+            <Icon name="menu" size={14} /> {widgetName(w.type)}
           </div>
           <button type="button" className="widget-remove" title="Remove" onClick={() => wm.remove(w.type)}>
             <Icon name="close" size={13} />
@@ -111,7 +113,7 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
  */
 const SafeWidget = memo(function SafeWidget({ type, username }: { type: WidgetType; username: string }) {
   return (
-    <ErrorBoundary title={`${widgetDef(type).name} widget`} fallback="hidden">
+    <ErrorBoundary title={`${widgetName(type)} widget`} fallback="hidden">
       <WidgetBody type={type} username={username} />
     </ErrorBoundary>
   );
@@ -153,7 +155,15 @@ function WidgetBody({ type, username }: { type: WidgetType; username: string }) 
       return <ScriptLauncherWidget />;
     case 'transfers':
       return <TransfersWidget />;
+    case 'sessions':
+      return <SessionsWidget />;
   }
+}
+
+/** A widget's name, in the chosen voice when it has one. */
+function widgetName(type: WidgetType): string {
+  const d = widgetDef(type);
+  return d.nameKey ? tr(d.nameKey) : d.name;
 }
 
 function EditToolbar() {
@@ -173,7 +183,7 @@ function EditToolbar() {
           <Icon name="plus" size={14} />
           {addable.map((d) => (
             <button key={d.type} type="button" className="chip-btn" onClick={() => wm.add(d.type)}>
-              {d.name}
+              {widgetName(d.type)}
             </button>
           ))}
         </div>

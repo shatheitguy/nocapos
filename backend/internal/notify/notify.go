@@ -20,8 +20,9 @@ const (
 	KindAppError   = "app_error"
 	KindStorage    = "storage"
 	KindBackup     = "backup"
-	KindDevice     = "device" // USB drives plugged in and out
-	KindAgent      = "agent"  // an AI agent waits for approval (always delivered)
+	KindDevice     = "device"   // USB drives plugged in and out
+	KindAgent      = "agent"    // an AI agent waits for approval (always delivered)
+	KindSecurity   = "security" // someone signed in from a new device (always delivered)
 	KindTest       = "test"
 	keepNewest     = 500
 	settingsKey    = "notify.settings"

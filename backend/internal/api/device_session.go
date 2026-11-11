@@ -76,5 +76,6 @@ func (s *Server) authLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, userID, "devices.web_session", d.Name, true, "signed in from linked device")
+	s.signedIn(r, sess, d)
 	s.writeSession(w, r, http.StatusOK, sess)
 }

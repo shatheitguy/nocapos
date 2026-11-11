@@ -64,8 +64,9 @@ object NoCapKinds {
     const val AI = "ai"
     const val FILES = "files"
     const val TIMER = "timer"
+    const val SIGNINS = "signins"
 
-    val all = listOf(STATUS, CLOCK, WEATHER, CALENDAR, MUSIC, SERVER, PHONE, STORAGE, TOGGLES, NOTES, PHOTO, APPS, SEARCH, AI, QUICK, FILES, TIMER)
+    val all = listOf(STATUS, CLOCK, WEATHER, CALENDAR, MUSIC, SERVER, PHONE, STORAGE, TOGGLES, NOTES, PHOTO, APPS, SEARCH, AI, QUICK, FILES, TIMER, SIGNINS)
 
     data class Spec(val def: Pair<Int, Int>, val min: Pair<Int, Int>, val max: Pair<Int, Int>)
 
@@ -87,6 +88,7 @@ object NoCapKinds {
         AI -> Spec(4 to 1, 2 to 1, 4 to 2)
         FILES -> Spec(4 to 2, 2 to 2, 4 to 4)
         TIMER -> Spec(2 to 2, 2 to 1, 4 to 2)
+        SIGNINS -> Spec(4 to 2, 2 to 1, 4 to 4)
         else -> Spec(4 to 2, 1 to 1, 4 to 4)
     }
 
