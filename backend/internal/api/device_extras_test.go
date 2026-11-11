@@ -369,6 +369,11 @@ func TestDeviceRoutesRegistered(t *testing.T) {
 		"GET /api/v1/device/ai/conversations", "POST /api/v1/device/ai/conversations",
 		"GET /api/v1/device/ai/conversations/x", "DELETE /api/v1/device/ai/conversations/x",
 		"POST /api/v1/device/ai/conversations/x/send",
+		"POST /api/v1/device/phone-notifications", "DELETE /api/v1/device/phone-notifications/0%7Ccom.chat%2F1",
+		"POST /api/v1/device/clipboard", "GET /api/v1/device/events?after=0&wait=0",
+		// NoCap OS's side (a session, not a device token).
+		"GET /api/v1/phone-notifications", "DELETE /api/v1/phone-notifications/d1/k%2F1",
+		"GET /api/v1/clipboard", "POST /api/v1/clipboard",
 	} {
 		method, target, _ := strings.Cut(rt, " ")
 		r := httptest.NewRequest(method, target, nil)

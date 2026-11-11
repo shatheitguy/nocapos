@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="open" path="open/" />
+    <!-- Photo-frame widget pictures, opened in the phone's photo viewer. -->
+    <files-path name="photos" path="photos/" />
 </paths>

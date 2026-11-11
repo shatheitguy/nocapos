@@ -7,6 +7,8 @@ import { useClock } from '../lib/hooks';
 import { fmtTime, useTimePrefs } from '../lib/time';
 import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
+import { useLink, useLinkUnseen } from '../state/link';
+import { ClipBanner, ClipboardSection, PhoneSection } from './LinkSync';
 import { toast } from '../state/toasts';
 import {
   noticeText,
@@ -156,12 +158,14 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
 
 function Banners({ look }: { look: Look }) {
   const banners = useNotifications((s) => s.banners);
-  if (!banners.length) return null;
+  const clip = useLink((s) => s.clipBanner);
+  if (!banners.length && !clip) return null;
   return (
     <div className={`nb-stack ${look}`} aria-live="polite">
       {banners.map((n) => (
         <Banner key={n.id} n={n} look={look} />
       ))}
+      <ClipBanner look={look} />
     </div>
   );
 }
@@ -292,9 +296,12 @@ function MacCenter({ items }: { items: Notice[] }) {
       window.removeEventListener('blur', off);
     };
   }, []);
+  const phoneNotes = useLink((s) => s.notes.length);
   return (
     <div className="nc-scroll">
-      {!items.length && <div className="nc-none">No Notifications</div>}
+      {!items.length && !phoneNotes && <div className="nc-none">No Notifications</div>}
+      <PhoneSection look="mac" />
+      <ClipboardSection look="mac" />
       {byApp(items).map(([k, list]) => (
         <MacStack key={k} list={list} alt={alt} />
       ))}
@@ -335,6 +342,7 @@ function byApp(items: Notice[]) {
 function WinCenter({ items }: { items: Notice[] }) {
   const clear = useNotifications((s) => s.clear);
   const focus = usePrefs((s) => s.focusMode);
+  const phoneNotes = useLink((s) => s.notes.length);
   return (
     <>
       <div className="nc-head">
@@ -356,7 +364,9 @@ function WinCenter({ items }: { items: Notice[] }) {
         )}
       </div>
       <div className="nc-scroll">
-        {!items.length && <Empty />}
+        {!items.length && !phoneNotes && <Empty />}
+        <PhoneSection look="windows" />
+        <ClipboardSection look="windows" />
         {byApp(items).map(([k, list]) => (
           <WinGroup key={k} list={list} />
         ))}
@@ -375,6 +385,7 @@ function Center({ look }: { look: Look }) {
   useEffect(() => {
     if (open) {
       setShown(true);
+      useLink.getState().markSeen();
       return;
     }
     const t = window.setTimeout(() => setShown(false), 220);
@@ -406,7 +417,7 @@ function Center({ look }: { look: Look }) {
   );
 }
 
-/** Banners and the Notification Center (admins). */
+/** Banners and the Notification Center (system notifications for admins; phone notifications and the clipboard for everyone). */
 export function NotificationLayer() {
   const look = useNotifyStyle();
   return (
@@ -419,7 +430,7 @@ export function NotificationLayer() {
 
 /** The bell in the tray / menu bar, with the unread count. */
 export function NotifyBell({ className, size = 16 }: { className: string; size?: number }) {
-  const unread = useNotifications((s) => s.unread);
+  const unread = useNotifications((s) => s.unread) + useLinkUnseen();
   const open = useNotifications((s) => s.centerOpen);
   const label = unread ? tr('nc.bellUnread', { n: unread }) : tr('nc.bell');
   return (
