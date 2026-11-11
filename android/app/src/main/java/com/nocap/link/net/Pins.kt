@@ -2,15 +2,15 @@ package com.nocap.link.net
 
 import android.net.http.SslCertificate
 import android.os.Build
-import okhttp3.OkHttpClient
 import java.io.ByteArrayInputStream
-import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
+import okhttp3.OkHttpClient
 
 /**
  * Trust on first use. NoCapOS servers usually have a self-signed

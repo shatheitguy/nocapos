@@ -11,15 +11,14 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
-import com.nocap.link.Notices
-import com.nocap.link.Prefs
-import com.nocap.link.R
-import com.nocap.link.Vault
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.SignedIn
 import com.nocap.link.net.SigninAlert
-import com.nocap.link.t
+import com.nocap.link.R
 import java.util.concurrent.Executors
 
 /**
@@ -81,7 +80,7 @@ object Signins {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher_fg)
+            .setSmallIcon(R.drawable.ic_stat_nocap)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

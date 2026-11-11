@@ -1,6 +1,12 @@
 package com.nocap.link.net
 
-import com.nocap.link.Link
+import com.nocap.link.data.Link
+import java.io.File
+import java.io.InputStream
+import java.io.IOException
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,12 +20,6 @@ import okio.BufferedSink
 import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.IOException
-import java.io.InputStream
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLException
 
 data class PairInfo(val nocapId: String, val name: String, val version: String)
 
