@@ -93,6 +93,7 @@ fun NoCapWidget(a: MainActivity, item: NoCapItem) {
         NoCapKinds.AI -> AiWidget(a, item)
         NoCapKinds.FILES -> FilesWidget(a, item)
         NoCapKinds.TIMER -> TimerWidget(a, item)
+        NoCapKinds.SIGNINS -> SigninsWidget(a, item)
         else -> WSurface(item, null) { Text(item.kind, style = MaterialTheme.typography.bodySmall) }
     }
 }
@@ -450,6 +451,41 @@ private fun FilesWidget(a: MainActivity, item: NoCapItem) {
                         }
                         Text(f.name, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(human(f.size), style = MaterialTheme.typography.labelSmall, color = NoCap.Muted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Where your NoCap account is signed in right now (refreshed with the other server widgets). */
+@Composable
+private fun SigninsWidget(a: MainActivity, item: NoCapItem) {
+    val list = a.signedIn
+    WSurface(item, null) {
+        val rows = ((maxHeight - 34.dp) / 30.dp).toInt().coerceIn(0, 10)
+        Column(Modifier.fillMaxSize()) {
+            WTitle(t("Who's Signed In", "Signed in"), Modifier.clickable { a.layer = Layer.HUB }) {
+                if (list != null) Text("${list.size}", style = MaterialTheme.typography.titleMedium.copy(fontFamily = Orbitron), color = NoCap.Red)
+            }
+            Spacer(Modifier.height(6.dp))
+            when {
+                a.server is ServerState.NotLinked -> Text(t("Link your server to see who's signed in.", "Link your server to see signed-in devices."), style = MaterialTheme.typography.bodySmall)
+                list == null -> Text(t("Your server needs an update for this one.", "This needs a newer NoCapOS on your server."), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted)
+                rows == 0 -> Text(
+                    if (list.size == 1) t("Just this phone. Vibes.", "Only this device.") else t("${list.size} devices signed in", "${list.size} devices signed in"),
+                    style = MaterialTheme.typography.bodySmall, color = NoCap.Muted,
+                )
+                else -> list.take(rows).forEach { s ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(NoCap.Red.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                            Text(com.nocap.link.sync.Signins.kindName(s.kind).take(3).uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = NoCap.Red)
+                        }
+                        Text(com.nocap.link.sync.Signins.label(s), Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (s.current) t("this phone", "this device") else s.ip,
+                            style = MaterialTheme.typography.labelSmall, color = if (s.current) NoCap.Red else NoCap.Muted, maxLines = 1,
+                        )
                     }
                 }
             }

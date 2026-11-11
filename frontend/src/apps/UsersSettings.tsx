@@ -1,4 +1,5 @@
 import { tr } from '../i18n';
+import { PersonSessionsPanel, YourSessions } from './SessionsPanel';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { removeAvatar, uploadAvatar, useAvatar } from '../lib/avatar';
 import { UserAvatar } from '../components/UserAvatar';
@@ -62,27 +63,30 @@ export function YourAccount() {
     for (const w of wm.windows) if (w.appId !== 'settings') wm.close(w.id);
   };
   return (
-    <Section title="Your account">
-      <div className="settings-row account-card">
-        <PhotoPicker username={user.username} />
-        <span className="settings-row-text">
-          <span className="account-name">{user.username}</span>
-          <span className="settings-row-hint">
-            {user.role === 'admin' ? 'Administrator' : 'Standard user'} · member since {new Date(user.created_at).toLocaleDateString()}
+    <>
+      <Section title="Your account">
+        <div className="settings-row account-card">
+          <PhotoPicker username={user.username} />
+          <span className="settings-row-text">
+            <span className="account-name">{user.username}</span>
+            <span className="settings-row-hint">
+              {user.role === 'admin' ? 'Administrator' : 'Standard user'} · member since {new Date(user.created_at).toLocaleDateString()}
+            </span>
           </span>
-        </span>
-      </div>
-      <Row label={tr('sp.closeOthers')} hint={tr('sp.closeOthersHint')}>
-        <button type="button" className="ghost small" onClick={closeOthers}>
-          Close windows
-        </button>
-      </Row>
-      <Row label="Log out" hint="Closes all your windows and ends your session on the server right away">
-        <button type="button" className="ghost small danger" onClick={() => void logOutClean()}>
-          <Icon name="logout" size={13} /> Log out
-        </button>
-      </Row>
-    </Section>
+        </div>
+        <Row label={tr('sp.closeOthers')} hint={tr('sp.closeOthersHint')}>
+          <button type="button" className="ghost small" onClick={closeOthers}>
+            Close windows
+          </button>
+        </Row>
+        <Row label="Log out" hint="Closes all your windows and ends your session on the server right away">
+          <button type="button" className="ghost small danger" onClick={() => void logOutClean()}>
+            <Icon name="logout" size={13} /> Log out
+          </button>
+        </Row>
+      </Section>
+      <YourSessions />
+    </>
   );
 }
 
@@ -104,6 +108,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [spacesFor, setSpacesFor] = useState<string | null>(null);
+  const [sessionsFor, setSessionsFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = async () => {
@@ -171,7 +176,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
 
       <Section title="People">
         {data.users.map((p) => (
-          <div key={p.username} className={`settings-row user-row ${p.disabled ? 'dimmed' : ''}`}>
+          <div key={p.username} className={`settings-row user-row ${p.disabled ? 'dimmed' : ''} ${sessionsFor === p.username ? 'with-sessions' : ''}`}>
             <span className="user-avatar">{p.username.slice(0, 1).toUpperCase()}</span>
             <span className="settings-row-text">
               <span className="settings-row-label">
@@ -215,6 +220,10 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                 onClick={() => setSpacesFor(spacesFor === p.username ? null : p.username)}>
                 <Icon name="folder" size={15} />
               </button>
+              <button type="button" className={`icon-btn neutral ${sessionsFor === p.username ? 'on' : ''}`} title={tr('ses.manageTitle')} aria-label={tr('ses.manageFor', { name: p.username })}
+                onClick={() => setSessionsFor(sessionsFor === p.username ? null : p.username)}>
+                <Icon name="shield" size={15} />
+              </button>
               <button type="button" className="icon-btn neutral" title="Reset password" aria-label={`Reset password for ${p.username}`}
                 onClick={() => setResetFor(resetFor === p.username ? null : p.username)}>
                 <Icon name="key" size={15} />
@@ -229,6 +238,7 @@ function ManagePeople({ withAccount }: { withAccount: boolean }) {
                 <Icon name="trash" size={15} />
               </button>
             </div>
+            {sessionsFor === p.username && <PersonSessionsPanel username={p.username} you={!!p.you} />}
           </div>
         ))}
       </Section>

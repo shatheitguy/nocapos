@@ -47,6 +47,7 @@ func (s *Server) authed(h http.HandlerFunc) http.Handler {
 			s.internalError(w, r, err)
 			return
 		}
+		s.touchSession(r, sid)
 		ctx := context.WithValue(context.WithValue(r.Context(), userKey, u), sessionKey, sid)
 		h(w, r.WithContext(ctx))
 	})

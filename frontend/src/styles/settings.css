@@ -273,3 +273,13 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 .agent-args summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
 .agent-args pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; user-select: text; }
 .agent-approve-actions { flex-wrap: wrap; }
+
+/* Where you're signed in (Your Account, and Users for administrators). */
+.session-row.current .dev-row-icon { color: var(--accent); }
+.session-row .settings-row-label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.badge.session-here { font-size: 11px; padding: 1px 8px; border-radius: 999px; color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); font-weight: 500; }
+.user-row.with-sessions { flex-wrap: wrap; }
+.person-sessions { flex: 1 0 100%; display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+.person-sessions-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
+.person-sessions-head b { font-weight: 600; }
+.person-sessions .settings-row { padding-left: 0; padding-right: 0; border: 0; }

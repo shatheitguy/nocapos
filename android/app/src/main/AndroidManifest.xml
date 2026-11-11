@@ -191,6 +191,15 @@
             android:taskAffinity="com.nocap.link.clip"
             android:theme="@style/Theme.NoCap.Sheet" />
 
+        <!-- "Not you? Sign it out" from a sign-in alert: a confirm over whatever is open. -->
+        <activity
+            android:name=".sync.SignOutActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="com.nocap.link.signout"
+            android:theme="@style/Theme.NoCap.Sheet" />
+
         <!-- Notification dots (opt-in: only after you allow notification access). -->
         <service
             android:name=".system.DotsService"
