@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"alfaos/alfad/internal/accounts"
@@ -93,6 +94,8 @@ type Server struct {
 	localGate        *hostaccess.Gate    // "Let other devices open NoCapOS" switch
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
+	linkOnce         sync.Once
+	linkSync         *linkHub // NoCap Link: phone notifications, clipboard, events
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -108,6 +111,7 @@ func New(ctx context.Context, d Deps) *Server {
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
 	s.notify = notify.New(d.Store, d.Log)
+	s.notify.OnAdd(s.link().noticeAdded) // wakes phones' long-polls
 	s.crashes = notify.NewCrashWatch()
 	s.ctStats = docker.NewStatsSampler(d.Docker)
 	s.webBook = webaddr.NewBook(d.Store)
@@ -170,6 +174,7 @@ func (s *Server) Handler() http.Handler {
 	// More for the NoCap OS app: summary, look, Files, Send to NoCap,
 	// home-screen backup, notifications, unlink, NoCap AI.
 	s.deviceRoutes(mux)
+	s.linkRoutes(mux) // NoCap Link sync, NoCap OS's side
 
 	// Real-time
 	mux.Handle("POST /api/v1/ws/ticket", s.authed(s.wsTicket))

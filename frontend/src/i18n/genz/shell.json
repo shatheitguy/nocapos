@@ -129,5 +129,22 @@
   "upd.reload": "Reload page",
   "upd.ready": "NoCapOS got a Glow Up",
   "upd.readyReload": "Reload",
-  "upd.later": "Later"
+  "upd.later": "Later",
+  "link.noteTitle": "{app}: {title}",
+  "link.from": "Straight from {device}",
+  "link.phoneTitle": "Phone tea",
+  "link.clipTitle": "Shared clipboard",
+  "link.sendClip": "Yeet clipboard to phone",
+  "link.pastePlaceholder": "Paste or type what your phone should get",
+  "link.sendTo": "Send to",
+  "link.allPhones": "All my phones",
+  "link.cancel": "Nah",
+  "link.send": "Send it",
+  "link.sent": "Sent to your phone, bestie",
+  "link.sendFailed": "Couldn't send that to your phone",
+  "link.copied": "Copied, no cap",
+  "link.copyFailed": "The browser won't let me copy that",
+  "link.copy": "Copy",
+  "link.pasteFrom": "Paste from {device}",
+  "link.sentFromHere": "Sent from NoCap OS"
 }

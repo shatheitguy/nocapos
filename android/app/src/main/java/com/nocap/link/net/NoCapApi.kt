@@ -32,6 +32,9 @@ data class Usage(val total: Long, val used: Long, val percent: Double)
 data class Summary(
     val ready: Boolean, val uptime: Double, val cpuPercent: Double, val cores: Int,
     val memory: Usage, val storage: Usage, val server: PairInfo,
+    /** Bytes/s down and up (null on servers that don't report it). */
+    val net: Pair<Double, Double>? = null,
+    val updates: Int = 0,
 )
 
 data class ServerPrefs(val wallpaper: String, val lingo: String, val accent: String)
@@ -128,6 +131,8 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         return Summary(
             o.optBoolean("ready"), o.optDouble("uptime", 0.0), cpu?.optDouble("percent", 0.0) ?: 0.0, cpu?.optInt("cores") ?: 0,
             usage("memory"), usage("storage"), info(o.optJSONObject("server") ?: JSONObject()),
+            net = o.optJSONObject("network")?.let { n -> n.optDouble("rx_rate", 0.0) to n.optDouble("tx_rate", 0.0) },
+            updates = o.optInt("updates", 0),
         )
     }
 
@@ -278,6 +283,49 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
             }
         }
         return sb.toString()
+    }
+
+    // ---------- v3: NoCap Link sync ----------
+
+    /** A notification from this phone, shown in the web OS notification center. */
+    fun postPhoneNotification(key: String, app: String, pkg: String, title: String, text: String, iconB64: String?, posted: Long) {
+        val b = JSONObject().put("key", key).put("app", app).put("package", pkg).put("title", title).put("text", text).put("posted", posted)
+        if (!iconB64.isNullOrBlank()) b.put("icon", iconB64)
+        call("POST", "/api/v1/device/phone-notifications", b)
+    }
+
+    fun deletePhoneNotification(key: String) {
+        call("DELETE", "/api/v1/device/phone-notifications/${enc(key)}")
+    }
+
+    /** Puts text on your NoCap OS shared clipboard. */
+    fun postClip(text: String): Long = JSONObject(call("POST", "/api/v1/device/clipboard", JSONObject().put("text", text))).optLong("id")
+
+    data class Clip(val id: Long, val text: String, val from: String)
+    data class Events(val cursor: Long, val notices: List<ServerNotice>, val clips: List<Clip>, val dismissed: List<String>)
+
+    private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
+
+    /** Waits (up to [wait] s) for anything new: server notices, clipboard from the web, dismissals. */
+    fun events(after: Long, wait: Int = 25): Events {
+        val o = JSONObject(call("GET", "/api/v1/device/events?after=$after&wait=$wait", client = poll))
+        val na = o.optJSONArray("notices") ?: JSONArray()
+        val ca = o.optJSONArray("clipboard") ?: JSONArray()
+        val da = o.optJSONArray("dismissed") ?: JSONArray()
+        return Events(
+            o.optLong("cursor"),
+            (0 until na.length()).map { notice(na.getJSONObject(it)) },
+            (0 until ca.length()).map { val c = ca.getJSONObject(it); Clip(c.optLong("id"), c.optString("text"), c.optString("from")) },
+            (0 until da.length()).map { da.getString(it) },
+        )
+    }
+
+    private fun notice(n: JSONObject): ServerNotice {
+        val g = n.optJSONObject("genz")
+        return ServerNotice(
+            n.optLong("id"), n.optString("level"), n.optString("title"), n.optString("body"),
+            g?.optString("title")?.takeIf { s -> s.isNotBlank() }, g?.optString("body")?.takeIf { s -> s.isNotBlank() },
+        )
     }
 
     /** Raw bytes from this server (app icons), or null. */

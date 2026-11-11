@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -89,17 +91,36 @@ object Wallpapers {
 
 /** The home screen's background: the picked wallpaper, dimmed a little. */
 @Composable
-fun WallpaperLayer(modifier: Modifier = Modifier) {
+fun WallpaperLayer(modifier: Modifier = Modifier, scroll: () -> Float = { 0.5f }, extraBlur: androidx.compose.ui.unit.Dp = androidx.compose.ui.unit.Dp(0f)) {
     val ctx = LocalContext.current
     val id = Prefs.wallpaper
     val v = Wallpapers.version
+    val blur = Opt.blur.v
     var img by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(id, v) {
-        img = withContext(Dispatchers.IO) { Wallpapers.bitmap(ctx, id)?.asImageBitmap() }
+    LaunchedEffect(id, v, blur) {
+        img = withContext(Dispatchers.IO) {
+            val b = Wallpapers.bitmap(ctx, id)
+            // Older phones can't blur while drawing: shrink the picture instead (it blurs as it's scaled back up).
+            if (b != null && blur > 0 && android.os.Build.VERSION.SDK_INT < 31) {
+                val k = (blur / 3f + 1f)
+                Bitmap.createScaledBitmap(b, (b.width / k).toInt().coerceAtLeast(8), (b.height / k).toInt().coerceAtLeast(8), true).asImageBitmap()
+            } else b?.asImageBitmap()
+        }
     }
+    val parallax = Opt.parallax.v
     Box(modifier.fillMaxSize()) {
         val i = img
-        if (i == null || id == Wallpapers.GRID) Wallpaper {} else Image(i, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        val total = if (android.os.Build.VERSION.SDK_INT >= 31) androidx.compose.ui.unit.Dp(blur.toFloat()) + extraBlur else androidx.compose.ui.unit.Dp(0f)
+        val fx = Modifier.fillMaxSize()
+            .then(if (total.value > 0f) Modifier.blur(total) else Modifier)
+            .graphicsLayer {
+                if (parallax) {
+                    val extra = 0.12f
+                    scaleX = 1f + extra; scaleY = 1f + extra
+                    translationX = (0.5f - scroll().coerceIn(0f, 1f)) * size.width * extra
+                }
+            }
+        if (i == null || id == Wallpapers.GRID) Wallpaper(fx) {} else Image(i, null, fx, contentScale = ContentScale.Crop)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = Prefs.dim / 100f)))
     }
 }

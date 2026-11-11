@@ -31,22 +31,77 @@ data class FolderItem(override val id: String, override val cell: Cell, val name
 /** An Android home-screen widget (from AppWidgetHost). */
 data class WidgetItem(override val id: String, override val cell: Cell, val widgetId: Int) : Item
 /** One of NoCap OS's own widgets. */
-data class NoCapItem(override val id: String, override val cell: Cell, val kind: String) : Item
+data class NoCapItem(override val id: String, override val cell: Cell, val kind: String, val cfg: Map<String, String> = emptyMap()) : Item {
+    fun opt(k: String, def: String = "") = cfg[k]?.takeIf { it.isNotEmpty() } ?: def
+    fun flag(k: String, def: Boolean) = cfg[k]?.let { it == "1" } ?: def
+    fun with(vararg kv: Pair<String, String?>): NoCapItem {
+        val m = cfg.toMutableMap()
+        for ((k, v) in kv) if (v == null) m.remove(k) else m[k] = v
+        return copy(cfg = m)
+    }
+}
 
 data class Page(val items: List<Item> = emptyList())
 
 data class Layout(val pages: List<Page>, val dock: List<String>)
 
+/** NoCap OS's own widgets: default, smallest and biggest size (cells). */
 object NoCapKinds {
     const val CLOCK = "clock"
+    const val WEATHER = "weather"
+    const val CALENDAR = "calendar"
+    const val STATUS = "status"
     const val SERVER = "server"
+    const val PHONE = "phone"
+    const val STORAGE = "storage"
+    const val MUSIC = "music"
+    const val TOGGLES = "toggles"
+    const val NOTES = "notes"
+    const val PHOTO = "photo"
+    const val APPS = "apps"
+    const val SEARCH = "search"
     const val QUICK = "quick"
-    const val FILES = "files"
     const val AI = "ai"
-    val all = listOf(CLOCK, SERVER, QUICK, FILES, AI)
-    fun size(kind: String): Pair<Int, Int> = when (kind) {
-        QUICK, AI -> 4 to 1
-        else -> 4 to 2
+    const val FILES = "files"
+    const val TIMER = "timer"
+
+    val all = listOf(STATUS, CLOCK, WEATHER, CALENDAR, MUSIC, SERVER, PHONE, STORAGE, TOGGLES, NOTES, PHOTO, APPS, SEARCH, AI, QUICK, FILES, TIMER)
+
+    data class Spec(val def: Pair<Int, Int>, val min: Pair<Int, Int>, val max: Pair<Int, Int>)
+
+    fun spec(kind: String): Spec = when (kind) {
+        CLOCK -> Spec(4 to 2, 2 to 1, 4 to 3)
+        WEATHER -> Spec(4 to 2, 2 to 1, 4 to 3)
+        CALENDAR -> Spec(4 to 2, 2 to 2, 4 to 4)
+        STATUS -> Spec(4 to 3, 2 to 2, 4 to 4)
+        SERVER -> Spec(4 to 2, 2 to 1, 4 to 3)
+        PHONE -> Spec(2 to 2, 2 to 1, 4 to 2)
+        STORAGE -> Spec(2 to 1, 2 to 1, 4 to 2)
+        MUSIC -> Spec(4 to 2, 4 to 1, 4 to 3)
+        TOGGLES -> Spec(4 to 1, 2 to 1, 4 to 2)
+        NOTES -> Spec(2 to 2, 2 to 2, 4 to 4)
+        PHOTO -> Spec(2 to 2, 1 to 1, 4 to 4)
+        APPS -> Spec(4 to 1, 2 to 1, 4 to 4)
+        SEARCH -> Spec(4 to 1, 2 to 1, 4 to 1)
+        QUICK -> Spec(4 to 1, 2 to 1, 4 to 2)
+        AI -> Spec(4 to 1, 2 to 1, 4 to 2)
+        FILES -> Spec(4 to 2, 2 to 2, 4 to 4)
+        TIMER -> Spec(2 to 2, 2 to 1, 4 to 2)
+        else -> Spec(4 to 2, 1 to 1, 4 to 4)
+    }
+
+    fun size(kind: String): Pair<Int, Int> = spec(kind).def
+
+    /** Every size this kind comes in, for the picker and the edit sheet (fits the grid). */
+    fun sizes(kind: String, cols: Int = Prefs.columns, rows: Int = Prefs.rows): List<Pair<Int, Int>> {
+        val s = spec(kind)
+        val out = mutableListOf<Pair<Int, Int>>()
+        for (h in s.min.second..s.max.second) for (w in s.min.first..s.max.first) {
+            if (w > cols || h > rows) continue
+            if (w == 3 && cols >= 4) continue // keep the list short: 1, 2, 4 wide
+            out += w to h
+        }
+        return out.ifEmpty { listOf(s.def.first.coerceAtMost(cols) to s.def.second.coerceAtMost(rows)) }
     }
 }
 
@@ -173,7 +228,30 @@ object Home {
         set(layout.copy(pages = layout.pages.filterIndexed { idx, _ -> idx != i }))
     }
 
-    fun setDock(keys: List<String>) = set(layout.copy(dock = keys.distinct().take(5)))
+    fun setDock(keys: List<String>) = set(layout.copy(dock = keys.distinct().take(com.nocap.link.Opt.dockCount.v)))
+
+    /** Every app key placed somewhere (pages, folders, dock). */
+    fun placedKeys(): Set<String> {
+        val s = HashSet<String>(layout.dock)
+        for (p in layout.pages) for (i in p.items) when (i) {
+            is AppItem -> s += i.key
+            is FolderItem -> s += i.keys
+            else -> {}
+        }
+        return s
+    }
+
+    /**
+     * "All apps on home pages": anything not placed yet (new installs) lands
+     * on the last page, spilling onto new pages.
+     */
+    fun placeAll(keys: List<String>) {
+        val have = placedKeys()
+        val missing = keys.filter { it !in have }
+        if (missing.isEmpty()) return
+        val from = (layout.pages.size - 1).coerceAtLeast(0)
+        for (k in missing) addApp(k, from)
+    }
 
     /** Removes apps that were uninstalled. */
     fun prune(installed: Set<String>) {
@@ -228,7 +306,7 @@ object Home {
                     is AppItem -> o.put("type", "app").put("key", i.key)
                     is FolderItem -> o.put("type", "folder").put("name", i.name).put("keys", JSONArray(i.keys))
                     is WidgetItem -> o.put("type", "widget").put("widget_id", i.widgetId)
-                    is NoCapItem -> o.put("type", "nocap").put("kind", i.kind)
+                    is NoCapItem -> o.put("type", "nocap").put("kind", i.kind).also { if (i.cfg.isNotEmpty()) it.put("cfg", JSONObject(i.cfg)) }
                 }
                 items.put(o)
             }
@@ -252,7 +330,10 @@ object Home {
                         FolderItem(id, c, j.optString("name"), (0 until ka.length()).map { ka.getString(it) })
                     }
                     "widget" -> WidgetItem(id, c, j.optInt("widget_id"))
-                    "nocap" -> NoCapItem(id, c, j.optString("kind"))
+                    "nocap" -> NoCapItem(
+                        id, c, j.optString("kind"),
+                        j.optJSONObject("cfg")?.let { o -> o.keys().asSequence().associateWith { k -> o.optString(k) } } ?: emptyMap(),
+                    )
                     else -> null
                 }
             })

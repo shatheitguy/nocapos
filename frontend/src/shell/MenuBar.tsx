@@ -15,6 +15,7 @@ import { ClockPanel } from './ClockPanel';
 import { useSpotlight } from '../state/spotlight';
 import { QuickSettings } from './QuickSettings';
 import { NotifyBell } from './Notifications';
+import { useLink } from '../state/link';
 
 /**
  * macOS-style menu bar (Settings → Windows → buttons on the Left). The clock,
@@ -37,6 +38,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLButtonElement>(null);
   const isAdmin = user.role === 'admin';
+  const hasPhone = useLink((s) => s.phones.length > 0);
   const t = useT();
 
 
@@ -64,7 +66,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
           </button>
         )}
         <TransfersButton className="mb-icon" />
-        {isAdmin && <NotifyBell className="mb-icon" size={15} />}
+        {(isAdmin || hasPhone) && <NotifyBell className="mb-icon" size={15} />}
         <button type="button" className="mb-icon" title={t('mb.search')} aria-label={t('mb.searchLabel')} onClick={() => useSpotlight.getState().toggle()}>
           <Icon name="search" size={15} />
         </button>

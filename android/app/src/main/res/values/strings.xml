@@ -10,5 +10,16 @@
     <string name="lock_service_label">NoCap OS lock</string>
     <string name="lock_service_desc">Lets NoCap OS lock your screen when you double-tap the home screen. It doesn\'t read anything on your screen and does nothing else.</string>
     <string name="lock_admin_label">NoCap OS lock</string>
-    <string name="dots_label">NoCap OS notification dots</string>
+    <string name="dots_label">NoCap OS (dots, now playing, NoCap Link sync)</string>
+    <string name="w_clock">NoCap clock</string>
+    <string name="w_clock_desc">Big NoCap glow clock with the date</string>
+    <string name="w_weather">NoCap weather</string>
+    <string name="w_weather_desc">Weather for the place you picked in NoCap OS</string>
+    <string name="w_status">NoCap status</string>
+    <string name="w_status_desc">Your NoCap server at a glance: CPU, memory, storage, updates</string>
+    <string name="w_link">NoCap Link</string>
+    <string name="w_link_desc">Open your NoCap desktop, ask NoCap AI, send a file, browse files</string>
+    <string name="w_search">NoCap search</string>
+    <string name="w_search_desc">Search apps, files and settings, or ask NoCap AI</string>
+    <string name="clip_tile">Send clipboard to NoCap</string>
 </resources>
