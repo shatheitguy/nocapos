@@ -30,6 +30,10 @@ foreach ($t in $Targets) {
         Copy-Item "$root\deploy\$f" "$stage\$f"
     }
     Copy-Item -Recurse "$root\deploy\plymouth" "$stage\plymouth" # boot splash theme
+    Copy-Item -Recurse "$root\deploy\desktop" "$stage\desktop"   # NoCap Desktop: full desktop + boot branding
+    New-Item -ItemType Directory -Force "$stage\brand", "$stage\wallpapers" | Out-Null
+    Copy-Item "$root\frontend\public\brand\*.png" "$stage\brand\"
+    Copy-Item "$root\frontend\public\wallpapers\*.jpg" "$stage\wallpapers\"
     Set-Content -NoNewline -Encoding ascii "$stage\VERSION" $Version
     Set-Content -NoNewline -Encoding ascii "$stage\ARCH" $label
     Set-Content -NoNewline -Encoding ascii "$stage\rootfs\data\.keep" ""

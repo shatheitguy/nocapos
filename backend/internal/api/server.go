@@ -118,7 +118,11 @@ func New(ctx context.Context, d Deps) *Server {
 	s.pkgJobs = syspkg.NewJobs()
 	s.pkgAdmin = syspkg.NewAdmin()
 	s.localGate = hostaccess.NewGate(d.Config.DataDir)
-	s.desktop = &hostaccess.Desktop{Run: hostaccess.ExecRunner, Native: hostSwitchesNative()}
+	s.desktop = hostaccess.NewDesktop(hostSwitchesNative(), d.Config.DataDir)
+	if s.desktop.Native {
+		// The full desktop: tell native apps who is signed in on the screen.
+		go s.desktop.WatchSession(ctx, hostaccess.DesktopEnvFile)
+	}
 	if d.AppStore != nil {
 		s.crashes.Busy = d.AppStore.Busy
 	}
@@ -187,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/update/packages", s.admin(s.sysPkgUpdates))
 	mux.Handle("POST /api/v1/system/update/packages/refresh", s.admin(s.sysPkgRefresh))
 	mux.Handle("POST /api/v1/system/update/packages/install", s.admin(s.sysPkgInstall))
+	mux.Handle("POST /api/v1/system/update/packages/repair", s.admin(s.sysPkgRepair))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))
@@ -203,6 +208,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/host-access", s.admin(s.hostAccessGet))
 	mux.Handle("PUT /api/v1/system/remote-access", s.admin(s.remoteAccessSet))
 	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
+	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
+	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
+	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))

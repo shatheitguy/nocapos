@@ -51,6 +51,7 @@ type sysPkgStatus struct {
 	Kernel        bool            `json:"kernel"`         // a pending update needs a restart afterwards
 	RestartNeeded bool            `json:"restart_needed"` // an installed update needs a restart now
 	Job           *syspkg.Job     `json:"job,omitempty"`  // the latest check/install from here (without output)
+	Health        syspkg.Health   `json:"health"`         // apt/dpkg left in a broken state: offer a repair
 	Error         string          `json:"error,omitempty"`
 }
 
@@ -172,6 +173,7 @@ func (s *Server) sysPkgUpdates(w http.ResponseWriter, r *http.Request) {
 		out.Checked = &refreshed
 	}
 	out.RestartNeeded = s.restartNeeded()
+	out.Health = s.pkgHealth(r.Context())
 	// While a package task runs, the package database is busy: show the last list.
 	maxAge := sysPkgListMaxAge
 	if s.pkgJobs.Busy() {
@@ -190,24 +192,34 @@ func (s *Server) sysPkgUpdates(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// sysPkgStart runs a check or an install as a Packages job.
+// sysPkgReq: the optional body of install / repair.
+type sysPkgReq struct {
+	// AllowRemove: removals the person saw in the preview and confirmed.
+	AllowRemove []string `json:"allow_remove,omitempty"`
+}
+
+// sysPkgStart runs a check, an install or a repair as a Packages job.
 func (s *Server) sysPkgStart(w http.ResponseWriter, r *http.Request, action string, onDone func(syspkg.Job)) {
 	st, ok := s.pkgSupported(w)
 	if !ok {
+		return
+	}
+	var req sysPkgReq
+	if r.ContentLength != 0 && r.Header.Get("Content-Type") != "" && !decodeJSON(w, r, &req) {
 		return
 	}
 	if s.updateIsRunning() {
 		writeError(w, http.StatusConflict, "busy", "NoCapOS is updating itself right now. Try again when it's done.")
 		return
 	}
-	plan, err := syspkg.Plan(st.Manager, action, "")
+	steps, err := s.pkgChangeSteps(r.Context(), st.Manager, action, nil, req.AllowRemove)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	ar := r.Clone(context.WithoutCancel(r.Context()))
 	uid := userFrom(r.Context()).ID
-	job, err := s.pkgJobs.Start(action, "system", syspkg.StepsFor(plan), func(j syspkg.Job) {
+	job, err := s.pkgJobs.Start(action, "system", steps, func(j syspkg.Job) {
 		s.pkgAdmin.Invalidate()
 		sysPkgForget()
 		if onDone != nil {
@@ -237,6 +249,12 @@ func (s *Server) sysPkgRefresh(w http.ResponseWriter, r *http.Request) {
 			sysPkgCache.Unlock()
 		}
 	})
+}
+
+// sysPkgRepair finishes what dpkg left half-done and fixes unmet
+// dependencies (POST /api/v1/system/update/packages/repair).
+func (s *Server) sysPkgRepair(w http.ResponseWriter, r *http.Request) {
+	s.sysPkgStart(w, r, syspkg.ActRepair, nil)
 }
 
 func (s *Server) sysPkgInstall(w http.ResponseWriter, r *http.Request) {

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
-	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -33,24 +32,39 @@ const (
 // ErrNoSlots: every stream slot is taken.
 var ErrNoSlots = errors.New("too many apps are streaming right now; close one and try again")
 
-// RunAs is the Linux account a streamed app runs as (nil = alfad's own).
+// RunAs is the Linux account a streamed app runs as. Never root: streams
+// refuse to start without one.
 type RunAs struct {
 	Username string
 	UID, GID uint32
 	Groups   []uint32
 	Home     string
+	// Runtime is XDG_RUNTIME_DIR ("" = /run/user/<uid>).
+	Runtime string
+	// OwnHome: the setup step makes Home (owned by the account) when it's
+	// missing — the shared apps account's per-person homes.
+	OwnHome bool
 }
+
+// Stream modes (app-stream.sh's first argument).
+const (
+	ModeApp     = "app"     // one app, maximized, with a window manager
+	ModeDesktop = "desktop" // a full Linux desktop
+	ModeScreen  = "screen"  // the server's own screen (NoCap Desktop session)
+)
 
 // StreamSpec says what to stream.
 type StreamSpec struct {
 	// Key identifies the app (one session per Key per person).
 	Key   string
 	Title string
-	// Command is the app's argv, run inside the virtual display.
+	// Mode is ModeApp (default), ModeDesktop or ModeScreen.
+	Mode string
+	// Command is the app's argv, run inside the virtual display (ModeApp).
 	Command []string
 	RunAs   *RunAs
-	// Home is HOME when RunAs is nil (alfad's own account).
-	Home string
+	// Env is extra KEY=VALUE for the session (ModeScreen: where the screen is).
+	Env []string
 }
 
 // StreamStatus is a session as the UI sees it.
@@ -87,8 +101,8 @@ type streamSession struct {
 	slot    streamSlot
 	phase   Phase
 	message string
-	proc    *os.Process
-	active  int // open proxy requests / WebSockets
+	halt    func() // stops its processes (nil once stopped)
+	active  int    // open proxy requests / WebSockets
 	seen    time.Time
 	ended   bool
 }
@@ -98,9 +112,9 @@ func (s *streamSession) status() StreamStatus {
 }
 
 // starter launches a session's processes and waits until its web port
-// answers. It returns the process (its own group) and a channel closed when
-// it exits. Swappable in tests.
-type starter func(ctx context.Context, s *streamSession, logDir string) (*os.Process, <-chan struct{}, error)
+// answers. It returns how to stop them and a channel closed when they exit.
+// Swappable in tests.
+type starter func(ctx context.Context, s *streamSession, logDir string) (halt func(), done <-chan struct{}, err error)
 
 // Streams supervises native app streams.
 type Streams struct {
@@ -108,8 +122,9 @@ type Streams struct {
 	logDir string
 	idle   time.Duration
 	start  starter
-	stop   func(*os.Process)
-	now    func() time.Time
+	// cleanup stops streams left over from an earlier alfad run.
+	cleanup func()
+	now     func() time.Time
 
 	mu       sync.Mutex
 	sessions map[string]*streamSession
@@ -120,7 +135,7 @@ type Streams struct {
 func NewStreams(log *slog.Logger, dataDir string) *Streams {
 	return &Streams{
 		log: log, logDir: dataDir, idle: DefaultStreamIdle,
-		start: startStream, stop: stopProcess, now: time.Now,
+		start: startStream, cleanup: cleanupStreams, now: time.Now,
 		sessions: map[string]*streamSession{},
 	}
 }
@@ -168,7 +183,7 @@ func (m *Streams) Open(userID string, spec StreamSpec) (StreamStatus, error) {
 func (m *Streams) run(s *streamSession) {
 	ctx, cancel := context.WithTimeout(context.Background(), streamStartWait)
 	defer cancel()
-	proc, done, err := m.start(ctx, s, m.logDir)
+	halt, done, err := m.start(ctx, s, m.logDir)
 	m.mu.Lock()
 	if err != nil {
 		s.phase, s.message, s.ended = PhaseError, err.Error(), true
@@ -178,16 +193,16 @@ func (m *Streams) run(s *streamSession) {
 	}
 	if m.closed || s.ended { // stopped while starting
 		m.mu.Unlock()
-		m.stop(proc)
+		halt()
 		return
 	}
-	s.proc, s.phase, s.message, s.seen = proc, PhaseReady, "Ready", m.now()
+	s.halt, s.phase, s.message, s.seen = halt, PhaseReady, "Ready", m.now()
 	m.mu.Unlock()
 	go func() {
 		<-done
 		m.mu.Lock()
 		defer m.mu.Unlock()
-		s.proc = nil
+		s.halt = nil
 		if !s.ended {
 			s.ended, s.phase, s.message = true, PhaseIdle, s.spec.Title+" was closed"
 		}
@@ -248,7 +263,7 @@ func (m *Streams) Stop(userID, id string) bool {
 	p := m.endLocked(s)
 	m.mu.Unlock()
 	if p != nil {
-		m.stop(p)
+		p()
 	}
 	return true
 }
@@ -256,7 +271,7 @@ func (m *Streams) Stop(userID, id string) bool {
 // StopUser ends every session of a person (signed out, removed).
 func (m *Streams) StopUser(userID string) {
 	m.mu.Lock()
-	var procs []*os.Process
+	var procs []func()
 	for _, s := range m.sessions {
 		if s.userID == userID {
 			if p := m.endLocked(s); p != nil {
@@ -265,15 +280,13 @@ func (m *Streams) StopUser(userID string) {
 		}
 	}
 	m.mu.Unlock()
-	for _, p := range procs {
-		m.stop(p)
-	}
+	haltAll(procs)
 }
 
 // StopKey ends every session of an app (it was uninstalled).
 func (m *Streams) StopKey(key string) {
 	m.mu.Lock()
-	var procs []*os.Process
+	var procs []func()
 	for _, s := range m.sessions {
 		if s.spec.Key == key {
 			if p := m.endLocked(s); p != nil {
@@ -282,14 +295,12 @@ func (m *Streams) StopKey(key string) {
 		}
 	}
 	m.mu.Unlock()
-	for _, p := range procs {
-		m.stop(p)
-	}
+	haltAll(procs)
 }
 
-func (m *Streams) endLocked(s *streamSession) *os.Process {
-	p := s.proc
-	s.proc = nil
+func (m *Streams) endLocked(s *streamSession) func() {
+	p := s.halt
+	s.halt = nil
 	s.ended = true
 	if s.phase != PhaseError {
 		s.phase, s.message = PhaseIdle, s.spec.Title+" was closed"
@@ -303,7 +314,7 @@ func (m *Streams) endLocked(s *streamSession) *os.Process {
 func (m *Streams) Reap() {
 	now := m.now()
 	m.mu.Lock()
-	var procs []*os.Process
+	var procs []func()
 	for _, s := range m.sessions {
 		switch {
 		case s.ended && now.Sub(s.seen) > time.Minute:
@@ -315,13 +326,29 @@ func (m *Streams) Reap() {
 		}
 	}
 	m.mu.Unlock()
-	for _, p := range procs {
-		m.stop(p)
-	}
+	haltAll(procs)
 }
 
-// Run reaps idle sessions until ctx ends, then stops them all.
+// haltAll stops sessions side by side (each may take a few seconds).
+func haltAll(halts []func()) {
+	var wg sync.WaitGroup
+	for _, h := range halts {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h()
+		}()
+	}
+	wg.Wait()
+}
+
+// Run reaps idle sessions until ctx ends, then stops them all. Streams
+// left running by an earlier alfad (restarted or updated) are stopped first:
+// nobody can reach them any more.
 func (m *Streams) Run(ctx context.Context) {
+	if m.cleanup != nil {
+		m.cleanup()
+	}
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
 	for {
@@ -339,16 +366,14 @@ func (m *Streams) Run(ctx context.Context) {
 func (m *Streams) Close() {
 	m.mu.Lock()
 	m.closed = true
-	var procs []*os.Process
+	var procs []func()
 	for _, s := range m.sessions {
 		if p := m.endLocked(s); p != nil {
 			procs = append(procs, p)
 		}
 	}
 	m.mu.Unlock()
-	for _, p := range procs {
-		m.stop(p)
-	}
+	haltAll(procs)
 }
 
 func newStreamID() string {

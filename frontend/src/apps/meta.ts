@@ -111,6 +111,15 @@ export const APPS: Record<string, AppMeta> = {
     description: 'A Linux app installed on this server, streamed into a window',
     hidden: true,
   },
+  linuxdesktop: {
+    id: 'linuxdesktop',
+    title: 'Linux Desktop',
+    icon: 'desktop',
+    tile: ['#5c7cfa', '#2b3a8f'],
+    size: { w: 1240, h: 800 },
+    description: 'A full Linux desktop on this server, in a window',
+    single: true,
+  },
   remotedesktop: {
     id: 'remotedesktop',
     title: 'Remote Desktop',
@@ -118,6 +127,16 @@ export const APPS: Record<string, AppMeta> = {
     tile: ['#2f6bff', '#1b3f9e'],
     size: { w: 1080, h: 700 },
     description: 'Connect to Windows and Linux PCs over RDP',
+    adminOnly: true,
+  },
+  nocapdesktop: {
+    id: 'nocapdesktop',
+    title: 'NoCap Desktop',
+    icon: 'desktop',
+    tile: ['#e5383b', '#7a0f12'],
+    size: { w: 1280, h: 800 },
+    description: 'The server’s own screen: its full desktop, right here in a window',
+    single: true,
     adminOnly: true,
   },
   virtualdesk: {
