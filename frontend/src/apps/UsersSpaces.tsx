@@ -1,97 +1,102 @@
 import { useEffect, useState } from 'react';
-import { PERM_LABEL, sharesApi, type Access, type Perm, type PersonSpaces } from '../api/shares';
+import { sharesApi, type Perm, type PersonSpaces } from '../api/shares';
 import type { Person } from '../api/users';
+import { Icon } from '../components/Icon';
+import { useT } from '../i18n';
 import { toast } from '../state/toasts';
 
-// Users & Groups → a person's access type, shared folders and apps.
+// Users & Groups → a person's shared folders and apps. (Whether they sign
+// in to the desktop or only use file sharing is their role: User or Guest.)
 
-export function PersonSpacesPanel({ person, onChanged }: { person: Person; onChanged: () => void }) {
+const PERMS: Perm[] = ['rw', 'ro', 'none'];
+
+export function PersonSpacesPanel({ person }: { person: Person }) {
+  const t = useT();
   const [data, setData] = useState<PersonSpaces | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = async () => {
     const r = await sharesApi.person(person.username);
     if (r.ok) setData(r.data);
-    else setError(r.error ?? 'Couldn’t load');
+    else setError(r.error ?? t('ug.sp.loadFailed'));
   };
   useEffect(() => {
     void load();
-  }, [person.username]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [person.username, person.role, person.access]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (p: Promise<{ ok: boolean; error?: string }>, done: string) => {
     const r = await p;
-    if (!r.ok) return toast('error', 'That didn’t work', r.error);
+    if (!r.ok) return toast('error', t('ug.toast.failed'), r.error);
     toast('success', done);
     await load();
   };
 
   if (error) return <p className="error small">{error}</p>;
-  if (!data) return <p className="muted small">Loading…</p>;
+  if (!data) {
+    return (
+      <div className="ug-list" aria-busy="true">
+        <div className="ug-list-row"><span className="ug-skel line" /></div>
+        <div className="ug-list-row"><span className="ug-skel line short" /></div>
+      </div>
+    );
+  }
   const admin = data.admin;
   return (
-    <div className="person-spaces">
-      <div className="ps-line">
-        <span>
-          Access
-          <span className="muted small"> · {admin ? 'administrators always have the desktop' : data.access === 'files' ? 'connects from a computer or phone only' : 'signs in to the desktop'}</span>
-        </span>
-        <select
-          className="select"
-          aria-label={`Access for ${person.username}`}
-          value={data.access}
-          disabled={admin || person.you}
-          onChange={(e) => {
-            const a = e.target.value as Access;
-            void act(sharesApi.setAccess(person.username, a), a === 'files' ? `${person.username} now uses file sharing only` : `${person.username} can sign in to the desktop`).then(onChanged);
-          }}
-        >
-          <option value="desktop">Desktop</option>
-          <option value="files">File sharing only</option>
-        </select>
+    <div className="ug-spaces">
+      <h4><Icon name="folder" size={13} /> {t('ug.sp.folders')}</h4>
+      <div className="ug-list">
+        {data.folders.length === 0 && <p className="ug-list-row muted small">{t('ug.sp.noFolders')}</p>}
+        {data.folders.map((f) => (
+          <div key={f.id} className="ug-list-row">
+            <span className="ug-list-text">
+              <b>{f.name}</b>
+              {f.read_only && <span>{t('ug.sp.readOnlyAll')}</span>}
+            </span>
+            <select
+              className="select"
+              aria-label={t('ug.sp.permFor', { name: person.username, folder: f.name })}
+              value={f.perm}
+              disabled={admin}
+              title={admin ? t('ug.sp.adminAll') : undefined}
+              onChange={(e) => {
+                const p = e.target.value as Perm;
+                void act(sharesApi.setFolderPerm(person.username, f.id, p), t('ug.sp.permSet', { name: person.username, perm: t(`ug.perm.${p}`), folder: f.name }));
+              }}
+            >
+              {PERMS.map((p) => (
+                <option key={p} value={p}>
+                  {t(`ug.perm.${p}`)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
       </div>
 
-      <h4>Shared folders</h4>
-      {data.folders.length === 0 && <span className="muted small">No shared folders yet (Files → File Sharing).</span>}
-      {data.folders.map((f) => (
-        <div key={f.id} className="ps-line">
-          <span>
-            {f.name}
-            {f.read_only && <span className="muted small"> · read only for everyone</span>}
-          </span>
-          <select
-            className="select"
-            aria-label={`${person.username} in ${f.name}`}
-            value={f.perm}
-            disabled={admin}
-            title={admin ? 'Administrators can always reach every shared folder' : undefined}
-            onChange={(e) => void act(sharesApi.setFolderPerm(person.username, f.id, e.target.value as Perm), `${person.username}: ${PERM_LABEL[e.target.value as Perm]} in ${f.name}`)}
-          >
-            {(['rw', 'ro', 'none'] as Perm[]).map((p) => (
-              <option key={p} value={p}>
-                {PERM_LABEL[p]}
-              </option>
-            ))}
-          </select>
-        </div>
-      ))}
-
-      <h4>Apps</h4>
-      {data.apps.length === 0 && <span className="muted small">No App Store apps are installed.</span>}
-      {data.apps.map((a) => (
-        <label key={a.id} className="ps-line">
-          <span>
-            {a.name}
-            <span className="muted small"> · {a.everyone ? 'everyone' : 'selected people'}</span>
-          </span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={a.allowed}
-            disabled={admin}
-            aria-label={`${person.username} can use ${a.name}`}
-            onChange={(e) => void act(sharesApi.setAppAllowed(person.username, a.id, e.target.checked), e.target.checked ? `${person.username} can use ${a.name}` : `${person.username} can no longer see ${a.name}`)}
-          />
-        </label>
-      ))}
+      <h4><Icon name="store" size={13} /> {t('ug.sp.apps')}</h4>
+      <div className="ug-list">
+        {data.apps.length === 0 && <p className="ug-list-row muted small">{t('ug.sp.noApps')}</p>}
+        {data.apps.map((a) => (
+          <label key={a.id} className="ug-list-row">
+            <span className="ug-list-text">
+              <b>{a.name}</b>
+              <span>{a.everyone ? t('ug.sp.everyone') : t('ug.sp.selected')}</span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={a.allowed}
+              disabled={admin}
+              aria-label={t('ug.sp.canUse', { name: person.username, app: a.name })}
+              onChange={(e) =>
+                void act(
+                  sharesApi.setAppAllowed(person.username, a.id, e.target.checked),
+                  e.target.checked ? t('ug.sp.appOn', { name: person.username, app: a.name }) : t('ug.sp.appOff', { name: person.username, app: a.name }),
+                )
+              }
+            />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
