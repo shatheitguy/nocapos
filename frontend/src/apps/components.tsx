@@ -35,4 +35,5 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   scripts: app(() => import('./Scripts').then((m) => m.Scripts)),
   viewer: app(() => import('./Viewer').then((m) => m.Viewer)),
   logs: app(() => import('./Logs').then((m) => m.Logs)),
+  phone: app(() => import('./Phone').then((m) => m.Phone)),
 };
