@@ -5,6 +5,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { setNetwork } from '../lib/hostActions';
 import { IPv4Editor, IPv4Summary, WifiList } from './NetworkParts';
 import { Section, Toggle } from './Personalize';
+import { SavedNetworks } from './WifiSaved';
 
 // Settings → Network: an overview of connections, then Wi-Fi and one page
 // per adapter with its IP settings.
@@ -145,6 +146,13 @@ export function WifiPage() {
           </div>
         )}
       </Section>
+      {net.manager === 'networkmanager' && net.wifi.supported && (
+        <Section title={tr('wifi.savedTitle')} hint={tr('wifi.savedHint')}>
+          <div className="settings-row full">
+            <SavedNetworks rev={rev} onChanged={load} />
+          </div>
+        </Section>
+      )}
       {wireless && <AddressSection key={`${wireless.name}-${rev}`} iface={wireless} onApplied={load} />}
     </div>
   );

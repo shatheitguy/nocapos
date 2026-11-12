@@ -2710,3 +2710,50 @@ button.ce-add-line { align-self: flex-start; }
 @container widget (max-height: 139px) {
   .sessions-widget .widget-list { display: none; }
 }
+
+/* Settings → Network → Wi-Fi: saved networks, enterprise sign-in, share */
+.wifi-eap { flex-basis: 100%; margin: 0 0 6px; }
+.wifi-eap-title { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.wifi-eap-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); min-width: 0; }
+.wifi-eap-field > input, .wifi-eap-field > .select { width: 100%; box-sizing: border-box; margin-top: 0; color: var(--text); }
+.wifi-eap-file { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.wifi-eap-file small { min-width: 0; overflow-wrap: anywhere; }
+.wifi-eap .wifi-warn { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 7px 9px; border-radius: 8px; font-size: 12px; line-height: 1.4; background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.wifi-eap .wifi-warn > svg { flex: none; color: var(--warn); margin-top: 1px; }
+.wifi-saved { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.wifi-saved-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 10px; }
+.wifi-saved-row + .wifi-saved-row { border-top: 1px solid var(--border); border-top-left-radius: 0; border-top-right-radius: 0; }
+.wifi-saved-row.current { background: var(--accent-soft); border-top-color: transparent; }
+.wifi-saved-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wifi-saved-icon { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-3); color: var(--muted); }
+.wifi-saved-row.current .wifi-saved-icon { background: var(--accent); color: var(--accent-ink); }
+.wifi-saved-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.wifi-saved-name { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.wifi-saved-meta { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.wifi-saved-actions { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 38px; }
+.wifi-saved-actions svg { flex: none; }
+.wifi-saved-actions button { padding: 4px 9px; font-size: 12px; }
+.wifi-saved-editor { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 2px 38px; padding: 10px; border-radius: 10px; background: var(--surface-2); }
+.wifi-saved-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0; }
+.wifi-saved-line > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 180px; font-size: 13px; }
+.wifi-saved-line small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.wifi-saved-inline { display: flex; gap: 6px; align-items: center; flex: 1 1 200px; justify-content: flex-end; }
+.wifi-saved-inline input { min-width: 0; flex: 1; max-width: 220px; padding: 6px 9px; }
+.wifi-saved-inline input[type='number'] { max-width: 90px; }
+.wifi-saved-editor .wifi-error, .wifi-saved-editor .wifi-other { padding-left: 0; margin-top: 0; }
+.wifi-saved-editor .wifi-eap { background: var(--surface-3); }
+.wifi-share { align-items: stretch; }
+.wifi-share-auth { display: flex; flex-direction: column; gap: 8px; }
+.wifi-share-auth .wifi-error { padding: 0; }
+.wifi-share-qr { align-self: center; width: min(240px, 70vw); height: auto; aspect-ratio: 1; border-radius: 12px; background: #fff; padding: 8px; box-sizing: border-box; image-rendering: pixelated; }
+.wifi-share-fields { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; align-items: center; }
+.wifi-share-fields code { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.wifi-share-pw { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.wifi-share-open { grid-column: 1 / -1; }
+.wifi-share .confirm-actions { flex-wrap: wrap; }
+@media (max-width: 480px) {
+  .wifi-saved-actions, .wifi-saved-editor { padding-left: 0; margin-left: 0; }
+  .wifi-saved-editor { padding-left: 10px; }
+  .wifi-saved-inline { justify-content: flex-start; }
+  .wifi-saved-inline input { max-width: none; }
+}
