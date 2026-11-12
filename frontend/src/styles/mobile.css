@@ -62,6 +62,13 @@
   padding: 4px 6px; gap: 2px; align-items: center; touch-action: pan-x;
 }
 :root[data-compact] .dock::-webkit-scrollbar { display: none; }
+/* Too many pins for the width: it scrolls, snaps to whole icons, and the
+   edge with more behind it fades (Shelf sets more-left / more-right). */
+:root[data-compact] .dock { scroll-snap-type: x proximity; scroll-padding-inline: 6px; }
+:root[data-compact] .dock > * { scroll-snap-align: start; }
+:root[data-compact] .dock.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+:root[data-compact] .dock.more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+:root[data-compact] .dock.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 :root[data-compact] .dock-item { flex: none; min-width: 42px; min-height: 42px; display: grid; place-items: center; padding: 3px; }
 :root[data-compact] .dock-item .app-icon,
 :root[data-compact] .launchpad-icon { width: 36px !important; height: 36px !important; }
@@ -70,8 +77,9 @@
 :root[data-compact] .dock-sep { height: 28px; margin: 0 3px; flex: none; }
 /* No drag-to-trash on a touch screen: the trash lives in Files. */
 :root[data-compact] .dock-item.trash, :root[data-compact] .dock-sep:has(+ .dock-item.trash), :root[data-compact] .dock > .dock-sep:last-child { display: none; }
-:root[data-compact] .tray { flex: none; padding: 0 4px; gap: 0; margin-left: auto; }
-:root[data-compact] .tray-btn { min-width: 40px; height: 44px; padding: 0 6px; justify-content: center; }
+:root[data-compact] .tray { flex: none; padding: 0 3px; gap: 0; margin-left: auto; }
+:root[data-compact] .tray-btn { min-width: 38px; height: 44px; padding: 0 5px; justify-content: center; }
+:root[data-compact] .tray-avatar .avatar { width: 28px; height: 28px; font-size: 12px; }
 :root[data-compact] .tray svg { display: inline-block; }
 :root[data-compact] .tray-status svg + svg { display: none; }
 :root[data-compact] .tray-status .status-dot { display: none; }
@@ -79,6 +87,16 @@
 :root[data-compact] .tray-date { display: none; }
 @media (max-width: 419.98px) {
   :root[data-compact] .tray-clock { display: none !important; }
+}
+/* The narrowest phones: slightly smaller icons, so five or six fit. */
+@media (max-width: 389.98px) {
+  :root[data-compact] .shelf { gap: 6px; }
+  :root[data-compact] .dock { padding: 4px; gap: 0; }
+  :root[data-compact] .dock-item { min-width: 40px; padding: 2px; }
+  :root[data-compact] .dock-item .app-icon,
+  :root[data-compact] .launchpad-icon { width: 34px !important; height: 34px !important; }
+  :root[data-compact] .dock-sep { margin: 0 2px; }
+  :root[data-compact] .tray-btn { min-width: 36px; padding: 0 4px; }
 }
 
 /* Tablets and small desktop windows: a centred dock would slide under the
@@ -236,7 +254,10 @@
 
 /* Launchpad: tighter cells so the names fit (also when held sideways) */
 :root[data-compact] .launcher-app { padding: 6px 2px; gap: 6px; font-size: 12px; }
-:root[data-compact] .launcher-app > span:last-child { flex: none; }
+:root[data-compact] .launcher-app > span:last-child {
+  flex: none; white-space: normal; text-align: center; line-height: 1.2;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: break-word;
+}
 @media (max-height: 479.98px) {
   :root[data-compact] .launcher-app { padding: 2px; gap: 4px; }
   :root[data-compact] .launcher-app :is(.app-icon, .folder-icon) { width: 44px !important; height: 44px !important; border-radius: 11px !important; }
@@ -247,4 +268,6 @@
 :root[data-compact] .window .segmented button,
 :root[data-compact] .window .ct-seg button { min-height: 38px; min-width: 40px; }
 :root[data-compact] .ct-filter, :root[data-compact] .ce-add { min-height: 36px; }
+:root[data-compact] a.ct-port { display: inline-flex; align-items: center; min-height: 32px; padding-inline: 8px; }
+:root[data-compact] .ct-ports { gap: 6px; }
 :root[data-compact] .accent-swatch { width: 34px; height: 34px; }

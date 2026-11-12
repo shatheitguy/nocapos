@@ -1,3 +1,4 @@
+import { focusUnlessTouch } from '../lib/touch';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { openStoreApp, storeApi, type StoreApp } from '../api/appstore';
 import { api } from '../api/client';
@@ -75,7 +76,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
   const list = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    input.current?.focus();
+    focusUnlessTouch(input.current);
     // Everyone: the server only lists the installed apps each person may use.
     void storeApi.list().then((r) => r.ok && setStore(r.data.apps));
   }, []);

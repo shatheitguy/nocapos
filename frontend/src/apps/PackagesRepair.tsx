@@ -3,9 +3,9 @@ import { api } from '../api/client';
 import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
 
-// Shared by Settings → Software Update and the Packages app: the "your
-// packages need a repair" card, the kernel update row, and the preview that
-// lists what an update or repair would remove before anything changes.
+// Used by Settings → Glow Up: the "your packages need a repair" card, the
+// kernel update row, and the preview that lists what an update or repair
+// would remove before anything changes.
 
 export interface PkgHealth {
   broken: boolean;
@@ -66,8 +66,8 @@ export async function confirmChange(
   return (await confirmDialog({ ...ask, message })) ? [] : null;
 }
 
-/** The "Your packages need a repair" card. */
-export function RepairCard({ health, busy, onRepair }: { health: PkgHealth; busy: boolean; onRepair: () => void }) {
+/** The "Your packages need a repair" card ("Update everything" repairs them first). */
+export function RepairCard({ health }: { health: PkgHealth }) {
   const t = useT();
   if (!health.broken) return null;
   const names = health.packages ?? [];
@@ -85,14 +85,6 @@ export function RepairCard({ health, busy, onRepair }: { health: PkgHealth; busy
           </details>
         )}
       </div>
-      <button type="button" className="pill small" disabled={busy} onClick={onRepair}>
-        <Icon name="restart" size={13} /> {t('pkg.repairBtn')}
-      </button>
     </div>
   );
-}
-
-/** Asks (with the preview) before a repair; resolves to the allowed removals or null. */
-export function confirmRepair(): Promise<string[] | null> {
-  return confirmChange('repair', [], { title: tr('pkg.repairAskTitle'), message: tr('pkg.repairAskMsg'), confirmLabel: tr('pkg.repairBtn') });
 }

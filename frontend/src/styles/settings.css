@@ -71,6 +71,26 @@
 .set-update-result.bad svg { color: var(--bad); }
 .set-update-err { margin: 0; font-size: 13px; color: var(--bad); }
 .set-update-part { margin: 0 0 -4px; }
+/* Glow Up: one card for every update */
+.glowup > .glowup-steps, .glowup > .sysupd-bar, .glowup > .set-update-result, .glowup > .sysupd-restart, .glowup > .pkg-repair, .glowup > .set-update-log { flex: 1 0 100%; min-width: 0; }
+.glowup > .pkg-repair { margin-bottom: 0; }
+.glowup .set-update-result span { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.glowup-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.glowup-steps li { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+.glowup-steps li.now { color: var(--text); font-weight: 600; }
+.glowup-steps li.done { color: var(--text); }
+.glowup-dot { width: 20px; height: 20px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 1.5px solid var(--border); }
+.glowup-steps li.done .glowup-dot { background: color-mix(in srgb, var(--ok) 16%, transparent); border-color: var(--ok); color: var(--ok); }
+.glowup-steps li.bad .glowup-dot { background: color-mix(in srgb, var(--bad) 16%, transparent); border-color: var(--bad); color: var(--bad); }
+.glowup-steps li.now .glowup-dot { border-color: var(--accent); }
+.glowup-steps .spinner.sm { width: 12px; height: 12px; }
+.glowup-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.glowup-details > summary::-webkit-details-marker { display: none; }
+.glowup-details > summary::before { content: '\25B8'; font-size: 11px; color: var(--muted); transition: transform 0.15s; }
+.glowup-details[open] > summary::before { transform: rotate(90deg); }
+.glowup-details > summary .muted { font-weight: 500; text-transform: none; letter-spacing: 0; }
+.glowup-details > .settings-card { margin-top: 8px; }
+.glowup-note { margin: 0; padding: 0 4px; }
 /* Software Update → System packages */
 .sysupd { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .sysupd-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
