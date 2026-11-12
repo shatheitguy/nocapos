@@ -326,7 +326,7 @@ fun SettingsScreen(a: MainActivity) {
             Hint(if (isHome) t("NoCap OS is your home screen. W.", "NoCap OS is your default home app.") else t("NoCap OS isn't your home screen yet.", "NoCap OS isn't the default home app."))
             Action(if (isHome) t("Change home app", "Change default home app") else t("Make NoCap OS my home screen", "Set as default home app")) { PhoneApps.askToBeHome(a) }
         },
-        Sec("backup", t("Save Point", "Backup & restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
+        Sec("backup", t("Save Point", "Export & restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
             if (linked) {
                 Action(t("Back up to my NoCap server", "Back up to my NoCap server")) { a.backupToServer() }
                 Action(t("Restore from my NoCap server", "Restore from my NoCap server")) { a.restoreFromServer() }
