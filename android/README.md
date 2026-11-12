@@ -136,26 +136,67 @@ Needs JDK 17 and the Android SDK (platform 34, build-tools 34.0.0).
 
 ```sh
 cd android
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug                 # app/build/outputs/apk/debug/app-debug.apk
+./gradlew testDebugUnitTest lintDebug   # unit tests + lint (lint-baseline.xml lists older warnings)
+./gradlew assembleRelease bundleRelease # release APK + Play bundle (.aab)
 ```
 
 Kotlin + Jetpack Compose, minSdk 26, target 34, application ID
 `com.nocap.link`.
 
+### Code layout
+
+`app/src/main/java/com/nocap/link/`:
+
+| Package | What's in it |
+| --- | --- |
+| (root) | `MainActivity` (screens and layers), `NoCapApp`, `HeartbeatWorker` |
+| `data` | Settings (`Opt`/`Prefs`), the encrypted `Vault`, phone apps, usage, custom icons |
+| `home` | Home screen, pages and layout file, gestures, menus, wallpaper |
+| `drawer` | App drawer styles, search, icon styles |
+| `widget` | NoCap widgets, hosting Android widgets, weather, now playing, and the widgets for other home screens |
+| `settings` | Settings, Permissions page, first-run setup, crash report dialogs |
+| `sync` | NoCap Link: pairing, QR scan, hub, notification and clipboard sync, sign-in alerts, notifications |
+| `net` | The NoCapOS device API client and certificate pinning |
+| `ai`, `desktop`, `share` | NoCap AI, the web desktop, "Send to NoCap" |
+| `system` | Notification listener, lock helper, crash log |
+| `ui` | Theme (NoCap colors, fonts, glass) and shared controls |
+
+Manifest components (services, receivers, the widget providers, activities)
+keep their class names across releases: renaming one would switch off
+accessibility, notification access, device admin or the quick-settings tile
+for people who turned them on, and remove placed widgets.
+
+### Crash reports
+
+If the app crashes, the report is kept on the phone (Settings → About). On
+the next start it offers, once, to send it to your linked server, where it is
+saved in NoCap Link in your home folder. Nothing is sent anywhere else.
+
 ## Releases and signing
 
-`.github/workflows/android.yml` builds the APK on pull requests that touch
-`android/**` (download it from the run's artifacts) and attaches
-`nocap-os.apk` to each NoCapOS release, which is what
+`.github/workflows/android.yml` runs the unit tests and lint, then builds the
+release APK and the Play bundle on pull requests that touch `android/**`
+(download them from the run's artifacts), and attaches `nocap-os.apk` and
+`nocap-os.aab` to each NoCapOS release, which is what
 `https://github.com/shatheitguy/nocapos/releases/latest/download/nocap-os.apk`
 serves.
 
-For now the APK is **debug-signed** (the Android SDK's debug key, made fresh
-on each CI runner). There are no signing secrets in the repo. Because the
-key can differ between builds, installing a newer APK over an older one may
-fail with "app not installed" — uninstall the old one first (you'll need to
-link again). A proper release key can be added later as repository secrets.
+Release signing reads four repository secrets:
 
+| Secret | Value |
+| --- | --- |
+| `NOCAP_KEYSTORE_B64` | The upload/release keystore (`.jks`), base64-encoded (`base64 -w0 nocap.jks`) |
+| `NOCAP_KEYSTORE_PASSWORD` | The keystore password |
+| `NOCAP_KEY_ALIAS` | The key alias inside it |
+| `NOCAP_KEY_PASSWORD` | The key password |
+
+Without them the build falls back to the Android SDK's debug key (made fresh
+on each CI runner), so installing a newer APK over an older one may fail with
+"app not installed": uninstall the old one first (you'll need to link again).
+Once a release key is in place, keep it safe: every later update must be
+signed with the same key. The first update from a debug-signed build to the
+release-signed one also needs the old app removed once.
 ## Credits
 
 Orbitron and Rajdhani (the NoCapOS desktop's fonts), converted to TTF from

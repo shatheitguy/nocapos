@@ -69,7 +69,14 @@ object CustomIcons {
 
     /** Copies a picked picture in as a square icon; returns the file name. */
     fun save(ctx: Context, key: String, uri: Uri): String? = runCatching {
-        val src = ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it) } ?: return null
+        // Read the size first and decode at most ~1024 px: phone photos are huge.
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 512) sample *= 2
+        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        val src = ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, opts) } ?: return null
+        if (src.width <= 0 || src.height <= 0) return null
         val side = minOf(src.width, src.height)
         val sq = android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
         val out = android.graphics.Bitmap.createScaledBitmap(sq, 256, 256, true)
@@ -96,27 +103,32 @@ object PhoneApps {
         val icons = Opt.customIcons.v
         return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != ctx.packageName }
-            .map {
-                val ai = it.activityInfo
-                val app = ai.applicationInfo
-                val key = "${ai.packageName}/${ai.name}"
-                val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0
-                val installed = runCatching { pm.getPackageInfo(ai.packageName, 0).firstInstallTime }.getOrDefault(0L)
-                val label = labels[key]?.takeIf { l -> l.isNotBlank() } ?: it.loadLabel(pm).toString()
-                val customBmp = icons[key]?.let { f -> CustomIcons.load(ctx, f, px) }
-                if (customBmp != null) {
-                    PhoneApp(label, ai.packageName, ai.name, customBmp, app.category, system, full = customBmp, installed = installed, custom = true)
-                } else {
-                    val d = it.loadIcon(pm)
-                    val l = layers(d, px)
-                    PhoneApp(
-                        label, ai.packageName, ai.name, d.toBitmap(px, px).asImageBitmap(), app.category, system,
-                        full = l?.first, fg = l?.second, mono = l?.third, installed = installed,
-                    )
-                }
-            }
+            .mapNotNull { runCatching { one(ctx, pm, it, px, labels, icons) }.getOrNull() } // one broken app mustn't empty the list
             .distinctBy { it.key }
             .sortedBy { it.label.lowercase() }
+    }
+
+    private fun one(
+        ctx: Context, pm: android.content.pm.PackageManager, it: android.content.pm.ResolveInfo, px: Int,
+        labels: Map<String, String>, icons: Map<String, String>,
+    ): PhoneApp {
+        val ai = it.activityInfo
+        val app = ai.applicationInfo
+        val key = "${ai.packageName}/${ai.name}"
+        val system = app.flags and ApplicationInfo.FLAG_SYSTEM != 0
+        val installed = runCatching { pm.getPackageInfo(ai.packageName, 0).firstInstallTime }.getOrDefault(0L)
+        val label = labels[key]?.takeIf { l -> l.isNotBlank() } ?: it.loadLabel(pm).toString()
+        val customBmp = icons[key]?.let { f -> CustomIcons.load(ctx, f, px) }
+        return if (customBmp != null) {
+            PhoneApp(label, ai.packageName, ai.name, customBmp, app.category, system, full = customBmp, installed = installed, custom = true)
+        } else {
+            val d = it.loadIcon(pm)
+            val l = layers(d, px)
+            PhoneApp(
+                label, ai.packageName, ai.name, d.toBitmap(px, px).asImageBitmap(), app.category, system,
+                full = l?.first, fg = l?.second, mono = l?.third, installed = installed,
+            )
+        }
     }
 
     /** Draws an adaptive icon's layers full-bleed (the visible 72 of 108 units fill the bitmap). */
@@ -155,14 +167,15 @@ object PhoneApps {
     }
 
     fun info(ctx: Context, app: PhoneApp) {
-        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        runCatching { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { runCatching { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
     fun uninstall(ctx: Context, app: PhoneApp) {
         try {
             @Suppress("DEPRECATION")
             ctx.startActivity(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:${app.pkg}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (_: ActivityNotFoundException) {
+        } catch (_: Exception) {
             info(ctx, app)
         }
     }
@@ -231,7 +244,7 @@ object PhoneApps {
             }
         }
         runCatching { activity.startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
-            .onFailure { activity.startActivity(Intent(Settings.ACTION_SETTINGS)) }
+            .onFailure { runCatching { activity.startActivity(Intent(Settings.ACTION_SETTINGS)) } }
     }
 
     fun isDefaultHome(ctx: Context): Boolean {

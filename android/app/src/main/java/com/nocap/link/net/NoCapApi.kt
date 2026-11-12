@@ -191,7 +191,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         slow.newCall(Request.Builder().url(url).build()).execute().use { r ->
             if (!r.isSuccessful) throw ApiError(r.code, "http_${r.code}", "Couldn't download ${f.name} (HTTP ${r.code}).")
             dest.parentFile?.mkdirs()
-            r.body!!.byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
+            (r.body ?: throw IOException("empty download")).byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
         }
     }
 
@@ -277,7 +277,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         guarded {
             slow.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) fail(r.code, r.body?.string() ?: "", "/ai/send")
-                val src = r.body!!.source()
+                val src = (r.body ?: throw IOException("empty reply")).source()
                 while (true) {
                     val line = src.readUtf8Line() ?: break
                     if (line.isBlank()) continue

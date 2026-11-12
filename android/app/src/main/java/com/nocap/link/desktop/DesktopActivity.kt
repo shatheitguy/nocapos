@@ -21,6 +21,7 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.Toast as SystemToast
 import androidx.activity.addCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
@@ -63,6 +64,7 @@ import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.Pins
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.R
+import com.nocap.link.system.CrashLog
 import com.nocap.link.ui.GhostButton
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
@@ -106,10 +108,18 @@ class DesktopActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        link = Vault.get(this).link ?: run { finish(); return }
+        link = runCatching { Vault.get(this).link }.getOrNull() ?: run { finish(); return }
         current = WeakReference(this)
 
-        web = WebView(this)
+        // The system WebView can be missing, disabled or mid-update.
+        web = try {
+            WebView(this)
+        } catch (e: Exception) {
+            CrashLog.warn("desktop web view", e)
+            SystemToast.makeText(applicationContext, MainActivity.friendlyWebView(), SystemToast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         web.setBackgroundColor(Color.parseColor("#07080B"))
         with(web.settings) {
             javaScriptEnabled = true
@@ -187,7 +197,7 @@ class DesktopActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        CookieManager.getInstance().flush()
+        if (::web.isInitialized) runCatching { CookieManager.getInstance().flush() }
     }
 
     override fun onDestroy() {
@@ -323,8 +333,10 @@ class DesktopActivity : ComponentActivity() {
 
         /** Sign out here for good (the link was forgotten). */
         fun forget() {
-            CookieManager.getInstance().removeAllCookies(null)
-            WebStorage.getInstance().deleteAllData()
+            runCatching {
+                CookieManager.getInstance().removeAllCookies(null)
+                WebStorage.getInstance().deleteAllData()
+            }
             current?.get()?.finishAndRemoveTask()
             current = null
         }

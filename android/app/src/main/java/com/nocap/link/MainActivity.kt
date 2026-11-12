@@ -12,6 +12,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -21,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -57,10 +61,12 @@ import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.ServerApp
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.net.Summary
-import com.nocap.link.settings.IntroScreen
+import com.nocap.link.settings.SetupScreen
+import com.nocap.link.settings.SetupStep
 import com.nocap.link.sync.LinkScreen
 import com.nocap.link.sync.ScanScreen
 import com.nocap.link.sync.Sync
+import com.nocap.link.system.CrashLog
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
 import com.nocap.link.widget.Widgets
@@ -76,7 +82,8 @@ import org.json.JSONObject
 /** Where the person is in the app. */
 sealed interface Screen {
     data object Home : Screen
-    data object Intro : Screen
+    /** First run: link the server, then permissions, step by step. */
+    data class Setup(val step: SetupStep = SetupStep.WELCOME) : Screen
     data class LinkForm(val server: String = "", val code: String = "", val id: String = "", val auto: Boolean = false) : Screen
     data object Scan : Screen
 }
@@ -92,7 +99,7 @@ sealed interface ServerState {
 }
 
 /** Full-screen layers over the home screen. */
-enum class Layer { NONE, DRAWER, SEARCH, SETTINGS, HUB, WIDGETS }
+enum class Layer { NONE, DRAWER, SEARCH, SETTINGS, HUB, WIDGETS, PERMISSIONS }
 
 class MainActivity : ComponentActivity() {
     private val vault by lazy { Vault.get(this) }
@@ -112,6 +119,8 @@ class MainActivity : ComponentActivity() {
     var searchStart by mutableStateOf("")
     var toast by mutableStateOf<String?>(null)
     var busy by mutableStateOf<String?>(null)
+    /** A crash report from last time that hasn't been sent or dismissed (asked about once). */
+    var crashReport by mutableStateOf<String?>(null)
     /** Grid cell size in dp, measured by the home screen (for widget spans). */
     var cellW = 80f
     var cellH = 100f
@@ -211,7 +220,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Prefs.init(this)
-        if (!vault.introDone) screen = Screen.Intro
+        if (!vault.introDone) {
+            // Back where setup was, after Android stopped the app in the background.
+            val step = savedInstanceState?.getString(STATE_SETUP)?.let { s -> SetupStep.entries.firstOrNull { it.name == s } }
+            screen = Screen.Setup(step ?: SetupStep.WELCOME)
+        }
+        crashReport = CrashLog.pending(this)
         handle(intent)
         setContent {
             // Rotation, and the status bar on the home screen, from Settings.
@@ -242,19 +256,26 @@ class MainActivity : ComponentActivity() {
             NoCapTheme {
                 when (val s = screen) {
                     Screen.Home -> HomeScreen(this)
-                    Screen.Intro -> IntroScreen(onDone = {
-                        vault.introDone = true
-                        screen = Screen.Home
-                    })
+                    is Screen.Setup -> SetupScreen(this, s.step)
                     is Screen.LinkForm -> {
-                        BackHandler { screen = Screen.Home }
-                        LinkScreen(s, onScan = { screen = Screen.Scan }, onCancel = { screen = Screen.Home }, onLinked = { linked() })
+                        BackHandler { screen = afterLinkForm() }
+                        LinkScreen(s, onScan = { screen = Screen.Scan }, onCancel = { screen = afterLinkForm() }, onLinked = { linked() })
                     }
                     Screen.Scan -> {
                         BackHandler { screen = Screen.LinkForm() }
                         ScanScreen(onResult = { uri -> if (!handle(Intent(Intent.ACTION_VIEW, uri))) toast = t("That QR isn't a NoCap Link code.", "That QR code isn't a NoCap Link code.") }, onCancel = { screen = Screen.LinkForm() })
                     }
                 }
+                // The home screen shows its own toasts; the other screens get them here.
+                if (screen != Screen.Home) {
+                    toast?.let { msg ->
+                        LaunchedEffect(msg) { delay(2800); if (toast == msg) toast = null }
+                        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.BottomCenter) {
+                            com.nocap.link.ui.Toast(msg, androidx.compose.ui.Modifier.navigationBarsPadding().padding(bottom = 32.dp))
+                        }
+                    }
+                }
+                crashReport?.let { report -> com.nocap.link.settings.CrashPrompt(this, report) { crashReport = null } }
             }
         }
     }
@@ -274,7 +295,7 @@ class MainActivity : ComponentActivity() {
         if (!handle(intent) && intent.hasCategory(Intent.CATEGORY_HOME)) {
             // Home pressed while already home: close whatever's open, or run the Home gesture.
             val clean = screen == Screen.Home && layer == Layer.NONE && editing == null && weatherFor == null && customizing == null
-            if (screen != Screen.Intro) screen = Screen.Home
+            if (screen !is Screen.Setup) screen = Screen.Home
             layer = Layer.NONE
             editing = null; weatherFor = null; customizing = null
             if (clean) homeTick++
@@ -324,17 +345,19 @@ class MainActivity : ComponentActivity() {
     fun askPermission(perm: String, done: (Boolean) -> Unit) {
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED) { done(true); return }
         permCallback = done
-        askPerm.launch(perm)
+        runCatching { askPerm.launch(perm) }.onFailure { permCallback = null; done(false) }
     }
 
     fun pickPhotos(item: NoCapItem) {
         photoFor = item.id
-        photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        runCatching { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            .onFailure { photoFor = null; toast = t("No photo picker on this phone.", "No photo picker is available.") }
     }
 
     fun pickIcon(app: PhoneApp) {
         iconFor = app.key
-        iconPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        runCatching { iconPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            .onFailure { iconFor = null; toast = t("No photo picker on this phone.", "No photo picker is available.") }
     }
 
     fun voiceSearch() {
@@ -398,16 +421,47 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    /** Where "back" from the link form goes: setup (first run) or home. */
+    private fun afterLinkForm(): Screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.LINK)
+
+    /** Setup finished or skipped: straight to the home screen. */
+    fun finishSetup() {
+        vault.introDone = true
+        screen = Screen.Home
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        (screen as? Screen.Setup)?.let { outState.putString(STATE_SETUP, it.step.name) }
+    }
+
+    /** Sends the last crash report to your own server (saved in NoCap Link in your home folder). */
+    fun sendCrashReport(report: String) {
+        val api = api() ?: run { toast = t("Link your NoCap server first.", "Link a NoCap server first."); return }
+        lifecycleScope.launch {
+            toast = try {
+                withContext(Dispatchers.IO) { api.sendText(report, "NoCap OS crash report") }
+                CrashLog.settle(this@MainActivity)
+                t("Crash report sent to your server's NoCap Link folder.", "Crash report saved to NoCap Link on your server.")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say(e)
+            }
+        }
+    }
+
     private fun linked() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
-        screen = Screen.Home
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.BASICS)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
     }
 
     val link: Link? get() = vault.link
-    fun api(): NoCapApi? = vault.link?.let { NoCapApi(it) }
+    /** The server API, or null when not linked (or the stored link is unusable). */
+    fun api(): NoCapApi? = runCatching { vault.link?.let { NoCapApi(it) } }.getOrNull()
 
     fun refresh() {
         val link = vault.link
@@ -509,13 +563,14 @@ class MainActivity : ComponentActivity() {
 
     fun openDesktop() {
         if (vault.link == null) { screen = Screen.LinkForm(); return }
-        startActivity(Intent(this, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        runCatching { startActivity(Intent(this, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { toast = friendly(it) }
     }
 
     fun openAi(prompt: String? = null) {
         val i = Intent(this, AiActivity::class.java)
         if (!prompt.isNullOrBlank()) i.putExtra(AiActivity.EXTRA_PROMPT, prompt)
-        startActivity(i)
+        runCatching { startActivity(i) }.onFailure { toast = friendly(it) }
     }
 
     fun openServerApp(app: ServerApp) {
@@ -674,18 +729,27 @@ class MainActivity : ComponentActivity() {
     // ---------- Android widgets ----------
 
     fun addWidget(info: AppWidgetProviderInfo, page: Int) {
-        val host = Widgets.host(this)
-        val id = host.allocateAppWidgetId()
+        val id = runCatching { Widgets.host(this).allocateAppWidgetId() }.getOrElse {
+            toast = t("Couldn't add that widget.", "That widget couldn't be added.")
+            return
+        }
         pendingWidget = id
         pendingPage = page
-        if (Widgets.manager.bindAppWidgetIdIfAllowed(id, info.provider)) {
+        // The widget's app can be uninstalled while the picker is open.
+        val bound = runCatching { Widgets.bind(this, id, info.provider) }.getOrDefault(false)
+        if (bound) {
             configureOrPlace(id)
         } else {
-            bindWidget.launch(
-                Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider),
-            )
+            runCatching {
+                bindWidget.launch(
+                    Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider),
+                )
+            }.onFailure {
+                dropPending()
+                toast = t("Couldn't add that widget.", "That widget couldn't be added.")
+            }
         }
     }
 
@@ -748,6 +812,12 @@ class MainActivity : ComponentActivity() {
         const val ACTION_SEND_FILE = "com.nocap.link.SEND_FILE"
         const val ACTION_SETTINGS = "com.nocap.link.SETTINGS"
         private const val REQ_CONFIGURE = 4242
+        private const val STATE_SETUP = "setup_step"
+
+        fun friendlyWebView() = t(
+            "This phone's web view is missing or updating. Try again in a minute.",
+            "Android System WebView isn't available right now. Try again shortly.",
+        )
 
         fun needsUpdate(version: String?): String {
             val v = version?.takeIf { it.isNotBlank() && it != "?" }
