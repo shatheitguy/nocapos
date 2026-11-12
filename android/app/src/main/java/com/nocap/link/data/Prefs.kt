@@ -224,6 +224,8 @@ object Opt {
         val s = ctx.applicationContext.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE)
         sp = s
         all.forEach { it.load(s) }
+        // "Roster + NoCap buttons" became two switches: keep a hidden drawer button hidden.
+        if (!s.contains("dock_drawer_button") && s.contains("dock_buttons") && !dockButtons.v) dockDrawerButton.set(false)
         // v2 → v3: "double-tap to lock" and "swipe down" became gesture bindings.
         if (!s.contains("gestures")) {
             val m = gestures.v.toMutableMap()
