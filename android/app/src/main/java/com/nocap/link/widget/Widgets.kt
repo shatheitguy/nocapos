@@ -76,31 +76,46 @@ import kotlinx.coroutines.withContext
 /** Android home-screen widgets, hosted by NoCap OS. */
 object Widgets {
     private const val HOST_ID = 0x0C0F
-    private var hostRef: NoCapWidgetHost? = null
+    @Volatile private var hostRef: NoCapWidgetHost? = null
+    /** Set by [host]; always call [host] (or use [manager] with a context) first. */
     lateinit var manager: AppWidgetManager
         private set
 
+    /** One host for the whole app (the picker asks from a background thread, the activity from the main one). */
     fun host(ctx: Context): NoCapWidgetHost {
         hostRef?.let { return it }
-        manager = AppWidgetManager.getInstance(ctx.applicationContext)
-        return NoCapWidgetHost(ctx.applicationContext, HOST_ID).also { hostRef = it }
+        return synchronized(this) {
+            hostRef ?: run {
+                manager = AppWidgetManager.getInstance(ctx.applicationContext)
+                NoCapWidgetHost(ctx.applicationContext, HOST_ID).also { hostRef = it }
+            }
+        }
     }
 
-    fun info(ctx: Context, id: Int): AppWidgetProviderInfo? {
+    fun manager(ctx: Context): AppWidgetManager {
         host(ctx)
-        return runCatching { manager.getAppWidgetInfo(id) }.getOrNull()
+        return manager
     }
+
+    fun info(ctx: Context, id: Int): AppWidgetProviderInfo? = runCatching { manager(ctx).getAppWidgetInfo(id) }.getOrNull()
+
+    /** Binds a widget id to a provider; false if not allowed or the provider is gone. */
+    fun bind(ctx: Context, id: Int, provider: android.content.ComponentName): Boolean =
+        runCatching { manager(ctx).bindAppWidgetIdIfAllowed(id, provider) }.getOrDefault(false)
+
+    /** Every app's widget providers (empty if the system won't say). */
+    fun providers(ctx: Context): List<AppWidgetProviderInfo> = runCatching { manager(ctx).installedProviders.orEmpty() }.getOrDefault(emptyList())
 
     /** How many cells a widget wants, from its own minimum size. */
     fun span(ctx: Context, info: AppWidgetProviderInfo, cellW: Float, cellH: Float): Pair<Int, Int> {
-        val cols = com.nocap.link.data.Prefs.columns
-        val rows = com.nocap.link.data.Prefs.rows
+        val cols = com.nocap.link.data.Prefs.columns.coerceAtLeast(1)
+        val rows = com.nocap.link.data.Prefs.rows.coerceAtLeast(1)
         if (Build.VERSION.SDK_INT >= 31 && info.targetCellWidth > 0 && info.targetCellHeight > 0) {
             return info.targetCellWidth.coerceIn(1, cols) to info.targetCellHeight.coerceIn(1, rows)
         }
-        val d = ctx.resources.displayMetrics.density
-        val w = kotlin.math.ceil(info.minWidth / d / cellW).toInt()
-        val h = kotlin.math.ceil(info.minHeight / d / cellH).toInt()
+        val d = ctx.resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
+        val w = kotlin.math.ceil(info.minWidth / d / cellW.coerceAtLeast(1f)).toInt()
+        val h = kotlin.math.ceil(info.minHeight / d / cellH.coerceAtLeast(1f)).toInt()
         return w.coerceIn(1, cols) to h.coerceIn(1, rows)
     }
 
@@ -164,20 +179,32 @@ fun AndroidWidget(item: WidgetItem, width: Dp, height: Dp, onLongPress: () -> Un
     }
     AndroidView(
         factory = { c ->
-            Widgets.host(c).createView(c, item.widgetId, info).also { v ->
-                (v as? LongPressHostView)?.onLongPress = onLongPress
-                v.setPadding(0, 0, 0, 0)
+            // A misbehaving provider can throw while its view is built: show a note instead of crashing.
+            runCatching {
+                Widgets.host(c).createView(c, item.widgetId, info).also { v ->
+                    (v as? LongPressHostView)?.onLongPress = onLongPress
+                    v.setPadding(0, 0, 0, 0)
+                }
+            }.getOrElse {
+                android.widget.TextView(c).apply {
+                    text = t("This widget dipped. Long-press to remove.", "This widget couldn't load. Long-press to remove.")
+                    gravity = android.view.Gravity.CENTER
+                    setTextColor(android.graphics.Color.WHITE)
+                    setOnLongClickListener { onLongPress(); true }
+                }
             }
         },
         update = { v ->
             (v as? LongPressHostView)?.onLongPress = onLongPress
             val w = width.value.toInt()
             val h = height.value.toInt()
-            if (Build.VERSION.SDK_INT >= 31) {
-                v.updateAppWidgetSize(Bundle(), listOf(SizeF(w.toFloat(), h.toFloat())))
-            } else {
-                @Suppress("DEPRECATION")
-                v.updateAppWidgetSize(null, w, h, w, h)
+            if (v is AppWidgetHostView) runCatching {
+                if (Build.VERSION.SDK_INT >= 31) {
+                    v.updateAppWidgetSize(Bundle(), listOf(SizeF(w.toFloat(), h.toFloat())))
+                } else {
+                    @Suppress("DEPRECATION")
+                    v.updateAppWidgetSize(null, w, h, w, h)
+                }
             }
         },
         modifier = Modifier.fillMaxSize(),
@@ -196,11 +223,10 @@ fun WidgetPicker(a: com.nocap.link.MainActivity, cellW: Float, cellH: Float, onN
     var rows by remember { mutableStateOf<List<ProviderRow>?>(null) }
     LaunchedEffect(Unit) {
         rows = withContext(Dispatchers.IO) {
-            Widgets.host(ctx)
             val pm = ctx.packageManager
             val dpi = ctx.resources.displayMetrics.densityDpi
             val px = (140 * ctx.resources.displayMetrics.density).toInt()
-            Widgets.manager.installedProviders.mapNotNull { info ->
+            Widgets.providers(ctx).mapNotNull { info ->
                 runCatching {
                     val app = pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
                     val prev = (info.loadPreviewImage(ctx, dpi) ?: info.loadIcon(ctx, dpi))?.let { d ->

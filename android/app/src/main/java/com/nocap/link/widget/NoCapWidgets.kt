@@ -136,12 +136,16 @@ fun WTitle(text: String, modifier: Modifier = Modifier, trailing: @Composable ((
     }
 }
 
+/** Servers can send NaN or infinite numbers; they must never reach layout or drawing. */
+fun finitePct(v: Double): Double = if (v.isFinite()) v else 0.0
+
 fun levelColor(percent: Double): Color = when { percent >= 90 -> NoCap.Bad; percent >= 75 -> NoCap.Warn; else -> NoCap.Red }
 
 /** An animated progress ring with a slowly turning highlight. */
 @Composable
 fun Ring(percent: Double, size: Dp, label: String? = null, sub: String? = null, color: Color = levelColor(percent), center: String? = null) {
-    val p by animateFloatAsState((percent / 100.0).toFloat().coerceIn(0f, 1f), tween(900), label = "ring")
+    val pct = finitePct(percent)
+    val p by animateFloatAsState((pct / 100.0).toFloat().coerceIn(0f, 1f), tween(900), label = "ring")
     val spin = rememberInfiniteTransition(label = "spin").animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "spin")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
@@ -158,7 +162,7 @@ fun Ring(percent: Double, size: Dp, label: String? = null, sub: String? = null, 
                     drawCircle(Color.White.copy(alpha = 0.7f), sw * 0.32f, Offset(this.size.width / 2 + (r * kotlin.math.cos(ang)).toFloat(), this.size.height / 2 + (r * kotlin.math.sin(ang)).toFloat()))
                 }
             }
-            Text(center ?: "${percent.toInt()}%", style = MaterialTheme.typography.labelMedium.copy(fontSize = (size.value * 0.22f).coerceIn(9f, 16f).sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            Text(center ?: "${pct.toInt()}%", style = MaterialTheme.typography.labelMedium.copy(fontSize = (size.value * 0.22f).coerceIn(9f, 16f).sp, fontWeight = FontWeight.Bold), maxLines = 1)
         }
         if (label != null) Text(label, style = MaterialTheme.typography.labelSmall, color = NoCap.Muted, maxLines = 1)
         if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = NoCap.Muted, maxLines = 1)
@@ -194,7 +198,8 @@ fun Spark(values: List<Float>, modifier: Modifier, color: Color = NoCap.Red, max
 /** A thin labeled progress bar. */
 @Composable
 fun Meter(label: String, percent: Double, value: String, modifier: Modifier = Modifier) {
-    val p by animateFloatAsState((percent / 100.0).toFloat().coerceIn(0f, 1f), tween(800), label = "meter")
+    // fillMaxWidth(NaN) throws while measuring, so a bad number must never reach it.
+    val p by animateFloatAsState((finitePct(percent) / 100.0).toFloat().coerceIn(0f, 1f), tween(800), label = "meter")
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = NoCap.Muted, maxLines = 1)
@@ -321,9 +326,10 @@ private fun ServerBlock(a: MainActivity, modifier: Modifier, rich: Boolean, tall
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(s?.server?.name?.ifBlank { null } ?: a.link?.serverName ?: "NoCapOS", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if ((s?.updates ?: 0) > 0 && !tiny) {
+            val updates = s?.updates ?: 0
+            if (updates > 0 && !tiny) {
                 Text(
-                    t("${s!!.updates} glow ups", "${s!!.updates} updates"), Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(NoCap.Warn.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
+                    t("$updates glow ups", "$updates updates"), Modifier.padding(end = 6.dp).clip(RoundedCornerShape(50)).background(NoCap.Warn.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 2.dp),
                     style = MaterialTheme.typography.labelSmall, color = NoCap.Warn, maxLines = 1,
                 )
             }

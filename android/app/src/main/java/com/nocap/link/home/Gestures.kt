@@ -61,8 +61,17 @@ fun runGesture(a: MainActivity, g: Gesture, firstPage: () -> Unit): Boolean {
 }
 
 fun runAction(a: MainActivity, binding: String, firstPage: () -> Unit): Boolean {
-    when (actOf(binding)) {
-        Act.NONE -> return false
+    val act = actOf(binding)
+    if (act == Act.NONE) return false
+    // Gestures run from touch handlers and effects: a screen that won't open must never take the launcher down.
+    runCatching { doAction(a, act, binding, firstPage) }
+        .onFailure { a.toast = t("Couldn't open that. Try again.", "That couldn't be opened.") }
+    return true
+}
+
+private fun doAction(a: MainActivity, act: Act, binding: String, firstPage: () -> Unit) {
+    when (act) {
+        Act.NONE -> {}
         Act.DRAWER -> a.openDrawer()
         Act.SEARCH -> a.layer = Layer.SEARCH
         Act.AI -> a.openAi()
@@ -80,7 +89,6 @@ fun runAction(a: MainActivity, binding: String, firstPage: () -> Unit): Boolean 
         Act.WIDGETS -> if (Opt.lockLayout.v) a.toast = lockedMsg() else a.layer = Layer.WIDGETS
         Act.FIRST_PAGE -> firstPage()
     }
-    return true
 }
 
 fun lockedMsg() = t("Layout's locked. Unlock it in Settings → Home.", "The home layout is locked. Unlock it in Settings → Home screen.")

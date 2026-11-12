@@ -105,17 +105,22 @@ object Weather {
 
     fun hasLocation(ctx: Context) = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    /** The phone's rough location (only with permission), named if possible. */
+    /**
+     * The phone's rough location (only with permission), named if possible.
+     * Blocking (the place name comes from the network): call it off the main thread.
+     */
     @SuppressLint("MissingPermission")
     fun here(ctx: Context): Place? {
+        // Checked right before use: location access can be revoked at any time.
         if (!hasLocation(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
         val loc: Location = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
             .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
             .maxByOrNull { it.time } ?: return null
         val name = runCatching {
+            if (!android.location.Geocoder.isPresent()) return@runCatching null
             @Suppress("DEPRECATION")
-            android.location.Geocoder(ctx).getFromLocation(loc.latitude, loc.longitude, 1)?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
+            android.location.Geocoder(ctx.applicationContext).getFromLocation(loc.latitude, loc.longitude, 1)?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
         }.getOrNull() ?: t("Right here", "My location")
         val p = Place(name, loc.latitude, loc.longitude)
         Opt.weatherPlace.set(p.encode()) // remembered for home-screen widgets in other launchers

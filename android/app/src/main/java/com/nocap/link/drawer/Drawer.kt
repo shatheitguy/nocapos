@@ -160,7 +160,8 @@ private fun PagedStyle(apps: List<PhoneApp>, open: (PhoneApp) -> Unit, menu: (Ph
         Column {
             HorizontalPager(pager, Modifier.weight(1f)) { p ->
                 Column {
-                    pages[p].chunked(cols).forEach { row ->
+                    // getOrElse: the list can shrink (search, uninstall) while the pager still shows an old page.
+                    pages.getOrElse(p) { emptyList() }.chunked(cols).forEach { row ->
                         Row(Modifier.fillMaxWidth().height(rowH)) {
                             row.forEach { app -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { DrawerTile(app, open, menu, icon, labelWidth = lw) } }
                             repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
@@ -392,7 +393,7 @@ fun AppLibrary(a: MainActivity, ui: HomeUi) {
                 Column(Modifier.glass(RoundedCornerShape(22.dp)).padding(10.dp)) {
                     BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(1f)) {
                         val cell = maxWidth / 2
-                        val icon = (cell - 14.dp).coerceAtMost(56.dp)
+                        val icon = (cell - 14.dp).coerceIn(16.dp, 56.dp)
                         Column {
                             list.take(4).chunked(2).forEachIndexed { r, row ->
                                 Row {

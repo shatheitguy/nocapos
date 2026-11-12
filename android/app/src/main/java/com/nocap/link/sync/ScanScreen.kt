@@ -51,6 +51,7 @@ import com.google.zxing.DecodeHintType
 import com.google.zxing.MultiFormatReader
 import com.google.zxing.NotFoundException
 import com.google.zxing.PlanarYUVLuminanceSource
+import com.nocap.link.data.t
 import com.nocap.link.ui.GlassCard
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.RedButton
@@ -65,11 +66,12 @@ fun ScanScreen(onResult: (Uri) -> Unit, onCancel: () -> Unit) {
     var allowed by remember { mutableStateOf(ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) }
     var asked by remember { mutableStateOf(false) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { allowed = it; asked = true }
-    LaunchedEffect(Unit) { if (!allowed) ask.launch(Manifest.permission.CAMERA) }
+    var camError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { if (!allowed) runCatching { ask.launch(Manifest.permission.CAMERA) } }
 
     Wallpaper {
-        if (allowed) {
-            CameraScanner(onResult)
+        if (allowed && camError == null) {
+            CameraScanner(onResult) { camError = it }
             Box(Modifier.align(Alignment.Center).size(250.dp).border(3.dp, NoCap.Red, RoundedCornerShape(28.dp)))
         }
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(20.dp)) {
@@ -80,7 +82,7 @@ fun ScanScreen(onResult: (Uri) -> Unit, onCancel: () -> Unit) {
                     Text("SCAN TO LINK", style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        if (allowed) "Point at the QR in Settings → Devices → Link a device on your NoCap desktop."
+                        camError ?: if (allowed) "Point at the QR in Settings → Devices → Link a device on your NoCap desktop."
                         else if (asked) "No camera, no scan — that's okay. Go back and type the address and code instead, or allow the camera in Settings."
                         else "The camera is only used to read the QR code. Nothing gets recorded or uploaded.",
                         style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted, textAlign = TextAlign.Start,
@@ -96,35 +98,53 @@ fun ScanScreen(onResult: (Uri) -> Unit, onCancel: () -> Unit) {
 }
 
 @Composable
-private fun CameraScanner(onResult: (Uri) -> Unit) {
+private fun CameraScanner(onResult: (Uri) -> Unit, onError: (String) -> Unit) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val done = remember { AtomicBoolean(false) }
-    val exec = remember { Executors.newSingleThreadExecutor() }
     val view = remember { PreviewView(ctx).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
 
     DisposableEffect(owner) {
+        val exec = Executors.newSingleThreadExecutor()
+        val disposed = AtomicBoolean(false)
+        var analysis: ImageAnalysis? = null
         val future = ProcessCameraProvider.getInstance(ctx)
         future.addListener({
-            val provider = future.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
-            val reader = MultiFormatReader().apply {
-                setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE), DecodeHintType.TRY_HARDER to true))
-            }
-            val analysis = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
-            analysis.setAnalyzer(exec) { img -> decode(img, reader)?.let { text ->
-                val uri = Uri.parse(text)
-                if (uri.scheme == "nocap" && done.compareAndSet(false, true)) {
-                    ContextCompat.getMainExecutor(ctx).execute { onResult(uri) }
+            if (disposed.get()) return@addListener // left the screen before the camera was ready
+            try {
+                // Checked right before use: the camera permission can be revoked at any time.
+                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    onError(t("Camera's off for NoCap OS now. Type the address and code instead.", "Camera access is off. Type the address and code instead."))
+                    return@addListener
                 }
-            } }
-            runCatching {
+                val provider = future.get()
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(view.surfaceProvider) }
+                val reader = MultiFormatReader().apply {
+                    setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE), DecodeHintType.TRY_HARDER to true))
+                }
+                val a = ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build()
+                a.setAnalyzer(exec) { img ->
+                    // decode() always closes the frame.
+                    decode(img, reader)?.let { text ->
+                        val uri = runCatching { Uri.parse(text) }.getOrNull() ?: return@let
+                        if (uri.scheme == "nocap" && done.compareAndSet(false, true)) {
+                            ContextCompat.getMainExecutor(ctx).execute { if (!disposed.get()) onResult(uri) }
+                        }
+                    }
+                }
+                analysis = a
                 provider.unbindAll()
-                provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+                provider.bindToLifecycle(owner, CameraSelector.DEFAULT_BACK_CAMERA, preview, a)
+            } catch (_: Exception) {
+                // No back camera, camera in use by another app, or the camera service failed.
+                onError(t("Camera's busy or missing rn. Type the address and code instead.", "Can't open the camera (it may be in use). Type the address and code instead."))
             }
         }, ContextCompat.getMainExecutor(ctx))
         onDispose {
-            runCatching { future.get().unbindAll() }
+            disposed.set(true)
+            analysis?.clearAnalyzer()
+            // Never block the main thread waiting for the camera to start.
+            if (future.isDone) runCatching { future.get().unbindAll() }
             exec.shutdown()
         }
     }

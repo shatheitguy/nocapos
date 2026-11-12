@@ -7,7 +7,6 @@ import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.location.LocationManager
 import android.Manifest
 import android.net.wifi.WifiManager
@@ -83,6 +82,7 @@ import com.nocap.link.ui.titleFamily
 import java.io.File
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -115,7 +115,7 @@ fun ClockWidget(a: MainActivity, item: NoCapItem) {
     val hh = DateFormat.format(if (h24) "HH" else "h", now).toString()
     val mm = DateFormat.format("mm", now).toString()
     val ss = DateFormat.format("ss", now).toString()
-    val date = DateFormat.format(item.opt("datefmt", "EEEE, d MMMM"), now).toString()
+    val date = runCatching { DateFormat.format(item.opt("datefmt", "EEEE, d MMMM"), now).toString() }.getOrElse { DateFormat.format("EEEE, d MMMM", now).toString() }
     val alarm = if (item.flag("alarm", true)) remember(now.time / 60_000) {
         runCatching { ctx.getSystemService(AlarmManager::class.java).nextAlarmClock?.triggerTime }.getOrNull()
             ?.takeIf { it - System.currentTimeMillis() < 24 * 3_600_000L }
@@ -218,18 +218,26 @@ fun WeatherWidget(a: MainActivity, item: NoCapItem) {
     var refresh by remember { mutableIntStateOf(0) }
     LaunchedEffect(item.cfg, Opt.weatherPlace.v, f, refresh) {
         while (true) {
-            val p = withContext(Dispatchers.IO) { weatherPlace(ctx, item) }
+            val p = try { withContext(Dispatchers.IO) { weatherPlace(ctx, item) } } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
             place = p
             if (p != null) {
-                err = runCatching { withContext(Dispatchers.IO) { Weather.forecast(p, f, force = refresh > 0) } }.exceptionOrNull()?.let { t("Weather's not loading. Offline?", "Couldn't load the weather.") }
+                err = try {
+                    withContext(Dispatchers.IO) { Weather.forecast(p, f, force = refresh > 0) }
+                    null
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    t("Weather's not loading. Offline?", "Couldn't load the weather.")
+                }
                 runCatching { com.nocap.link.widget.AppWidgets.updateWeather(ctx, null) }
             }
             delay(20 * 60_000L)
         }
     }
-    val r = place?.let { Weather.cached(it, f) }
-    WSurface(item, onClick = { if (place == null) a.editing = item else a.weatherFor = item }) {
-        if (place == null) {
+    val shown = place
+    val r = shown?.let { Weather.cached(it, f) }
+    WSurface(item, onClick = { if (shown == null) a.editing = item else a.weatherFor = item }) {
+        if (shown == null) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                 WTitle(t("Weather", "Weather"))
                 Text(t("Where you at? Tap to pick a city or use your location.", "Tap to choose a city or use your location."), style = MaterialTheme.typography.bodySmall, maxLines = 3)
@@ -238,7 +246,7 @@ fun WeatherWidget(a: MainActivity, item: NoCapItem) {
         }
         if (r == null) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                WTitle(place!!.name)
+                WTitle(shown.name)
                 Text(err ?: t("Checking the sky…", "Loading…"), style = MaterialTheme.typography.bodySmall, color = if (err != null) NoCap.Warn else NoCap.Muted)
             }
             return@WSurface
@@ -277,9 +285,8 @@ fun WeatherWidget(a: MainActivity, item: NoCapItem) {
 }
 
 fun dayName(iso: String): String = runCatching {
-    val d = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(iso)!!
-    DateFormat.format("EEE", d).toString()
-}.getOrDefault(iso.takeLast(2))
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(iso)?.let { DateFormat.format("EEE", it).toString() }
+}.getOrNull() ?: iso.takeLast(2)
 
 // ---------- calendar ----------
 
@@ -429,8 +436,9 @@ fun TogglesWidget(a: MainActivity, item: NoCapItem) {
         "torch" -> Torch.on
         "wifi" -> runCatching { ctx.applicationContext.getSystemService(WifiManager::class.java).isWifiEnabled }.getOrNull()
         "bt" -> runCatching { ctx.getSystemService(BluetoothManager::class.java).adapter?.isEnabled }.getOrNull()
-        "dnd" -> ctx.getSystemService(NotificationManager::class.java).currentInterruptionFilter.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
-        "location" -> if (Build.VERSION.SDK_INT >= 28) ctx.getSystemService(LocationManager::class.java).isLocationEnabled else null
+        "dnd" -> runCatching { ctx.getSystemService(NotificationManager::class.java).currentInterruptionFilter }.getOrNull()
+            ?.let { it != NotificationManager.INTERRUPTION_FILTER_ALL && it != NotificationManager.INTERRUPTION_FILTER_UNKNOWN }
+        "location" -> if (Build.VERSION.SDK_INT >= 28) runCatching { ctx.getSystemService(LocationManager::class.java)?.isLocationEnabled }.getOrNull() else null
         else -> null
     }
     fun press(id: String) {
@@ -440,9 +448,11 @@ fun TogglesWidget(a: MainActivity, item: NoCapItem) {
             "bt" -> a.openSystem(Settings.ACTION_BLUETOOTH_SETTINGS)
             "dnd" -> {
                 val nm = ctx.getSystemService(NotificationManager::class.java)
-                if (nm.isNotificationPolicyAccessGranted) {
+                // Access can be withdrawn between the check and the call.
+                val flipped = nm != null && nm.isNotificationPolicyAccessGranted && runCatching {
                     nm.setInterruptionFilter(if (state("dnd") == true) NotificationManager.INTERRUPTION_FILTER_ALL else NotificationManager.INTERRUPTION_FILTER_PRIORITY)
-                } else {
+                }.isSuccess
+                if (!flipped) {
                     a.toast = t("Let NoCap OS flip Do not disturb, then tap again.", "Allow Do not disturb access for NoCap OS, then tap again.")
                     a.openSystem(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
                 }
@@ -542,7 +552,8 @@ fun PhotoWidget(a: MainActivity, item: NoCapItem) {
     }
     val name = names[idx % names.size]
     var bmp by remember(name) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(name) { bmp = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(File(Photos.dir(ctx), name).path)?.asImageBitmap() }.getOrNull() } }
+    // Scaled down and cached by Photos.load, so rotating frames don't decode full-size pictures again.
+    LaunchedEffect(name) { bmp = withContext(Dispatchers.IO) { Photos.load(ctx, name)?.asImageBitmap() } }
     Box(
         Modifier.fillMaxSize().clip(shape).border(1.dp, NoCap.Red.copy(alpha = if (item.flag("glow", true)) 0.4f else 0f), shape)
             .clickable {
@@ -647,7 +658,12 @@ object Timers {
         PendingIntent.getBroadcast(ctx, id.hashCode(), Intent(ctx, TimerReceiver::class.java).putExtra("title", title), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     fun schedule(ctx: Context, id: String, at: Long, title: String) {
-        runCatching { ctx.getSystemService(AlarmManager::class.java).setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi(ctx, id, title)) }
+        val am = ctx.getSystemService(AlarmManager::class.java) ?: return
+        val p = pi(ctx, id, title)
+        // Exact when the system allows it (always before Android 12); otherwise inexact, which may run a little late.
+        val exact = Build.VERSION.SDK_INT < 31 || runCatching { am.canScheduleExactAlarms() }.getOrDefault(false)
+        val ok = exact && runCatching { am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, p) }.isSuccess
+        if (!ok) runCatching { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, p) }
     }
 
     fun cancel(ctx: Context, id: String) {
@@ -657,7 +673,10 @@ object Timers {
 
 class TimerReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        com.nocap.link.data.Prefs.init(ctx)
-        Notices.show(ctx, 4040, intent.getStringExtra("title") ?: t("Timer", "Timer"), t("Time's up!", "Time's up."), Intent(ctx, MainActivity::class.java))
+        // A crash here would take down the app process in the background; a missed notice is the lesser evil.
+        runCatching {
+            com.nocap.link.data.Prefs.init(ctx)
+            Notices.show(ctx, 4040, intent.getStringExtra("title") ?: t("Timer", "Timer"), t("Time's up!", "Time's up."), Intent(ctx, MainActivity::class.java))
+        }
     }
 }

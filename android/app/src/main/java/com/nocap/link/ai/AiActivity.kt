@@ -92,6 +92,11 @@ class AiActivity : ComponentActivity() {
     private var showList by mutableStateOf(false)
     private var serverVersion: String? = null
     private var sendJob: Job? = null
+    private var openJob: Job? = null
+    /** Bumped when the shown chat changes, so a reply still streaming for another chat doesn't land here. */
+    private var shown = 0
+    /** Looked up once (not on every keystroke). */
+    private val canListen by lazy { runCatching { packageManager.resolveActivity(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0) != null }.getOrDefault(false) }
 
     private val listen = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val said = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
@@ -102,8 +107,8 @@ class AiActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Prefs.init(this)
-        val link = Vault.get(this).link
-        api = link?.let { NoCapApi(it) }
+        // A broken keystore or a bad saved link shows the "link first" screen instead of crashing.
+        api = runCatching { Vault.get(this).link?.let { NoCapApi(it) } }.getOrNull()
         intent.getStringExtra(EXTRA_PROMPT)?.let { input = it }
         setContent { NoCapTheme { Screen() } }
         if (api != null) loadList(pickLatest = intent.getStringExtra(EXTRA_PROMPT) == null)
@@ -133,9 +138,13 @@ class AiActivity : ComponentActivity() {
         current = id
         showList = false
         messages.clear()
-        lifecycleScope.launch {
+        error = null
+        val mine = ++shown
+        openJob?.cancel()
+        openJob = lifecycleScope.launch {
             try {
-                messages.addAll(withContext(Dispatchers.IO) { api.conversation(id) })
+                val list = withContext(Dispatchers.IO) { api.conversation(id) }
+                if (mine == shown) messages.addAll(list)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -145,6 +154,8 @@ class AiActivity : ComponentActivity() {
     }
 
     private fun newChat() {
+        shown++
+        openJob?.cancel()
         current = null
         messages.clear()
         showList = false
@@ -175,23 +186,28 @@ class AiActivity : ComponentActivity() {
         thinking = true
         messages.add(ChatMessage("user", text))
         messages.add(ChatMessage("assistant", ""))
+        val mine = shown
         sendJob = lifecycleScope.launch {
             try {
-                val id = current ?: withContext(Dispatchers.IO) { api.newConversation().id }.also { current = it }
+                val id = current ?: withContext(Dispatchers.IO) { api.newConversation().id }.also { if (mine == shown) current = it }
                 withContext(Dispatchers.IO) {
                     api.chat(id, text) { delta ->
                         runOnUiThread {
+                            // Only into the chat it belongs to (you may have switched chats meanwhile).
                             val last = messages.lastIndex
-                            if (last >= 0) messages[last] = messages[last].copy(content = messages[last].content + delta)
+                            if (mine == shown && last >= 0 && messages[last].role == "assistant") messages[last] = messages[last].copy(content = messages[last].content + delta)
                         }
                     }
                 }
-                conversations = withContext(Dispatchers.IO) { runCatching { api.conversations() }.getOrDefault(conversations) }
+                val fresh = withContext(Dispatchers.IO) { runCatching { api.conversations() }.getOrNull() }
+                if (fresh != null) conversations = fresh
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                fail(e)
-                if (messages.lastOrNull()?.let { it.role == "assistant" && it.content.isEmpty() } == true) messages.removeAt(messages.lastIndex)
+                if (mine == shown) {
+                    fail(e)
+                    if (messages.lastOrNull()?.let { it.role == "assistant" && it.content.isEmpty() } == true) messages.removeAt(messages.lastIndex)
+                }
             } finally {
                 thinking = false
             }
@@ -205,7 +221,7 @@ class AiActivity : ComponentActivity() {
         try { listen.launch(i) } catch (_: Exception) { error = t("No voice typing on this phone.", "Speech recognition isn't available on this phone.") }
     }
 
-    private fun voiceAvailable() = packageManager.resolveActivity(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0) != null
+    private fun voiceAvailable() = canListen
 
     @Composable
     private fun Screen() {
