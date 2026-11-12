@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"alfaos/alfad/internal/mirror"
 	"alfaos/alfad/internal/notify"
 	"alfaos/alfad/internal/store"
 )
@@ -292,6 +293,8 @@ type linkEvents struct {
 	Clipboard []linkClip            `json:"clipboard"`
 	Dismissed []string              `json:"dismissed"`
 	Signins   []signinAlert         `json:"signins"`
+	// Mirror: NoCap OS asks this phone to share its screen (see mirror_handlers.go).
+	Mirror *mirror.Ask `json:"mirror,omitempty"`
 }
 
 func (e linkEvents) empty() bool {
@@ -482,9 +485,10 @@ func (s *Server) deviceEvents(w http.ResponseWriter, r *http.Request) {
 	for {
 		h.mu.Lock()
 		out := h.events(u.ID, d.ID, admin, after)
+		out.Mirror = s.mirrorHub().AskSince(d.ID, after)
 		wake := h.wake
 		h.mu.Unlock()
-		if !out.empty() || after <= 0 || after > out.Cursor {
+		if !out.empty() || out.Mirror != nil || after <= 0 || after > out.Cursor {
 			writeJSON(w, http.StatusOK, out)
 			return
 		}
