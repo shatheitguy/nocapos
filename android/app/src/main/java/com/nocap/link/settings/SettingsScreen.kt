@@ -149,6 +149,7 @@ fun SettingsScreen(a: MainActivity) {
         if (ok) { Prefs.setServerNotices(true); HeartbeatWorker.now(a) } else a.toast = t("Notifications are off for NoCap OS, so no tea.", "Notifications are blocked for NoCap OS.")
     }
     val linked = a.server !is ServerState.NotLinked
+    com.nocap.link.update.AutoCheck(a)
 
     val secs = listOf(
         Sec("look", t("The Lingo", "Language"), t("How NoCap OS words things", "Wording style"), "language lingo gen z standard words wording") {
@@ -343,7 +344,9 @@ fun SettingsScreen(a: MainActivity) {
                 else t("$missing of the basics are off.", "$missing recommended permission(s) not allowed."),
             )
             Action(t("Open permissions", "Manage permissions")) { a.layer = Layer.PERMISSIONS }
-            Hint(t("Talks only to the NoCap server you link (and the weather service for forecasts). Your key stays encrypted on this phone.", "Connects only to your linked NoCap server and the weather service. The device key is encrypted on this phone."))
+            Hint(t("Talks only to the NoCap server you link, GitHub for updates, and Open-Meteo if you turn weather on. Your key stays encrypted on this phone.", "Connects only to your linked NoCap server, GitHub for updates, and Open-Meteo if weather is enabled. The device key is encrypted on this phone."))
+            Action(t("Privacy: everything NoCap OS talks to", "Privacy: every connection the app makes")) { Extras.privacy = true }
+            Action(t("Setup guide", "Setup guide")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.GUIDE) }
         },
         Sec("privacy", t("Lock helper", "Lock helper"), null, "lock accessibility device admin double tap turn off") {
             val canLock = remember(tick) { Phone.canLock(a) }
@@ -351,16 +354,22 @@ fun SettingsScreen(a: MainActivity) {
             if (canLock) Action(t("Turn the lock helper off", "Turn off the lock helper")) { Phone.turnOffLockHelpers(a); runCatching { a.startActivity(Phone.lockSetupIntent(a)) } }
             else Action(t("Set up the lock helper", "Set up the lock helper")) { lockSetup = true }
         },
-        Sec("about", t("About", "About"), null, "about version licenses fonts setup crash report") {
+        Sec("about", t("Updates", "Updates"), t("This app and your NoCap server", "App and server versions"), "update updates version upgrade github glow up install") {
+            com.nocap.link.update.UpdatesSection(a)
+        },
+        Sec("about", t("About", "About"), null, "about version licenses fonts setup guide crash report bug privacy terms") {
             Hint("NoCap OS ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            Action(t("Setup guide", "Setup guide")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.GUIDE) }
             Action(t("Run setup again", "Run setup again")) { a.layer = Layer.NONE; a.screen = Screen.Setup() }
+            Action(t("Privacy", "Privacy")) { Extras.privacy = true }
+            Action(t("Report a bug", "Report a bug")) { Extras.bug = true }
             val crash = remember(tick) { com.nocap.link.system.CrashLog.last(a) }
             if (crash == null) {
                 Hint(t("No crashes on record. Clean.", "No crash reports."))
             } else {
                 Hint(crash.lineSequence().drop(1).firstOrNull().orEmpty())
                 Action(t("View the last crash report", "View last crash report")) { viewCrash = crash }
-                if (linked) Action(t("Send it to my NoCap server", "Send to my NoCap server")) { a.sendCrashReport(crash) }
+                if (linked) Action(t("Send it to my NoCap server", "Send to my NoCap server")) { a.sendCrashReport(com.nocap.link.system.CrashLog.sanitize(crash)) }
                 Action(t("Clear it", "Delete crash report"), danger = true) { com.nocap.link.system.CrashLog.clear(a); tick++ }
             }
             Hint(t("Orbitron & Rajdhani fonts under the SIL Open Font License · Weather by Open-Meteo", "Orbitron and Rajdhani fonts: SIL Open Font License. Weather data: Open-Meteo."))
@@ -391,6 +400,7 @@ fun SettingsScreen(a: MainActivity) {
                 }
             }
             LazyColumn(contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (com.nocap.link.update.updateBadge(a)) item { com.nocap.link.update.UpdateBanner(a) { q = ""; cat = "about" } }
                 if (shown.isEmpty()) item { Text(t("Nothing matches “$q”.", "No settings match “$q”."), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted) }
                 items(shown, key = { it.title }) { s -> Group(s.title, s.sub) { s.content() } }
             }
