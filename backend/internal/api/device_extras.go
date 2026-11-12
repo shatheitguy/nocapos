@@ -55,6 +55,8 @@ func (s *Server) deviceRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/device/ai/conversations/{id}", s.device(s.withAI(s.aiGetConversation)))
 	mux.Handle("DELETE /api/v1/device/ai/conversations/{id}", s.device(s.withAI(s.aiDeleteConversation)))
 	mux.Handle("POST /api/v1/device/ai/conversations/{id}/send", s.device(s.withAI(s.aiSend)))
+	mux.Handle("GET /api/v1/device/wifi/saved", s.device(s.deviceWifiSaved))
+	mux.Handle("POST /api/v1/device/wifi/share", s.device(s.deviceWifiShare))
 }
 
 // withAI answers 503 when this server has no AI Assistant.

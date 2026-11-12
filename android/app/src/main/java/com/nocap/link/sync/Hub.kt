@@ -114,6 +114,7 @@ fun Hub(a: MainActivity) {
                     }
                 }
                 FilesBrowser(a)
+                WifiShareCard(a)
                 Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(14.dp)) {
                     Toggle(
                         t("Server tea on this phone", "Server notifications"),
