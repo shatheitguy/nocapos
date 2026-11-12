@@ -27,7 +27,8 @@ fun actName(a: Act) = when (a) {
     Act.DRAWER -> t("The Roster", "App drawer")
     Act.SEARCH -> t("Search", "Search")
     Act.AI -> t("NoCap AI", "NoCap AI")
-    Act.NOTIFICATIONS -> t("The Tea (notifications)", "Notifications")
+    Act.CONTROL_CENTER -> t("NoCap control center", "NoCap control center")
+    Act.NOTIFICATIONS -> t("Android's shade (notifications)", "System notification shade")
     Act.QUICK_SETTINGS -> t("Quick settings", "Quick settings")
     Act.LOCK -> t("Lock screen", "Lock screen")
     Act.APP -> t("Open an app…", "Open an app…")
@@ -75,6 +76,7 @@ private fun doAction(a: MainActivity, act: Act, binding: String, firstPage: () -
         Act.DRAWER -> a.openDrawer()
         Act.SEARCH -> a.layer = Layer.SEARCH
         Act.AI -> a.openAi()
+        Act.CONTROL_CENTER -> a.layer = Layer.CONTROL
         Act.NOTIFICATIONS -> if (!Phone.expandNotifications(a)) a.layer = Layer.SEARCH
         Act.QUICK_SETTINGS -> if (!Phone.expandQuickSettings(a)) Phone.expandNotifications(a)
         Act.LOCK -> if (!Phone.lock(a)) a.toast = t("Turn on the lock helper in Settings → Gestures first.", "Enable the lock helper in Settings → Gestures first.")

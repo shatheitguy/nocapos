@@ -259,6 +259,9 @@ fun SettingsScreen(a: MainActivity) {
             }
             Hint(t("Lock uses an accessibility helper that only locks the screen. Off unless you bind it.", "Locking uses an accessibility service that only locks the screen."))
         },
+        Sec("gestures", t("Control center", "Control center"), t("Swipe down for toggles and notifs", "Quick toggles and notifications"), "control center swipe down toggles brightness wifi bluetooth flashlight rotation edge overlay any app") {
+            ControlCenterSettings(a)
+        },
         Sec("widgets", t("Widgets", "Widgets"), t("NoCap widgets + every app's", "Weather place and units"), "widget widgets weather celsius fahrenheit place city clock") {
             Action(t("Add widgets", "Add widgets")) { a.layer = Layer.WIDGETS }
             Hint(t("Long-press a NoCap widget → Customize for faces, sizes and more.", "Long-press a NoCap widget and choose Customize to change it."))
