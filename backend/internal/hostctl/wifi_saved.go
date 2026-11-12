@@ -83,10 +83,10 @@ type SavedSettings struct {
 
 // The EAP methods and inner (phase 2) methods NoCapOS sets up.
 var (
-	eapMethods   = map[string]bool{"peap": true, "ttls": true, "tls": true, "pwd": true, "leap": true}
+	eapMethods   = map[string]bool{"peap": true, "ttls": true, "tls": true}
 	eapPhase2    = map[string]map[string]bool{"peap": {"mschapv2": true, "gtc": true, "md5": true}, "ttls": {"mschapv2": true, "pap": true, "gtc": true, "md5": true}}
 	ttlsNonEAP   = map[string]bool{"pap": true, "mschapv2": true} // TTLS inner methods that aren't EAP (phase2-auth)
-	usesPassword = map[string]bool{"peap": true, "ttls": true, "pwd": true, "leap": true}
+	usesPassword = map[string]bool{"peap": true, "ttls": true}
 	uuidRe       = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
 	domainRe     = regexp.MustCompile(`^[A-Za-z0-9.;*-]*$`)
 )
@@ -114,7 +114,7 @@ func (c *EAPConfig) Validate(existing *EAPInfo) error {
 	c.AnonymousIdentity = strings.TrimSpace(c.AnonymousIdentity)
 	c.DomainSuffixMatch = strings.TrimSpace(c.DomainSuffixMatch)
 	if !eapMethods[c.Method] {
-		return errors.New("choose an EAP method: PEAP, TTLS, TLS, PWD or LEAP")
+		return errors.New("choose an EAP method: PEAP, TTLS or TLS")
 	}
 	if allowed := eapPhase2[c.Method]; allowed != nil {
 		if c.Phase2 == "" {

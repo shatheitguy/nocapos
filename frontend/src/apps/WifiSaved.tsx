@@ -380,7 +380,7 @@ function ShareDialog({ n, onClose }: { n: SavedWiFi; onClose: () => void }) {
 
 const PHASE2: Record<string, EAPPhase2[]> = { peap: ['mschapv2', 'gtc', 'md5'], ttls: ['mschapv2', 'pap', 'gtc', 'md5'] };
 const PHASE2_LABEL: Record<EAPPhase2, string> = { mschapv2: 'MSCHAPv2', pap: 'PAP', gtc: 'GTC', md5: 'MD5' };
-const METHODS: EAPMethod[] = ['peap', 'ttls', 'tls', 'pwd', 'leap'];
+const METHODS: EAPMethod[] = ['peap', 'ttls', 'tls'];
 
 function readBase64(file: File): Promise<string> {
   return file.arrayBuffer().then((buf) => {

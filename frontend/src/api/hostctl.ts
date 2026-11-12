@@ -32,7 +32,7 @@ export interface WiFiNetwork {
   enterprise?: boolean;
 }
 
-export type EAPMethod = 'peap' | 'ttls' | 'tls' | 'pwd' | 'leap';
+export type EAPMethod = 'peap' | 'ttls' | 'tls';
 export type EAPPhase2 = 'mschapv2' | 'pap' | 'gtc' | 'md5';
 export type CAMode = 'system' | 'file' | 'none';
 
