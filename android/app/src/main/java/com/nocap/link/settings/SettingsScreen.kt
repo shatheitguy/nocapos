@@ -154,6 +154,12 @@ fun SettingsScreen(a: MainActivity) {
         Sec("look", t("The Lingo", "Language"), t("How NoCap OS words things", "Wording style"), "language lingo gen z standard words wording server same") {
             LanguagePicker(a)
         },
+        Sec("look", t("NoCap phone", "NoCap theme for the phone"), t("Lock wallpaper, phone colors", "Wallpapers and system colors"), "theme whole phone nocap red material you colors lock wallpaper root") {
+            ThemePhoneSettings(a)
+        },
+        Sec("look", t("NoCap lock screen", "NoCap lock screen"), t("Clock, music, notifs over the lock", "Shown over the system lock screen"), "lock screen keyguard clock music notifications wake") {
+            LockScreenSettings(a)
+        },
         Sec("look", t("Theme & accent", "Theme and accent color"), t("Dark, light, or follow the phone", "Dark, light or automatic"), "theme dark light auto mode accent color colour red picker font typeface haptics vibration") {
             Label(t("Mode", "Mode"))
             Choice(listOf(t("Dark", "Dark") to ThemeMode.DARK, t("Light", "Light") to ThemeMode.LIGHT, t("Auto", "Automatic") to ThemeMode.AUTO), Opt.theme.v) { Opt.theme.set(it) }
