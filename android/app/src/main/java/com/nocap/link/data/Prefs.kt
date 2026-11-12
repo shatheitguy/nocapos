@@ -216,9 +216,11 @@ object Opt {
     val serverNotices = BoolPref("server_notices", false)
     val homeAsked = BoolPref("home_asked", false)
 
-    // Phone style: language source, control center (see control/)
+    // Phone style: language source, NoCap lock screen, control center (see lock/, control/)
     /** The server's language, for Language → "Same as my server" (refetched, so not backed up). */
     val serverLingo = StrPref("server_lingo", "", backup = false)
+    val lockScreen = BoolPref("nocap_lock", false)
+    val lockNotifText = BoolPref("lock_notif_text", false)
     val edgeSwipe = BoolPref("edge_swipe", false)
 
     fun init(ctx: Context) {
@@ -247,7 +249,7 @@ object Opt {
     fun controlCenterDefault(m: Map<String, String>): Map<String, String> =
         if (m[Gesture.SWIPE_DOWN.name] == Act.NOTIFICATIONS.name) m + (Gesture.SWIPE_DOWN.name to Act.CONTROL_CENTER.name) else m
 
-    private val skip = setOf("server_notices", "home_asked", "custom_icons", "forward_notifications", "clip_sync", "edge_swipe")
+    private val skip = setOf("server_notices", "home_asked", "custom_icons", "forward_notifications", "clip_sync", "nocap_lock", "edge_swipe")
 
     /** Every setting that travels with a backup. */
     fun export(): JSONObject {

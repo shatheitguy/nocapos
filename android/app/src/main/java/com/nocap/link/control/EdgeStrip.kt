@@ -19,6 +19,7 @@ import com.nocap.link.system.CrashLog
  * down on it, in any app. Needs "Display over other apps"; it only watches
  * touches that land on the strip itself and never reads the screen.
  */
+@SuppressLint("StaticFieldLeak") // the strip is made with the application context and removed when switched off
 object EdgeStrip {
     private var view: View? = null
 

@@ -154,10 +154,10 @@ fun ControlCenter(h: ControlHost) {
 }
 
 @Composable
-private fun Header(h: ControlHost, drag: Modifier) {
+private fun Header(h: ControlHost, modifier: Modifier) {
     val ctx = h.ctx
     val now = Date()
-    Row(Modifier.fillMaxWidth().then(drag).padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(DateFormat.getTimeFormat(ctx).format(now), style = MaterialTheme.typography.displaySmall, color = NoCap.Text)
             Text(DateFormat.format("EEEE, MMMM d", now).toString(), style = MaterialTheme.typography.bodySmall)

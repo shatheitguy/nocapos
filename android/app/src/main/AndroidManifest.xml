@@ -26,7 +26,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Timer widget: "ring with the clock app". -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
-    <!-- Opt-in, you allow them in Android's settings: the control-center edge strip in other apps ("Display over other apps");
+    <!-- Opt-in, you allow them in Android's settings: the NoCap lock screen appearing when the
+         screen turns on, and the control-center edge strip in other apps ("Display over other apps");
          the control center's rotation lock and brightness slider ("Modify system settings"). -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
@@ -204,6 +205,16 @@
             android:noHistory="true"
             android:taskAffinity="com.nocap.link.signout"
             android:theme="@style/Theme.NoCap.Sheet" />
+
+        <!-- NoCap lock screen (opt-in): shown over Android's own lock screen, which still
+             asks for your PIN / fingerprint when you swipe up. -->
+        <activity
+            android:name=".lock.LockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.nocap.link.lock"
+            android:theme="@style/Theme.NoCap" />
 
         <!-- The NoCap control center over other apps (opt-in edge swipe). -->
         <activity

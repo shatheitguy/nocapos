@@ -41,8 +41,8 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **Notification dots** (opt-in: needs notification access; only counts).
 - **Settings you can search**, grouped like NoCapOS's own Settings:
   - *Look*: dark / light / follow the phone, accent color (NoCap red,
-    presets or any color, or synced from your NoCap desktop), font, Gen Z or
-    Standard wording.
+    presets or any color, or synced from your NoCap desktop), font, Gen Z,
+    Standard or your server's wording, NoCap lock screen, NoCap phone theme.
   - *Home*: grid 3–7 columns × 4–9 rows, page transitions (slide, fade,
     zoom, cube, stack, carousel), folder style (grid or stack), search bar,
     page dots, lock the layout.
@@ -56,8 +56,9 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
     buttons; labels.
   - *Wallpaper*: dim, blur, parallax.
   - *Gestures*: swipe up/down, double-tap, pinch in/out, two-finger swipe
-    up/down and the Home button (while home) can each open the drawer,
-    search, NoCap AI, notifications, quick settings, lock the screen
+    up/down and the Home button (while home) can each open the drawer, the
+    NoCap control center, search, NoCap AI, Android's notification shade,
+    quick settings, lock the screen
     (opt-in helper), any app, your NoCap desktop, NoCap Link, settings,
     widgets or the first page.
   - *System*: status bar clear / tinted / hidden, navigation bar clear /
@@ -67,7 +68,33 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **Wallpapers**: the three NoCapOS wallpapers (Tide, Nebula, Midnight), a
   classic grid, or a picture from your gallery; dim it, set it as the phone's
   own wallpaper too, or sync the one you picked on your NoCap desktop.
-- **Language**: Gen Z (default) or Standard, like NoCapOS's own setting.
+- **Language**: Gen Z (default), Standard, or *Same as my server* (follows the
+  Language setting saved on your NoCap desktop, read from the device API's
+  saved look; it keeps the last answer for offline use, and is Gen Z until
+  there is one). All text switches instantly.
+- **NoCap control center**: swipe down on the home screen (the new default;
+  *Android's shade* is still a Gestures option) for a glass, NoCap-red panel:
+  Wi-Fi, Bluetooth, flashlight, Do not disturb, rotation lock, a brightness
+  slider, music controls, NoCap Link tiles (send clipboard, Find my phone,
+  server status) and your notifications grouped by app, with reply and
+  dismiss. Wi-Fi and Bluetooth open Android's own panel (apps can't flip them
+  since Android 10); rotation lock and brightness need *Modify system
+  settings*. Optional (Settings → Gestures → Control center): pull down on an
+  invisible strip just under the status bar to open it in any app — needs
+  *Display over other apps*, and only sees touches on that strip.
+- **NoCap lock screen** (opt-in, Settings → Look): when the screen turns on
+  and the phone is locked, a NoCap screen with the clock, logo, server status,
+  music controls and notifications (app names and counts unless you allow the
+  text) shows *over* Android's lock screen. Swipe up asks Android to dismiss
+  the keyguard, so your PIN, pattern or fingerprint is still required; the
+  system lock screen is never disabled or bypassed. Needs *Display over other
+  apps* (Android only lets apps open a screen from the background with it).
+- **NoCap phone theme** (Settings → Look → NoCap phone): sets NoCap
+  wallpapers (the NoCapOS wallpaper you use, washed in NoCap red; the lock one
+  carries the NoCap mark) on the phone's home and lock screens, or just the
+  lock one. Red is the dominant color, so on Android 12+ the phone's Material
+  You colors follow it and go NoCap red. Without root, apps can't restyle
+  Android's own system screens; the setting says so.
 - **Backup & restore** of pages, folders, dock and settings — to your NoCap
   server (if linked) or a file.
 
@@ -124,8 +151,11 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 Asked only when you use the feature: notifications, camera (QR scan only),
 approximate location (weather widget, only if you choose "My location"),
 calendar (calendar widget). Opt-in in Android's settings: notification
-access (dots, now playing, forwarding notifications), accessibility or
-device admin (lock gesture only), Do not disturb access (quick toggles).
+access (dots, now playing, forwarding notifications, control center and lock
+screen notifications), accessibility or device admin (lock gesture only), Do
+not disturb access (quick toggles), display over other apps (NoCap lock
+screen, control-center edge swipe), modify system settings (control center
+rotation lock and brightness).
 Normal permissions: set wallpaper, expand the notification shade, ask to
 uninstall an app, Wi-Fi/Bluetooth state (toggles), set a timer in the clock
 app. Weather requests go to Open-Meteo with only the coordinates.
@@ -160,6 +190,8 @@ Kotlin + Jetpack Compose, minSdk 26, target 34, application ID
 | `net` | The NoCapOS device API client and certificate pinning |
 | `ai`, `desktop`, `share` | NoCap AI, the web desktop, "Send to NoCap" |
 | `system` | Notification listener, lock helper, crash log |
+| `lock` | NoCap lock screen (`LockActivity`, screen-on watch) and the NoCap wallpapers for the phone |
+| `control` | NoCap control center, its toggles, notifications (reply / dismiss), the edge strip and `ControlActivity` |
 | `ui` | Theme (NoCap colors, fonts, glass) and shared controls |
 
 Manifest components (services, receivers, the widget providers, activities)
