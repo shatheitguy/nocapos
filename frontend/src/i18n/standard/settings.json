@@ -3,7 +3,7 @@
   "set.network.desc": "Wi-Fi, Ethernet and IP addresses",
   "set.general": "General",
   "set.general.desc": "Device, storage, updates, date and language",
-  "set.devices": "Devices",
+  "set.devices": "Linked Devices",
   "set.devices.desc": "Link your phone and see your linked devices",
   "set.agents": "AI Agents",
   "set.agents.desc": "Let AI agents use this server, with your approval",

@@ -25,7 +25,7 @@ export const CATS: CatInfo[] = [
   { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
   { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
     groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
-  { id: 'devices', label: 'Devices', icon: 'phone', color: '#30d158', groups: [] },
+  { id: 'devices', label: 'Linked Devices', icon: 'phone', color: '#30d158', groups: [] },
   { id: 'agents', label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', groups: [] },
   { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
@@ -59,7 +59,7 @@ export const SUBS: Record<string, { label: string; icon: IconName; color: string
   account: { label: 'Your Account', icon: 'user', color: '#007aff', desc: 'Photo, name and sign out' },
   users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add your people and pick who runs the show' },
   wifi: { label: 'Wi-Fi', icon: 'wifi', color: '#0a84ff' },
-  devices: { label: 'Devices', icon: 'phone', color: '#30d158', desc: 'Link your phone with the NoCap OS app' },
+  devices: { label: 'Linked Devices', icon: 'phone', color: '#30d158', desc: 'Link your phone with the NoCap OS app' },
   agents: { label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', desc: 'Let AI agents use this server, with your OK' },
 };
 
@@ -93,8 +93,8 @@ export const ENTRIES: Entry[] = [
   { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
   { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
   { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
-  { id: 'devices', cat: 'devices', label: 'Devices', icon: 'phone', desc: 'Link your phone and see your linked devices', keywords: 'phone android tablet pair pairing link launcher app nocap id qr code mobile',
-    options: ['Your NoCap ID', 'Link a device', 'Unlink'] },
+  { id: 'devices', cat: 'devices', label: 'Linked Devices', icon: 'phone', desc: 'Link your phone and see your linked devices', keywords: 'devices linked squad your squad the squad phone android tablet pair pairing link launcher app nocap id qr code mobile limit max how many battery online last seen rename',
+    options: ['Your NoCap ID', 'Link a device', 'Unlink', 'Rename', 'Devices per person'] },
   { id: 'agents', cat: 'agents', label: 'AI Agents', icon: 'sparkles', desc: 'NoCap MCP: let AI agents use this server, with your approval', keywords: 'mcp ai agent hermes claude token computer use automation assistant approval',
     options: ['Let AI agents in', 'Only agents on this machine', 'Add an agent', 'Revoke', 'Recent activity'] },
   { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, wallpaper, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',

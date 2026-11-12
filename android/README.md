@@ -73,7 +73,7 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 
 ## NoCap Link
 
-- **Link with NoCap Link** — scan the QR from *Settings → Devices → Link a
+- **Link with NoCap Link** — scan the QR from *Settings → Linked Devices → Link a
   device*, tap a `nocap://pair` link, or type the address + 6-digit code.
 - **Open my NoCap desktop** — your server's web desktop, full screen, signed
   in with a one-time ticket.
@@ -96,6 +96,11 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   lets the app in front read the clipboard, so there's no silent background
   copying.
 - **Unlink** — removes the phone on the server too.
+- **Linked Devices** — the heartbeat tells only your own server the phone's
+  battery, app version, model, Android version and which of notifications /
+  clipboard / files are on, so *Settings → Linked Devices* can show them.
+  An administrator can cap how many devices each person links (5 by
+  default); at the cap, linking answers `device_limit` until one is unlinked.
 - **Older servers** — anything a server doesn't support yet says *Your NoCap
   server needs an update (Settings → Glow Up)* with the version it's running,
   instead of an error.
