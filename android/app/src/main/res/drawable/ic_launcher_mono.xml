@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The NoCapOS mark as a one-color glyph, for Android 13+ themed icons. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/nocap_mark_mono"
+    android:inset="22%" />

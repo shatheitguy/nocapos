@@ -1,8 +1,25 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Release signing comes from the environment (GitHub secrets in CI):
+//   NOCAP_KEYSTORE_B64       the keystore (.jks), base64-encoded
+//   NOCAP_KEYSTORE_PASSWORD  its password
+//   NOCAP_KEY_ALIAS          the key's alias
+//   NOCAP_KEY_PASSWORD       the key's password
+// Without them, release builds are signed with the debug key so CI still works.
+val releaseKeystore: File? = System.getenv("NOCAP_KEYSTORE_B64")?.takeIf { it.isNotBlank() }?.let { b64 ->
+    layout.buildDirectory.file("signing/nocap-release.jks").get().asFile.apply {
+        parentFile.mkdirs()
+        writeBytes(Base64.getMimeDecoder().decode(b64.trim()))
+    }
+}
+val hasReleaseKey = releaseKeystore != null &&
+    listOf("NOCAP_KEYSTORE_PASSWORD", "NOCAP_KEY_ALIAS", "NOCAP_KEY_PASSWORD").all { !System.getenv(it).isNullOrBlank() }
 
 android {
     namespace = "com.nocap.link"
@@ -12,15 +29,42 @@ android {
         applicationId = "com.nocap.link"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "3.0.0"
+        versionCode = 4
+        versionName = "3.1.0"
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("NOCAP_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("NOCAP_KEY_ALIAS")
+                keyPassword = System.getenv("NOCAP_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
-        // Only debug builds for now: signed with the Android SDK's debug key.
         debug {
             isMinifyEnabled = false
         }
+        release {
+            // No shrinking: the app is small, and reflection (status bar, widgets) stays safe.
+            isMinifyEnabled = false
+            signingConfig = if (hasReleaseKey) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+
+    lint {
+        // Real errors fail the build; what was already there is listed in lint-baseline.xml.
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+        checkReleaseBuilds = true
+        warningsAsErrors = false
+    }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
     compileOptions {
@@ -65,4 +109,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
     implementation("com.google.zxing:core:3.5.3")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

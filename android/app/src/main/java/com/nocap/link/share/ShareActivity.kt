@@ -8,21 +8,21 @@ import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -33,24 +33,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
-import com.nocap.link.Prefs
-import com.nocap.link.R
-import com.nocap.link.Vault
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.ServerTooOld
-import com.nocap.link.t
+import com.nocap.link.R
 import com.nocap.link.ui.GhostButton
+import com.nocap.link.ui.glass
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
 import com.nocap.link.ui.RedButton
-import com.nocap.link.ui.glass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,24 +88,35 @@ class ShareActivity : ComponentActivity() {
             )
             Intent.ACTION_SEND_MULTIPLE -> (if (Build.VERSION.SDK_INT >= 33) i.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java) else i.getParcelableArrayListExtra(Intent.EXTRA_STREAM)).orEmpty()
             else -> emptyList()
-        }
+        }.filter { safeToSend(it) }
         text = i.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
         subject = i.getStringExtra(Intent.EXTRA_SUBJECT)
     }
 
+    /**
+     * Anyone can share to this screen, so only take content from other apps:
+     * never raw file paths or this app's own files (its key and settings).
+     */
+    private fun safeToSend(u: Uri): Boolean =
+        u.scheme == "content" && u.authority?.startsWith(packageName) != true
+
     private fun name(u: Uri): String {
-        contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0)?.let { return it } }
+        runCatching {
+            contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0)?.let { return it } }
+        }
         return u.lastPathSegment ?: "file"
     }
 
     private fun size(u: Uri): Long {
-        contentResolver.query(u, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) return c.getLong(0) }
+        runCatching {
+            contentResolver.query(u, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c -> if (c.moveToFirst() && !c.isNull(0)) return c.getLong(0) }
+        }
         return -1
     }
 
     private fun send() {
-        val link = Vault.get(this).link ?: return
-        val api = NoCapApi(link)
+        val link = runCatching { Vault.get(this).link }.getOrNull() ?: return
+        val api = runCatching { NoCapApi(link) }.getOrElse { state = State.Failed(MainActivity.friendly(it)); return }
         state = State.Sending
         lifecycleScope.launch {
             state = try {
@@ -129,7 +140,8 @@ class ShareActivity : ComponentActivity() {
 
     @Composable
     private fun Sheet() {
-        val linked = remember { Vault.get(this).link != null }
+        val linked = remember { runCatching { Vault.get(this).link != null }.getOrDefault(false) }
+        val first = remember { uris.firstOrNull()?.let { name(it) } }
         Box(
             Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null) { if (state !is State.Sending) finish() },
             contentAlignment = Alignment.BottomCenter,
@@ -150,9 +162,9 @@ class ShareActivity : ComponentActivity() {
                     return@Column
                 }
                 val what = when {
-                    uris.size == 1 -> name(uris[0])
+                    uris.size == 1 -> first
                     uris.size > 1 -> t("${uris.size} files", "${uris.size} files")
-                    text != null -> text!!.take(140)
+                    text != null -> text?.take(140)
                     else -> null
                 }
                 if (what == null) {
@@ -162,7 +174,7 @@ class ShareActivity : ComponentActivity() {
                     return@Column
                 }
                 Text(what, style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(t("Lands in NoCap Link, in your home on ${Vault.get(this@ShareActivity).link?.serverName ?: "your server"}.", "Saved to the NoCap Link folder in your home folder."), style = MaterialTheme.typography.bodySmall)
+                Text(t("Lands in NoCap Link, in your home on ${runCatching { Vault.get(this@ShareActivity).link?.serverName }.getOrNull() ?: "your server"}.", "Saved to the NoCap Link folder in your home folder."), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(16.dp))
                 when (val s = state) {
                     State.Ready -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

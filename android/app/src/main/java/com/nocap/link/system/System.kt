@@ -24,7 +24,7 @@ class DotsService : NotificationListenerService() {
     override fun onListenerConnected() {
         instance = this
         recount()
-        com.nocap.link.nocap.Media.start(this)
+        com.nocap.link.widget.Media.start(this)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {

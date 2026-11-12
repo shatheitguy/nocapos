@@ -12,14 +12,14 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
-import com.nocap.link.Link
-import com.nocap.link.Notices
+import com.nocap.link.data.Link
 import com.nocap.link.net.NoCapApi
-import okhttp3.Request
-import org.json.JSONObject
+import com.nocap.link.sync.Notices
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
+import okhttp3.Request
+import org.json.JSONObject
 
 /**
  * Downloads from the web desktop. Normal links are fetched with the pinned

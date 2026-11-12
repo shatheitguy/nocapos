@@ -5,10 +5,13 @@ name: NoCap OS app
 # attached to it as nocap-os.apk, so Settings -> Devices can link to
 # releases/latest/download/nocap-os.apk.
 #
-# The APK is signed with the Android SDK's debug key for now (no signing
-# secrets in this repo). Android only lets an app update over itself when
-# both builds have the same signature, and each CI runner makes its own debug
-# key, so an update from a newer release may need the old app removed first.
+# Unit tests and lint run first. The release APK and the Play bundle (.aab)
+# are signed with the release key when these repository secrets exist:
+# NOCAP_KEYSTORE_B64 (base64 of the .jks), NOCAP_KEYSTORE_PASSWORD,
+# NOCAP_KEY_ALIAS, NOCAP_KEY_PASSWORD. Without them they fall back to the
+# Android SDK's debug key (each runner makes its own, so an update may need
+# the old app removed first). Secrets are never available to pull requests
+# from forks, so those always use the debug key.
 #
 # The Release workflow publishes with the built-in token, which does not fire
 # "release" events for other workflows; so this also runs after Release
@@ -50,18 +53,42 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
+      - name: Unit tests and lint
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk nocap-os.apk
-          ls -la nocap-os.apk
+          ./gradlew testDebugUnitTest lintDebug --no-daemon --stacktrace
+
+      - name: Build release APK and Play bundle
+        working-directory: android
+        env:
+          NOCAP_KEYSTORE_B64: ${{ secrets.NOCAP_KEYSTORE_B64 }}
+          NOCAP_KEYSTORE_PASSWORD: ${{ secrets.NOCAP_KEYSTORE_PASSWORD }}
+          NOCAP_KEY_ALIAS: ${{ secrets.NOCAP_KEY_ALIAS }}
+          NOCAP_KEY_PASSWORD: ${{ secrets.NOCAP_KEY_PASSWORD }}
+        run: |
+          if [ -n "$NOCAP_KEYSTORE_B64" ]; then echo "Signing with the release key"; else echo "No release key secrets: signing with the debug key"; fi
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk nocap-os.apk
+          cp app/build/outputs/bundle/release/app-release.aab nocap-os.aab
+          rm -rf app/build/signing
+          ls -la nocap-os.apk nocap-os.aab
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-and-test-reports
+          path: |
+            android/app/build/reports/lint-results-debug.html
+            android/app/build/reports/tests/
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
           name: nocap-os-apk
-          path: android/nocap-os.apk
+          path: |
+            android/nocap-os.apk
+            android/nocap-os.aab
           if-no-files-found: error
 
       - name: Attach to the NoCapOS release
@@ -74,5 +101,5 @@ jobs:
           else
             tag="v$(cat VERSION)"
           fi
-          echo "Uploading nocap-os.apk to $tag"
-          gh release upload "$tag" android/nocap-os.apk --clobber --repo "${{ github.repository }}"
+          echo "Uploading nocap-os.apk and nocap-os.aab to $tag"
+          gh release upload "$tag" android/nocap-os.apk android/nocap-os.aab --clobber --repo "${{ github.repository }}"
