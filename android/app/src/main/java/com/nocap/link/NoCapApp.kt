@@ -19,5 +19,7 @@ class NoCapApp : Application() {
         val linked = runCatching { Vault.get(this).link != null }.getOrDefault(false)
         if (linked) HeartbeatWorker.schedule(this)
         Sync.start(this)
+        // Daily update check, only if you turned it on (Settings → About → Updates).
+        if (com.nocap.link.update.Updater.autoOn(this)) com.nocap.link.update.UpdateWorker.schedule(this)
     }
 }

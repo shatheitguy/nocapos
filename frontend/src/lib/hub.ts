@@ -9,15 +9,20 @@ const params = () => new URLSearchParams(window.location.search);
 /** This page is the NoCap Hub window on the server's own desktop. */
 export const isHub = (): boolean => params().has('hub');
 
-/** The app the hub was asked to open (nocap-hub appcenter, settings, files...), once. */
-export function takeHubApp(): string | null {
+/**
+ * The app the hub (or the phone app) asked to open (appcenter, settings,
+ * files...), with an optional Settings page (&section=update), once.
+ */
+export function takeHubApp(): { app: string; section?: string } | null {
   const p = params();
   const app = p.get('open');
-  if (!app || !/^[a-z0-9-]{1,32}$/.test(app)) return null;
+  const section = p.get('section');
   p.delete('open');
+  p.delete('section');
+  if (!app || !/^[a-z0-9-]{1,32}$/.test(app)) return null;
   const q = p.toString();
   window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : '') + window.location.hash);
-  return app;
+  return { app, section: section && /^[a-z0-9-]{1,32}$/.test(section) ? section : undefined };
 }
 
 /** Shows a notification on the desktop when the hub window isn't in front. */
