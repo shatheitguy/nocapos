@@ -99,7 +99,7 @@ sealed interface ServerState {
 }
 
 /** Full-screen layers over the home screen. */
-enum class Layer { NONE, DRAWER, SEARCH, SETTINGS, HUB, WIDGETS, PERMISSIONS }
+enum class Layer { NONE, DRAWER, SEARCH, SETTINGS, HUB, WIDGETS, PERMISSIONS, CONTROL }
 
 class MainActivity : ComponentActivity() {
     private val vault by lazy { Vault.get(this) }

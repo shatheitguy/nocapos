@@ -19,5 +19,7 @@ class NoCapApp : Application() {
         val linked = runCatching { Vault.get(this).link != null }.getOrDefault(false)
         if (linked) HeartbeatWorker.schedule(this)
         Sync.start(this)
+        // Opt-in control-center edge strip (does nothing unless switched on).
+        runCatching { com.nocap.link.control.EdgeStrip.sync(this) }
     }
 }
