@@ -218,8 +218,6 @@ func TestEAPValidate(t *testing.T) {
 		{Method: "ttls", Phase2: "pap", Identity: "bob", Password: "pw", CA: "file", CACert: b64(pemCA), DomainSuffixMatch: "radius.example.com"},
 		{Method: "tls", Identity: "dev", ClientCert: b64(pemCA), PrivateKey: b64("-----BEGIN PRIVATE KEY-----\n"), PrivateKeyPassword: "k"},
 		{Method: "tls", Identity: "dev", ClientCert: b64("\x30\x82binary-p12")}, // PKCS#12: key inside
-		{Method: "pwd", Identity: "x", Password: "y"},
-		{Method: "leap", Identity: "x", Password: "y"},
 	}
 	for _, c := range ok {
 		if err := c.Validate(nil); err != nil {
@@ -228,6 +226,8 @@ func TestEAPValidate(t *testing.T) {
 	}
 	bad := []EAPConfig{
 		{Method: "md5", Identity: "a", Password: "b"},
+		{Method: "pwd", Identity: "x", Password: "y"}, // only PEAP, TTLS and TLS are set up here
+		{Method: "leap", Identity: "x", Password: "y"},
 		{Method: "peap", Phase2: "pap", Identity: "a", Password: "b"}, // PEAP has no PAP
 		{Method: "peap", Password: "b"},
 		{Method: "peap", Identity: "a"},
