@@ -16,6 +16,7 @@ import './styles/storage.css';
 import './styles/containers.css';
 import './styles/virtualdesk.css';
 import './styles/notifications.css';
+import './styles/users.css';
 import './themes.css';
 import './glass.css';
 import './styles/mobile.css';

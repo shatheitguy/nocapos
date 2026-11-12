@@ -222,6 +222,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/users", s.admin(s.usersCreate))
 	mux.Handle("PATCH /api/v1/users/{name}", s.admin(s.usersUpdate))
 	mux.Handle("DELETE /api/v1/users/{name}", s.admin(s.usersDelete))
+	mux.Handle("GET /api/v1/users/{name}/avatar", s.admin(s.userAvatarGet))
+	// Groups of people (admin, audited).
+	mux.Handle("GET /api/v1/groups", s.admin(s.groupsList))
+	mux.Handle("POST /api/v1/groups", s.admin(s.groupsCreate))
+	mux.Handle("PUT /api/v1/groups/{id}", s.admin(s.groupsUpdate))
+	mux.Handle("DELETE /api/v1/groups/{id}", s.admin(s.groupsDelete))
 	// Each person's shared folders and apps (admin, audited).
 	mux.Handle("GET /api/v1/users/{name}/spaces", s.admin(s.userSpaces))
 	mux.Handle("PUT /api/v1/users/{name}/folders/{id}", s.admin(s.userFolderPerm))
