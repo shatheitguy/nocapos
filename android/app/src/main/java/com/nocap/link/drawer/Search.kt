@@ -85,7 +85,7 @@ private fun settingHits(): List<SettingHit> {
         SettingHit(t("Status bar & rotation", "Status bar and rotation"), "status navigation bar rotation haptics", mine),
         SettingHit(t("Notification dots", "Notification dots"), "dots badges notifications", mine),
         SettingHit(t("Hidden apps", "Hidden apps"), "hide hidden unhide", mine),
-        SettingHit(t("Backup & restore", "Backup and restore"), "backup restore layout export import", mine),
+        SettingHit(t("Export & restore", "Export and restore"), "backup restore layout export import", mine),
         SettingHit(t("Make NoCap OS home", "Default home app"), "default home launcher", mine),
         SettingHit(t("Widgets", "Add widgets"), "widget widgets") { it.layer = Layer.WIDGETS },
         SettingHit(t("NoCap Link", "NoCap Link"), "link server nocap desktop unlink pair") { it.layer = Layer.HUB },

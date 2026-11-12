@@ -159,6 +159,7 @@ export function Appearance() {
         </Row>
       </Section>
 
+      <WallpaperSections />
 
       <Section title={t('pz.display')} hint={t('pz.displayHint')}>
         <Slider label={t('pz.brightness')} hint={t('pz.brightnessHint')} value={prefs.brightness}
@@ -258,24 +259,22 @@ export function WallpaperStrip({ strip = false }: { strip?: boolean }) {
   );
 }
 
-export function Wallpaper() {
+/** Wallpaper picker and dim slider: part of the Appearance page. */
+function WallpaperSections() {
   const t = useT();
   const prefs = usePrefs();
   const set = prefs.set;
   const custom = shownWallpaper(prefs.wallpaper).startsWith('custom');
   return (
-    <div className="stack settings-page">
+    <>
       <Section title={t('pz.wallpapers')} hint={prefs.uiTheme === 'cyberdeck' && !custom ? t('pz.cyberWall') : t('pz.wallpapersHint')}>
         <Row>
           <WallpaperStrip />
         </Row>
-      </Section>
-
-      <Section title={t('pz.dimSection')}>
         <Slider label={t('pz.dim')} hint={t('pz.dimHint')} value={prefs.wallpaperDim}
           min={0} max={60} step={5} format={(v) => (v ? `${v}%` : t('pz.off'))} onChange={(wallpaperDim) => set({ wallpaperDim })} />
       </Section>
-    </div>
+    </>
   );
 }
 
