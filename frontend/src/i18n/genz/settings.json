@@ -30,7 +30,7 @@
   "set.about": "System Specs",
   "set.about.desc": "Device name, hardware and versions",
   "set.update": "Glow Up",
-  "set.update.desc": "Software update: check for a newer NoCapOS",
+  "set.update.desc": "Software update: NoCapOS and the system packages, in one go",
   "set.access": "Screen Real Estate",
   "set.access.desc": "NoCap Desktop on this screen, and who can open NoCapOS",
   "set.storage": "The Archives",

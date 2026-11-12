@@ -15,8 +15,8 @@
 #   --no-docker         don't install Docker (the App Store stays off until Docker is present)
 #   --install-docker    install Docker from get.docker.com without asking
 #   --minimal           skip the optional host packages (virtual machines, Samba, remote desktop
-#                       engine, Brave, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
-#                       to install each one later, from its app or from Packages
+#                       engine, Avahi, SMART, ZFS, FFmpeg, restic/rclone); NoCapOS offers
+#                       to install each one later, from its app
 #   --desktop           NoCap Desktop: a native desktop on this machine's own monitor (NoCapOS
 #                       sign-in screen, dock, Files, Settings, Software, terminal, text editor,
 #                       a web browser and the App Store's Linux apps; sign in with this
@@ -471,14 +471,6 @@ enable_host_services() {
   if has avahi-daemon || [ -x /usr/sbin/avahi-daemon ]; then
     systemctl enable --now avahi-daemon >/dev/null 2>&1 || warn "avahi-daemon didn't start"
   fi
-}
-
-# Brave comes from Brave's official repository, installed by the same script
-# the Brave app runs on first launch (alfad carries it: `nocapos install-brave`).
-install_brave() {
-  case "$(pkg_manager)" in apt | dnf) ;; *) warn "Brave: NoCapOS installs it on apt and dnf systems; skipped"; return 0 ;; esac
-  info "Installing Brave and its stream tools (from Brave's repository)"
-  "$BIN" install-brave >/dev/null 2>&1 || warn "Brave didn't install now; the Brave app installs it on first launch."
 }
 
 # ---------------------------------------------------------------- NoCap Desktop
@@ -1090,7 +1082,6 @@ EOF
     [ "$can_rollback" -eq 1 ] && rollback_native
     die "$NAME did not start; check: journalctl -u nocapos -e"
   fi
-  [ "$MINIMAL" -eq 1 ] || install_brave
   setup_desktop
   setup_mdns
   if [ "$BRANDING" -eq 1 ]; then
