@@ -106,7 +106,7 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
         if (busy) return
         error = when {
             server.isBlank() -> "Type your NoCapOS address first."
-            code.length != 6 -> "The code is 6 digits — it's in Settings → Devices → Link a device."
+            code.length != 6 -> "The code is 6 digits — it's in Settings → Linked Devices → Link a device."
             name.isBlank() -> "Give this phone a name."
             else -> null
         }
@@ -148,7 +148,7 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "On your NoCap desktop, open Settings → Devices → Link a device. Scan the QR, or type the address and the 6-digit code.",
+                "On your NoCap desktop, open Settings → Linked Devices → Link a device. Scan the QR, or type the address and the 6-digit code.",
                 style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted,
             )
             Spacer(Modifier.height(18.dp))
@@ -185,7 +185,7 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
             text = {
                 Column {
                     Text("NoCap ID: ${p.info.nocapId}", style = MaterialTheme.typography.bodyMedium)
-                    Text("Check it matches Settings → Devices on your server.", style = MaterialTheme.typography.bodySmall)
+                    Text("Check it matches Settings → Linked Devices on your server.", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(10.dp))
                     if (p.pin != null) {
                         Text("Certificate (SHA-256) — this phone will only ever trust this one:", style = MaterialTheme.typography.bodyMedium)

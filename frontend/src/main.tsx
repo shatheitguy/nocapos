@@ -11,6 +11,7 @@ import './kit.css';
 import './styles/files.css';
 import './styles/appstore.css';
 import './styles/settings.css';
+import './styles/devices.css';
 import './styles/photos.css';
 import './styles/storage.css';
 import './styles/containers.css';

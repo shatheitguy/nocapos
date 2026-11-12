@@ -118,6 +118,63 @@ func ValidAppVersion(v string) bool {
 	return true
 }
 
+// ValidDetail: a model or OS version, up to 64 printable characters (may be
+// empty).
+func ValidDetail(v string) bool {
+	if utf8.RuneCountInString(v) > 64 || !utf8.ValidString(v) {
+		return false
+	}
+	for _, r := range v {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// Caps are the NoCap Link features a device can report as on, in the
+// order they're shown.
+var Caps = []string{"notifications", "clipboard", "files"}
+
+// CapsString turns the features a device reports into what's stored
+// ("notifications,files"); unknown ones are dropped.
+func CapsString(on map[string]bool) string {
+	var out []string
+	for _, c := range Caps {
+		if on[c] {
+			out = append(out, c)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+// CapsList splits a stored caps string (never nil).
+func CapsList(s string) []string {
+	out := []string{}
+	for _, c := range strings.Split(s, ",") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// ---------- limits ----------
+
+const (
+	// DefaultLimit is how many devices each person may link when an
+	// administrator hasn't said otherwise.
+	DefaultLimit = 5
+	// MaxLimit is the highest limit that can be set. 0 means no limit.
+	MaxLimit = 100
+)
+
+// ValidLimit: 0 (no limit) to MaxLimit.
+func ValidLimit(n int) bool { return n >= 0 && n <= MaxLimit }
+
+// AtLimit reports whether someone with used devices may not link another.
+func AtLimit(used, limit int) bool { return limit > 0 && used >= limit }
+
 // ---------- pairing codes ----------
 
 const (
