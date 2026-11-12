@@ -216,6 +216,10 @@ object Opt {
     val serverNotices = BoolPref("server_notices", false)
     val homeAsked = BoolPref("home_asked", false)
 
+    // Phone style: language source
+    /** The server's language, for Language → "Same as my server" (refetched, so not backed up). */
+    val serverLingo = StrPref("server_lingo", "", backup = false)
+
     fun init(ctx: Context) {
         if (sp != null) return
         val s = ctx.applicationContext.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE)
@@ -261,7 +265,7 @@ object Opt {
  * Compose state, so the home screen redraws the moment something changes.
  */
 object Prefs {
-    val genz get() = Opt.lingo.v != "standard"
+    val genz get() = Lingo.isGenz(Opt.lingo.v, Opt.serverLingo.v)
     val drawer get() = Opt.drawer.v
     val columns get() = Opt.columns.v
     val rows get() = Opt.rows.v

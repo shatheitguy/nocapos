@@ -151,9 +151,8 @@ fun SettingsScreen(a: MainActivity) {
     val linked = a.server !is ServerState.NotLinked
 
     val secs = listOf(
-        Sec("look", t("The Lingo", "Language"), t("How NoCap OS words things", "Wording style"), "language lingo gen z standard words wording") {
-            Choice(listOf(t("Gen Z", "Gen Z") to true, t("Standard", "Standard") to false), Prefs.genz) { Prefs.setGenz(it) }
-            Hint(if (Prefs.genz) t("Playful names, with a plain description where it matters.", "") else "Plain, professional wording.")
+        Sec("look", t("The Lingo", "Language"), t("How NoCap OS words things", "Wording style"), "language lingo gen z standard words wording server same") {
+            LanguagePicker(a)
         },
         Sec("look", t("Theme & accent", "Theme and accent color"), t("Dark, light, or follow the phone", "Dark, light or automatic"), "theme dark light auto mode accent color colour red picker font typeface haptics vibration") {
             Label(t("Mode", "Mode"))
