@@ -486,6 +486,7 @@ class MainActivity : ComponentActivity() {
                 val apps = withContext(Dispatchers.IO) { api.apps() }
                 if (vault.unlinked) vault.unlinked = false
                 server = ServerState.Online(me)
+                launch { com.nocap.link.data.Lingo.refresh(api) }
                 serverApps.clear()
                 serverApps.addAll(apps)
                 refreshLive()
@@ -669,7 +670,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     t("Your desktop uses your own pic, and that lives in your browser. Pick one here instead.", "Your desktop uses a custom picture stored in the browser; choose one here instead.")
                 }
-                if (p.lingo == "genz" || p.lingo == "standard") Prefs.setGenz(p.lingo == "genz")
+                com.nocap.link.data.Lingo.fromServer(p.lingo)
                 if (Regex("^#[0-9a-fA-F]{6}$").matches(p.accent)) Opt.accent.set(p.accent)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
