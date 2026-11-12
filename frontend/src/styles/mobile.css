@@ -57,19 +57,15 @@
 }
 :root[data-compact] .window-layer { bottom: calc(var(--res-bottom, 76px) + env(safe-area-inset-bottom, 0px)); }
 :root[data-compact] .dock {
-  position: static; transform: none; flex: 0 1 auto; min-width: 0; max-width: none;
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
-  padding: 4px 6px; gap: 2px; align-items: center; touch-action: pan-x;
+  position: static; transform: none; flex: 1 1 auto; min-width: 0; max-width: none;
+  /* One row of whole icons only: anything that doesn't fit wraps to a second
+     row that is clipped away (every app is still in the launcher). No
+     half-cut icons, no sideways scrolling. */
+  display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center;
+  height: 52px; box-sizing: border-box; overflow: hidden; overflow: clip; /* clip: focus can never scroll row two into view */
+  padding: 4px 8px; gap: 2px 4px;
 }
-:root[data-compact] .dock::-webkit-scrollbar { display: none; }
-/* Too many pins for the width: it scrolls, snaps to whole icons, and the
-   edge with more behind it fades (Shelf sets more-left / more-right). */
-:root[data-compact] .dock { scroll-snap-type: x proximity; scroll-padding-inline: 6px; }
-:root[data-compact] .dock > * { scroll-snap-align: start; }
-:root[data-compact] .dock.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
-:root[data-compact] .dock.more-left { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
-:root[data-compact] .dock.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-:root[data-compact] .dock-item { flex: none; min-width: 42px; min-height: 42px; display: grid; place-items: center; padding: 3px; }
+:root[data-compact] .dock-item { flex: none; min-width: 44px; height: 44px; min-height: 44px; display: grid; place-items: center; padding: 3px; }
 :root[data-compact] .dock-item .app-icon,
 :root[data-compact] .launchpad-icon { width: 36px !important; height: 36px !important; }
 :root[data-compact] .dock-item:hover:not(:disabled) { transform: none; }
@@ -83,16 +79,14 @@
 :root[data-compact] .tray svg { display: inline-block; }
 :root[data-compact] .tray-status svg + svg { display: none; }
 :root[data-compact] .tray-status .status-dot { display: none; }
-:root[data-compact] .tray-clock { white-space: nowrap; font-size: 13px; }
 :root[data-compact] .tray-date { display: none; }
-@media (max-width: 419.98px) {
-  :root[data-compact] .tray-clock { display: none !important; }
-}
+/* The phone already shows the time in its status bar. */
+:root[data-compact] .tray-clock { display: none !important; }
 /* The narrowest phones: slightly smaller icons, so five or six fit. */
 @media (max-width: 389.98px) {
   :root[data-compact] .shelf { gap: 6px; }
-  :root[data-compact] .dock { padding: 4px; gap: 0; }
-  :root[data-compact] .dock-item { min-width: 40px; padding: 2px; }
+  :root[data-compact] .dock { padding: 4px 6px; gap: 2px; }
+  :root[data-compact] .dock-item { min-width: 42px; padding: 2px; }
   :root[data-compact] .dock-item .app-icon,
   :root[data-compact] .launchpad-icon { width: 34px !important; height: 34px !important; }
   :root[data-compact] .dock-sep { margin: 0 2px; }
