@@ -731,7 +731,7 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
     val style = Opt.dockStyle.v
     val buttons = Opt.dockButtons.v
     // The app drawer button can be hidden on its own; the drawer still opens with its gesture.
-    val roster = buttons && Opt.dockDrawerButton.v
+    val roster = Opt.dockDrawerButton.v
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = if (style == DockStyle.FLOATING) 20.dp else 12.dp), contentAlignment = Alignment.Center) {
         // Fit everything on one row, however narrow the screen.
         val slots = apps.size.coerceAtLeast(1) + (if (buttons) 1 else 0) + (if (roster) 1 else 0)

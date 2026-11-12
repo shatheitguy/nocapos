@@ -149,7 +149,7 @@ The guide, in order (steps that don't apply to the phone are left out):
 | No battery limits | Keeps NoCap Link, sign-in alerts and clipboard sync alive |
 | Install unknown apps | In-app updates (only NoCap OS signed with the same key) |
 | Camera | Scanning the pairing QR code |
-| Calls & messages | `READ_PHONE_STATE`, `ANSWER_PHONE_CALLS`, `READ_CALL_LOG`, `READ_CONTACTS`, `READ_SMS`, `SEND_SMS`, for the NoCap features that show calls and texts on your own server. Shown only when the manifest asks for them; asked one at a time |
+| Calls & messages | Not requested today. If a feature later adds phone or SMS permissions to the manifest, the guide shows this step automatically and asks one at a time |
 | Weather | Turns weather on and asks for *approximate* location |
 | Calendar | The calendar widget |
 | Screen mirroring | Nothing to switch on: Android asks every time mirroring starts |
