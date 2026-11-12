@@ -178,7 +178,7 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	if got := strings.Join(f.calls, "|"); got != want {
 		t.Fatalf("calls = %s", got)
 	}
-	if f.files[DesktopModePath] != "off\n" {
+	if f.files[DesktopModePath] != "user-off\n" {
 		t.Fatalf("mode file = %q", f.files[DesktopModePath])
 	}
 	for _, bad := range []string{"party", "kiosk"} {

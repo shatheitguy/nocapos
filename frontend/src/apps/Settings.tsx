@@ -14,7 +14,7 @@ import { useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import type { Snapshot, SystemInfo } from '../api/types';
-import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, Wallpaper, WindowSettings } from './Personalize';
+import { Appearance, DesktopSettings, DockSettings, Row, Section as Group, Toggle, WindowSettings } from './Personalize';
 import { HostAccessPage } from './SettingsHostAccess';
 import { SoftwareUpdate } from './GlowUp';
 import { FocusSettings } from './SystemPages';
@@ -33,7 +33,7 @@ import { tr, useGenZ, useT } from '../i18n';
 
 
 /** Older links ("dock", "focus", …) still land in the right place. */
-const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general' };
+const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', wallpaper: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general' };
 function resolve(id: string | undefined): { cat: Cat; sub: Sub | null } | null {
   if (!id) return null;
   const e = ENTRIES.find((x) => x.id === (ALIASES[id] ?? id));
@@ -51,7 +51,7 @@ function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; s
 /** Sidebar sections, with a heading each (the first has none). */
 const SIDEBAR: { title?: string; cats: Cat[] }[] = [
   { cats: ['network', 'general', 'devices', 'agents'] },
-  { title: 'set.group.personal', cats: ['appearance', 'wallpaper', 'desktop', 'windows'] },
+  { title: 'set.group.personal', cats: ['appearance', 'desktop', 'windows'] },
   { title: 'set.group.notify', cats: ['notifications', 'sound'] },
   { title: 'set.group.security', cats: ['lock', 'security', 'users'] },
 ];
@@ -291,8 +291,6 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <Troubleshoot />;
     case 'appearance':
       return <Appearance />;
-    case 'wallpaper':
-      return <Wallpaper />;
     case 'desktop':
       return (
         <div className="stack settings-page">

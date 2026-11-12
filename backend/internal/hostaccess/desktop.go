@@ -161,7 +161,7 @@ var ErrDesktopUnavailable = errors.New("NoCap Desktop isn't set up on this serve
 // ErrBadMode is a mode this machine doesn't have.
 var ErrBadMode = errors.New("this server doesn't have that NoCap Desktop mode")
 
-const notSetUp = "Not set up yet. Plug in a screen, then run on the server: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop"
+const notSetUp = "Not set up yet. Run Update everything in Settings → Glow Up and NoCap Desktop is set up automatically."
 
 func (d *Desktop) exists(p string) bool {
 	if d.Exists != nil {
@@ -297,8 +297,13 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 			return fmt.Errorf("systemctl %s: %s", strings.Join(args, " "), msg)
 		}
 	}
-	// Remembered for updates (install.sh keeps this mode).
-	_ = d.writeFile(DesktopModePath, []byte(mode+"\n"), 0o644)
+	// Remembered for updates: install.sh turns the desktop on unless the
+	// owner switched it off here ("user-off").
+	saved := mode
+	if mode == ModeOff {
+		saved = "user-off"
+	}
+	_ = d.writeFile(DesktopModePath, []byte(saved+"\n"), 0o644)
 	return nil
 }
 

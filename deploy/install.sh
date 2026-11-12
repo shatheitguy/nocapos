@@ -20,8 +20,8 @@
 #   --desktop           NoCap Desktop: a native desktop on this machine's own monitor (NoCapOS
 #                       sign-in screen, dock, Files, Settings, Software, terminal, text editor,
 #                       a web browser and the App Store's Linux apps; sign in with this
-#                       machine's Linux accounts). On by default when a monitor is plugged in;
-#                       with no monitor nothing desktop-related is installed unless you pass this.
+#                       machine's Linux accounts). Always on by default, with or without a
+#                       monitor plugged in; this flag is kept for older instructions.
 #   --no-desktop        don't set up NoCap Desktop (and turn it off if it was on)
 #   --no-branding       leave the console login banner (/etc/issue) and MOTD as they are
 #   --mdns-name NAME    local name to announce with Avahi (default nocap -> http://nocap.local).
@@ -507,29 +507,16 @@ setup_desktop() {
     full) want=full ;;
     no)
       if [ -f "$ETC/desktop.conf" ]; then apply_desktop_mode off; fi
-      echo off >"$ETC/desktop-mode"
+      echo user-off >"$ETC/desktop-mode"
       return 0
       ;;
     auto)
-      # An update keeps what Settings (or an earlier install) chose.
+      # NoCap Desktop is part of NoCapOS: every install and update sets it up,
+      # monitor or not. Only an explicit "off" (Settings or --no-desktop) is kept.
       chosen="$(cat "$ETC/desktop-mode" 2>/dev/null || true)"
       case "$chosen" in
-        full) want=full ;;
-        off) return 0 ;;
-        *)
-          if [ "$DESK_KIOSK_WAS" = on ]; then
-            # The browser on the screen of earlier versions becomes the desktop.
-            want=full
-          elif [ "$DESK_KIOSK_WAS" = off ]; then
-            echo off >"$ETC/desktop-mode"
-            return 0
-          elif display_connected; then
-            want=full
-          else
-            echo "   No screen plugged in, so NoCap Desktop was skipped (add it later: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash -s -- --desktop)."
-            return 0
-          fi
-          ;;
+        user-off) return 0 ;;
+        *) want=full ;;
       esac
       ;;
   esac
