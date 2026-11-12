@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"alfaos/alfad/internal/accounts"
 	"alfaos/alfad/internal/auth"
@@ -16,32 +17,90 @@ type userView struct {
 	TOTP   bool   `json:"totp"`
 	You    bool   `json:"you"`
 	Access string `json:"access"` // desktop | files
+	// What the people list shows about each person.
+	Online    bool       `json:"online"`               // has NoCapOS open right now
+	LastSeen  *time.Time `json:"last_seen,omitempty"`  // last active anywhere
+	Sessions  int        `json:"sessions"`             // signed-in sessions and linked devices
+	Avatar    bool       `json:"avatar"`               // has a profile photo
+	Groups    []string   `json:"groups"`               // group names
+	CreatedAt *time.Time `json:"created_at,omitempty"` // joined NoCapOS
 }
 
 func (s *Server) usersList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.Accounts.List(r.Context())
+	ctx := r.Context()
+	list, err := s.Accounts.List(ctx)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
-	access, err := s.Store.UserAccessAll(r.Context())
+	access, err := s.Store.UserAccessAll(ctx)
 	if err != nil {
 		s.internalError(w, r, err)
 		return
 	}
-	me := userFrom(r.Context())
+	groups, err := s.Store.GroupsByMember(ctx)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	// Activity is nice to have: the list still loads without it.
+	seen, err := s.Store.LastSeenAll(ctx)
+	if err != nil {
+		s.Log.Warn("users: last seen", "err", err)
+	}
+	photos, err := s.Store.AvatarOwners(ctx)
+	if err != nil {
+		s.Log.Warn("users: avatars", "err", err)
+	}
+	me := userFrom(ctx)
 	out := make([]userView, 0, len(list))
 	for _, a := range list {
-		v := userView{Account: a, You: a.Username == me.Username, Access: store.AccessDesktop}
-		if a.Role != store.RoleAdmin && access[strings.ToLower(a.Username)] == store.AccessFiles {
+		key := strings.ToLower(a.Username)
+		v := userView{Account: a, You: a.Username == me.Username, Access: store.AccessDesktop, Groups: groups[key]}
+		if v.Groups == nil {
+			v.Groups = []string{}
+		}
+		if a.Role != store.RoleAdmin && access[key] == store.AccessFiles {
 			v.Access = store.AccessFiles
 		}
-		if u, err := s.Store.UserByUsername(r.Context(), a.Username); err == nil {
+		if u, err := s.Store.UserByUsername(ctx, a.Username); err == nil {
 			v.TOTP = u.TOTPEnabled
+			created := u.CreatedAt
+			v.CreatedAt = &created
+			v.Avatar = photos[u.ID]
+			v.Online = s.live.count(u.ID) > 0
+			if t, ok := seen[u.ID]; ok {
+				v.LastSeen = &t
+			}
+			if n, err := s.otherSessions(ctx, u.ID, "", ""); err == nil {
+				v.Sessions = n
+			}
 		}
 		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"mode": s.Accounts.Mode(), "users": out})
+}
+
+// userAvatarGet: anyone's profile photo, for administrators' people list.
+func (s *Server) userAvatarGet(w http.ResponseWriter, r *http.Request) {
+	u, err := s.Store.UserByUsername(r.Context(), r.PathValue("name"))
+	if err == nil {
+		var data []byte
+		var mime string
+		data, mime, err = s.Store.Avatar(r.Context(), u.ID)
+		if err == nil {
+			w.Header().Set("Content-Type", mime)
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("Cache-Control", "private, no-cache")
+			_, _ = w.Write(data)
+			return
+		}
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not_found", "no profile photo")
+		return
+	}
+	s.internalError(w, r, err)
 }
 
 type createUserRequest struct {
