@@ -180,6 +180,7 @@ object Opt {
     val dockCount = IntPref("dock_count", 5, 3..7)
     val dockStyle = EnumPref("dock_style", DockStyle.GLASS, DockStyle.entries.toTypedArray())
     val dockButtons = BoolPref("dock_buttons", true)
+    val dockDrawerButton = BoolPref("dock_drawer_button", true)
     val dockLabels = BoolPref("dock_labels", false)
 
     // Drawer
@@ -205,6 +206,8 @@ object Opt {
     // Widgets
     val weatherPlace = StrPref("weather_place", "")
     val fahrenheit = BoolPref("fahrenheit", false)
+    /** Weather (Open-Meteo) is off until you turn it on: no weather requests at all before that. */
+    val weatherOn = BoolPref("weather_on", false)
 
     // NoCap Link sync
     val forward = BoolPref("forward_notifications", false)

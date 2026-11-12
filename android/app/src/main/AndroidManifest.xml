@@ -25,11 +25,23 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Timer widget: "ring with the clock app". -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- In-app updates (Settings → About → Updates): installs NoCap OS itself, signed with the same key. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Setup guide: "no battery limits" asks Android directly (you still confirm). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Calls & messages on your NoCap server (asked one by one in the setup guide; only to your own server). -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <queries>
         <!-- The launcher lists every app that has a launcher icon. -->
@@ -169,6 +181,11 @@
         <receiver android:name=".widget.SearchAppWidget" android:exported="false" android:label="@string/w_search">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_search" />
+        </receiver>
+
+        <!-- In-app updates: the install result, and "NoCap OS was just updated". -->
+        <receiver android:name=".update.UpdateReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
 
         <!-- In-app timer finished (when not handed to the clock app). -->
