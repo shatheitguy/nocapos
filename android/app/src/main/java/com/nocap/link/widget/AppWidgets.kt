@@ -38,11 +38,23 @@ object AppWidgets {
 
     private fun main(ctx: Context, action: String) = Intent(ctx, MainActivity::class.java).setAction(action)
 
-    private fun ids(ctx: Context, cls: Class<*>): IntArray = AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, cls))
+    private fun ids(ctx: Context, cls: Class<*>): IntArray =
+        runCatching { AppWidgetManager.getInstance(ctx)?.getAppWidgetIds(ComponentName(ctx, cls)) }.getOrNull() ?: IntArray(0)
+
+    /** Pushes one widget; a launcher that went away or a too-big update must not crash us. */
+    private fun push(m: AppWidgetManager, id: Int, v: RemoteViews) {
+        runCatching { m.updateAppWidget(id, v) }.onFailure { com.nocap.link.system.CrashLog.warn("home-screen widget", it) }
+    }
 
     /** Remembers the latest server numbers (nothing secret) so the status widget can show them. */
     fun saveServer(ctx: Context, s: Summary, name: String) {
-        ctx.getSharedPreferences("nocap_widgets", Context.MODE_PRIVATE).edit()
+        val sp = ctx.getSharedPreferences("nocap_widgets", Context.MODE_PRIVATE)
+        // The app refreshes every 10-30 s; other home screens only need a redraw
+        // when a number moved or a few minutes passed (widget updates are rate-limited).
+        val same = sp.getInt("cpu", -1) == s.cpuPercent.toInt() && sp.getInt("ram", -1) == s.memory.percent.toInt() &&
+            sp.getInt("disk", -1) == s.storage.percent.toInt() && sp.getInt("updates", -1) == s.updates
+        if (same && System.currentTimeMillis() - sp.getLong("at", 0) < 5 * 60_000L) return
+        sp.edit()
             .putString("name", name.ifBlank { s.server.name })
             .putInt("cpu", s.cpuPercent.toInt()).putInt("ram", s.memory.percent.toInt()).putInt("disk", s.storage.percent.toInt())
             .putInt("updates", s.updates).putBoolean("ready", s.ready).putLong("at", System.currentTimeMillis()).apply()
@@ -50,24 +62,24 @@ object AppWidgets {
     }
 
     fun updateAll(ctx: Context) {
-        updateClock(ctx); updateStatus(ctx); updateLink(ctx); updateSearch(ctx); updateWeather(ctx, null)
+        runCatching { updateClock(ctx); updateStatus(ctx); updateLink(ctx); updateSearch(ctx); updateWeather(ctx, null) }
     }
 
     fun updateClock(ctx: Context) {
         Prefs.init(ctx)
-        val m = AppWidgetManager.getInstance(ctx)
+        val m = AppWidgetManager.getInstance(ctx) ?: return
         for (id in ids(ctx, ClockAppWidget::class.java)) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_clock)
             v.setOnClickPendingIntent(R.id.w_root, pi(ctx, 31, Intent(AlarmClock.ACTION_SHOW_ALARMS)))
-            m.updateAppWidget(id, v)
+            push(m, id, v)
         }
     }
 
     fun updateStatus(ctx: Context) {
         Prefs.init(ctx)
-        val m = AppWidgetManager.getInstance(ctx)
+        val m = AppWidgetManager.getInstance(ctx) ?: return
         val sp = ctx.getSharedPreferences("nocap_widgets", Context.MODE_PRIVATE)
-        val linked = com.nocap.link.data.Vault.get(ctx).link != null
+        val linked = runCatching { com.nocap.link.data.Vault.get(ctx).link != null }.getOrDefault(false)
         val fresh = System.currentTimeMillis() - sp.getLong("at", 0) < 30 * 60_000L
         for (id in ids(ctx, StatusAppWidget::class.java)) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_status)
@@ -88,13 +100,13 @@ object AppWidgets {
             row(R.id.w_ram_bar, R.id.w_ram, "RAM", sp.getInt("ram", 0))
             row(R.id.w_disk_bar, R.id.w_disk, t("Disk", "Storage"), sp.getInt("disk", 0))
             v.setOnClickPendingIntent(R.id.w_root, pi(ctx, 32, main(ctx, MainActivity.ACTION_HUB)))
-            m.updateAppWidget(id, v)
+            push(m, id, v)
         }
     }
 
     fun updateLink(ctx: Context) {
         Prefs.init(ctx)
-        val m = AppWidgetManager.getInstance(ctx)
+        val m = AppWidgetManager.getInstance(ctx) ?: return
         for (id in ids(ctx, LinkAppWidget::class.java)) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_link)
             v.setTextViewText(R.id.w_a1, t("Desktop", "Desktop"))
@@ -105,26 +117,26 @@ object AppWidgets {
             v.setOnClickPendingIntent(R.id.w_b2, pi(ctx, 42, Intent(ctx, AiActivity::class.java)))
             v.setOnClickPendingIntent(R.id.w_b3, pi(ctx, 43, main(ctx, MainActivity.ACTION_SEND_FILE)))
             v.setOnClickPendingIntent(R.id.w_b4, pi(ctx, 44, main(ctx, MainActivity.ACTION_HUB)))
-            m.updateAppWidget(id, v)
+            push(m, id, v)
         }
     }
 
     fun updateSearch(ctx: Context) {
         Prefs.init(ctx)
-        val m = AppWidgetManager.getInstance(ctx)
+        val m = AppWidgetManager.getInstance(ctx) ?: return
         for (id in ids(ctx, SearchAppWidget::class.java)) {
             val v = RemoteViews(ctx.packageName, R.layout.widget_search)
             v.setTextViewText(R.id.w_text, t("Search apps, files, settings…", "Search apps, files and settings"))
             v.setOnClickPendingIntent(R.id.w_root, pi(ctx, 51, main(ctx, MainActivity.ACTION_SEARCH)))
             v.setOnClickPendingIntent(R.id.w_ai, pi(ctx, 52, Intent(ctx, AiActivity::class.java)))
-            m.updateAppWidget(id, v)
+            push(m, id, v)
         }
     }
 
     /** Draws the weather widget from the last report (fetching one first when [fetch]). */
     fun updateWeather(ctx: Context, report: Weather.Report?) {
         Prefs.init(ctx)
-        val m = AppWidgetManager.getInstance(ctx)
+        val m = AppWidgetManager.getInstance(ctx) ?: return
         val place = Weather.Place.decode(Opt.weatherPlace.v)
         val r = report ?: place?.let { Weather.cached(it, Opt.fahrenheit.v) }
         for (id in ids(ctx, WeatherAppWidget::class.java)) {
@@ -142,7 +154,7 @@ object AppWidgets {
                 v.setTextViewText(R.id.w_hilo, "↑${Weather.deg(r.hi)}  ↓${Weather.deg(r.lo)}")
             }
             v.setOnClickPendingIntent(R.id.w_root, pi(ctx, 61, Intent(ctx, MainActivity::class.java)))
-            m.updateAppWidget(id, v)
+            push(m, id, v)
         }
     }
 

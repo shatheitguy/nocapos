@@ -36,12 +36,26 @@ object Media {
     private var appCtx: Context? = null
 
     private val cb = object : MediaController.Callback() {
-        override fun onMetadataChanged(metadata: MediaMetadata?) = publish()
-        override fun onPlaybackStateChanged(state: PlaybackState?) = publish()
-        override fun onSessionDestroyed() { pick() }
+        override fun onMetadataChanged(metadata: MediaMetadata?) = safe { publish() }
+        override fun onPlaybackStateChanged(state: PlaybackState?) = safe { publish() }
+        override fun onSessionDestroyed() = safe { pick() }
     }
 
-    private val sessions = MediaSessionManager.OnActiveSessionsChangedListener { pick() }
+    private val sessions = MediaSessionManager.OnActiveSessionsChangedListener { safe { pick() } }
+
+    /** Media sessions belong to other apps and can vanish mid-call (DeadObjectException, SecurityException). */
+    private inline fun safe(block: () -> Unit) {
+        try { block() } catch (e: Exception) { com.nocap.link.system.CrashLog.warn("now playing", e) }
+    }
+
+    /** Album art can be full-size; the widget never needs more than this. */
+    private fun small(b: Bitmap?): Bitmap? {
+        if (b == null || b.width <= 0 || b.height <= 0) return null
+        val max = 512
+        if (b.width <= max && b.height <= max) return b
+        val k = max.toFloat() / maxOf(b.width, b.height)
+        return runCatching { Bitmap.createScaledBitmap(b, (b.width * k).toInt().coerceAtLeast(1), (b.height * k).toInt().coerceAtLeast(1), true) }.getOrNull()
+    }
 
     fun start(ctx: Context) {
         val c = ctx.applicationContext
@@ -79,27 +93,28 @@ object Media {
             title = md?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE) ?: "",
             artist = md?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: md?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: md?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE) ?: "",
             app = app, pkg = mc.packageName,
-            art = md?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON),
+            art = small(md?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: md?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)),
             playing = st?.state == PlaybackState.STATE_PLAYING,
             position = st?.position ?: 0, updated = st?.lastPositionUpdateTime ?: 0, speed = st?.playbackSpeed ?: 1f,
             duration = md?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0,
         )
     }
 
-    fun toggle() {
-        val t = controller?.transportControls ?: return
+    fun toggle() = safe {
+        val t = controller?.transportControls ?: return@safe
         if (now?.playing == true) t.pause() else t.play()
     }
 
-    fun next() = controller?.transportControls?.skipToNext()
-    fun prev() = controller?.transportControls?.skipToPrevious()
-    fun seek(ms: Long) = controller?.transportControls?.seekTo(ms)
+    fun next() = safe { controller?.transportControls?.skipToNext() }
+    fun prev() = safe { controller?.transportControls?.skipToPrevious() }
+    fun seek(ms: Long) = safe { controller?.transportControls?.seekTo(ms) }
 
     /** Opens the app that's playing. */
     fun open(ctx: Context) {
         val mc = controller ?: return
-        runCatching { mc.sessionActivity?.send() }.onFailure {
+        val sent = runCatching { mc.sessionActivity?.send() != null }.getOrDefault(false)
+        if (!sent) runCatching {
             ctx.packageManager.getLaunchIntentForPackage(mc.packageName)?.let { ctx.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        }.onSuccess { if (mc.sessionActivity == null) ctx.packageManager.getLaunchIntentForPackage(mc.packageName)?.let { ctx.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+        }
     }
 }

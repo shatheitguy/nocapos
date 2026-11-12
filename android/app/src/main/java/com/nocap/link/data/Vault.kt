@@ -21,10 +21,23 @@ data class Link(
  * the Android Keystore). allowBackup is off, so none of it leaves the phone.
  */
 class Vault private constructor(ctx: Context) {
-    private val prefs: SharedPreferences = run {
+    private val prefs: SharedPreferences = try {
+        open(ctx)
+    } catch (e: Exception) {
+        // The Keystore key can be lost (restored phone, OS bug): the vault
+        // can't be read anymore. Start it fresh instead of crashing every
+        // launch; the phone just needs linking again.
+        com.nocap.link.system.CrashLog.warn("vault", e)
+        ctx.deleteSharedPreferences(FILE)
+        // Still unusable: this phone's keystore is broken. Keep the app usable
+        // with app-private storage (backups are off, so it never leaves the phone).
+        runCatching { open(ctx) }.getOrElse { ctx.getSharedPreferences("${FILE}_fallback", Context.MODE_PRIVATE) }
+    }
+
+    private fun open(ctx: Context): SharedPreferences {
         val key = MasterKey.Builder(ctx).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-        EncryptedSharedPreferences.create(
-            ctx, "nocap_link_vault", key,
+        return EncryptedSharedPreferences.create(
+            ctx, FILE, key,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
@@ -77,6 +90,7 @@ class Vault private constructor(ctx: Context) {
         set(v) = prefs.edit().putString("dock", v?.joinToString("\n")).apply()
 
     companion object {
+        private const val FILE = "nocap_link_vault"
         @Volatile private var instance: Vault? = null
         fun get(ctx: Context): Vault = instance ?: synchronized(this) {
             instance ?: Vault(ctx.applicationContext).also { instance = it }

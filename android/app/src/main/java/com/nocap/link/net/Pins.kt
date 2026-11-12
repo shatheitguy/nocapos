@@ -63,9 +63,23 @@ object Pins {
      * match a LAN address). Without one (probe), any certificate is
      * recorded in [PinTrust.seen] so it can be shown to the person.
      */
-    fun client(pin: String?, trust: PinTrust = PinTrust(pin)): OkHttpClient {
+    fun client(pin: String?): OkHttpClient = synchronized(clients) {
+        // One client per certificate, sharing threads and connections:
+        // every NoCapApi used to build its own, leaking a thread pool each.
+        clients.getOrPut(pin ?: "") { build(PinTrust(pin)) }
+    }
+
+    /** A fresh client recording the certificate it sees (probing a new server). */
+    fun client(pin: String?, trust: PinTrust): OkHttpClient = build(trust)
+
+    private val clients = HashMap<String, OkHttpClient>()
+
+    /** Threads and the connection pool, shared by every client above. */
+    private val base: OkHttpClient by lazy { OkHttpClient() }
+
+    private fun build(trust: PinTrust): OkHttpClient {
         val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
-        return OkHttpClient.Builder()
+        return base.newBuilder()
             .sslSocketFactory(ctx.socketFactory, trust)
             .hostnameVerifier { _, _ -> true } // the certificate itself is pinned above
             .connectTimeout(8, TimeUnit.SECONDS)

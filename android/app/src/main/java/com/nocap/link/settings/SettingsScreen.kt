@@ -125,7 +125,8 @@ private class Sec(val cat: String, val title: String, val sub: String?, val keys
 private fun cats() = listOf(
     "all" to t("All", "All"), "look" to t("Look", "Appearance"), "home" to t("Home", "Home screen"), "icons" to t("Icons", "Icons"),
     "dock" to t("Dock", "Dock"), "drawer" to t("Roster", "App drawer"), "gestures" to t("Gestures", "Gestures"),
-    "widgets" to t("Widgets", "Widgets"), "link" to "NoCap Link", "system" to t("System", "System"), "backup" to t("Save Point", "Backup"),
+    "widgets" to t("Widgets", "Widgets"), "link" to "NoCap Link", "notify" to t("Notifs & clipboard", "Notifications & clipboard"),
+    "privacy" to t("Privacy & permissions", "Privacy & permissions"), "backup" to t("Save Point", "Backup"), "about" to t("About", "About"),
 )
 
 /** Launcher settings, laid out like NoCapOS's own Settings app, with search. */
@@ -143,6 +144,7 @@ fun SettingsScreen(a: MainActivity) {
     var bindFor by remember { mutableStateOf<Gesture?>(null) }
     var resetAsk by remember { mutableStateOf(false) }
     var allowList by remember { mutableStateOf(false) }
+    var viewCrash by remember { mutableStateOf<String?>(null) }
     val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { Prefs.setServerNotices(true); HeartbeatWorker.now(a) } else a.toast = t("Notifications are off for NoCap OS, so no tea.", "Notifications are blocked for NoCap OS.")
     }
@@ -265,7 +267,7 @@ fun SettingsScreen(a: MainActivity) {
             val place = com.nocap.link.widget.Weather.Place.decode(Opt.weatherPlace.v)
             Hint(t("Shared weather place: ${place?.name ?: "none yet"}", "Shared weather location: ${place?.name ?: "not set"}"))
         },
-        Sec("link", t("NoCap Link sync", "NoCap Link sync"), t("Notifications and clipboard between this phone and NoCap OS", "Sync with your NoCap server"), "sync notifications forward mirror clipboard copy paste server tea alerts live") {
+        Sec("notify", t("Notifications & clipboard", "Notifications and clipboard"), t("Between this phone and NoCap OS", "Sync with your NoCap server"), "sync notifications forward mirror clipboard copy paste server tea alerts live") {
             if (!linked) {
                 Hint(t("Link your NoCap server first.", "Link a NoCap server first."))
                 Action(t("Link with NoCap Link", "Link with NoCap Link")) { a.layer = Layer.NONE; a.screen = Screen.LinkForm() }
@@ -299,7 +301,8 @@ fun SettingsScreen(a: MainActivity) {
             ) { Opt.clipSync.set(it); Sync.start(a) }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
         },
-        Sec("link", "NoCap Link", null, "link server unlink pair desktop") {
+        Sec("link", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
+            ServerStatus(a)
             if (linked) {
                 Action(t("Open NoCap Link", "Open NoCap Link")) { a.layer = Layer.HUB }
                 Action(t("Unlink this phone", "Unlink this phone"), danger = true) { forget = true }
@@ -307,7 +310,7 @@ fun SettingsScreen(a: MainActivity) {
                 Action(t("Link with NoCap Link", "Link with NoCap Link")) { a.layer = Layer.NONE; a.screen = Screen.LinkForm() }
             }
         },
-        Sec("system", t("Bars & screen", "Status bar, navigation and rotation"), t("Transparency, hide, rotation, haptics", "System bars, rotation and haptics"), "status bar navigation nav transparent hide hidden fullscreen rotation landscape portrait haptics vibration") {
+        Sec("look", t("Bars & screen", "Status bar, navigation and rotation"), t("Transparency, hide, rotation, haptics", "System bars, rotation and haptics"), "status bar navigation nav transparent hide hidden fullscreen rotation landscape portrait haptics vibration") {
             Label(t("Status bar", "Status bar"))
             Choice(listOf(t("Clear", "Transparent") to BarStyle.CLEAR, t("Tinted", "Tinted") to BarStyle.TINTED, t("Hidden", "Hidden") to BarStyle.HIDDEN), Opt.statusBar.v) { Opt.statusBar.set(it) }
             Spacer(Modifier.height(8.dp))
@@ -318,7 +321,7 @@ fun SettingsScreen(a: MainActivity) {
             Choice(listOf(t("Auto", "Automatic") to Rotation.AUTO, t("Portrait", "Portrait") to Rotation.PORTRAIT, t("Landscape", "Landscape") to Rotation.LANDSCAPE), Opt.rotation.v) { Opt.rotation.set(it) }
             Toggle(t("Haptics", "Haptic feedback"), null, Opt.haptics.v) { Opt.haptics.set(it) }
         },
-        Sec("system", t("Home app", "Default home app"), null, "default home launcher") {
+        Sec("home", t("Home app", "Default home app"), null, "default home launcher") {
             val isHome = remember(tick) { PhoneApps.isDefaultHome(a) }
             Hint(if (isHome) t("NoCap OS is your home screen. W.", "NoCap OS is your default home app.") else t("NoCap OS isn't your home screen yet.", "NoCap OS isn't the default home app."))
             Action(if (isHome) t("Change home app", "Change default home app") else t("Make NoCap OS my home screen", "Set as default home app")) { PhoneApps.askToBeHome(a) }
@@ -333,9 +336,34 @@ fun SettingsScreen(a: MainActivity) {
             Action(t("Reset settings to default", "Reset all settings"), danger = true) { resetAsk = true }
             Hint(t("Android widgets and custom icons stay put — they belong to this phone.", "Android widgets and custom icons aren't included; they belong to this phone."))
         },
-        Sec("system", t("About", "About"), null, "about version permissions licenses fonts") {
-            Action(t("Permissions", "Permissions")) { a.layer = Layer.NONE; a.screen = Screen.Intro }
-            Hint("NoCap OS ${BuildConfig.VERSION_NAME} · Orbitron & Rajdhani fonts under the SIL Open Font License · Weather by Open-Meteo")
+        Sec("privacy", t("Permissions", "Permissions"), t("What NoCap OS can use, and why", "What each permission is for"), "permissions privacy camera notifications location calendar accessibility device admin notification access do not disturb lock home") {
+            val missing = remember(tick) { com.nocap.link.settings.Permissions.missingCore(a) }
+            Hint(
+                if (missing == 0) t("The basics are all on. Extras only if you use them.", "All recommended permissions are allowed.")
+                else t("$missing of the basics are off.", "$missing recommended permission(s) not allowed."),
+            )
+            Action(t("Open permissions", "Manage permissions")) { a.layer = Layer.PERMISSIONS }
+            Hint(t("Talks only to the NoCap server you link (and the weather service for forecasts). Your key stays encrypted on this phone.", "Connects only to your linked NoCap server and the weather service. The device key is encrypted on this phone."))
+        },
+        Sec("privacy", t("Lock helper", "Lock helper"), null, "lock accessibility device admin double tap turn off") {
+            val canLock = remember(tick) { Phone.canLock(a) }
+            Hint(if (canLock) t("On. It can only lock the screen.", "Enabled. It can only lock the screen.") else t("Off. Bind Lock to a gesture to use it.", "Off. Assign Lock to a gesture to use it."))
+            if (canLock) Action(t("Turn the lock helper off", "Turn off the lock helper")) { Phone.turnOffLockHelpers(a); runCatching { a.startActivity(Phone.lockSetupIntent(a)) } }
+            else Action(t("Set up the lock helper", "Set up the lock helper")) { lockSetup = true }
+        },
+        Sec("about", t("About", "About"), null, "about version licenses fonts setup crash report") {
+            Hint("NoCap OS ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            Action(t("Run setup again", "Run setup again")) { a.layer = Layer.NONE; a.screen = Screen.Setup() }
+            val crash = remember(tick) { com.nocap.link.system.CrashLog.last(a) }
+            if (crash == null) {
+                Hint(t("No crashes on record. Clean.", "No crash reports."))
+            } else {
+                Hint(crash.lineSequence().drop(1).firstOrNull().orEmpty())
+                Action(t("View the last crash report", "View last crash report")) { viewCrash = crash }
+                if (linked) Action(t("Send it to my NoCap server", "Send to my NoCap server")) { a.sendCrashReport(crash) }
+                Action(t("Clear it", "Delete crash report"), danger = true) { com.nocap.link.system.CrashLog.clear(a); tick++ }
+            }
+            Hint(t("Orbitron & Rajdhani fonts under the SIL Open Font License · Weather by Open-Meteo", "Orbitron and Rajdhani fonts: SIL Open Font License. Weather data: Open-Meteo."))
         },
     )
     val term = q.trim().lowercase()
@@ -371,6 +399,7 @@ fun SettingsScreen(a: MainActivity) {
 
     bindFor?.let { g -> BindDialog(a, g, onPicked = { act -> if (act == Act.LOCK.name && !Phone.canLock(a)) lockSetup = true }) { bindFor = null } }
     if (allowList) ForwardAppsDialog(a) { allowList = false }
+    viewCrash?.let { r -> CrashViewer(r) { viewCrash = null } }
     if (resetAsk) {
         AlertDialog(
             onDismissRequest = { resetAsk = false },
@@ -422,6 +451,21 @@ fun SettingsScreen(a: MainActivity) {
             dismissButton = { TextButton(onClick = { forget = false }) { Text(t("Nah", "Cancel"), color = NoCap.Text) } },
         )
     }
+}
+
+/** Online, offline, certificate changed, or the server needs an update. */
+@Composable
+private fun ServerStatus(a: MainActivity) {
+    val (text, color) = when (val s = a.server) {
+        is ServerState.Online -> (if (a.outdated != null) MainActivity.needsUpdate(a.outdated) else t("Online: ${s.me.server.name.ifBlank { "NoCapOS" }} v${s.me.server.version}", "Connected to ${s.me.server.name.ifBlank { "NoCapOS" }} (v${s.me.server.version})")) to (if (a.outdated != null) NoCap.Warn else NoCap.Ok)
+        ServerState.Checking -> t("Checking in…", "Connecting…") to NoCap.Muted
+        is ServerState.Offline -> t("Can't reach it: ${s.why}", "Offline: ${s.why}") to NoCap.Warn
+        is ServerState.CertChanged -> t("Its certificate changed. Check it on the home screen.", "The server certificate changed. Review it on the home screen.") to NoCap.Bad
+        ServerState.Unlinked -> t("Your server forgot this phone. Link it again.", "This phone is no longer linked. Link it again.") to NoCap.Bad
+        ServerState.NotLinked -> t("Not linked yet.", "Not linked.") to NoCap.Muted
+    }
+    Text(text, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.titleSmall, color = color)
+    if (a.server is ServerState.Offline) Action(t("Try again", "Retry")) { a.refresh() }
 }
 
 /** NoCap red, presets, or any color (hue + brightness). */
