@@ -2,15 +2,15 @@ package com.nocap.link.net
 
 import android.net.http.SslCertificate
 import android.os.Build
-import okhttp3.OkHttpClient
 import java.io.ByteArrayInputStream
-import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
+import okhttp3.OkHttpClient
 
 /**
  * Trust on first use. NoCapOS servers usually have a self-signed
@@ -63,9 +63,23 @@ object Pins {
      * match a LAN address). Without one (probe), any certificate is
      * recorded in [PinTrust.seen] so it can be shown to the person.
      */
-    fun client(pin: String?, trust: PinTrust = PinTrust(pin)): OkHttpClient {
+    fun client(pin: String?): OkHttpClient = synchronized(clients) {
+        // One client per certificate, sharing threads and connections:
+        // every NoCapApi used to build its own, leaking a thread pool each.
+        clients.getOrPut(pin ?: "") { build(PinTrust(pin)) }
+    }
+
+    /** A fresh client recording the certificate it sees (probing a new server). */
+    fun client(pin: String?, trust: PinTrust): OkHttpClient = build(trust)
+
+    private val clients = HashMap<String, OkHttpClient>()
+
+    /** Threads and the connection pool, shared by every client above. */
+    private val base: OkHttpClient by lazy { OkHttpClient() }
+
+    private fun build(trust: PinTrust): OkHttpClient {
         val ctx = SSLContext.getInstance("TLS").apply { init(null, arrayOf(trust), null) }
-        return OkHttpClient.Builder()
+        return base.newBuilder()
             .sslSocketFactory(ctx.socketFactory, trust)
             .hostnameVerifier { _, _ -> true } // the certificate itself is pinned above
             .connectTimeout(8, TimeUnit.SECONDS)

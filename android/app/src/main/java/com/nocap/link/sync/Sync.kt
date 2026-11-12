@@ -2,8 +2,8 @@ package com.nocap.link.sync
 
 import android.app.Activity
 import android.app.Notification
-import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -13,27 +13,26 @@ import android.service.notification.StatusBarNotification
 import android.service.quicksettings.TileService
 import android.util.Base64
 import android.widget.Toast
+import com.nocap.link.data.Opt
+import com.nocap.link.data.Prefs
+import com.nocap.link.data.t
+import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
-import com.nocap.link.Notices
-import com.nocap.link.Opt
-import com.nocap.link.Prefs
-import com.nocap.link.Vault
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.system.DotsService
-import com.nocap.link.t
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 
 /**
  * NoCap Link sync: this phone's notifications → your NoCap OS (opt-in, per
@@ -42,14 +41,14 @@ import java.util.concurrent.Executors
  */
 object Sync {
     private val io = Executors.newSingleThreadExecutor()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + com.nocap.link.system.CrashLog.handler("NoCap Link sync"))
     private var loop: Job? = null
     /** Last notification content sent per key, so updates that change nothing aren't re-sent. */
     private val sent = HashMap<String, Int>()
     private var lastClipHash = 0
     @Volatile private var ourClip: String? = null
 
-    private fun api(ctx: Context): NoCapApi? = Vault.get(ctx).link?.let { NoCapApi(it) }
+    private fun api(ctx: Context): NoCapApi? = runCatching { Vault.get(ctx).link?.let { NoCapApi(it) } }.getOrNull()
 
     // ---------- phone notifications → NoCap OS ----------
 
@@ -73,6 +72,7 @@ object Sync {
         val hash = (title + "\u0000" + text).hashCode()
         synchronized(sent) {
             if (sent[sbn.key] == hash) return
+            if (sent.size > 500) sent.clear() // keys of long-gone notifications
             sent[sbn.key] = hash
         }
         val pm = ctx.packageManager
@@ -118,7 +118,7 @@ object Sync {
         val app = ctx.applicationContext
         Prefs.init(app)
         loop?.cancel()
-        if (Vault.get(app).link == null) return
+        if (runCatching { Vault.get(app).link }.getOrNull() == null) return
         loop = scope.launch { listen(app) }
     }
 
@@ -194,7 +194,7 @@ object Sync {
         val cm = ctx.getSystemService(ClipboardManager::class.java) ?: return
         ourClip = text
         lastClipHash = text.hashCode()
-        cm.setPrimaryClip(ClipData.newPlainText("NoCap OS", text))
+        runCatching { cm.setPrimaryClip(ClipData.newPlainText("NoCap OS", text)) }
     }
 
     /**
@@ -220,15 +220,27 @@ object Sync {
 
 /** Quick-settings tile: "Send clipboard to NoCap". */
 class ClipTileService : TileService() {
+    override fun onStartListening() {
+        super.onStartListening()
+        runCatching {
+            val tile = qsTile ?: return
+            val linked = runCatching { Vault.get(this).link != null }.getOrDefault(false)
+            tile.state = if (linked) android.service.quicksettings.Tile.STATE_INACTIVE else android.service.quicksettings.Tile.STATE_UNAVAILABLE
+            tile.updateTile()
+        }
+    }
+
     override fun onClick() {
         super.onClick()
         val i = Intent(this, ClipActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (android.os.Build.VERSION.SDK_INT >= 34) {
-            startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 0, i, android.app.PendingIntent.FLAG_IMMUTABLE))
-        } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(i)
-        }
+        runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 0, i, android.app.PendingIntent.FLAG_IMMUTABLE))
+            } else {
+                @Suppress("DEPRECATION", "StartActivityAndCollapseDeprecated")
+                startActivityAndCollapse(i)
+            }
+        }.onFailure { com.nocap.link.system.CrashLog.warn("clipboard tile", it) }
     }
 }
 
@@ -249,5 +261,7 @@ class ClipActivity : Activity() {
             Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
             finish()
         }
+        // Nothing to send (or no link): sendClipboard answered right away; also make sure we never linger.
+        window?.decorView?.postDelayed({ if (!isFinishing) finish() }, 15_000)
     }
 }

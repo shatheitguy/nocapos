@@ -1,6 +1,12 @@
 package com.nocap.link.net
 
-import com.nocap.link.Link
+import com.nocap.link.data.Link
+import java.io.File
+import java.io.InputStream
+import java.io.IOException
+import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,12 +20,6 @@ import okio.BufferedSink
 import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.io.IOException
-import java.io.InputStream
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLException
 
 data class PairInfo(val nocapId: String, val name: String, val version: String)
 
@@ -191,7 +191,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         slow.newCall(Request.Builder().url(url).build()).execute().use { r ->
             if (!r.isSuccessful) throw ApiError(r.code, "http_${r.code}", "Couldn't download ${f.name} (HTTP ${r.code}).")
             dest.parentFile?.mkdirs()
-            r.body!!.byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
+            (r.body ?: throw IOException("empty download")).byteStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
         }
     }
 
@@ -277,7 +277,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         guarded {
             slow.newCall(req).execute().use { r ->
                 if (!r.isSuccessful) fail(r.code, r.body?.string() ?: "", "/ai/send")
-                val src = r.body!!.source()
+                val src = (r.body ?: throw IOException("empty reply")).source()
                 while (true) {
                     val line = src.readUtf8Line() ?: break
                     if (line.isBlank()) continue

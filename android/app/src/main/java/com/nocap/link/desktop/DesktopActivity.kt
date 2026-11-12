@@ -6,8 +6,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.net.Uri
 import android.net.http.SslError
+import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.webkit.CookieManager
@@ -21,27 +21,28 @@ import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
-import androidx.activity.ComponentActivity
+import android.widget.Toast as SystemToast
 import androidx.activity.addCallback
+import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,26 +55,27 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.nocap.link.BuildConfig
-import com.nocap.link.Link
+import com.nocap.link.data.Link
+import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
-import com.nocap.link.R
-import com.nocap.link.Vault
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.NoCapApi
 import com.nocap.link.net.Pins
 import com.nocap.link.net.ServerTooOld
+import com.nocap.link.R
+import com.nocap.link.system.CrashLog
 import com.nocap.link.ui.GhostButton
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
 import com.nocap.link.ui.RedButton
 import com.nocap.link.ui.Toast
 import com.nocap.link.ui.Wallpaper
-import kotlinx.coroutines.Dispatchers
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.lang.ref.WeakReference
 
 private sealed interface DeskState {
     data object Loading : DeskState
@@ -106,10 +108,18 @@ class DesktopActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        link = Vault.get(this).link ?: run { finish(); return }
+        link = runCatching { Vault.get(this).link }.getOrNull() ?: run { finish(); return }
         current = WeakReference(this)
 
-        web = WebView(this)
+        // The system WebView can be missing, disabled or mid-update.
+        web = try {
+            WebView(this)
+        } catch (e: Exception) {
+            CrashLog.warn("desktop web view", e)
+            SystemToast.makeText(applicationContext, MainActivity.friendlyWebView(), SystemToast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         web.setBackgroundColor(Color.parseColor("#07080B"))
         with(web.settings) {
             javaScriptEnabled = true
@@ -187,7 +197,7 @@ class DesktopActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        CookieManager.getInstance().flush()
+        if (::web.isInitialized) runCatching { CookieManager.getInstance().flush() }
     }
 
     override fun onDestroy() {
@@ -323,8 +333,10 @@ class DesktopActivity : ComponentActivity() {
 
         /** Sign out here for good (the link was forgotten). */
         fun forget() {
-            CookieManager.getInstance().removeAllCookies(null)
-            WebStorage.getInstance().deleteAllData()
+            runCatching {
+                CookieManager.getInstance().removeAllCookies(null)
+                WebStorage.getInstance().deleteAllData()
+            }
             current?.get()?.finishAndRemoveTask()
             current = null
         }
