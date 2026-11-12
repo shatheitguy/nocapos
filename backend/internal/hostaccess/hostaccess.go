@@ -1,7 +1,7 @@
 // Package hostaccess holds the switches for how this machine itself is used:
 // whether other devices may open NoCapOS (a flag file both alfad and the cap
 // CLI read and write), and NoCap Desktop, what the server's own monitor
-// shows (the full desktop or NoCapOS full screen; see desktop.go).
+// shows (the native NoCap Desktop; see desktop.go).
 package hostaccess
 
 import (

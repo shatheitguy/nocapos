@@ -258,14 +258,27 @@ func (s *Server) sysPkgRepair(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) sysPkgInstall(w http.ResponseWriter, r *http.Request) {
-	// Whether a kernel is among them decides the "restart needed" mark.
-	kernel := false
-	if ups, err := s.sysPkgList(r.Context(), sysPkgListMaxAge); err == nil {
-		for _, u := range ups {
-			kernel = kernel || (u.Kernel && !u.Held)
+	s.sysPkgStart(w, r, syspkg.ActUpgradeAll, s.sysPkgInstalled(s.kernelPending(r.Context())))
+}
+
+// kernelPending: whether a kernel is among the pending (not held) updates,
+// which decides the "restart needed" mark after installing them.
+func (s *Server) kernelPending(ctx context.Context) bool {
+	ups, err := s.sysPkgList(ctx, sysPkgListMaxAge)
+	if err != nil {
+		return false
+	}
+	for _, u := range ups {
+		if u.Kernel && !u.Held {
+			return true
 		}
 	}
-	s.sysPkgStart(w, r, syspkg.ActUpgradeAll, func(j syspkg.Job) {
+	return false
+}
+
+// sysPkgInstalled is what happens after the system updates were installed.
+func (s *Server) sysPkgInstalled(kernel bool) func(syspkg.Job) {
+	return func(j syspkg.Job) {
 		if kernel && (j.OK || strings.Contains(j.Output, "linux-image") || strings.Contains(j.Output, "raspberrypi-kernel")) {
 			s.markRestartNeeded()
 		}
@@ -274,7 +287,7 @@ func (s *Server) sysPkgInstall(w http.ResponseWriter, r *http.Request) {
 			sysPkgCache.refreshed = time.Now()
 			sysPkgCache.Unlock()
 		}
-	})
+	}
 }
 
 // checkSystemUpdates is the background check (from watchUpdates): about once

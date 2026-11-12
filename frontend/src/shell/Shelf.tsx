@@ -121,6 +121,28 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
   const trayRef = useRef<HTMLButtonElement>(null);
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  // A dock wider than the screen scrolls sideways; fade the edge that has
+  // more icons behind it, so a cut-off icon reads as "scroll for more".
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const mark = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      el.classList.toggle('more-left', max > 1 && el.scrollLeft > 1);
+      el.classList.toggle('more-right', max > 1 && el.scrollLeft < max - 1);
+    };
+    mark();
+    el.addEventListener('scroll', mark, { passive: true });
+    const ro = new ResizeObserver(mark);
+    ro.observe(el);
+    for (const c of Array.from(el.children)) ro.observe(c);
+    return () => {
+      el.removeEventListener('scroll', mark);
+      ro.disconnect();
+    };
+  }, [pins, appIds, position]);
 
   // Auto-hide: push the pointer against the dock's screen edge to bring it back.
   useEffect(() => {
@@ -171,6 +193,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
       }}
     >
       <nav
+        ref={navRef}
         className={`dock ${dragging && over?.kind === 'dock' ? 'drop-target' : ''}`}
         aria-label={tr('dock.label')}
         data-drop="dock"

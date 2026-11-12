@@ -70,6 +70,8 @@ fonts-cantarell
 fonts-dejavu-core
 xwayland
 flatpak
+?gnome-software
+?gnome-software-plugin-flatpak
 ?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock
 ?gnome-shell-extension-appindicator
 gnome-remote-desktop
@@ -110,6 +112,7 @@ adwaita-icon-theme
 abattis-cantarell-fonts
 xorg-x11-server-Xwayland
 flatpak
+?gnome-software
 ?gnome-shell-extension-dash-to-dock
 ?gnome-shell-extension-appindicator
 gnome-remote-desktop
@@ -146,6 +149,7 @@ adwaita-icon-theme
 cantarell-fonts
 xorg-xwayland
 flatpak
+?gnome-software
 ?gnome-shell-extension-appindicator
 gnome-remote-desktop
 pipewire
@@ -558,9 +562,30 @@ gv_list() {
   printf '[%s]\n' "${out#, }"
 }
 
-# render_gschema_override TERMINAL_DESKTOP EXTENSION_UUID...
+# dock_apps ROOT: the dock's apps, one desktop file name per line, all of
+# them native: Files, the browser, Software, the terminal, Text Editor and
+# Settings (whichever of each this machine has under ROOT; Files and
+# Settings always, they're required packages).
+dock_apps() {
+  local d="$1/usr/share/applications" a
+  first() { for a in "$@"; do if [ -f "$d/$a" ]; then echo "$a"; return 0; fi; done; return 0; }
+  echo org.gnome.Nautilus.desktop
+  first firefox-esr.desktop firefox.desktop org.mozilla.firefox.desktop chromium.desktop chromium-browser.desktop \
+    brave-browser.desktop com.brave.Browser.desktop google-chrome.desktop
+  first org.gnome.Software.desktop
+  first org.gnome.Console.desktop org.gnome.Terminal.desktop
+  first org.gnome.TextEditor.desktop org.gnome.gedit.desktop
+  if [ -f "$d/gnome-control-center.desktop" ] && [ ! -f "$d/org.gnome.Settings.desktop" ]; then
+    echo gnome-control-center.desktop
+  else
+    echo org.gnome.Settings.desktop
+  fi
+}
+
+# render_gschema_override DOCK_APPS EXTENSION_UUID...: DOCK_APPS is a
+# GVariant list (gv_list of dock_apps).
 render_gschema_override() {
-  local term="$1"
+  local favs="$1"
   shift
   cat <<EOF
 # NoCapOS defaults for every account (written by NoCapOS's install.sh).
@@ -583,14 +608,14 @@ gtk-theme='Adwaita-dark'
 button-layout='appmenu:minimize,maximize,close'
 
 [org.gnome.shell]
-favorite-apps=$(gv_list nocap-hub.desktop org.gnome.Nautilus.desktop "$term" nocap-appstore.desktop nocap-settings.desktop)
+favorite-apps=$favs
 enabled-extensions=$(gv_list "$@")
 EOF
 }
 
-# render_dconf_local TERMINAL_DESKTOP EXTENSION_UUID...: /etc/dconf/db/local.d/00-nocapos
+# render_dconf_local DOCK_APPS EXTENSION_UUID...: /etc/dconf/db/local.d/00-nocapos
 render_dconf_local() {
-  local term="$1" exts
+  local favs="$1" exts
   shift
   exts="$(gv_list "$@")"
   cat <<EOF
@@ -615,7 +640,7 @@ primary-color='#050508'
 button-layout='appmenu:minimize,maximize,close'
 
 [org/gnome/shell]
-favorite-apps=$(gv_list nocap-hub.desktop org.gnome.Nautilus.desktop "$term" nocap-appstore.desktop nocap-settings.desktop)
+favorite-apps=$favs
 enabled-extensions=$exts
 disable-user-extensions=false
 welcome-dialog-last-shown-version='999'
@@ -640,11 +665,7 @@ custom-theme-customize-running-dots=true
 custom-theme-running-dots-color='#e5383b'
 
 [org/gnome/desktop/app-folders]
-folder-children=['NoCapOS', 'Utilities', 'System']
-
-[org/gnome/desktop/app-folders/folders/NoCapOS]
-name='NoCapOS'
-apps=['nocap-hub.desktop', 'nocap-appstore.desktop', 'nocap-files.desktop', 'nocap-settings.desktop']
+folder-children=['Utilities', 'System']
 
 [org/gnome/desktop/app-folders/folders/Utilities]
 name='Utilities'
@@ -713,6 +734,63 @@ render_gdm_css() {
 .unlock-dialog .login-dialog-button.default-button { background-color: #e5383b; color: #ffffff; }
 .login-dialog-prompt-entry:focus { border-color: #e5383b; }
 EOF
+}
+
+# ---------------------------------------------------------------- the session
+# The physical screen runs one session: NoCapOS (GNOME Shell with NoCapOS's
+# look). GDM starts it by default, every account is moved to it, and other
+# desktops' sessions (a distribution's own desktop, say) are taken out of
+# the sign-in screen's list.
+
+# NOCAP_SESSION: the session's name (its file is NOCAP_SESSION.desktop in
+# /usr/share/wayland-sessions and /usr/share/xsessions).
+NOCAP_SESSION=nocapos
+
+# render_session_desktop wayland|x11: the session's .desktop file.
+render_session_desktop() {
+  local name=NoCapOS
+  [ "$1" = x11 ] && name="NoCapOS (X11)"
+  cat <<EOF
+[Desktop Entry]
+# The NoCapOS desktop (written by NoCapOS's install.sh).
+Name=$name
+Comment=The NoCapOS desktop
+Exec=gnome-session
+TryExec=gnome-session
+Type=Application
+DesktopNames=GNOME
+X-GDM-SessionRegisters=true
+EOF
+}
+
+# other_sessions ROOT: the session files under ROOT that aren't NoCapOS's,
+# one path (without ROOT) per line.
+other_sessions() {
+  local d f
+  for d in /usr/share/wayland-sessions /usr/share/xsessions; do
+    for f in "$1$d"/*.desktop; do
+      [ -f "$f" ] || continue
+      [ "$(basename "$f")" = "$NOCAP_SESSION.desktop" ] && continue
+      echo "$d/$(basename "$f")"
+    done
+  done
+  return 0
+}
+
+# session_file_wants_change: an AccountsService user file (or ~/.dmrc) on
+# stdin names a session other than NoCapOS's.
+session_file_wants_change() {
+  awk -v want="$NOCAP_SESSION" '
+    { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s) }
+    s ~ /^(Session|XSession)=/ { v = s; sub(/^[^=]*=/, "", v); if (v != want) bad = 1 }
+    END { exit !bad }
+  '
+}
+
+# session_file_with SECTION: the file on stdin with Session and XSession set
+# to NoCapOS's in SECTION (User for AccountsService, Desktop for ~/.dmrc).
+session_file_with() {
+  ini_set "$1" Session "$NOCAP_SESSION" | ini_set "$1" XSession "$NOCAP_SESSION"
 }
 
 # ini_set SECTION KEY VALUE: reads an ini file (GDM's daemon.conf) on stdin

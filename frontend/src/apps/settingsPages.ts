@@ -85,7 +85,7 @@ export const ENTRIES: Entry[] = [
   { id: 'about', cat: 'general', sub: 'about', label: 'About', icon: 'info', desc: 'Device name, hardware, Docker and versions', keywords: 'version device hardware docker gpu npu model processor memory serial ip' },
   { id: 'update', cat: 'general', sub: 'update', admin: true, label: 'Software Update', icon: 'download', desc: 'Check for a newer NoCapOS', keywords: 'upgrade version release new' },
   { id: 'access', cat: 'general', sub: 'access', admin: true, label: 'This Screen & Access', icon: 'monitor', desc: 'NoCap Desktop on this screen, and who can open NoCapOS',
-    keywords: 'monitor display kiosk local screen hdmi remote access lan other devices phone local-only lock',
+    keywords: 'monitor display nocap desktop native gnome local screen hdmi remote access lan other devices phone local-only lock',
     options: ['NoCap Desktop on this screen', 'Let other devices open NoCapOS'] },
   { id: 'storage', cat: 'general', sub: 'storage', label: 'Storage', icon: 'disk', desc: 'Disks and how full they are', keywords: 'disk drive space capacity usage' },
   { id: 'datetime', cat: 'general', sub: 'datetime', label: 'Date & Time', icon: 'clock', desc: 'Time zone, 24-hour clock and calendar', keywords: 'clock time zone calendar week',

@@ -63,6 +63,7 @@ rm -rf "/usr/share/gnome-shell/extensions/$UUID"
 rm -f /usr/local/share/applications/nocap-hub.desktop /usr/local/share/applications/nocap-appstore.desktop \
   /usr/local/share/applications/nocap-settings.desktop /usr/local/share/applications/nocap-files.desktop
 rm -f /usr/local/lib/nocapos/nocap-hub
+rm -f /usr/share/wayland-sessions/nocapos.desktop /usr/share/xsessions/nocapos.desktop
 rm -rf /usr/share/backgrounds/nocapos /usr/share/nocapos
 rm -f /usr/share/gnome-background-properties/nocapos.xml
 rm -f /etc/brave/policies/managed/nocapos.json /etc/chromium/policies/managed/nocapos.json /etc/opt/chrome/policies/managed/nocapos.json

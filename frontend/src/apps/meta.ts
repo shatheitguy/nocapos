@@ -111,15 +111,6 @@ export const APPS: Record<string, AppMeta> = {
     description: 'A Linux app installed on this server, streamed into a window',
     hidden: true,
   },
-  linuxdesktop: {
-    id: 'linuxdesktop',
-    title: 'Linux Desktop',
-    icon: 'desktop',
-    tile: ['#5c7cfa', '#2b3a8f'],
-    size: { w: 1240, h: 800 },
-    description: 'A full Linux desktop on this server, in a window',
-    single: true,
-  },
   remotedesktop: {
     id: 'remotedesktop',
     title: 'Remote Desktop',
@@ -138,6 +129,8 @@ export const APPS: Record<string, AppMeta> = {
     description: 'The server’s own screen: its full desktop, right here in a window',
     single: true,
     adminOnly: true,
+    // Opened only from Settings → NoCap Desktop (Open screen), never an app icon.
+    hidden: true,
   },
   virtualdesk: {
     id: 'virtualdesk',
@@ -187,16 +180,6 @@ export const APPS: Record<string, AppMeta> = {
     single: true,
     adminOnly: true,
   },
-  packages: {
-    id: 'packages',
-    title: 'Packages',
-    icon: 'archiveBox',
-    tile: ['#a78bfa', '#6d28d9'],
-    size: { w: 1040, h: 680 },
-    description: 'Install, update and remove this server’s system packages',
-    single: true,
-    adminOnly: true,
-  },
   viewer: {
     id: 'viewer',
     title: 'Viewer',
@@ -218,7 +201,10 @@ export const APPS: Record<string, AppMeta> = {
   },
 };
 
-export const PINNED = ['assistant', 'browser', 'files', 'monitor', 'remotedesktop', 'appcenter', 'settings'];
+export const PINNED = ['assistant', 'files', 'monitor', 'remotedesktop', 'appcenter', 'settings'];
+
+/** Earlier default pins: a dock still exactly like one of these was never changed. */
+export const OLD_PINNED = [['assistant', 'browser', 'files', 'monitor', 'remotedesktop', 'appcenter', 'settings']];
 
 export interface OpenOptions {
   title?: string;
