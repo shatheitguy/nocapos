@@ -39,6 +39,14 @@ if [ "${1:-}" = --remove ]; then
   drop gtk-4.0
   exit 0
 fi
+# Earlier versions put NoCap Hub (the web desktop in a window) in the dock.
+# A dock someone saved with it goes back to NoCapOS's default (native apps).
+if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v gsettings >/dev/null 2>&1; then
+  case "$(gsettings get org.gnome.shell favorite-apps 2>/dev/null)" in
+    *nocap-hub.desktop* | *nocap-appstore.desktop* | *nocap-settings.desktop* | *nocap-files.desktop*)
+      gsettings reset org.gnome.shell favorite-apps 2>/dev/null || true ;;
+  esac
+fi
 major="$(gnome_major "$(gnome-shell --version 2>/dev/null)")"
 put gtk-3.0 render_gtk3_accent
 if gtk4_accent_wanted "$major"; then put gtk-4.0 render_gtk4_accent; else drop gtk-4.0; fi

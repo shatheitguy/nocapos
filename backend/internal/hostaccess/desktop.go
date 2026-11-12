@@ -17,32 +17,20 @@ import (
 
 // ---- NoCap Desktop ----
 //
-// NoCap Desktop is what the server's own monitor shows. install.sh sets up
-// up to two of these, and Settings switches between them:
-//
-//	full   the native desktop: NoCapOS's GDM sign-in with the machine's
-//	       Linux accounts, then a GNOME session with NoCapOS's look
-//	kiosk  NoCapOS full screen (nocapos-desktop.service: a small compositor
-//	       and a browser on tty1, behind NoCapOS's own sign-in)
-//	off    the text console
+// NoCap Desktop is what the server's own monitor shows: a native desktop
+// (NoCapOS's GDM sign-in with the machine's Linux accounts, then the
+// NoCapOS session: GNOME Shell with NoCapOS's look and native apps), or,
+// when it's off, the text console. There is no web UI on the screen.
 
 // Modes.
 const (
-	ModeFull  = "full"
-	ModeKiosk = "kiosk"
-	ModeOff   = "off"
+	ModeFull = "full"
+	ModeOff  = "off"
 )
-
-// DesktopUnit is the systemd unit install.sh writes for the kiosk.
-const DesktopUnit = "nocapos-desktop.service"
-
-// DesktopUnitPath is where it lives.
-const DesktopUnitPath = "/etc/systemd/system/" + DesktopUnit
 
 // DesktopEnvFile names the session on the screen (KEY=VALUE lines: the
 // user, the Wayland/X display and runtime folder), so native apps can be
-// opened there. The kiosk writes it; for the full desktop, alfad does
-// (WatchSession).
+// opened there. alfad writes it (WatchSession).
 const DesktopEnvFile = "/run/nocapos/desktop.env"
 
 // DesktopConfPath is written by install.sh when the full desktop is set up.
@@ -152,7 +140,7 @@ type DesktopState struct {
 	Enabled bool `json:"enabled"`
 	Active  bool `json:"active"`
 	Display bool `json:"display"` // a monitor is plugged in
-	// Mode is full, kiosk or off; Modes are the ones this machine has.
+	// Mode is full or off; Modes are the ones this machine has.
 	Mode  string   `json:"mode"`
 	Modes []string `json:"modes"`
 	// Signed in on the screen right now (full desktop), if anyone.
@@ -205,21 +193,13 @@ func (d *Desktop) conf() DesktopConf {
 	return ParseDesktopConf(string(b))
 }
 
-func (d *Desktop) hasKiosk() bool { return d.exists(DesktopUnitPath) }
-
-// Modes lists what this machine can switch between (always ending in off).
+// Modes lists what this machine can switch between: full and off once
+// install.sh has set the desktop up, else nothing.
 func (d *Desktop) Modes() []string {
-	var m []string
-	if d.conf().Full {
-		m = append(m, ModeFull)
-	}
-	if d.hasKiosk() {
-		m = append(m, ModeKiosk)
-	}
-	if len(m) == 0 {
+	if !d.conf().Full {
 		return nil
 	}
-	return append(m, ModeOff)
+	return []string{ModeFull, ModeOff}
 }
 
 func (d *Desktop) systemctl(ctx context.Context, args ...string) string {
@@ -245,28 +225,22 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 	}
 	st.Available = true
 	c := d.conf()
-	switch {
-	case c.Full && d.systemctl(ctx, "is-enabled", c.DMUnit) == "enabled":
+	if d.systemctl(ctx, "is-enabled", c.DMUnit) == "enabled" {
 		st.Mode = ModeFull
 		st.Active = d.systemctl(ctx, "is-active", c.DMUnit) == "active"
-	case d.hasKiosk() && d.systemctl(ctx, "is-enabled", DesktopUnit) == "enabled":
-		st.Mode = ModeKiosk
-		st.Active = d.systemctl(ctx, "is-active", DesktopUnit) == "active"
 	}
 	st.Enabled = st.Mode != ModeOff
-	if c.Full {
-		if s, ok := d.ScreenSession(ctx); ok {
-			if s.Greeter {
-				st.SignInScreen = true
-			} else {
-				st.SessionUser = s.User
-			}
+	if s, ok := d.ScreenSession(ctx); ok {
+		if s.Greeter {
+			st.SignInScreen = true
+		} else {
+			st.SessionUser = s.User
 		}
-		if c.GDMConf != "" {
-			st.AutologinSupported = true
-			if b, err := d.readFile(c.GDMConf); err == nil {
-				st.Autologin, st.AutologinUser = ParseAutologin(string(b))
-			}
+	}
+	if c.GDMConf != "" {
+		st.AutologinSupported = true
+		if b, err := d.readFile(c.GDMConf); err == nil {
+			st.Autologin, st.AutologinUser = ParseAutologin(string(b))
 		}
 	}
 	st.Remote = st.Active && d.remoteSupported(st.Mode)
@@ -275,38 +249,24 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 
 // ModeCommands are the systemctl calls that switch to mode (the same ones
 // install.sh's apply_desktop_mode makes).
-func ModeCommands(mode string, c DesktopConf, kiosk bool) [][]string {
+func ModeCommands(mode string, c DesktopConf) [][]string {
 	var cmds [][]string
 	add := func(args ...string) { cmds = append(cmds, args) }
 	switch mode {
 	case ModeFull:
-		if kiosk {
-			add("disable", "--now", DesktopUnit)
-		}
 		add("set-default", "graphical.target")
 		add("enable", "--force", c.DMUnit)
 		add("restart", c.DMUnit)
-	case ModeKiosk:
-		if c.Full {
-			add("disable", "--now", c.DMUnit)
-			add("set-default", "multi-user.target")
-		}
-		add("enable", "--now", DesktopUnit)
 	case ModeOff:
-		if c.Full {
-			add("disable", "--now", c.DMUnit)
-			add("set-default", "multi-user.target")
-		}
-		if kiosk {
-			add("disable", "--now", DesktopUnit)
-		}
+		add("disable", "--now", c.DMUnit)
+		add("set-default", "multi-user.target")
 		// The desktop had the screen; give the text console its login back.
 		add("--no-block", "start", "getty@tty1.service")
 	}
 	return cmds
 }
 
-// SetMode switches NoCap Desktop to full, kiosk or off.
+// SetMode switches NoCap Desktop on (full) or off.
 func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	if !d.Native {
 		return ErrDesktopUnavailable
@@ -327,7 +287,7 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	if mode != ModeFull {
 		d.StopScreen(ctx)
 	}
-	for _, args := range ModeCommands(mode, d.conf(), d.hasKiosk()) {
+	for _, args := range ModeCommands(mode, d.conf()) {
 		out, err := d.Run(ctx, "systemctl", args...)
 		if err != nil && args[0] != "--no-block" {
 			msg := strings.TrimSpace(string(out))
@@ -342,17 +302,12 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	return nil
 }
 
-// Set is the older on/off switch: on means the full desktop where there is
-// one, else NoCapOS full screen.
+// Set is the on/off switch.
 func (d *Desktop) Set(ctx context.Context, on bool) error {
 	if !on {
 		return d.SetMode(ctx, ModeOff)
 	}
-	modes := d.Modes()
-	if len(modes) == 0 {
-		return d.SetMode(ctx, ModeFull) // ErrDesktopUnavailable
-	}
-	return d.SetMode(ctx, modes[0])
+	return d.SetMode(ctx, ModeFull)
 }
 
 // DisplayConnected reports whether any graphics output under drmDir (normally

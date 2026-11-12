@@ -111,6 +111,7 @@
   "upd.restartingSub": "NoCapOS is restarting into the new version. This page reconnects automatically.",
   "upd.successTitle": "Updated to {version}",
   "upd.reloading": "Reloading in {n}…",
+  "upd.reloadingRestart": "Restart the server to finish: its screen switches to NoCap Desktop. Reloading in {n}…",
   "upd.backTitle": "NoCapOS is back",
   "upd.backSub": "Your session ended during the restart. Sign in again to continue — Settings shows the update result.",
   "upd.failedUnchanged": "Update failed — nothing was changed.",

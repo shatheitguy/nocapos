@@ -66,8 +66,6 @@ func (f *fakeHost) run(_ context.Context, name string, args ...string) ([]byte, 
 		} else {
 			f.open[ScreenRDPPort] = true
 		}
-	case name == "systemd-run":
-		f.open[VNCPort] = true
 	}
 	return nil, nil
 }
@@ -132,19 +130,16 @@ func TestModeCommands(t *testing.T) {
 		return strings.Join(s, " | ")
 	}
 	for _, tc := range []struct {
-		mode  string
-		conf  DesktopConf
-		kiosk bool
-		want  string
+		mode string
+		conf DesktopConf
+		want string
 	}{
-		{ModeFull, c, true, "disable --now nocapos-desktop.service | set-default graphical.target | enable --force gdm3.service | restart gdm3.service"},
-		{ModeKiosk, c, true, "disable --now gdm3.service | set-default multi-user.target | enable --now nocapos-desktop.service"},
-		{ModeOff, c, true, "disable --now gdm3.service | set-default multi-user.target | disable --now nocapos-desktop.service | --no-block start getty@tty1.service"},
-		// A kiosk-only machine (no full desktop): exactly the older switches.
-		{ModeKiosk, DesktopConf{}, true, "enable --now nocapos-desktop.service"},
-		{ModeOff, DesktopConf{}, true, "disable --now nocapos-desktop.service | --no-block start getty@tty1.service"},
+		{ModeFull, c, "set-default graphical.target | enable --force gdm3.service | restart gdm3.service"},
+		{ModeOff, c, "disable --now gdm3.service | set-default multi-user.target | --no-block start getty@tty1.service"},
+		// There is no web full screen mode any more.
+		{"kiosk", c, ""},
 	} {
-		if got := join(ModeCommands(tc.mode, tc.conf, tc.kiosk)); got != tc.want {
+		if got := join(ModeCommands(tc.mode, tc.conf)); got != tc.want {
 			t.Errorf("%s: got  %s\nwant %s", tc.mode, got, tc.want)
 		}
 	}
@@ -161,7 +156,6 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	}
 
 	f.files[DesktopConfPath] = fullConf
-	f.files[DesktopUnitPath] = "[Unit]"
 	f.files["/etc/gdm3/daemon.conf"] = "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=sam\n"
 	f.enabled["gdm3.service"], f.active["gdm3.service"] = true, true
 	f.session = "Name=sam\nUser=1000\nType=wayland\nClass=user\nRemote=no\nState=active\n"
@@ -169,7 +163,7 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	if !st.Available || st.Mode != ModeFull || !st.Active || !st.Enabled || st.SessionUser != "sam" {
 		t.Fatalf("state = %+v", st)
 	}
-	if strings.Join(st.Modes, ",") != "full,kiosk,off" {
+	if strings.Join(st.Modes, ",") != "full,off" {
 		t.Fatalf("modes = %v", st.Modes)
 	}
 	if !st.AutologinSupported || !st.Autologin || st.AutologinUser != "sam" {
@@ -177,21 +171,23 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	}
 
 	f.calls = nil
-	if err := d.SetMode(context.Background(), ModeKiosk); err != nil {
+	if err := d.SetMode(context.Background(), ModeOff); err != nil {
 		t.Fatal(err)
 	}
-	want := "systemctl disable --now gdm3.service|systemctl set-default multi-user.target|systemctl enable --now nocapos-desktop.service"
+	want := "systemctl disable --now gdm3.service|systemctl set-default multi-user.target|systemctl --no-block start getty@tty1.service"
 	if got := strings.Join(f.calls, "|"); got != want {
 		t.Fatalf("calls = %s", got)
 	}
-	if f.files[DesktopModePath] != "kiosk\n" {
+	if f.files[DesktopModePath] != "off\n" {
 		t.Fatalf("mode file = %q", f.files[DesktopModePath])
 	}
-	if err := d.SetMode(context.Background(), "party"); !errors.Is(err, ErrBadMode) {
-		t.Fatalf("bad mode = %v", err)
+	for _, bad := range []string{"party", "kiosk"} {
+		if err := d.SetMode(context.Background(), bad); !errors.Is(err, ErrBadMode) {
+			t.Fatalf("%s mode = %v", bad, err)
+		}
 	}
 
-	// The older on/off switch: on means the full desktop when there is one.
+	// The on/off switch: on is the native desktop.
 	f.calls = nil
 	if err := d.Set(context.Background(), true); err != nil || !strings.Contains(strings.Join(f.calls, "|"), "enable --force gdm3.service") {
 		t.Fatalf("Set(true) = %v, %v", err, f.calls)
@@ -252,11 +248,11 @@ func TestSyncSessionEnv(t *testing.T) {
 		!strings.Contains(got, "XDG_RUNTIME_DIR="+rt+"\n") {
 		t.Fatalf("env = %q", got)
 	}
-	// The kiosk's own file is never touched.
+	// A file alfad didn't write is never touched.
 	f.files[env] = "USER=nocap-desktop\nWAYLAND_DISPLAY=wayland-0\n"
 	d.SyncSessionEnv(context.Background(), env)
 	if f.files[env] != "USER=nocap-desktop\nWAYLAND_DISPLAY=wayland-0\n" {
-		t.Fatal("kiosk file overwritten")
+		t.Fatal("someone else's file overwritten")
 	}
 }
 
@@ -489,7 +485,6 @@ func TestRemoteViewFollowsTheScreen(t *testing.T) {
 	if _, err := d.RemoteView(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	f.files[DesktopUnitPath] = "[Unit]"
 	f.calls = nil
 	if err := d.SetMode(context.Background(), ModeOff); err != nil {
 		t.Fatal(err)
@@ -508,25 +503,17 @@ func TestStateShowsSignInScreen(t *testing.T) {
 	}
 }
 
-func TestRemoteViewKiosk(t *testing.T) {
+// An old web full screen unit left on a machine (before the update that
+// removes it) is no mode at all: the screen view needs the native desktop.
+func TestKioskIsNoMode(t *testing.T) {
 	f := newFakeHost()
 	d := f.desktop()
-	f.files[DesktopUnitPath] = "[Unit]"
-	f.enabled[DesktopUnit], f.active[DesktopUnit] = true, true
-	f.files[DesktopEnvFile] = "USER=nocap-desktop\nWAYLAND_DISPLAY=wayland-0\nXDG_RUNTIME_DIR=/run/nocap-desktop\n"
-	f.tools["wayvnc"] = true
-	tgt, err := d.RemoteView(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	f.files["/etc/systemd/system/nocapos-desktop.service"] = "[Unit]"
+	f.enabled["nocapos-desktop.service"], f.active["nocapos-desktop.service"] = true, true
+	if st := d.State(context.Background()); st.Available || st.Mode != ModeOff || len(st.Modes) != 0 {
+		t.Fatalf("state = %+v", st)
 	}
-	if tgt.Protocol != "vnc" || tgt.Port != VNCPort {
-		t.Fatalf("target = %+v", tgt)
-	}
-	if !strings.Contains(strings.Join(f.calls, "\n"), "systemd-run --unit=nocapos-desktop-vnc --collect --quiet --uid=nocap-desktop --setenv=XDG_RUNTIME_DIR=/run/nocap-desktop --setenv=WAYLAND_DISPLAY=wayland-0 wayvnc 127.0.0.1 5905") {
-		t.Fatalf("calls = %v", f.calls)
-	}
-	f.enabled[DesktopUnit] = false
-	if _, err := d.RemoteView(context.Background()); !errors.Is(err, ErrRemoteOff) {
-		t.Fatalf("off = %v", err)
+	if _, err := d.RemoteView(context.Background()); !errors.Is(err, ErrDesktopUnavailable) {
+		t.Fatalf("view = %v", err)
 	}
 }
