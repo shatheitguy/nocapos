@@ -137,6 +137,7 @@ object Sync {
             try {
                 val ev = api.events(cursor, 25)
                 backoff = 5_000L
+                ev.mirror?.let { com.nocap.link.mirror.MirrorAsk.asked(ctx, it) }
                 if (cursor != 0L) handle(ctx, ev)
                 cursor = ev.cursor
             } catch (e: kotlinx.coroutines.CancellationException) {
