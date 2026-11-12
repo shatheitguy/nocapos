@@ -33,7 +33,7 @@ import { tr, useGenZ, useT } from '../i18n';
 
 
 /** Older links ("dock", "focus", …) still land in the right place. */
-const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', wallpaper: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general' };
+const ALIASES: Record<string, string> = { dock: 'desktop', focus: 'notifications', password: 'security', privacy: 'security', personal: 'appearance', wallpaper: 'appearance', notify: 'notifications', 'users-accounts': 'users', apps: 'general', 'linked-devices': 'devices', squad: 'devices', phones: 'devices' };
 function resolve(id: string | undefined): { cat: Cat; sub: Sub | null } | null {
   if (!id) return null;
   const e = ENTRIES.find((x) => x.id === (ALIASES[id] ?? id));

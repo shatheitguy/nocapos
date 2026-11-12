@@ -128,8 +128,8 @@ private fun LinkStep(a: MainActivity, next: () -> Unit) {
     }
     Text(
         t(
-            "On your NoCap desktop open Settings → Devices → Link a phone. Scan the QR code, or type the address and code.",
-            "On the NoCap desktop, open Settings → Devices → Link a phone, then scan the QR code or enter the address and code.",
+            "On your NoCap desktop open Settings → Your Squad → Add to the squad. Scan the QR code, or type the address and code.",
+            "On the NoCap desktop, open Settings → Linked Devices → Link a device, then scan the QR code or enter the address and code.",
         ),
         style = MaterialTheme.typography.bodyLarge, color = NoCap.Muted,
     )
