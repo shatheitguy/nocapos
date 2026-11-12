@@ -300,6 +300,16 @@ fun SettingsScreen(a: MainActivity) {
                 Opt.clipSync.v,
             ) { Opt.clipSync.set(it); Sync.start(a) }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
+            Toggle(
+                t("Let NoCap OS ask to mirror this screen", "Allow screen mirroring requests"),
+                t("You still OK every session, here and in Android's prompt.", "Each session still needs your OK, here and in Android's prompt."),
+                Opt.mirrorAsks.v,
+            ) { Opt.mirrorAsks.set(it) }
+            val control = remember(tick) { com.nocap.link.system.MirrorInput.available() }
+            if (!control) {
+                Hint(t("To tap and type from NoCap OS, turn on NoCap OS in Accessibility (sideloaded? App info → ⋮ → Allow restricted settings first).", "To control this phone from NoCap OS, turn on NoCap OS in Accessibility settings (sideloaded installs: App info → ⋮ → Allow restricted settings first)."))
+                Action(t("Open Accessibility settings", "Open Accessibility settings")) { com.nocap.link.system.MirrorInput.accessibilitySettings(a) }
+            }
         },
         Sec("link", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
             ServerStatus(a)
@@ -347,7 +357,7 @@ fun SettingsScreen(a: MainActivity) {
         },
         Sec("privacy", t("Lock helper", "Lock helper"), null, "lock accessibility device admin double tap turn off") {
             val canLock = remember(tick) { Phone.canLock(a) }
-            Hint(if (canLock) t("On. It can only lock the screen.", "Enabled. It can only lock the screen.") else t("Off. Bind Lock to a gesture to use it.", "Off. Assign Lock to a gesture to use it."))
+            Hint(if (canLock) t("On. It locks the screen, and lets you control this phone while you mirror it.", "Enabled. It locks the screen, and lets you control this phone while you mirror it.") else t("Off. Bind Lock to a gesture to use it.", "Off. Assign Lock to a gesture to use it."))
             if (canLock) Action(t("Turn the lock helper off", "Turn off the lock helper")) { Phone.turnOffLockHelpers(a); runCatching { a.startActivity(Phone.lockSetupIntent(a)) } }
             else Action(t("Set up the lock helper", "Set up the lock helper")) { lockSetup = true }
         },

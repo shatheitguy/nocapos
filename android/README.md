@@ -95,6 +95,22 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   from the *Send clipboard to NoCap* quick-settings tile — Android 10+ only
   lets the app in front read the clipboard, so there's no silent background
   copying.
+- **Phone mirroring** — the *Phone* app on NoCap OS shows this phone's
+  live screen, and lets you tap, swipe, scroll, type, press Back / Home /
+  Recents and change the volume from there. Every session needs your OK:
+  first *"<server> wants to mirror your screen"* in NoCap OS, then Android's
+  own screen-capture prompt. While it runs, an ongoing notification says
+  *Your screen is being mirrored* with a **Stop** button; it also stops by
+  itself when nobody has watched for 30 seconds. The screen is encoded with
+  the phone's hardware H.264 encoder (up to 1080p, about 6 Mbps; pictures
+  for browsers that can't decode video) and goes only to your own server,
+  through the same address as everything else (`/api/v1/device/mirror`, a
+  WebSocket on the device token). Only your own account can watch it —
+  administrators can't open other people's phones. The ask arrives on the
+  events long-poll, so NoCap OS must be running with the screen on.
+  Taps and typing use the opt-in accessibility helper (the same one as the
+  lock gesture); without it you can still watch. Turn off the asks in
+  Settings → Notifications & clipboard.
 - **Unlink** — removes the phone on the server too.
 - **Older servers** — anything a server doesn't support yet says *Your NoCap
   server needs an update (Settings → Glow Up)* with the version it's running,
@@ -125,7 +141,10 @@ Asked only when you use the feature: notifications, camera (QR scan only),
 approximate location (weather widget, only if you choose "My location"),
 calendar (calendar widget). Opt-in in Android's settings: notification
 access (dots, now playing, forwarding notifications), accessibility or
-device admin (lock gesture only), Do not disturb access (quick toggles).
+device admin (lock gesture, and taps and typing while you mirror the
+screen — sideloaded installs need App info → ⋮ → *Allow restricted settings*
+first), Do not disturb access (quick toggles). Screen capture (Android's
+prompt, every mirroring session) and a foreground service while mirroring.
 Normal permissions: set wallpaper, expand the notification shade, ask to
 uninstall an app, Wi-Fi/Bluetooth state (toggles), set a timer in the clock
 app. Weather requests go to Open-Meteo with only the coordinates.
@@ -160,6 +179,7 @@ Kotlin + Jetpack Compose, minSdk 26, target 34, application ID
 | `net` | The NoCapOS device API client and certificate pinning |
 | `ai`, `desktop`, `share` | NoCap AI, the web desktop, "Send to NoCap" |
 | `system` | Notification listener, lock helper, crash log |
+| `mirror` | Phone mirroring: the consent screen, the capture service (MediaProjection → H.264 or JPEG) and its wire format |
 | `ui` | Theme (NoCap colors, fonts, glass) and shared controls |
 
 Manifest components (services, receivers, the widget providers, activities)

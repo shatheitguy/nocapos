@@ -318,6 +318,8 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
     data class Events(
         val cursor: Long, val notices: List<ServerNotice>, val clips: List<Clip>, val dismissed: List<String>,
         val signins: List<SigninAlert> = emptyList(),
+        /** A pending "mirror my screen" ask from NoCap OS (its id), if any. */
+        val mirror: String? = null,
     )
 
     private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
@@ -334,6 +336,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
             (0 until ca.length()).map { val c = ca.getJSONObject(it); Clip(c.optLong("id"), c.optString("text"), c.optString("from")) },
             (0 until da.length()).map { da.getString(it) },
             alerts(o.optJSONArray("signins")),
+            o.optJSONObject("mirror")?.optString("id")?.takeIf { it.isNotBlank() },
         )
     }
 
