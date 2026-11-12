@@ -1,20 +1,19 @@
 import { tr } from '../i18n';
-import { PersonSessionsPanel, YourSessions } from './SessionsPanel';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { YourSessions } from './SessionsPanel';
+import { useRef, useState } from 'react';
 import { removeAvatar, uploadAvatar, useAvatar } from '../lib/avatar';
 import { UserAvatar } from '../components/UserAvatar';
 import { getUser } from '../api/client';
 import { logOutClean } from '../lib/signOut';
-import { usersApi, type PeopleList, type Person } from '../api/users';
 import { Icon } from '../components/Icon';
-import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { useWM } from '../state/windows';
-import { Choice, Row, Section } from './Personalize';
-import { PersonSpacesPanel } from './UsersSpaces';
+import { Row, Section } from './Personalize';
+import { ManagePeople } from './UsersPeople';
 
-// Settings → Users & Roles. On a native Linux install these are the machine's
-// real Linux accounts; in Docker / on Windows they're NoCapOS accounts.
+// Settings → Users & Groups. On a native Linux install these are the machine's
+// real Linux accounts; in Docker / on Windows they're NoCapOS accounts. The
+// administrators' people and groups manager is in UsersPeople.tsx.
 
 /** Your profile photo: click to change it; it shows on the login screen too. */
 function PhotoPicker({ username }: { username: string }) {
@@ -96,245 +95,14 @@ export function UsersSettings({ isAdmin, withAccount = true }: { isAdmin: boolea
     return (
       <div className="stack settings-page">
         <YourAccount />
-        <p className="settings-tip">Only administrators can add people or change roles — ask one if you need a hand.</p>
+        <p className="settings-tip">{tr('ug.nonAdmin')}</p>
       </div>
     );
   }
-  return <ManagePeople withAccount={withAccount} />;
-}
-
-function ManagePeople({ withAccount }: { withAccount: boolean }) {
-  const [data, setData] = useState<PeopleList | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [resetFor, setResetFor] = useState<string | null>(null);
-  const [spacesFor, setSpacesFor] = useState<string | null>(null);
-  const [sessionsFor, setSessionsFor] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const load = async () => {
-    const r = await usersApi.list();
-    if (r.ok) setData(r.data);
-    else setError(r.error ?? 'Couldn’t load the people list. Try again in a sec.');
-  };
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const act = async (name: string, fn: () => Promise<{ ok: boolean; error?: string }>, done: string) => {
-    setBusy(name);
-    const r = await fn();
-    setBusy(null);
-    if (!r.ok) {
-      toast('error', 'That didn’t go through', r.error);
-      return false;
-    }
-    toast('success', done);
-    await load();
-    return true;
-  };
-
-  const remove = async (p: Person) => {
-    const ok = await confirmDialog({
-      title: `Delete ${p.username}?`,
-      message: linux
-        ? `This deletes the Linux account "${p.username}" from this machine for real and signs them out of NoCapOS.`
-        : `This deletes "${p.username}" for real: they can’t sign in anymore, and their chats and settings in NoCapOS are gone.`,
-      confirmLabel: 'Delete user',
-      danger: true,
-    });
-    if (!ok) return;
-    let removeHome = false;
-    if (linux && p.home) {
-      removeHome = await confirmDialog({
-        title: `Also delete ${p.home}?`,
-        message: `Their home folder and every file in it get erased for good — no undo. Choose Keep files to leave ${p.home} on disk.`,
-        confirmLabel: 'Delete files too',
-        danger: true,
-      });
-    }
-    await act(p.username, () => usersApi.remove(p.username, removeHome), `${p.username} is gone for good`);
-  };
-
-  if (error) return <p className="error">{error}</p>;
-  if (!data) return <p className="muted">Rounding up your people…</p>;
-  const linux = data.mode === 'system';
-
   return (
-    <div className="stack settings-page">
+    <div className="stack settings-page ug-host">
       {withAccount && <YourAccount />}
-      <div className={`users-mode ${linux ? 'linux' : ''}`}>
-        <Icon name={linux ? 'terminal' : 'users'} size={18} />
-        <div>
-          <b>{linux ? "This machine's Linux accounts" : 'NoCapOS accounts'}</b>
-          <span>
-            {linux
-              ? 'Everyone here is a real Linux user. Administrators are in the sudo/wheel group; changes run useradd, usermod and chpasswd on the host.'
-              : 'NoCapOS is running in Docker or on Windows, so it keeps its own accounts. On a native Linux install these become the machine’s real Linux users.'}
-          </span>
-        </div>
-      </div>
-
-      <Section title="People">
-        {data.users.map((p) => (
-          <div key={p.username} className={`settings-row user-row ${p.disabled ? 'dimmed' : ''} ${sessionsFor === p.username ? 'with-sessions' : ''}`}>
-            <span className="user-avatar">{p.username.slice(0, 1).toUpperCase()}</span>
-            <span className="settings-row-text">
-              <span className="settings-row-label">
-                {p.full_name || p.username}
-                {p.full_name && <span className="muted"> · {p.username}</span>}
-              </span>
-              <span className="user-badges">
-                <span className={`badge ${p.role === 'admin' ? 'admin' : ''}`}>{p.role === 'admin' ? 'Administrator' : 'Standard'}</span>
-                {p.root && <span className="badge root">root</span>}
-                {p.you && <span className="badge you">You</span>}
-                {p.disabled && <span className="badge off">Disabled</span>}
-                {p.totp && <span className="badge">2FA</span>}
-                {p.access === 'files' && <span className="badge" title="Can’t sign in to the desktop; uses shared folders over the network">File sharing only</span>}
-                {linux && p.uid >= 0 && <span className="muted small">uid {p.uid} · {p.home}</span>}
-              </span>
-              {spacesFor === p.username && <PersonSpacesPanel person={p} onChanged={load} />}
-              {resetFor === p.username && (
-                <ResetPassword
-                  name={p.username}
-                  busy={busy === p.username}
-                  onCancel={() => setResetFor(null)}
-                  onSave={async (pw) => {
-                    if (await act(p.username, () => usersApi.setPassword(p.username, pw), tr('sp.passwordSet', { name: p.username }))) setResetFor(null);
-                  }}
-                />
-              )}
-            </span>
-            <div className="settings-row-control user-actions">
-              <select
-                className="select"
-                aria-label={`Role for ${p.username}`}
-                value={p.role}
-                disabled={p.root || p.you || busy === p.username}
-                title={p.root ? 'root is always an administrator' : p.you ? "You can't change your own role" : undefined}
-                onChange={(e) => void act(p.username, () => usersApi.setRole(p.username, e.target.value as Person['role']), `${p.username} is now ${e.target.value === 'admin' ? 'an administrator' : 'a standard user'}`)}
-              >
-                <option value="admin">Administrator</option>
-                <option value="user">Standard</option>
-              </select>
-              <button type="button" className={`icon-btn neutral ${spacesFor === p.username ? 'on' : ''}`} title="Access, shared folders and apps" aria-label={`Access, shared folders and apps for ${p.username}`}
-                onClick={() => setSpacesFor(spacesFor === p.username ? null : p.username)}>
-                <Icon name="folder" size={15} />
-              </button>
-              <button type="button" className={`icon-btn neutral ${sessionsFor === p.username ? 'on' : ''}`} title={tr('ses.manageTitle')} aria-label={tr('ses.manageFor', { name: p.username })}
-                onClick={() => setSessionsFor(sessionsFor === p.username ? null : p.username)}>
-                <Icon name="shield" size={15} />
-              </button>
-              <button type="button" className="icon-btn neutral" title="Reset password" aria-label={`Reset password for ${p.username}`}
-                onClick={() => setResetFor(resetFor === p.username ? null : p.username)}>
-                <Icon name="key" size={15} />
-              </button>
-              <button type="button" className="icon-btn neutral" disabled={p.root || p.you || busy === p.username}
-                title={p.disabled ? 'Enable account' : 'Disable account'} aria-label={`${p.disabled ? 'Enable' : 'Disable'} ${p.username}`}
-                onClick={() => void act(p.username, () => usersApi.setDisabled(p.username, !p.disabled), p.disabled ? `${p.username} is back — they can sign in again` : `${p.username} is disabled and signed out`)}>
-                <Icon name={p.disabled ? 'check' : 'lock'} size={15} />
-              </button>
-              <button type="button" className="icon-btn" disabled={p.root || p.you || busy === p.username} title="Delete user" aria-label={`Delete ${p.username}`}
-                onClick={() => void remove(p)}>
-                <Icon name="trash" size={15} />
-              </button>
-            </div>
-            {sessionsFor === p.username && <PersonSessionsPanel username={p.username} you={!!p.you} />}
-          </div>
-        ))}
-      </Section>
-
-      <AddPerson linux={linux} onAdded={load} />
+      <ManagePeople />
     </div>
-  );
-}
-
-function ResetPassword({ name, busy, onSave, onCancel }: { name: string; busy: boolean; onSave: (pw: string) => void; onCancel: () => void }) {
-  const [pw, setPw] = useState('');
-  return (
-    <form
-      className="user-reset"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (pw.length >= 10) onSave(pw);
-      }}
-    >
-      <input type="password" autoFocus autoComplete="new-password" placeholder={`New password for ${name}`} value={pw} onChange={(e) => setPw(e.target.value)} />
-      <button type="submit" className="small" disabled={busy || pw.length < 10}>
-        Save
-      </button>
-      <button type="button" className="ghost small" onClick={onCancel}>
-        Cancel
-      </button>
-      {pw.length > 0 && pw.length < 10 && <span className="muted small">At least 10 characters</span>}
-    </form>
-  );
-}
-
-function AddPerson({ linux, onAdded }: { linux: boolean; onAdded: () => void }) {
-  const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
-  const [role, setRole] = useState<'admin' | 'user'>('user');
-  const [access, setAccess] = useState<'desktop' | 'files'>('desktop');
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const nameOk = linux ? /^[a-z_][a-z0-9_-]{0,31}$/.test(username) : /^[a-zA-Z0-9][a-zA-Z0-9._-]{2,31}$/.test(username);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setErr(null);
-    if (!nameOk) return setErr(linux ? 'That user name’s not it — use lowercase letters, digits, - or _, starting with a letter.' : 'That user name’s not it — use 3–32 letters, digits, ., _ or -.');
-    if (pw.length < 10) return setErr('Too short — passwords need at least 10 characters.');
-    if (pw !== pw2) return setErr("Those passwords don't match. Try again?");
-    setBusy(true);
-    const r = await usersApi.create({ username, full_name: fullName || undefined, password: pw, role, access: role === 'admin' ? 'desktop' : access });
-    setBusy(false);
-    if (!r.ok) return setErr(r.error ?? 'Couldn’t add that person');
-    toast('success', `${username} just joined the squad`, linux ? 'Their Linux account and home folder are ready.' : undefined);
-    setUsername('');
-    setFullName('');
-    setPw('');
-    setPw2('');
-    setRole('user');
-    setAccess('desktop');
-    onAdded();
-  };
-
-  return (
-    <Section title="Add a person" hint={linux ? 'Creates a real Linux account with a home folder and a bash shell.' : undefined}>
-      <form className="user-add" onSubmit={(e) => void submit(e)}>
-        <Row label="User name" hint={linux ? 'Lowercase, used to sign in to NoCapOS and to Linux' : 'Used to sign in'}>
-          <input value={username} autoComplete="off" spellCheck={false} placeholder={linux ? 'alex' : 'alex'}
-            onChange={(e) => setUsername(linux ? e.target.value.toLowerCase() : e.target.value)} />
-        </Row>
-        {linux && (
-          <Row label="Full name" hint="Optional">
-            <input value={fullName} placeholder="Alex Smith" onChange={(e) => setFullName(e.target.value)} />
-          </Row>
-        )}
-        <Row label="Password" hint="At least 10 characters">
-          <input type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
-        </Row>
-        <Row label="Confirm password">
-          <input type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
-        </Row>
-        <Row label="Role" hint={role === 'admin' ? (linux ? 'Full control of NoCapOS, and sudo on this machine' : 'Full control of NoCapOS') : 'Uses apps; can’t touch system settings'}>
-          <Choice value={role} onChange={setRole} options={[{ id: 'user', label: 'Standard' }, { id: 'admin', label: 'Administrator' }]} />
-        </Row>
-        {role === 'user' && (
-          <Row label="Access" hint={access === 'files' ? 'Can’t sign in here; connects to their home and shared folders from a computer or phone (SMB / WebDAV)' : 'Signs in to the NoCapOS desktop, and can use file sharing too'}>
-            <Choice value={access} onChange={setAccess} options={[{ id: 'desktop', label: 'Desktop' }, { id: 'files', label: 'File sharing only' }]} />
-          </Row>
-        )}
-        <div className="user-add-foot">
-          {err && <span className="error small">{err}</span>}
-          <button type="submit" disabled={busy}>
-            <Icon name="plus" size={14} /> {busy ? 'Adding…' : 'Add person'}
-          </button>
-        </div>
-      </form>
-    </Section>
   );
 }
