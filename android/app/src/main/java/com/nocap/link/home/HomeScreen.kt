@@ -327,8 +327,8 @@ fun HomeScreen(a: MainActivity) {
                     if (d.dockKey != null) Home.setDock(Home.layout.dock - d.dockKey)
                 } else if (Home.isFree(page, Cell(cx, cy, w, h), item?.id)) {
                     if (item != null) Home.move(item.id, page, Cell(cx, cy, w, h))
-                    else {
-                        Home.setDock(Home.layout.dock - d.dockKey!!)
+                    else if (d.dockKey != null) {
+                        Home.setDock(Home.layout.dock - d.dockKey)
                         Home.set(Home.layout.copy(pages = Home.layout.pages.mapIndexed { i, p -> if (i == page) Page(p.items + dragged.at(Cell(cx, cy))) else p }))
                     }
                 }
@@ -581,11 +581,13 @@ private fun TopStrip(a: MainActivity, ui: HomeUi) {
         Spacer(Modifier.width(8.dp))
         Box(
             Modifier.size(44.dp).glass(CircleShape, edge = NoCap.Red.copy(alpha = 0.5f))
-                .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); if (waitUp()) a.openAi() } },
+                .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); if (waitUp()) runCatching { a.openAi() }.onFailure { a.toast = t("NoCap AI wouldn't open. Try again.", "NoCap AI couldn't be opened.") } } },
             contentAlignment = Alignment.Center,
         ) { Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = Orbitron), color = NoCap.Red) }
     } else Spacer(Modifier.height(8.dp))
-    if (ui.drag == null && !Prefs.homeAsked && !PhoneApps.isDefaultHome(a)) {
+    // A PackageManager call: checked once per resume, not on every recomposition.
+    val isHome = remember(a.resumeTick) { runCatching { PhoneApps.isDefaultHome(a) }.getOrDefault(true) }
+    if (ui.drag == null && !Prefs.homeAsked && !isHome) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.4f)).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -593,7 +595,7 @@ private fun TopStrip(a: MainActivity, ui: HomeUi) {
             Text(t("Make NoCap OS your home screen?", "Set NoCap OS as your home app?"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             Text(
                 t("Bet", "Set"), Modifier.clip(RoundedCornerShape(10.dp)).background(NoCap.Red)
-                    .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume(); if (waitUp()) { Prefs.setHomeAsked(); PhoneApps.askToBeHome(a) } } }
+                    .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume(); if (waitUp()) { Prefs.setHomeAsked(); runCatching { PhoneApps.askToBeHome(a) }.onFailure { a.toast = t("Couldn't open the home app picker.", "The home app settings couldn't be opened.") } } } }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelLarge, color = Color.White,
             )
@@ -611,7 +613,7 @@ private fun TopStrip(a: MainActivity, ui: HomeUi) {
 private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.waitUp(): Boolean {
     while (true) {
         val ev = awaitPointerEvent()
-        val ch = ev.changes.first()
+        val ch = ev.changes.firstOrNull() ?: return false
         if (ch.changedToUp()) { ch.consume(); return true }
         if (ch.isConsumed) return false
     }
@@ -725,7 +727,7 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
             ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
             if (buttons) {
                 Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(s).nocapTile(iconShape(s, nocapDefault = true)!!, NoCap.Red, NoCap.light), contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
+                    Box(Modifier.size(s).nocapTile(iconShape(s, nocapDefault = true) ?: RoundedCornerShape(s * 0.24f), NoCap.Red, NoCap.light), contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
                 }
                 Box(Modifier.width(1.dp).height(s * 0.6f).background(NoCap.GlassEdge))
             } else ui.dockSlots.remove("btn:roster")

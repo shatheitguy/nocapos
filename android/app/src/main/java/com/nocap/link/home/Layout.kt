@@ -122,9 +122,12 @@ object Home {
 
     fun load(ctx: Context, firstRun: () -> Layout) {
         if (loaded) return
-        file = File(ctx.filesDir, "home_layout.json")
-        val f = file!!
-        layout = runCatching { if (f.exists()) fromJson(JSONObject(f.readText())) else null }.getOrNull() ?: firstRun().also { save(it) }
+        val f = File(ctx.filesDir, "home_layout.json")
+        file = f
+        val saved = runCatching { if (f.exists()) fromJson(JSONObject(f.readText())) else null }
+        // A corrupt file is kept aside (not silently overwritten) and the home screen starts fresh.
+        if (saved.isFailure) runCatching { f.renameTo(File(f.parentFile, f.name + ".bad")) }
+        layout = saved.getOrNull() ?: firstRun().also { save(it) }
         loaded = true
     }
 
@@ -134,8 +137,17 @@ object Home {
         save(clean)
     }
 
+    /** Writes to a temp file, then renames it over the old one, so a crash mid-write never leaves half a layout. */
     private fun save(l: Layout) {
-        runCatching { file?.writeText(toJson(l).toString()) }
+        val f = file ?: return
+        runCatching {
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.writeText(toJson(l).toString())
+            if (!tmp.renameTo(f)) {
+                f.delete()
+                if (!tmp.renameTo(f)) tmp.delete()
+            }
+        }
     }
 
     fun page(i: Int) = layout.pages.getOrElse(i) { Page() }
@@ -146,6 +158,7 @@ object Home {
     }
 
     private fun updatePage(i: Int, f: (List<Item>) -> List<Item>) {
+        if (i < 0) return
         val pages = layout.pages.toMutableList()
         while (pages.size <= i) pages.add(Page())
         pages[i] = Page(f(pages[i].items))
@@ -161,10 +174,12 @@ object Home {
     }
 
     /** First free spot for a w×h thing, searching from page [from]; adds a page if all are full. */
-    fun freeSpot(w: Int, h: Int, from: Int = 0): Pair<Int, Cell> {
+    fun freeSpot(w0: Int, h0: Int, from: Int = 0): Pair<Int, Cell> {
         val cols = Prefs.columns
         val rows = Prefs.rows
-        for (p in from until layout.pages.size + 1) {
+        val w = w0.coerceIn(1, cols.coerceAtLeast(1))
+        val h = h0.coerceIn(1, rows.coerceAtLeast(1))
+        for (p in from.coerceAtLeast(0) until layout.pages.size + 1) {
             val items = page(p).items
             for (y in 0..rows - h) for (x in 0..cols - w) {
                 val c = Cell(x, y, w.coerceAtMost(cols), h)
@@ -191,6 +206,7 @@ object Home {
 
     /** Moves something to another spot (any page). */
     fun move(id: String, toPage: Int, c: Cell) {
+        if (toPage < 0) return
         val (_, item) = find(id) ?: return
         val pages = layout.pages.map { p -> Page(p.items.filter { it.id != id }) }.toMutableList()
         while (pages.size <= toPage) pages.add(Page())
@@ -319,17 +335,22 @@ object Home {
 
     fun fromJson(o: JSONObject): Layout {
         val pa = o.optJSONArray("pages") ?: JSONArray()
+        // Lenient: anything malformed (a partial file, an old backup) is skipped instead of failing the whole layout.
         val pages = (0 until pa.length()).map { pi ->
-            val ia = pa.getJSONObject(pi).optJSONArray("items") ?: JSONArray()
+            val ia = pa.optJSONObject(pi)?.optJSONArray("items") ?: JSONArray()
             Page((0 until ia.length()).mapNotNull { ii ->
-                val j = ia.getJSONObject(ii)
-                val c = Cell(j.optInt("x"), j.optInt("y"), j.optInt("w", 1).coerceAtLeast(1), j.optInt("h", 1).coerceAtLeast(1))
+                val j = ia.optJSONObject(ii) ?: return@mapNotNull null
+                val c = Cell(
+                    j.optInt("x").coerceAtLeast(0), j.optInt("y").coerceAtLeast(0),
+                    j.optInt("w", 1).coerceIn(1, 16), j.optInt("h", 1).coerceIn(1, 16),
+                )
                 val id = j.optString("id").ifBlank { newId() }
                 when (j.optString("type")) {
-                    "app" -> AppItem(id, c, j.optString("key"))
+                    "app" -> j.optString("key").takeIf { it.isNotBlank() }?.let { AppItem(id, c, it) }
                     "folder" -> {
                         val ka = j.optJSONArray("keys") ?: JSONArray()
-                        FolderItem(id, c, j.optString("name"), (0 until ka.length()).map { ka.getString(it) })
+                        val keys = (0 until ka.length()).map { ka.optString(it) }.filter { it.isNotBlank() }.distinct()
+                        if (keys.isEmpty()) null else FolderItem(id, c, j.optString("name"), keys)
                     }
                     "widget" -> WidgetItem(id, c, j.optInt("widget_id"))
                     "nocap" -> NoCapItem(
@@ -341,6 +362,6 @@ object Home {
             })
         }
         val da = o.optJSONArray("dock") ?: JSONArray()
-        return Layout(pages.ifEmpty { listOf(Page()) }, (0 until da.length()).map { da.getString(it) })
+        return Layout(pages.ifEmpty { listOf(Page()) }, (0 until da.length()).map { da.optString(it) }.filter { it.isNotBlank() }.distinct())
     }
 }

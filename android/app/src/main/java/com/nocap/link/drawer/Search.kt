@@ -118,8 +118,8 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
         files = emptyList(); filesNote = null
         if (term.length < 2 || a.server !is ServerState.Online) return@LaunchedEffect
         delay(300)
-        val api = a.api() ?: return@LaunchedEffect
         try {
+            val api = a.api() ?: return@LaunchedEffect
             files = withContext(Dispatchers.IO) { api.search(term) }
         } catch (e: ServerTooOld) {
             filesNote = a.say(e)
@@ -159,7 +159,10 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
             }
             if (term.isNotEmpty()) item {
                 Row(
-                    Modifier.fillMaxWidth().glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.45f)).clickable { a.openAi(q.trim()); a.layer = Layer.NONE }.padding(14.dp),
+                    Modifier.fillMaxWidth().glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.45f)).clickable {
+                        runCatching { a.openAi(q.trim()) }.onFailure { a.toast = t("NoCap AI wouldn't open. Try again.", "NoCap AI couldn't be opened.") }
+                        a.layer = Layer.NONE
+                    }.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = com.nocap.link.ui.Orbitron), color = NoCap.Red)

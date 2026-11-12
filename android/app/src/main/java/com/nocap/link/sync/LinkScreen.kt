@@ -82,11 +82,18 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
         error = null
         scope.launch {
             try {
-                val c = withContext(Dispatchers.IO) { NoCapApi(p.server, p.pin).claim(code, name.trim()) }
-                Vault.get(ctx).link = Link(p.server, c.token, c.deviceId, c.nocapId.ifBlank { p.info.nocapId }, c.serverName.ifBlank { p.info.name }, c.username, p.pin)
+                val typedCode = code
+                val phoneName = name.trim()
+                withContext(Dispatchers.IO) {
+                    val c = NoCapApi(p.server, p.pin).claim(typedCode, phoneName)
+                    // The vault is encrypted storage backed by the keystore: keep it off the main thread.
+                    Vault.get(ctx).link = Link(p.server, c.token, c.deviceId, c.nocapId.ifBlank { p.info.nocapId }, c.serverName.ifBlank { p.info.name }, c.username, p.pin)
+                }
                 onLinked()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: ApiError) {
-                error = e.message
+                error = e.message?.ifBlank { null } ?: MainActivity.friendly(e)
             } catch (e: Exception) {
                 error = MainActivity.friendly(e)
             } finally {
@@ -107,12 +114,15 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
         busy = true
         scope.launch {
             try {
-                val p = withContext(Dispatchers.IO) { NoCapApi.probe(server) }
-                if (start.id.isNotBlank() && start.server == server && !p.info.nocapId.equals(start.id, ignoreCase = true)) {
+                val typed = server
+                val p = withContext(Dispatchers.IO) { NoCapApi.probe(typed) }
+                if (start.id.isNotBlank() && start.server == typed && !p.info.nocapId.equals(start.id, ignoreCase = true)) {
                     error = "That server's NoCap ID is ${p.info.nocapId}, not ${start.id} from the QR. Not linking — that's sus."
                 } else {
                     probe = p // confirm the certificate first
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 error = MainActivity.friendly(e)
             } finally {

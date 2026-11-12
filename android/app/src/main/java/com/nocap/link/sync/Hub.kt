@@ -161,8 +161,9 @@ private fun SendTextDialog(a: MainActivity, onDone: () -> Unit) {
         },
         confirmButton = {
             TextButton(enabled = text.isNotBlank(), onClick = {
-                val api = a.api() ?: return@TextButton
+                val api = runCatching { a.api() }.getOrNull()
                 onDone()
+                if (api == null) { a.toast = t("Link your server first.", "Link your server first."); return@TextButton }
                 scope.launch {
                     a.toast = try {
                         withContext(Dispatchers.IO) { api.sendText(text, null) }
@@ -309,8 +310,9 @@ private fun FilesBrowser(a: MainActivity) {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        val api = a.api() ?: return@LaunchedEffect
         try {
+            val api = a.api()
+            if (api == null) { error = t("Link your server to browse its files.", "Link your server to see its files."); return@LaunchedEffect }
             roots = withContext(Dispatchers.IO) { api.roots() }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -320,9 +322,9 @@ private fun FilesBrowser(a: MainActivity) {
     }
     LaunchedEffect(root, path) {
         val r = root ?: return@LaunchedEffect
-        val api = a.api() ?: return@LaunchedEffect
         loading = true
         try {
+            val api = a.api() ?: throw java.io.IOException(t("Link your server to browse its files.", "Link your server to see its files."))
             entries = withContext(Dispatchers.IO) { api.list(r.id, path) }
             error = null
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -348,6 +350,7 @@ private fun FilesBrowser(a: MainActivity) {
             if (r == null) {
                 val rs = roots
                 if (rs == null && error == null) Text(t("Loading your spots…", "Loading…"), style = MaterialTheme.typography.bodySmall)
+                if (rs != null && rs.isEmpty()) Text(t("No file spots shared with you yet.", "No file locations available."), style = MaterialTheme.typography.bodySmall)
                 rs?.forEach { x ->
                     FileRow(FileEntry(x.id, "/", x.name, true, 0, "")) { root = x; path = "/" }
                 }

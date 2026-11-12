@@ -248,13 +248,24 @@ private fun WeatherOptions(a: MainActivity, item: NoCapItem, put: (Array<out Pai
     var q by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<Weather.Place>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
+    var searchErr by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(q) {
         results = emptyList()
+        searchErr = null
+        busy = false
         if (q.trim().length < 2) return@LaunchedEffect
         delay(350)
         busy = true
-        results = runCatching { withContext(Dispatchers.IO) { Weather.search(q) } }.getOrDefault(emptyList())
-        busy = false
+        try {
+            results = withContext(Dispatchers.IO) { Weather.search(q) }
+            if (results.isEmpty()) searchErr = t("No city by that name. Try another spelling?", "No matching places.")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            searchErr = t("Can't search rn. Offline?", "Couldn't search. Check your connection.")
+        } finally {
+            busy = false
+        }
     }
     val src = item.opt("src", "shared")
     Label(t("Where", "Location"))
@@ -276,6 +287,7 @@ private fun WeatherOptions(a: MainActivity, item: NoCapItem, put: (Array<out Pai
     Hint2(t("Only rough location, only when you allow it. Forecasts come from Open-Meteo.", "Uses approximate location only if you allow it. Forecasts by Open-Meteo."))
     SearchField(q, { q = it }, t("Search a city…", "Search for a city"))
     if (busy) Text(t("Looking…", "Searching…"), style = MaterialTheme.typography.bodySmall)
+    searchErr?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = NoCap.Warn) }
     results.forEach { r ->
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
@@ -425,9 +437,20 @@ private fun TimerOptions(item: NoCapItem, put: (Array<out Pair<String, String?>>
 fun WeatherSheet(a: MainActivity, item: NoCapItem) {
     val ctx = LocalContext.current
     var r by remember { mutableStateOf<Weather.Report?>(null) }
+    var err by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(item.id) {
-        val p = withContext(Dispatchers.IO) { weatherPlace(ctx, item) } ?: return@LaunchedEffect
-        r = Weather.cached(p, Opt.fahrenheit.v) ?: runCatching { withContext(Dispatchers.IO) { Weather.forecast(p, Opt.fahrenheit.v) } }.getOrNull()
+        try {
+            val p = withContext(Dispatchers.IO) { weatherPlace(ctx, item) }
+            if (p == null) {
+                err = t("No place picked yet. Hit Edit to choose one.", "No location set. Tap Settings to choose one.")
+                return@LaunchedEffect
+            }
+            r = Weather.cached(p, Opt.fahrenheit.v) ?: withContext(Dispatchers.IO) { Weather.forecast(p, Opt.fahrenheit.v) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            err = t("Weather's not loading. Offline?", "Couldn't load the weather.")
+        }
     }
     BackHandler { a.weatherFor = null }
     Box(Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null) { a.weatherFor = null }, contentAlignment = Alignment.BottomCenter) {
@@ -436,7 +459,12 @@ fun WeatherSheet(a: MainActivity, item: NoCapItem) {
                 .clickable(remember { MutableInteractionSource() }, null) {}.navigationBarsPadding().padding(18.dp),
         ) {
             val rep = r
-            if (rep == null) { Text(t("Checking the sky…", "Loading…"), style = MaterialTheme.typography.bodyMedium); return@Column }
+            if (rep == null) {
+                val e = err
+                Text(e ?: t("Checking the sky…", "Loading…"), style = MaterialTheme.typography.bodyMedium, color = if (e != null) NoCap.Warn else NoCap.Text)
+                if (e != null) Row(Modifier.padding(top = 8.dp)) { Pill(t("Edit", "Settings")) { a.weatherFor = null; a.editing = item } }
+                return@Column
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 WeatherGlyph(rep.code, rep.isDay, 72.dp)
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {

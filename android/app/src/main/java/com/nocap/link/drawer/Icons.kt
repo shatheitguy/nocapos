@@ -89,11 +89,14 @@ val Squircle: Shape = GenericShape { size, _ ->
 }
 
 /** The shape icons are drawn in (NoCap tiles default to the web desktop's rounded square). */
-fun iconShape(size: Dp, s: IconShape = Opt.iconShape.v, nocapDefault: Boolean = false): Shape? = when (s) {
-    IconShape.CIRCLE -> CircleShape
-    IconShape.SQUIRCLE -> Squircle
-    IconShape.ROUNDED -> RoundedCornerShape(size * 0.24f)
-    IconShape.ORIGINAL -> if (nocapDefault) RoundedCornerShape(size * 0.234f) else null
+fun iconShape(size: Dp, s: IconShape = Opt.iconShape.v, nocapDefault: Boolean = false): Shape? {
+    val px = size.coerceAtLeast(0.dp) // a negative corner radius throws when the shape is drawn
+    return when (s) {
+        IconShape.CIRCLE -> CircleShape
+        IconShape.SQUIRCLE -> Squircle
+        IconShape.ROUNDED -> RoundedCornerShape(px * 0.24f)
+        IconShape.ORIGINAL -> if (nocapDefault) RoundedCornerShape(px * 0.234f) else null
+    }
 }
 
 /**
@@ -118,7 +121,7 @@ fun AppIcon(app: PhoneApp, size: Dp, desc: String? = null) {
     val accent = NoCap.Red
     when (theme) {
         IconTheme.NOCAP -> {
-            val shape = iconShape(size, nocapDefault = true)!!
+            val shape = iconShape(size, nocapDefault = true) ?: RoundedCornerShape(size.coerceAtLeast(0.dp) * 0.234f)
             Box(Modifier.size(size).nocapTile(shape, accent, NoCap.light), contentAlignment = Alignment.Center) {
                 val mono = app.mono
                 when {

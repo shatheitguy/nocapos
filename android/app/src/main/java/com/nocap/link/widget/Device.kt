@@ -51,7 +51,7 @@ object DeviceStats {
         if (now - last < 1800 && snap != null) return
         val dt = (now - last).coerceAtLeast(1) / 1000.0
         last = now
-        val b = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val b = runCatching { ctx.applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.getOrNull()
         val level = b?.let { val l = it.getIntExtra(BatteryManager.EXTRA_LEVEL, -1); val s = it.getIntExtra(BatteryManager.EXTRA_SCALE, 100); if (l >= 0 && s > 0) l * 100 / s else -1 } ?: -1
         val status = b?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
@@ -71,11 +71,11 @@ object DeviceStats {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
             else -> "other"
         }
-        val rx = TrafficStats.getTotalRxBytes()
-        val tx = TrafficStats.getTotalTxBytes()
+        val rx = runCatching { TrafficStats.getTotalRxBytes() }.getOrDefault(-1L)
+        val tx = runCatching { TrafficStats.getTotalTxBytes() }.getOrDefault(-1L)
         var down = 0.0
         var up = 0.0
-        if (lastRx >= 0 && rx >= lastRx && tx >= lastTx) { down = (rx - lastRx) / dt; up = (tx - lastTx) / dt }
+        if (lastRx >= 0 && lastTx >= 0 && rx >= lastRx && tx >= lastTx) { down = (rx - lastRx) / dt; up = (tx - lastTx) / dt }
         lastRx = rx; lastTx = tx
         if (snap != null) {
             netHist.add((down + up).toFloat())
@@ -96,20 +96,21 @@ object Torch {
 
     private fun camera(ctx: Context): String? {
         id?.let { return it }
-        val cm = ctx.getSystemService(CameraManager::class.java) ?: return null
+        val cm = ctx.applicationContext.getSystemService(CameraManager::class.java) ?: return null
         id = runCatching { cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true } }.getOrNull()
         if (!registered && id != null) {
-            registered = true
-            cm.registerTorchCallback(object : CameraManager.TorchCallback() {
-                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) { if (cameraId == id) on = enabled }
-            }, Handler(Looper.getMainLooper()))
+            registered = runCatching {
+                cm.registerTorchCallback(object : CameraManager.TorchCallback() {
+                    override fun onTorchModeChanged(cameraId: String, enabled: Boolean) { if (cameraId == id) on = enabled }
+                }, Handler(Looper.getMainLooper()))
+            }.isSuccess
         }
         return id
     }
 
     fun toggle(ctx: Context): Boolean {
         val c = camera(ctx) ?: return false
-        return runCatching { ctx.getSystemService(CameraManager::class.java).setTorchMode(c, !on) }.isSuccess
+        return runCatching { ctx.applicationContext.getSystemService(CameraManager::class.java).setTorchMode(c, !on) }.isSuccess
     }
 }
 
@@ -119,12 +120,13 @@ object Agenda {
 
     fun allowed(ctx: Context) = ContextCompat.checkSelfPermission(ctx, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
+    /** Blocking (a content-provider query): call it off the main thread. Empty if access was revoked. */
     fun upcoming(ctx: Context, days: Int, allDay: Boolean, limit: Int = 12): List<Event> {
         if (!allowed(ctx)) return emptyList()
         val now = System.currentTimeMillis()
         val b = CalendarContract.Instances.CONTENT_URI.buildUpon()
         ContentUris.appendId(b, now - 60 * 60_000L)
-        ContentUris.appendId(b, now + days * 86_400_000L)
+        ContentUris.appendId(b, now + days.coerceIn(1, 366) * 86_400_000L)
         val proj = arrayOf(
             CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.DISPLAY_COLOR,
@@ -178,6 +180,32 @@ object Photos {
 
     /** Deletes pictures no photo frame uses anymore. */
     fun prune(ctx: Context, keep: Set<String>) {
-        dir(ctx).listFiles()?.filter { it.name !in keep }?.forEach { it.delete() }
+        dir(ctx).listFiles()?.filter { it.name !in keep }?.forEach { it.delete(); cache.remove(it.name) }
+    }
+
+    /** Recently shown pictures, so rotating frames don't decode the same file again (sized by bytes). */
+    private val cache = object : android.util.LruCache<String, android.graphics.Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 16).coerceIn(4L shl 20, 48L shl 20).toInt(),
+    ) {
+        override fun sizeOf(key: String, value: android.graphics.Bitmap) = value.byteCount
+    }
+
+    /**
+     * A saved picture scaled down to about [maxPx] on its longer side (blocking: call it
+     * off the main thread). Null if the file is gone or unreadable.
+     */
+    fun load(ctx: Context, name: String, maxPx: Int = 1080): android.graphics.Bitmap? {
+        cache.get(name)?.let { return it }
+        return runCatching {
+            val f = File(dir(ctx), name)
+            if (!f.isFile) return null
+            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(f.path, o)
+            if (o.outWidth <= 0 || o.outHeight <= 0) return null
+            var sample = 1
+            val target = maxPx.coerceAtLeast(64)
+            while (maxOf(o.outWidth, o.outHeight) / (sample * 2) >= target) sample *= 2
+            android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        }.getOrNull()?.also { cache.put(name, it) }
     }
 }

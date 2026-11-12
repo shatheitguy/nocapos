@@ -102,7 +102,9 @@ private fun MenuCard(content: @Composable () -> Unit) {
 fun AppMenu(a: MainActivity, ui: HomeUi, m: Menu, page: Int) {
     val app = m.app
     var shortcuts by remember(app?.key) { mutableStateOf<List<AppShortcut>>(emptyList()) }
-    LaunchedEffect(app?.key) { if (app != null) shortcuts = withContext(Dispatchers.IO) { PhoneApps.shortcuts(a, app) } }
+    LaunchedEffect(app?.key) {
+        if (app != null) shortcuts = withContext(Dispatchers.IO) { runCatching { PhoneApps.shortcuts(a, app) }.getOrDefault(emptyList()) }
+    }
     fun close() { ui.menu = null; ui.drag = null }
     AnchoredPopup(m.anchor, ::close) {
         MenuCard {
@@ -154,13 +156,19 @@ fun AppMenu(a: MainActivity, ui: HomeUi, m: Menu, page: Int) {
                     close()
                 }
             }
-            MenuRow(t("App info", "App info")) { PhoneApps.info(a, app); close() }
+            MenuRow(t("App info", "App info")) {
+                runCatching { PhoneApps.info(a, app) }.onFailure { a.toast = t("Couldn't open app info.", "App info couldn't be opened.") }
+                close()
+            }
             MenuRow(t("Hide", "Hide app")) {
                 Prefs.hide(app.key, true)
                 a.toast = t("${app.label} is hidden. Unhide it in Settings.", "${app.label} hidden. Unhide it in Settings.")
                 close()
             }
-            if (!app.system) MenuRow(t("Uninstall", "Uninstall"), danger = true) { PhoneApps.uninstall(a, app); close() }
+            if (!app.system) MenuRow(t("Uninstall", "Uninstall"), danger = true) {
+                runCatching { PhoneApps.uninstall(a, app) }.onFailure { a.toast = t("Couldn't start the uninstall.", "The app couldn't be uninstalled from here.") }
+                close()
+            }
         }
     }
 }
@@ -169,7 +177,10 @@ fun AppMenu(a: MainActivity, ui: HomeUi, m: Menu, page: Int) {
 @Composable
 fun WidgetMenu(a: MainActivity, ui: HomeUi, page: Int, item: Item) {
     val anchor = ui.itemRects[item.id] ?: Rect(Offset(200f, 400f), Offset(400f, 600f))
-    val info = (item as? WidgetItem)?.let { Widgets.info(a, it.widgetId) }
+    // AppWidgetManager / PackageManager lookups: once per widget, not every recomposition.
+    val widgetId = (item as? WidgetItem)?.widgetId
+    val info = remember(widgetId) { widgetId?.let { Widgets.info(a, it) } }
+    val widgetLabel = remember(info) { info?.let { runCatching { it.loadLabel(a.packageManager) }.getOrNull() } }
     val resizable = item is WidgetItem && Widgets.canResize(info)
     fun close() { ui.widgetMenu = null }
     val locked = com.nocap.link.data.Opt.lockLayout.v
@@ -178,7 +189,7 @@ fun WidgetMenu(a: MainActivity, ui: HomeUi, page: Int, item: Item) {
             Text(
                 when (item) {
                     is NoCapItem -> noCapWidgetName(item.kind)
-                    is WidgetItem -> info?.loadLabel(a.packageManager) ?: t("Widget", "Widget")
+                    is WidgetItem -> widgetLabel ?: t("Widget", "Widget")
                     else -> t("Widget", "Widget")
                 },
                 Modifier.padding(8.dp), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -281,7 +292,8 @@ fun EditMenu(a: MainActivity, ui: HomeUi, at: Offset, page: Int, goTo: (Int) -> 
 fun FolderWindow(a: MainActivity, ui: HomeUi, page: Int, f: FolderItem, byKey: Map<String, PhoneApp>) {
     var name by remember(f.id) { mutableStateOf(f.name) }
     val current = (Home.find(f.id)?.second as? FolderItem) ?: f
-    val apps = current.keys.mapNotNull { byKey[it] }
+    // distinctBy: the grid below keys items by app, and a duplicate key would crash it.
+    val apps = current.keys.mapNotNull { byKey[it] }.distinctBy { it.key }
     fun close() {
         if (name.isNotBlank() && name != current.name) Home.replace(current.copy(name = name.trim()))
         ui.folder = null
@@ -354,7 +366,9 @@ fun CustomizeApp(a: MainActivity, app: PhoneApp) {
                     Spacer(Modifier.width(12.dp))
                     com.nocap.link.widget.Field(label, { label = it.take(40) }, app.label, modifier = Modifier.weight(1f))
                 }
-                MenuRow(t("Pick an icon from my pics", "Choose icon from gallery")) { a.pickIcon(app) }
+                MenuRow(t("Pick an icon from my pics", "Choose icon from gallery")) {
+                    runCatching { a.pickIcon(app) }.onFailure { a.toast = t("No photo picker on this phone.", "No photo picker is available.") }
+                }
                 if (app.custom) MenuRow(t("Back to the original icon", "Reset icon")) {
                     com.nocap.link.data.Opt.customIcons.put(app.key, null); com.nocap.link.data.CustomIcons.prune(a); a.reloadApps()
                 }
