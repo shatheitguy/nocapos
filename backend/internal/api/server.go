@@ -415,6 +415,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/v1/ai/conversations/{id}", s.authed(s.aiPatchConversation))
 	mux.Handle("DELETE /api/v1/ai/conversations/{id}", s.authed(s.aiDeleteConversation))
 	mux.Handle("POST /api/v1/ai/conversations/{id}/send", s.authed(s.aiSend))
+	mux.Handle("DELETE /api/v1/ai/conversations/{id}/messages/{msg}", s.authed(s.aiDeleteMessagesFrom))
 
 	mux.Handle("GET /api/v1/ai/memory", s.authed(s.aiListMemory))
 	mux.Handle("POST /api/v1/ai/memory", s.authed(s.aiAddMemory))
