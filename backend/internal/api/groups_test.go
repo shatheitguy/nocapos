@@ -14,7 +14,7 @@ import (
 )
 
 // withPath calls h as u with the {name}/{id} path values set.
-func withPath(t *testing.T, h http.HandlerFunc, u *store.User, method, target string, values map[string]string, body any) *httptest.ResponseRecorder {
+func groupReq(t *testing.T, h http.HandlerFunc, u *store.User, method, target string, values map[string]string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -57,7 +57,7 @@ func TestGroupsAPI(t *testing.T) {
 	}
 
 	id := strconv.FormatInt(g.ID, 10)
-	rec = withPath(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "description": "the squad", "members": []string{"admin2"}})
+	rec = groupReq(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "description": "the squad", "members": []string{"admin2"}})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
@@ -86,7 +86,7 @@ func TestGroupsAPI(t *testing.T) {
 	}
 
 	// Deleting a person drops them from their groups.
-	if rec := withPath(t, w.s.usersDelete, boss, "DELETE", "/api/v1/users/admin2", map[string]string{"name": "admin2"}, nil); rec.Code != http.StatusNoContent {
+	if rec := groupReq(t, w.s.usersDelete, boss, "DELETE", "/api/v1/users/admin2", map[string]string{"name": "admin2"}, nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete user: %d %s", rec.Code, rec.Body)
 	}
 	if got, _ := w.st.Group(context.Background(), g.ID); len(got.Members) != 0 {
@@ -99,22 +99,22 @@ func TestGroupsAPI(t *testing.T) {
 	if err := w.st.UpdateGroup(context.Background(), gone); err != nil {
 		t.Fatal(err)
 	}
-	rec = withPath(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "members": []string{"gone", "alex", "boss"}})
+	rec = groupReq(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "members": []string{"gone", "alex", "boss"}})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update with stale member: %d %s", rec.Code, rec.Body)
 	}
 	if got, _ := w.st.Group(context.Background(), g.ID); !reflect.DeepEqual(got.Members, []string{"alex", "boss"}) {
 		t.Fatalf("stale member kept: %v", got.Members)
 	}
-	rec = withPath(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "members": []string{"ghost"}})
+	rec = groupReq(t, w.s.groupsUpdate, boss, "PUT", "/api/v1/groups/"+id, map[string]string{"id": id}, map[string]any{"name": "Crew", "members": []string{"ghost"}})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("unknown new member: %d", rec.Code)
 	}
 
-	if rec := withPath(t, w.s.groupsDelete, boss, "DELETE", "/api/v1/groups/"+id, map[string]string{"id": id}, nil); rec.Code != http.StatusNoContent {
+	if rec := groupReq(t, w.s.groupsDelete, boss, "DELETE", "/api/v1/groups/"+id, map[string]string{"id": id}, nil); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
-	if rec := withPath(t, w.s.groupsDelete, boss, "DELETE", "/api/v1/groups/"+id, map[string]string{"id": id}, nil); rec.Code != http.StatusNotFound {
+	if rec := groupReq(t, w.s.groupsDelete, boss, "DELETE", "/api/v1/groups/"+id, map[string]string{"id": id}, nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("delete twice: %d", rec.Code)
 	}
 }
@@ -125,11 +125,11 @@ func TestUserAvatarForAdmins(t *testing.T) {
 	if err := w.st.SetAvatar(context.Background(), w.users["alex"].ID, "image/png", png); err != nil {
 		t.Fatal(err)
 	}
-	rec := withPath(t, w.s.userAvatarGet, w.users["boss"], "GET", "/api/v1/users/alex/avatar", map[string]string{"name": "alex"}, nil)
+	rec := groupReq(t, w.s.userAvatarGet, w.users["boss"], "GET", "/api/v1/users/alex/avatar", map[string]string{"name": "alex"}, nil)
 	if rec.Code != http.StatusOK || !bytes.Equal(rec.Body.Bytes(), png) || rec.Header().Get("Content-Type") != "image/png" {
 		t.Fatalf("avatar: %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
-	if rec := withPath(t, w.s.userAvatarGet, w.users["boss"], "GET", "/api/v1/users/boss/avatar", map[string]string{"name": "boss"}, nil); rec.Code != http.StatusNotFound {
+	if rec := groupReq(t, w.s.userAvatarGet, w.users["boss"], "GET", "/api/v1/users/boss/avatar", map[string]string{"name": "boss"}, nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("no photo: %d", rec.Code)
 	}
 }
