@@ -91,6 +91,12 @@ object Permissions {
      * Asks for a runtime permission. Once Android stops showing its prompt
      * (denied twice, or "don't ask again"), opens this app's settings page instead.
      */
+    /** True when Android would still show its prompt for [perm] (never asked, or not refused for good). */
+    fun canPrompt(a: MainActivity, perm: String): Boolean {
+        val asked = a.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE).getBoolean("asked:$perm", false)
+        return !asked || runtime(a, perm) || ActivityCompat.shouldShowRequestPermissionRationale(a, perm)
+    }
+
     fun ask(a: MainActivity, perm: String, done: (Boolean) -> Unit = {}) {
         val sp = a.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE)
         val asked = sp.getBoolean("asked:$perm", false)
@@ -148,6 +154,19 @@ object Permissions {
             { t("Weather for where you are. Or skip it and pick a city instead.", "Local weather. You can pick a city instead.") },
             { runtime(it, Manifest.permission.ACCESS_COARSE_LOCATION) },
             { a -> ask(a, Manifest.permission.ACCESS_COARSE_LOCATION) },
+        ),
+        Perm(
+            "nearby", Kind.OPTIONAL,
+            { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) t("Nearby devices (Bluetooth)", "Nearby devices (Bluetooth)") else t("Bluetooth scan (location)", "Bluetooth scanning (location)") },
+            {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    t("Spots NoCap servers close by over Bluetooth in Find NoCap servers. Only listens for NoCap servers, never your location.", "Finds NoCap servers nearby over Bluetooth (Find NoCap servers). Only NoCap servers are looked for; your location is never used.")
+                } else {
+                    t("Android 11 and older only let apps scan Bluetooth with location allowed. NoCap OS only listens for NoCap servers and never reads where you are.", "Android 11 and earlier require location permission for Bluetooth scanning. NoCap OS only looks for NoCap servers and never reads your location.")
+                }
+            },
+            { c -> if (com.nocap.link.sync.Finder.hasBle(c)) com.nocap.link.sync.Finder.blePermitted(c) else null },
+            { a -> com.nocap.link.sync.Finder.askBle(a) {} },
         ),
         Perm(
             "calendar", Kind.OPTIONAL,
