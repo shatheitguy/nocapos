@@ -207,6 +207,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/wifi", s.admin(s.wifiList))
 	mux.Handle("POST /api/v1/system/wifi/connect", s.admin(s.wifiConnect))
 	mux.Handle("POST /api/v1/system/wifi/disconnect", s.admin(s.wifiDisconnect))
+	s.wifiRoutes(mux)
 	mux.Handle("POST /api/v1/system/network/ipv4", s.admin(s.ipv4Set))
 	mux.Handle("POST /api/v1/system/network/ipv4/keep", s.admin(s.ipv4Keep))
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))

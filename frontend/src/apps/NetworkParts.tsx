@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { hostApi, type IPv4Config, type NetInterface, type WiFiNetwork } from '../api/hostctl';
+import { hostApi, type EAPConfig, type IPv4Config, type NetInterface, type WiFiNetwork } from '../api/hostctl';
 import { Icon } from '../components/Icon';
+import { useT } from '../i18n';
 import { applyIPv4, joinWiFi } from '../lib/hostActions';
+import { EnterpriseForm } from './WifiSaved';
 
 // Network UI shared by the Control Center and Settings → Network.
 
@@ -19,6 +21,7 @@ export function SignalBars({ level }: { level: number }) {
 
 /** Available Wi-Fi networks with join / disconnect. */
 export function WifiList({ device, onChanged }: { device?: string; onChanged?: () => void }) {
+  const t = useT();
   const [list, setList] = useState<WiFiNetwork[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -42,10 +45,10 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
     void scan(true);
   }, []);
 
-  const join = async (n: Pick<WiFiNetwork, 'ssid' | 'secure'>, pw?: string, hidden?: boolean) => {
+  const join = async (n: Pick<WiFiNetwork, 'ssid' | 'secure'>, pw?: string, hidden?: boolean, eap?: EAPConfig) => {
     setJoining(n.ssid);
     setFailed(null);
-    const r = await joinWiFi({ ssid: n.ssid, password: pw || undefined, hidden, device });
+    const r = await joinWiFi({ ssid: n.ssid, password: eap ? undefined : pw || undefined, hidden, device, eap });
     setJoining(null);
     if (r.state) {
       setAskFor(null);
@@ -57,14 +60,16 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
     }
     setFailed({ ssid: n.ssid, error: r.error ?? 'Couldn’t join' });
     // A saved network whose stored password no longer works: ask for it.
-    if (n.secure && !hidden) setAskFor(n.ssid);
+    if (n.secure && !hidden && !eap) setAskFor(n.ssid);
     return false;
   };
 
   const pick = (n: WiFiNetwork) => {
     if (n.in_use || joining) return;
     setFailed(null);
-    if (n.secure && !n.saved) {
+    if (n.enterprise && !n.saved) {
+      setAskFor(askFor === n.ssid ? null : n.ssid);
+    } else if (n.secure && !n.saved) {
       setAskFor(askFor === n.ssid ? null : n.ssid);
       setPassword('');
     } else void join(n);
@@ -82,7 +87,9 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
             <SignalBars level={n.signal} />
             <span className="wifi-name">{n.ssid}</span>
             {joining === n.ssid && <span className="spinner sm" />}
-            {n.secure && <Icon name="lock" size={12} />}
+            {n.saved && <span className="chip tiny">{t('wifi.savedBadge')}</span>}
+            {n.enterprise && <span className="chip tiny" title={t('wifi.enterpriseHint')}>802.1X</span>}
+            {n.secure && <Icon name={n.enterprise ? 'shield' : 'lock'} size={12} />}
             {n.in_use && <Icon name="check" size={14} />}
           </button>
           {n.in_use && device && (
@@ -100,7 +107,16 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
               Disconnect
             </button>
           )}
-          {askFor === n.ssid && (
+          {askFor === n.ssid && n.enterprise && (
+            <EnterpriseForm
+              ssid={n.ssid}
+              busy={!!joining}
+              submitLabel={t('wifi.join')}
+              onSubmit={(eap) => void join(n, undefined, false, eap)}
+              onCancel={() => setAskFor(null)}
+            />
+          )}
+          {askFor === n.ssid && !n.enterprise && (
             <form
               className="wifi-join"
               onSubmit={(e) => {
@@ -118,7 +134,12 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
         </div>
       ))}
       {other ? (
-        <OtherNetwork busy={!!joining} error={failed && !list.some((n) => n.ssid === failed.ssid) ? failed.error : undefined} onJoin={(ssid, pw, hidden) => void join({ ssid, secure: !!pw }, pw, hidden)} onCancel={() => setOther(false)} />
+        <OtherNetwork
+          busy={!!joining}
+          error={failed && !list.some((n) => n.ssid === failed.ssid) ? failed.error : undefined}
+          onJoin={(ssid, pw, hidden, eap) => void join({ ssid, secure: !!pw || !!eap }, pw, hidden, eap)}
+          onCancel={() => setOther(false)}
+        />
       ) : null}
       <div className="btn-group">
         <button type="button" className="ghost small wifi-rescan" onClick={() => void scan(true)} disabled={scanning}>
@@ -135,27 +156,47 @@ export function WifiList({ device, onChanged }: { device?: string; onChanged?: (
 }
 
 /** Join a network by name: hidden networks, or ones out of the list. */
-function OtherNetwork({ busy, error, onJoin, onCancel }: { busy: boolean; error?: string; onJoin: (ssid: string, pw: string, hidden: boolean) => void; onCancel: () => void }) {
+function OtherNetwork({
+  busy,
+  error,
+  onJoin,
+  onCancel,
+}: {
+  busy: boolean;
+  error?: string;
+  onJoin: (ssid: string, pw: string, hidden: boolean, eap?: EAPConfig) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
   const [ssid, setSsid] = useState('');
   const [pw, setPw] = useState('');
   const [hidden, setHidden] = useState(true);
+  const [enterprise, setEnterprise] = useState(false);
+  const [eapStep, setEapStep] = useState(false);
+  if (eapStep) {
+    return <EnterpriseForm ssid={ssid} busy={busy} error={error} submitLabel={t('wifi.join')} onSubmit={(eap) => onJoin(ssid, '', hidden, eap)} onCancel={() => setEapStep(false)} />;
+  }
   return (
     <form
       className="wifi-other"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ssid) onJoin(ssid, pw, hidden);
+        if (ssid && enterprise) setEapStep(true);
+        else if (ssid) onJoin(ssid, pw, hidden);
       }}
     >
       <input type="text" autoFocus spellCheck={false} maxLength={32} placeholder="Network name (SSID)" value={ssid} onChange={(e) => setSsid(e.target.value)} />
-      <input type="password" autoComplete="off" placeholder="Password (leave empty for an open network)" value={pw} onChange={(e) => setPw(e.target.value)} />
+      {!enterprise && <input type="password" autoComplete="off" placeholder="Password (leave empty for an open network)" value={pw} onChange={(e) => setPw(e.target.value)} />}
       <label className="check">
         <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} /> Hidden network (doesn’t broadcast its name)
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={enterprise} onChange={(e) => setEnterprise(e.target.checked)} /> {t('wifi.otherEnterprise')}
       </label>
       {error && <p className="wifi-error">{error}</p>}
       <div className="btn-group">
         <button type="submit" className="small" disabled={!ssid || busy}>
-          {busy ? 'Joining…' : 'Join'}
+          {busy ? 'Joining…' : enterprise ? t('wifi.next') : 'Join'}
         </button>
         <button type="button" className="ghost small" onClick={onCancel}>
           Cancel

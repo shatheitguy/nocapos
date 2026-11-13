@@ -41,6 +41,9 @@ type WiFiNetwork struct {
 	Secure   bool   `json:"secure"`
 	InUse    bool   `json:"in_use"`
 	Saved    bool   `json:"saved"` // a profile exists, so no password is needed
+	// Enterprise is an 802.1X network (WPA/WPA2/WPA3-Enterprise): joining it
+	// takes an EAP sign-in, not a shared password.
+	Enterprise bool `json:"enterprise"`
 }
 
 // splitTerse splits one line of `nmcli -t` output: fields are separated by
@@ -150,7 +153,8 @@ func WiFiNetworks(ctx context.Context, rescan bool) ([]WiFiNetwork, error) {
 		}
 		sig, _ := strconv.Atoi(f[2])
 		sec := strings.TrimSpace(f[3])
-		n := WiFiNetwork{SSID: f[1], Signal: sig, Security: sec, Secure: sec != "" && sec != "--", InUse: f[0] == "*", Saved: saved[f[1]]}
+		n := WiFiNetwork{SSID: f[1], Signal: sig, Security: sec, Secure: sec != "" && sec != "--", InUse: f[0] == "*", Saved: saved[f[1]],
+			Enterprise: strings.Contains(strings.ToUpper(sec), "802.1X")}
 		if cur, ok := best[n.SSID]; !ok || n.InUse || (!cur.InUse && n.Signal > cur.Signal) {
 			best[n.SSID] = n
 		}
@@ -191,6 +195,9 @@ type WiFiJoin struct {
 	Password string `json:"password"`
 	Hidden   bool   `json:"hidden"` // not broadcast: join it by name
 	Device   string `json:"device"` // Wi-Fi interface ("" = the first one)
+	// EAP, when set, joins a WPA/WPA2/WPA3-Enterprise (802.1X) network;
+	// Password is then unused (the EAP password lives in EAP).
+	EAP *EAPConfig `json:"eap,omitempty"`
 }
 
 // wifiConnectTimeout bounds association plus DHCP.
@@ -209,6 +216,9 @@ func (j WiFiJoin) Validate() error {
 	}
 	if j.Device != "" && !validDevice(j.Device) {
 		return errors.New("invalid device")
+	}
+	if j.EAP != nil {
+		return j.EAP.Validate(nil)
 	}
 	return nil
 }
@@ -238,53 +248,97 @@ func wifiConnectArgs(j WiFiJoin) []string {
 // const, so tests can point it at a temp dir instead of needing root.
 var nmConnectionsDir = "/etc/NetworkManager/system-connections"
 
-// writeWifiProfile saves a WPA/WPA2/WPA3-personal profile as a NetworkManager
-// keyfile. This is how the password reaches NetworkManager instead of a
-// command-line argument (`nmcli device wifi connect ... password ...`, where
-// any other local user could read it from `ps` or /proc/<pid>/cmdline for as
-// long as the connect attempt runs): it only ever lives in this one
-// root-only file, which NetworkManager itself reads.
+// writeWifiProfile saves a WPA/WPA2/WPA3 personal or enterprise profile as
+// a NetworkManager keyfile. This is how secrets reach NetworkManager instead
+// of a command-line argument (`nmcli device wifi connect ... password ...`,
+// where any other local user could read it from `ps` or /proc/<pid>/cmdline
+// for as long as the connect attempt runs): they only ever live in this one
+// root-only file, which NetworkManager itself reads. Enterprise certificates
+// go in a root-only folder of their own (see writeCerts).
 func writeWifiProfile(j WiFiJoin) (path string, cleanup func(), err error) {
 	id := make([]byte, 8)
 	if _, err := rand.Read(id); err != nil {
 		return "", nil, err
 	}
-	uuidBytes := make([]byte, 16)
-	if _, err := rand.Read(uuidBytes); err != nil {
+	uuid, err := newUUID()
+	if err != nil {
 		return "", nil, err
 	}
-	uuidBytes[6] = uuidBytes[6]&0x0f | 0x40 // version 4
-	uuidBytes[8] = uuidBytes[8]&0x3f | 0x80 // RFC 4122 variant
-	uuid := fmt.Sprintf("%x-%x-%x-%x-%x", uuidBytes[0:4], uuidBytes[4:6], uuidBytes[6:8], uuidBytes[8:10], uuidBytes[10:16])
+	var certs certPaths
+	if j.EAP != nil {
+		if certs, err = writeCerts(uuid, *j.EAP, certPaths{}); err != nil {
+			removeCerts(uuid)
+			return "", nil, err
+		}
+	}
+	path = filepath.Join(nmConnectionsDir, "nocap-"+hex.EncodeToString(id)+".nmconnection")
+	if err := writeFileAtomic(path, []byte(wifiKeyfile(j, uuid, certs))); err != nil {
+		removeCerts(uuid)
+		return "", nil, err
+	}
+	return path, func() { os.Remove(path); removeCerts(uuid) }, nil
+}
 
+func newUUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6] = b[6]&0x0f | 0x40 // version 4
+	b[8] = b[8]&0x3f | 0x80 // RFC 4122 variant
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+// wifiKeyfile is the keyfile text for a new Wi-Fi profile.
+func wifiKeyfile(j WiFiJoin, uuid string, certs certPaths) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[connection]\nid=%s\nuuid=%s\ntype=wifi\n", iniEscape(j.SSID), uuid)
+	fmt.Fprintf(&b, "[connection]\nid=%s\nuuid=%s\ntype=wifi\n", keyfileEscape(j.SSID), uuid)
 	if j.Device != "" {
 		fmt.Fprintf(&b, "interface-name=%s\n", j.Device)
 	}
 	b.WriteString("\n[wifi]\nmode=infrastructure\n")
-	fmt.Fprintf(&b, "ssid=%s\n", iniEscape(j.SSID))
+	fmt.Fprintf(&b, "ssid=%s\n", keyfileEscape(j.SSID))
 	if j.Hidden {
 		b.WriteString("hidden=true\n")
 	}
-	b.WriteString("\n[wifi-security]\nkey-mgmt=wpa-psk\n")
-	fmt.Fprintf(&b, "psk=%s\n", iniEscape(j.Password))
-	b.WriteString("\n[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n")
-
-	path = filepath.Join(nmConnectionsDir, "nocap-"+hex.EncodeToString(id)+".nmconnection")
-	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
-		return "", nil, err
+	if j.EAP != nil {
+		b.WriteString("\n[wifi-security]\nkey-mgmt=wpa-eap\n\n[802-1x]\n")
+		for _, kv := range eapKeys(*j.EAP, certs, true) {
+			if kv.v != nil {
+				fmt.Fprintf(&b, "%s=%s\n", kv.k, *kv.v)
+			}
+		}
+	} else {
+		b.WriteString("\n[wifi-security]\nkey-mgmt=wpa-psk\n")
+		fmt.Fprintf(&b, "psk=%s\n", keyfileEscape(j.Password))
 	}
-	return path, func() { os.Remove(path) }, nil
+	b.WriteString("\n[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n")
+	return b.String()
 }
 
-// iniEscape keeps a value that may contain NetworkManager keyfile special
-// characters (notably a leading '#' or trailing whitespace) literal.
-func iniEscape(v string) string {
-	if v == "" || strings.HasPrefix(v, "#") || v != strings.TrimRight(v, " \t") {
-		return "\"" + strings.ReplaceAll(v, "\"", "\\\"") + "\""
+// keyfileEscape writes a string the way NetworkManager's keyfile reader
+// (GKeyFile) reads it back literally: backslashes and control characters
+// escaped, and leading or trailing spaces kept with \s.
+func keyfileEscape(v string) string {
+	var b strings.Builder
+	trail := len(strings.TrimRight(v, " "))
+	for i, r := range v {
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r == ' ' && (i == 0 || i >= trail):
+			b.WriteString(`\s`)
+		default:
+			b.WriteRune(r)
+		}
 	}
-	return v
+	return b.String()
 }
 
 // wifiProfiles returns the UUIDs of saved Wi-Fi profiles for an SSID: named
@@ -320,6 +374,7 @@ func isRepeatSuffix(s string) bool {
 func deleteProfiles(ctx context.Context, uuids []string) {
 	for _, id := range uuids {
 		_, _ = runCmd(ctx, "nmcli", "connection", "delete", "uuid", id)
+		removeCerts(id)
 	}
 }
 
@@ -351,7 +406,8 @@ func WiFiConnect(ctx context.Context, j WiFiJoin) error {
 	if j.Device == "" {
 		j.Device = firstWiFiDevice(ctx)
 	}
-	if j.Password != "" || j.Hidden {
+	secrets := j.Password != "" || j.EAP != nil
+	if secrets || j.Hidden {
 		deleteProfiles(ctx, wifiProfiles(ctx, j.SSID))
 	}
 	cctx, cancel := context.WithTimeout(ctx, wifiConnectTimeout)
@@ -360,7 +416,7 @@ func WiFiConnect(ctx context.Context, j WiFiJoin) error {
 	var out string
 	var err error
 	var profileCleanup func()
-	if j.Password != "" {
+	if secrets {
 		path, cleanup, werr := writeWifiProfile(j)
 		if werr != nil {
 			return werr
@@ -382,7 +438,7 @@ func WiFiConnect(ctx context.Context, j WiFiJoin) error {
 	if profileCleanup != nil {
 		profileCleanup()
 	}
-	if j.Password != "" || j.Hidden {
+	if secrets || j.Hidden {
 		deleteProfiles(context.Background(), wifiProfiles(context.Background(), j.SSID))
 	}
 	return wifiError(j, out, err)
@@ -400,7 +456,9 @@ func wifiError(j WiFiJoin, out string, err error) error {
 	switch {
 	case strings.Contains(low, "secrets were required") || strings.Contains(low, "no secrets") ||
 		strings.Contains(low, "802-1x supplicant") || strings.Contains(low, "4-way handshake") || strings.Contains(low, "psk: property is invalid"):
-		if j.Password == "" {
+		if j.EAP != nil {
+			why = j.SSID + " turned down that sign-in. Check the user name, password and certificate, then try again."
+		} else if j.Password == "" {
 			why = "This network needs a password. Pop it in and try again."
 		} else {
 			why = "That password's not it for " + j.SSID + ". Try again?"
@@ -411,8 +469,8 @@ func wifiError(j WiFiJoin, out string, err error) error {
 		why = j.SSID + " is taking forever to answer. Move closer to the router and try again."
 	case strings.Contains(low, "ip configuration could not be reserved") || strings.Contains(low, "dhcp"):
 		why = "Joined " + j.SSID + ", but its router never handed over an address."
-	case strings.Contains(low, "key-mgmt") || strings.Contains(low, "enterprise") || strings.Contains(low, "802-1x"):
-		why = j.SSID + " uses a sign-in type NoCapOS can't set up here yet (WPA Enterprise)."
+	case j.EAP == nil && (strings.Contains(low, "key-mgmt") || strings.Contains(low, "enterprise") || strings.Contains(low, "802-1x")):
+		why = j.SSID + " is a WPA Enterprise network — sign in to it with a user name (Enterprise sign-in) instead of a password."
 	}
 	if why == "" {
 		return fmt.Errorf("Wi-Fi's being sus — couldn't join %s: %s", j.SSID, raw)
