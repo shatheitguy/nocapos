@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node scripts/check-i18n.mjs && npm test && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test scripts/wallpapers.test.ts scripts/wifiQr.test.ts",
+    "test": "node --experimental-strip-types --no-warnings --test scripts/wallpapers.test.ts scripts/wifiQr.test.ts scripts/justify.test.ts",
     "check:i18n": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
