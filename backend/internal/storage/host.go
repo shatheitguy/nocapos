@@ -69,6 +69,8 @@ type Host struct {
 	MountedFn func(string) bool
 	Fstab     string
 	MkdirAll  func(string, os.FileMode) error
+	UnitDir   string // systemd units ("" = /etc/systemd/system)
+	EtcDir    string // NoCapOS config files ("" = /etc/nocapos)
 
 	mu     sync.Mutex
 	jsonOK *bool // OpenZFS >= 2.3 (zpool -j)
@@ -128,8 +130,10 @@ func atLeast23(v string) bool {
 }
 
 var packages = map[string]syspkg.Names{
-	"smart": {"apt": {"smartmontools"}, "dnf": {"smartmontools"}, "pacman": {"smartmontools"}, "zypper": {"smartmontools"}, "apk": {"smartmontools"}},
-	"zfs":   {"apt": {"zfsutils-linux"}},
+	"smart":  {"apt": {"smartmontools"}, "dnf": {"smartmontools"}, "pacman": {"smartmontools"}, "zypper": {"smartmontools"}, "apk": {"smartmontools"}},
+	"zfs":    {"apt": {"zfsutils-linux"}},
+	"hdparm": {"apt": {"hdparm"}, "dnf": {"hdparm"}, "pacman": {"hdparm"}, "zypper": {"hdparm"}, "apk": {"hdparm"}},
+	"flex":   {"apt": {"mergerfs", "snapraid", "fuse3"}},
 }
 
 // zfsBuildHelp explains the usual reason ZFS doesn't come up on Debian and
