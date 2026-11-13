@@ -19,3 +19,5 @@ console-setup
 keyboard-configuration
 network-manager
 firmware-linux-free
+rsync
+cryptsetup
