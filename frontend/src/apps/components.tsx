@@ -29,6 +29,7 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   containers: app(() => import('./Containers').then((m) => m.Containers)),
   appcenter: app(() => import('./AppCenter').then((m) => m.AppCenter)),
   settings: app(() => import('./Settings').then((m) => m.Settings)),
+  shield: app(() => import('./Shield').then((m) => m.Shield)),
   storage: app(() => import('./Storage').then((m) => m.Storage)),
   virtualdesk: app(() => import('./VirtualDesk').then((m) => m.VirtualDesk)),
   vmscreen: app(() => import('./VirtualDeskScreen').then((m) => m.VmScreen)),

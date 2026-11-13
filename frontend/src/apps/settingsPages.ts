@@ -74,11 +74,16 @@ export interface Entry {
   admin?: boolean;
   keywords?: string;
   options?: string[];
+  /** Opens this app instead of a Settings page. */
+  app?: string;
 }
 
 export const ENTRIES: Entry[] = [
   { id: 'network', cat: 'network', admin: true, label: 'Network', icon: 'wifi', desc: 'Wi-Fi, Ethernet and IP addresses', keywords: 'internet lan connection', options: ['Networking'] },
   { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, label: 'Wi-Fi', icon: 'wifi', desc: 'Join a wireless network', keywords: 'wireless wlan ssid hotspot' },
+  { id: 'shield', cat: 'network', admin: true, app: 'shield', label: 'Shield: Firewall & DNS blocker', icon: 'shield', desc: 'Firewall rules, what’s exposed, and blocking ads and trackers for every device',
+    keywords: 'firewall ufw ports open exposed block allow deny ssh security ad blocker ads trackers dns blocklist privacy query log',
+    options: ['Firewall', 'What’s exposed', 'DNS blocker', 'Block lists', 'Query log', 'Pause blocking'] },
   { id: 'ethernet', cat: 'network', admin: true, label: 'Ethernet & IP address', icon: 'ethernet', desc: 'Wired adapters, static IP, DNS and gateway', keywords: 'ip address dhcp static dns gateway router ipv4 lan cable' },
   { id: 'general', cat: 'general', label: 'General', icon: 'settings', desc: 'Device, storage, updates, date and language' },
   { id: 'about', cat: 'general', sub: 'about', label: 'About', icon: 'info', desc: 'Device name, hardware, Docker and versions', keywords: 'version device hardware docker gpu npu model processor memory serial ip' },
@@ -114,8 +119,8 @@ export const ENTRIES: Entry[] = [
 ];
 
 /** Every Settings page, for universal search. */
-export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconName; admin?: boolean; keywords?: string }[] = ENTRIES.map((e) => ({
-  id: e.id, label: e.label, icon: e.icon, admin: e.admin, keywords: `${e.desc} ${e.keywords ?? ''} ${(e.options ?? []).join(' ')}`,
+export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconName; admin?: boolean; keywords?: string; app?: string }[] = ENTRIES.map((e) => ({
+  id: e.id, label: e.label, icon: e.icon, admin: e.admin, app: e.app, keywords: `${e.desc} ${e.keywords ?? ''} ${(e.options ?? []).join(' ')}`,
 }));
 
 type Translate = (key: string) => string;
