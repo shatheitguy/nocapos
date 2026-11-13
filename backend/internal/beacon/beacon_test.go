@@ -13,13 +13,13 @@ func TestServiceUUID(t *testing.T) {
 
 func TestShortName(t *testing.T) {
 	for in, want := range map[string]string{
-		"media-box":           "media-box",
-		"media-box.local":     "media-box",
+		"media-box":            "media-box",
+		"media-box.local":      "media-box",
 		"a-very-long-hostname": "a-very-lon",
-		"":                    "NoCap",
-		"..":                  "NoCap",
-		"wohnzimmer_pc":       "wohnzimmer",
-		"Küche":               "Kche",
+		"":                     "NoCap",
+		"..":                   "NoCap",
+		"wohnzimmer_pc":        "wohnzimmer",
+		"Küche":                "Kche",
 	} {
 		if got := ShortName(in); got != want {
 			t.Errorf("ShortName(%q) = %q, want %q", in, got, want)
