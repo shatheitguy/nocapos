@@ -323,7 +323,7 @@ fun SettingsScreen(a: MainActivity) {
             if (Opt.gestures.v.values.any { it == Act.LOCK.name } && !canLock) {
                 Action(t("Lock needs the lock helper — set it up", "Set up the lock helper")) { lockSetup = true }
             }
-            Hint(t("Lock uses an accessibility helper that only locks the screen. Off unless you bind it.", "Locking uses an accessibility service that only locks the screen."))
+            Hint(t("Lock uses an accessibility helper that locks the screen (and taps and types for you only while you mirror this phone). Off unless you bind it.", "Locking uses an accessibility service that locks the screen (and controls this phone only while you mirror it)."))
         },
         Sec("home", t("Control center", "Control center"), t("Swipe down for toggles and notifs", "Quick toggles and notifications"), "control center swipe down toggles brightness wifi bluetooth flashlight rotation edge overlay any app") {
             ControlCenterSettings(a)
@@ -369,6 +369,16 @@ fun SettingsScreen(a: MainActivity) {
             ) { Opt.clipSync.set(it); Sync.start(a) }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
             com.nocap.link.sync.LinkSettings(a)
+            Toggle(
+                t("Let NoCap OS ask to mirror this screen", "Allow screen mirroring requests"),
+                t("You still OK every session, here and in Android's prompt.", "Each session still needs your OK, here and in Android's prompt."),
+                Opt.mirrorAsks.v,
+            ) { Opt.mirrorAsks.set(it) }
+            val control = remember(tick) { com.nocap.link.system.MirrorInput.available() }
+            if (!control) {
+                Hint(t("To tap and type from NoCap OS, turn on NoCap OS in Accessibility (sideloaded? App info → ⋮ → Allow restricted settings first).", "To control this phone from NoCap OS, turn on NoCap OS in Accessibility settings (sideloaded installs: App info → ⋮ → Allow restricted settings first)."))
+                Action(t("Open Accessibility settings", "Open Accessibility settings")) { com.nocap.link.system.MirrorInput.accessibilitySettings(a) }
+            }
         },
         Sec("sync", t("Save Point", "Export & restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
             if (linked) {
@@ -391,7 +401,7 @@ fun SettingsScreen(a: MainActivity) {
             Spacer(Modifier.height(6.dp))
             Label(t("Lock helper", "Lock helper"))
             val canLock = remember(tick) { Phone.canLock(a) }
-            Hint(if (canLock) t("On. It can only lock the screen.", "Enabled. It can only lock the screen.") else t("Off. Bind Lock to a gesture to use it.", "Off. Assign Lock to a gesture to use it."))
+            Hint(if (canLock) t("On. It locks the screen, and lets you control this phone while you mirror it.", "Enabled. It locks the screen, and lets you control this phone while you mirror it.") else t("Off. Bind Lock to a gesture to use it.", "Off. Assign Lock to a gesture to use it."))
             if (canLock) Action(t("Turn the lock helper off", "Turn off the lock helper")) { Phone.turnOffLockHelpers(a); runCatching { a.startActivity(Phone.lockSetupIntent(a)) } }
             else Action(t("Set up the lock helper", "Set up the lock helper")) { lockSetup = true }
             Action(t("Privacy: everything NoCap OS talks to", "Privacy: every connection the app makes")) { Extras.privacy = true }
@@ -521,7 +531,7 @@ fun SettingsScreen(a: MainActivity) {
             title = { Text(t("Switch on the lock helper", "Enable the lock helper"), style = MaterialTheme.typography.titleMedium) },
             text = {
                 Text(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) t("In Accessibility, find NoCap OS lock and turn it on. It can only lock your screen — nothing else.", "In Accessibility settings, turn on NoCap OS lock. It only locks the screen.")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) t("In Accessibility, find NoCap OS lock and turn it on. It locks your screen, and does your taps and typing while you mirror this phone — nothing else.", "In Accessibility settings, turn on NoCap OS lock. It locks the screen, and performs your taps and typing while you mirror this phone.")
                     else t("Allow NoCap OS as a device admin. It can only lock the screen.", "Allow NoCap OS as a device admin. It can only lock the screen."),
                     style = MaterialTheme.typography.bodyMedium,
                 )

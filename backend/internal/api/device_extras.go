@@ -534,6 +534,7 @@ func (s *Server) deviceUnlink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.link().forgetDevice(d.UserID, d.ID)
+	s.mirrorForget(d.ID)
 	s.audit(r, d.UserID, "devices.revoke", d.Name, true, "unlinked from the phone")
 	w.WriteHeader(http.StatusNoContent)
 }
