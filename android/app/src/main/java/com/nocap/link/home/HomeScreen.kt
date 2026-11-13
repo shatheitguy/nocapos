@@ -546,6 +546,9 @@ fun HomeScreen(a: MainActivity) {
         AnimatedVisibility(a.layer == Layer.PERMISSIONS, enter = fadeIn(), exit = fadeOut()) {
             com.nocap.link.settings.PermissionsScreen(a)
         }
+        AnimatedVisibility(a.layer == Layer.CONTROL, enter = fadeIn() + slideInVertically { -it / 3 }, exit = fadeOut() + slideOutVertically { -it / 3 }) {
+            com.nocap.link.control.ControlCenter(remember(a) { com.nocap.link.control.LauncherHost(a) })
+        }
         if (a.layer == Layer.WIDGETS) {
             WidgetPicker(a, a.cellW, a.cellH, onNoCap = { k, w, h -> a.addNoCapWidget(k, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1), w, h) }, onPick = { a.addWidget(it, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1)) }, onClose = { a.layer = Layer.NONE })
         }
