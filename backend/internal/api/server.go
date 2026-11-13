@@ -95,10 +95,11 @@ type Server struct {
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
 	linkOnce         sync.Once
-	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
-	sessions         sessionFeed // sign-in alerts and session list changes, live
-	linkFeed         linkFeed    // the person's phones changed, or handed a link over
-	mirror           mirrorState // phone mirroring: rooms and viewer tickets
+	linkSync         *linkHub     // NoCap Link: phone notifications, clipboard, events
+	sessions         sessionFeed  // sign-in alerts and session list changes, live
+	linkFeed         linkFeed     // the person's phones changed, or handed a link over
+	mirror           mirrorState  // phone mirroring: rooms and viewer tickets
+	shield           *shieldState // Shield: firewall (ufw) and DNS blocker
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -136,6 +137,7 @@ func New(ctx context.Context, d Deps) *Server {
 	if d.Removable != nil {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
+	s.shield = newShield(ctx, d.Config.DataDir, d.Log, s.shieldReverted)
 	// NoCap Link: phones find this server nearby (_nocap._tcp).
 	go s.advertiseLink(ctx)
 	s.versionSince() // note when this version first ran (stale update results go by it)
@@ -466,6 +468,9 @@ func (s *Server) Handler() http.Handler {
 
 	// NoCap MCP for AI agents (/mcp) and Settings → AI Agents.
 	s.agentRoutes(mux)
+
+	// Shield: firewall and DNS ad blocker (admin, audited).
+	s.shieldRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
