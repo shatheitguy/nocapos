@@ -224,6 +224,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
 	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
+	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.
+	mux.Handle("POST /api/v1/system/desktop/repair", s.admin(s.desktopRepair))
+	mux.Handle("GET /api/v1/system/desktop/diagnostics", s.admin(s.desktopDiagnostics))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))

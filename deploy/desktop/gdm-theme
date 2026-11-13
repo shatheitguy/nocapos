@@ -16,6 +16,9 @@ ART=/usr/share/nocapos/desktop/login-background.jpg
 . "$LIB/lib.sh"
 
 command -v update-alternatives >/dev/null 2>&1 || exit 0
+# NoCap Desktop's repair put the sign-in screen on the system's own theme
+# (its last fallback when the sign-in screen wouldn't start): keep it so.
+if grep -qsx software /var/lib/nocapos/desktop-fallback; then exit 0; fi
 [ -f "$SRC" ] || exit 0
 if [ "${1:-}" = --if-stale ] && [ -f "$OUT" ] && [ "$OUT" -nt "$SRC" ] && [ "$OUT" -nt "$LIB/lib.sh" ]; then exit 0; fi
 for tool in gresource glib-compile-resources; do
