@@ -83,7 +83,7 @@ func TestSetupPeerIgnoresSpoofedHeaders(t *testing.T) {
 			for _, v := range c.xff {
 				r.Header.Add("X-Forwarded-For", v)
 			}
-			r.Header.Set("X-Real-IP", "192.168.1.1") // never read
+			r.Header.Set("X-Real-IP", "192.168.1.1")   // never read
 			r.Header.Set("Forwarded", "for=127.0.0.1") // never read
 			s := &Server{Deps: Deps{Config: &config.Config{TrustedProxies: c.trusted}}}
 			if got := s.setupFromLocal(r); got != c.local {

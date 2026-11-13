@@ -27,6 +27,9 @@ type Camera struct {
 	ISO      int     `json:"iso,omitempty"`
 	Focal    float64 `json:"focal,omitempty"`    // mm
 	Focal35  int     `json:"focal_35,omitempty"` // 35 mm equivalent
+	// Where it was taken (degrees; south and west are negative), when the camera recorded it.
+	Lat float64 `json:"lat,omitempty"`
+	Lon float64 `json:"lon,omitempty"`
 }
 
 // readJPEGExif reads the EXIF block of a JPEG (it is near the start).
@@ -122,8 +125,15 @@ func parseTIFF(b []byte, info *exifInfo) {
 		}
 		return 0
 	}
+	// degrees reads a GPS coordinate: three rationals (degrees, minutes, seconds).
+	degrees := func(typ uint16, count, value uint32) float64 {
+		if typ != 5 || count != 3 || int(value)+24 > len(b) {
+			return 0
+		}
+		return rational(5, value) + rational(5, value+8)/60 + rational(5, value+16)/3600
+	}
 	cam := &info.camera
-	var exifIFD uint32
+	var exifIFD, gpsIFD uint32
 	ifd(bo.Uint32(b[4:]), func(tag, typ uint16, count, value uint32, raw []byte) {
 		switch tag {
 		case 0x010F:
@@ -136,8 +146,37 @@ func parseTIFF(b []byte, info *exifInfo) {
 			}
 		case 0x8769: // Exif IFD pointer
 			exifIFD = value
+		case 0x8825: // GPS IFD pointer
+			gpsIFD = value
 		}
 	})
+	if gpsIFD != 0 {
+		var latRef, lonRef string
+		var lat, lon float64
+		ifd(gpsIFD, func(tag, typ uint16, count, value uint32, raw []byte) {
+			switch tag {
+			case 1:
+				latRef = ascii(count, value, raw)
+			case 2:
+				lat = degrees(typ, count, value)
+			case 3:
+				lonRef = ascii(count, value, raw)
+			case 4:
+				lon = degrees(typ, count, value)
+			}
+		})
+		if lat != 0 || lon != 0 {
+			if latRef == "S" {
+				lat = -lat
+			}
+			if lonRef == "W" {
+				lon = -lon
+			}
+			if lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 {
+				cam.Lat, cam.Lon = lat, lon
+			}
+		}
+	}
 	if exifIFD != 0 {
 		ifd(exifIFD, func(tag, typ uint16, count, value uint32, raw []byte) {
 			switch tag {

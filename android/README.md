@@ -181,6 +181,22 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   from the *Send clipboard to NoCap* quick-settings tile — Android 10+ only
   lets the app in front read the clipboard, so there's no silent background
   copying.
+- **Phone mirroring** — the *Phone* app on NoCap OS shows this phone's
+  live screen, and lets you tap, swipe, scroll, type, press Back / Home /
+  Recents and change the volume from there. Every session needs your OK:
+  first *"<server> wants to mirror your screen"* in NoCap OS, then Android's
+  own screen-capture prompt. While it runs, an ongoing notification says
+  *Your screen is being mirrored* with a **Stop** button; it also stops by
+  itself when nobody has watched for 30 seconds. The screen is encoded with
+  the phone's hardware H.264 encoder (up to 1080p, about 6 Mbps; pictures
+  for browsers that can't decode video) and goes only to your own server,
+  through the address NoCap Link picked (`/api/v1/device/mirror`, a
+  WebSocket on the device token). Only your own account can watch it —
+  administrators can't open other people's phones. The ask arrives over
+  the NoCap Link connection, Nearby or Remote like everything else.
+  Taps and typing use the opt-in accessibility helper (the same one as the
+  lock gesture); without it you can still watch. Turn off the asks in
+  Settings → Notifications & clipboard.
 - **Share Wi-Fi** (administrators) — pick a Wi-Fi network saved on the
   server, confirm with your account password, and the phone shows its join
   QR code and password (drawn on the phone; enterprise networks can't be
@@ -244,7 +260,7 @@ The guide, in order (steps that don't apply to the phone are left out):
 | Default home app | NoCap OS as your home screen |
 | Notifications | Unlinked / download / opt-in server notifications |
 | Allow restricted settings (Android 13+) | Android blocks accessibility, notification access and device admin for apps installed from a file until you tap App info → ⋮ → *Allow restricted settings*. That item only appears after you've tried once, so the step is "try, then App info". Status is read from Android where it allows it |
-| Accessibility (lock helper) | Lock-screen gesture; it can only lock |
+| Accessibility (lock helper) | Lock-screen gesture, and taps, swipes and typing from NoCap OS while you mirror the screen (opt-in; you can still watch without it) |
 | Notification access | Dots, now playing, forwarding chosen apps to your server |
 | Device admin (Android 9+) | Fallback lock; its only policy is "lock the screen" |
 | No battery limits | Keeps NoCap Link, sign-in alerts and clipboard sync alive |
@@ -254,7 +270,7 @@ The guide, in order (steps that don't apply to the phone are left out):
 | Calls & messages | Phone calls (`ANSWER_PHONE_CALLS`), so NoCap OS can decline a call; also asked when you turn on *Calls on NoCap OS*. No SMS permission: replies go through the messaging app's own notification |
 | Weather | Turns weather on and asks for *approximate* location |
 | Calendar | The calendar widget |
-| Screen mirroring | Nothing to switch on: Android asks every time mirroring starts |
+| Screen mirroring | Nothing to switch on: NoCap OS and Android both ask every time mirroring starts; a foreground service (screen capture) runs while it's on |
 
 Also opt-in in Android's settings: Do not disturb access (quick toggles),
 display over other apps (NoCap lock screen, control-center edge swipe) and
@@ -312,6 +328,7 @@ Kotlin + Jetpack Compose, minSdk 26, target 34, application ID
 | `net` | The NoCapOS device API client and certificate pinning |
 | `ai`, `desktop`, `share` | NoCap AI, the web desktop, "Send to NoCap" |
 | `system` | Notification listener, lock helper, crash log (and report scrubbing) |
+| `mirror` | Phone mirroring: the consent screen, the capture service (MediaProjection → H.264 or JPEG) and its wire format |
 | `update` | In-app updates from GitHub releases |
 | `lock` | NoCap lock screen (`LockActivity`, screen-on watch) and the NoCap wallpapers for the phone |
 | `control` | NoCap control center, its toggles, notifications (reply / dismiss), the edge strip and `ControlActivity` |

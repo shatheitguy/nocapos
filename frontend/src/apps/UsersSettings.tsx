@@ -22,20 +22,20 @@ function PhotoPicker({ username }: { username: string }) {
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
-    const err = await uploadAvatar(file, username).catch(() => 'That image wouldn’t open. Try a PNG, JPEG, WebP or GIF.');
+    const err = await uploadAvatar(file, username).catch(() => tr('su.photoBad'));
     setBusy(false);
-    if (err) toast('error', 'Couldn’t set your photo', err);
+    if (err) toast('error', tr('su.photoFail'), err);
     else toast('success', tr('sp.photoUpdated'), tr('sp.photoUpdatedBody'));
   };
   return (
     <div className="photo-picker">
-      <button type="button" className="photo-btn" title="Change photo" disabled={busy} onClick={() => input.current?.click()}>
+      <button type="button" className="photo-btn" title={tr('su.changePhoto')} aria-label={tr('su.changePhoto')} disabled={busy} onClick={() => input.current?.click()}>
         <UserAvatar name={username} size="xl" />
         <span className="photo-edit">{busy ? <span className="spinner sm" /> : <Icon name="edit" size={13} />}</span>
       </button>
       {has && (
         <button type="button" className="link small" onClick={() => void removeAvatar(username)}>
-          Remove
+          {tr('su.removePhoto')}
         </button>
       )}
       <input
@@ -58,19 +58,19 @@ export function YourAccount() {
   if (!user) return null;
   return (
     <>
-      <Section title="Your account">
+      <Section title={tr('su.account')}>
         <div className="settings-row account-card">
           <PhotoPicker username={user.username} />
           <span className="settings-row-text">
             <span className="account-name">{user.username}</span>
             <span className="settings-row-hint">
-              {user.role === 'admin' ? 'Administrator' : 'Standard user'} · member since {new Date(user.created_at).toLocaleDateString()}
+              {tr('su.memberSince', { role: tr(user.role === 'admin' ? 'set.admin' : 'set.standardUser'), date: new Date(user.created_at).toLocaleDateString() })}
             </span>
           </span>
         </div>
-        <Row label="Log out" hint="Closes all your windows and ends your session on the server right away">
+        <Row label={tr('su.signOut')} hint={tr('su.signOutHint')}>
           <button type="button" className="ghost small danger" onClick={() => void logOutClean()}>
-            <Icon name="logout" size={13} /> Log out
+            <Icon name="logout" size={13} /> {tr('su.signOut')}
           </button>
         </Row>
       </Section>

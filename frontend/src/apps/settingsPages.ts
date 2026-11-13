@@ -1,11 +1,16 @@
 // Settings' page catalogue, kept apart from the Settings app so universal
 // search can list the pages without loading the whole app.
+//
+// Every name and description comes from the dictionaries (set.<id> and
+// set.<id>.desc), and each page lists its options as dictionary keys, so
+// search matches what is on screen in either voice.
 import type { IconName } from '../components/Icon';
+import { translate, tr } from '../i18n';
 
-export type Cat = 'network' | 'general' | 'devices' | 'agents' | 'appearance' | 'wallpaper' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
+export type Cat = 'network' | 'general' | 'devices' | 'agents' | 'appearance' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 export type Sub =
-  | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot' | 'power'
-  | 'appearance' | 'wallpaper' | 'desktop' | 'windows'
+  | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot'
+  | 'appearance' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
   | 'account' | 'users' | 'devices' | 'agents'
@@ -13,7 +18,6 @@ export type Sub =
 
 export interface CatInfo {
   id: Cat;
-  label: string;
   icon: IconName;
   color: string;
   admin?: boolean;
@@ -22,101 +26,110 @@ export interface CatInfo {
 }
 
 export const CATS: CatInfo[] = [
-  { id: 'network', label: 'Network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
-  { id: 'general', label: 'General', icon: 'settings', color: '#8e8e93',
+  { id: 'network', icon: 'wifi', color: '#0a84ff', admin: true, groups: [] },
+  { id: 'general', icon: 'settings', color: '#8e8e93',
     groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
-  { id: 'devices', label: 'Linked Devices', icon: 'phone', color: '#30d158', groups: [] },
-  { id: 'agents', label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', groups: [] },
-  { id: 'appearance', label: 'Appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
-  { id: 'desktop', label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', groups: [] },
-  { id: 'windows', label: 'Windows', icon: 'maximize', color: '#3a3a3c', groups: [] },
-  { id: 'notifications', label: 'Notifications', icon: 'bell', color: '#ff3b30', groups: [] },
-  { id: 'sound', label: 'Sound', icon: 'sound', color: '#ff2d55', groups: [] },
-  { id: 'lock', label: 'Lock Screen', icon: 'lock', color: '#48484a', groups: [] },
-  { id: 'security', label: 'Password', icon: 'shield', color: '#30a0ff', groups: [] },
-  { id: 'users', label: 'Users & Groups', icon: 'users', color: '#007aff', admin: true, groups: [] },
-  { id: 'account', label: 'Your Account', icon: 'user', color: '#007aff', groups: [] },
+  { id: 'devices', icon: 'phone', color: '#30d158', groups: [] },
+  { id: 'agents', icon: 'sparkles', color: '#bf5af2', groups: [] },
+  { id: 'appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
+  { id: 'desktop', icon: 'launcher', color: '#3a3a3c', groups: [] },
+  { id: 'windows', icon: 'maximize', color: '#3a3a3c', groups: [] },
+  { id: 'notifications', icon: 'bell', color: '#ff3b30', groups: [] },
+  { id: 'sound', icon: 'sound', color: '#ff2d55', groups: [] },
+  { id: 'lock', icon: 'lock', color: '#48484a', groups: [] },
+  { id: 'security', icon: 'shield', color: '#30a0ff', groups: [] },
+  { id: 'users', icon: 'users', color: '#007aff', admin: true, groups: [] },
+  { id: 'account', icon: 'user', color: '#007aff', groups: [] },
 ];
 
-export const SUBS: Record<string, { label: string; icon: IconName; color: string; admin?: boolean; desc?: string }> = {
-  about: { label: 'About', icon: 'info', color: '#8e8e93' },
-  update: { label: 'Software Update', icon: 'download', color: '#8e8e93', admin: true },
-  access: { label: 'This Screen & Access', icon: 'monitor', color: '#30d158', admin: true, desc: 'NoCap Desktop on this screen, and who can open NoCapOS' },
-  storage: { label: 'Storage', icon: 'disk', color: '#8e8e93' },
-  datetime: { label: 'Date & Time', icon: 'clock', color: '#0a84ff' },
-  language: { label: 'Language & Region', icon: 'globe', color: '#0a84ff' },
-  backup: { label: 'Export & Restore', icon: 'save', color: '#8e8e93', admin: true },
-  troubleshoot: { label: 'Troubleshoot', icon: 'wrench', color: '#8e8e93', admin: true },
-  power: { label: 'Restart & Shut Down', icon: 'power', color: '#ff453a' },
-  appearance: { label: 'Appearance', icon: 'palette', color: '#5e5ce6', desc: 'Theme, accent color, brightness — make it yours' },
-  wallpaper: { label: 'Wallpaper', icon: 'image', color: '#32ade6', desc: 'Built-in wallpapers or your own pictures' },
-  desktop: { label: 'Desktop & Dock', icon: 'launcher', color: '#3a3a3c', desc: 'Dock, widgets and desktop icons' },
-  windows: { label: 'Windows', icon: 'maximize', color: '#3a3a3c', desc: 'Title bar buttons and double-click' },
-  notifications: { label: 'Notifications', icon: 'bell', color: '#ff3b30', desc: 'Banners, what pings you, Focus and sounds' },
-  sound: { label: 'Sound', icon: 'sound', color: '#ff2d55', desc: 'Sound effects and volume' },
-  security: { label: 'Password', icon: 'shield', color: '#30a0ff', desc: 'Your password, plus a sign-in code for extra lock-down' },
-  lock: { label: 'Lock Screen', icon: 'lock', color: '#48484a', desc: 'Auto-lock and screen saver' },
-  account: { label: 'Your Account', icon: 'user', color: '#007aff', desc: 'Photo, name and sign out' },
-  users: { label: 'Users', icon: 'users', color: '#007aff', admin: true, desc: 'Add your people and pick who runs the show' },
-  wifi: { label: 'Wi-Fi', icon: 'wifi', color: '#0a84ff' },
-  devices: { label: 'Linked Devices', icon: 'phone', color: '#30d158', desc: 'Link your phone with the NoCap OS app' },
-  agents: { label: 'AI Agents', icon: 'sparkles', color: '#bf5af2', desc: 'Let AI agents use this server, with your OK' },
+/** General's sub-pages (and Wi-Fi under Network). */
+export const SUBS: Record<string, { icon: IconName; color: string; admin?: boolean }> = {
+  about: { icon: 'info', color: '#8e8e93' },
+  update: { icon: 'download', color: '#8e8e93', admin: true },
+  access: { icon: 'monitor', color: '#30d158', admin: true },
+  storage: { icon: 'disk', color: '#8e8e93' },
+  datetime: { icon: 'clock', color: '#0a84ff' },
+  language: { icon: 'globe', color: '#0a84ff' },
+  backup: { icon: 'save', color: '#8e8e93', admin: true },
+  troubleshoot: { icon: 'wrench', color: '#8e8e93', admin: true },
+  wifi: { icon: 'wifi', color: '#0a84ff' },
 };
 
 /** Everything searchable: deep-link ids (also used by universal search and older links). */
 export interface Entry {
   id: string;
-  label: string;
   icon: IconName;
-  desc: string;
   cat: Cat;
   sub?: Sub;
   admin?: boolean;
+  /** Extra English search words (synonyms, technical terms). */
   keywords?: string;
+  /** The page's options, as dictionary keys of their labels. */
   options?: string[];
+  /** Opens this app instead of a Settings page. */
+  app?: string;
 }
 
 export const ENTRIES: Entry[] = [
-  { id: 'network', cat: 'network', admin: true, label: 'Network', icon: 'wifi', desc: 'Wi-Fi, Ethernet and IP addresses', keywords: 'internet lan connection', options: ['Networking'] },
-  { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, label: 'Wi-Fi', icon: 'wifi', desc: 'Join a wireless network', keywords: 'wireless wlan ssid hotspot' },
-  { id: 'ethernet', cat: 'network', admin: true, label: 'Ethernet & IP address', icon: 'ethernet', desc: 'Wired adapters, static IP, DNS and gateway', keywords: 'ip address dhcp static dns gateway router ipv4 lan cable' },
-  { id: 'general', cat: 'general', label: 'General', icon: 'settings', desc: 'Device, storage, updates, date and language' },
-  { id: 'about', cat: 'general', sub: 'about', label: 'About', icon: 'info', desc: 'Device name, hardware, Docker and versions', keywords: 'version device hardware docker gpu npu model processor memory serial ip' },
-  { id: 'update', cat: 'general', sub: 'update', admin: true, label: 'Software Update', icon: 'download', desc: 'Check for a newer NoCapOS', keywords: 'upgrade version release new' },
-  { id: 'access', cat: 'general', sub: 'access', admin: true, label: 'This Screen & Access', icon: 'monitor', desc: 'NoCap Desktop on this screen, and who can open NoCapOS',
-    keywords: 'monitor display nocap desktop native gnome local screen hdmi remote access lan other devices phone local-only lock',
-    options: ['NoCap Desktop on this screen', 'Let other devices open NoCapOS'] },
-  { id: 'storage', cat: 'general', sub: 'storage', label: 'Storage', icon: 'disk', desc: 'Disks and how full they are', keywords: 'disk drive space capacity usage' },
-  { id: 'datetime', cat: 'general', sub: 'datetime', label: 'Date & Time', icon: 'clock', desc: 'Time zone, 24-hour clock and calendar', keywords: 'clock time zone calendar week',
-    options: ['24-hour time', 'Show seconds', 'Show the date in the Dock', 'Set time zone automatically', 'Time zone', 'First day of the week'] },
-  { id: 'language', cat: 'general', sub: 'language', label: 'Language & Region', icon: 'globe', desc: 'Language and region formats', keywords: 'locale currency number format gen z genz standard wording slang professional voice', options: ['Wording', 'Gen Z', 'Standard', 'NoCapOS language', 'Region formats'] },
-  { id: 'backup', cat: 'general', sub: 'backup', admin: true, label: 'Export & Restore', icon: 'save', desc: 'Download a backup of NoCapOS itself', keywords: 'backup export database restore download', options: ['Download a backup', 'Restore'] },
-  { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, label: 'Troubleshoot', icon: 'wrench', desc: 'NoCapOS logs', keywords: 'logs debug journal problems errors support' },
-  { id: 'power', cat: 'general', label: 'Restart & Shut Down', icon: 'power', desc: 'Restart or shut down this machine, or sign out', keywords: 'reboot shutdown power off sign out', options: ['Restart', 'Shut down', 'Sign out'] },
-  { id: 'devices', cat: 'devices', label: 'Linked Devices', icon: 'phone', desc: 'Link your phone and see your linked devices', keywords: 'devices linked squad your squad the squad phone android tablet pair pairing link launcher app nocap id qr code mobile limit max how many battery online last seen rename',
-    options: ['Your NoCap ID', 'Link a device', 'Unlink', 'Rename', 'Devices per person'] },
-  { id: 'agents', cat: 'agents', label: 'AI Agents', icon: 'sparkles', desc: 'NoCap MCP: let AI agents use this server, with your approval', keywords: 'mcp ai agent hermes claude token computer use automation assistant approval',
-    options: ['Let AI agents in', 'Only agents on this machine', 'Add an agent', 'Revoke', 'Recent activity'] },
-  { id: 'appearance', cat: 'appearance', label: 'Appearance', icon: 'palette', desc: 'Theme, accent color, wallpaper, brightness and effects', keywords: 'theme glass classic cyber deck dark light accent color colour',
-    options: ['Light or dark', 'Accent color', 'Match wallpaper', 'Brightness', 'Reduce transparency', 'Reduce motion', 'Square corners', 'Reset personalization'] },
-  { id: 'wallpaper', cat: 'appearance', label: 'Wallpaper', icon: 'image', desc: 'Built-in wallpapers or your own pictures', keywords: 'background photo picture', options: ['Your picture', 'Delete wallpaper', 'Dim wallpaper'] },
-  { id: 'desktop', cat: 'desktop', label: 'Desktop & Dock', icon: 'launcher', desc: 'Dock, widgets and desktop icons', keywords: 'dock taskbar widgets icons grid desktop',
-    options: ['Position on screen', 'Icon size', 'Magnify on hover', 'Automatically hide the Dock', 'Show recent apps', 'Show widgets on the desktop', 'Snap icons to grid'] },
-  { id: 'windows', cat: 'windows', label: 'Windows', icon: 'maximize', desc: 'Title bar buttons and double-click', keywords: 'title bar macos menu bar', options: ['Window buttons', 'Double-click a title bar to'] },
-  { id: 'notifications', cat: 'notifications', label: 'Notifications', icon: 'bell', desc: 'Banner style, what to be told about, Focus and sounds', keywords: 'do not disturb dnd silence alerts banners toasts macos windows notification center updates', options: ['Banner style', 'Send a test notification', 'Notify me about', 'Focus', 'Play a sound for notifications'] },
-  { id: 'sound', cat: 'sound', label: 'Sound', icon: 'sound', desc: 'Sound effects and volume', keywords: 'volume mute clicks effects',
-    options: ['Play sound effects', 'Volume', 'Clicking buttons and icons', 'Opening and closing windows', 'Locking and unlocking'] },
-  { id: 'security', cat: 'security', label: 'Password', icon: 'shield', desc: 'Two-factor authentication and your password', keywords: '2fa two-factor totp otp authenticator security password privacy',
-    options: ['Two-factor authentication', 'Change password'] },
-  { id: 'lock', cat: 'lock', label: 'Lock Screen', icon: 'lock', desc: 'Auto-lock and screen saver', keywords: 'screensaver screen saver idle auto-lock', options: ['Lock the screen after', 'Screen saver', 'Start after'] },
-  { id: 'account', cat: 'account', label: 'Your Account', icon: 'user', desc: 'Your photo, name and sign out', keywords: 'profile avatar picture sign out log out sessions signed in devices sign-in alerts', options: ['Profile photo', 'Close other windows', 'Sign out'] },
-  { id: 'users', cat: 'users', admin: true, label: 'Users & Groups', icon: 'users', desc: 'Add people and choose who is an administrator', keywords: 'people roles admin linux accounts', options: ['Add user', 'Reset password', 'Delete user', 'Role', 'Access', 'Desktop or file sharing only', 'Shared folders', 'Apps'] },
+  { id: 'network', cat: 'network', admin: true, icon: 'wifi', keywords: 'internet lan connection',
+    options: ['sn.networking'] },
+  { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, icon: 'wifi', keywords: 'wireless wlan ssid hotspot',
+    options: ['wifi.savedTitle', 'wifi.share', 'wifi.forget', 'wifi.autoConnect'] },
+  { id: 'shield', cat: 'network', admin: true, app: 'shield', icon: 'shield',
+    keywords: 'firewall ufw ports open exposed block allow deny ssh security ad blocker ads trackers dns blocklist privacy query log',
+    options: ['sh.tab.firewall', 'sh.exp.title', 'sh.ov.dns', 'sh.lists.title', 'sh.logs.queries'] },
+  { id: 'ethernet', cat: 'network', admin: true, icon: 'ethernet', keywords: 'ip address dhcp static dns gateway router ipv4 lan cable tcp',
+    options: ['sn.tcpip'] },
+  { id: 'general', cat: 'general', icon: 'settings' },
+  { id: 'about', cat: 'general', sub: 'about', icon: 'info', keywords: 'version device hardware docker gpu npu model processor memory serial ip hostname',
+    options: ['sp.renameDevice', 'sp.copyDetails'] },
+  { id: 'update', cat: 'general', sub: 'update', admin: true, icon: 'download', keywords: 'upgrade version release new packages patches',
+    options: ['gu.updateAll', 'gu.check'] },
+  { id: 'access', cat: 'general', sub: 'access', admin: true, icon: 'monitor',
+    keywords: 'monitor display native local screen hdmi remote access lan other devices phone local-only lock',
+    options: ['nd.mode', 'nd.autologin', 'nd.repair', 'nd.diag', 'su.remoteRow'] },
+  { id: 'storage', cat: 'general', sub: 'storage', icon: 'disk', keywords: 'disk drive space capacity usage',
+    options: ['sp.disks'] },
+  { id: 'storageApp', cat: 'general', admin: true, app: 'storage', icon: 'hdd',
+    keywords: 'zfs raid mirror raidz pool pools snapshot snapshots rollback scrub cache encrypted folder share shares mount mounts smart health boot drive spin down cloud',
+    options: ['stx.nav.boot', 'stx.nav.pools', 'stx.nav.disks', 'stx.nav.snapshots', 'stx.nav.mounts'] },
+  { id: 'setup', cat: 'general', sub: 'about', admin: true, icon: 'sparkles', keywords: 'setup wizard welcome first start onboarding again',
+    options: ['wiz.step.voice', 'wiz.step.look'] },
+  { id: 'datetime', cat: 'general', sub: 'datetime', icon: 'clock', keywords: 'clock time zone calendar week',
+    options: ['sp.clock24', 'sp.seconds', 'sp.dateInDock', 'sp.tzAuto', 'sp.timeZone', 'sp.weekStart'] },
+  { id: 'language', cat: 'general', sub: 'language', icon: 'globe', keywords: 'locale currency number format gen z genz standard wording slang professional voice',
+    options: ['set.lang.voice', 'set.lang.genz', 'set.lang.standard', 'set.lang.languageRow', 'set.lang.region'] },
+  { id: 'backup', cat: 'general', sub: 'backup', admin: true, icon: 'save', keywords: 'backup export database restore download',
+    options: ['sp.bkDownload', 'sp.restore'] },
+  { id: 'troubleshoot', cat: 'general', sub: 'troubleshoot', admin: true, icon: 'wrench', keywords: 'logs debug journal problems errors support',
+    options: ['sp.logs'] },
+  { id: 'power', cat: 'general', admin: true, icon: 'power', keywords: 'reboot shutdown power off',
+    options: ['set.hero.restart', 'set.hero.shutdown'] },
+  { id: 'devices', cat: 'devices', icon: 'phone', keywords: 'devices linked squad phone android tablet pair pairing link launcher app qr code mobile limit max how many battery online last seen',
+    options: ['ld.nocapId', 'ld.link', 'ld.unlink', 'ld.rename', 'ld.defaultLabel', 'link.addr.title'] },
+  { id: 'agents', cat: 'agents', icon: 'sparkles', keywords: 'mcp ai agent token computer use automation assistant approval',
+    options: ['ag.letIn', 'ag.loopback', 'ag.add', 'ag.revoke', 'ag.stop', 'ag.scopes'] },
+  { id: 'appearance', cat: 'appearance', icon: 'palette', keywords: 'theme glass classic cyber deck dark light accent color colour',
+    options: ['pz.theme', 'pz.lightDark', 'pz.accent', 'pz.wallpapers', 'pz.dim', 'pz.brightness', 'pz.icons', 'pz.transparency', 'pz.motion', 'pz.square', 'pz.grid', 'pz.resetRow'] },
+  { id: 'wallpaper', cat: 'appearance', icon: 'image', keywords: 'background photo picture',
+    options: ['pz.addPhoto', 'pz.deletePhoto', 'pz.dim'] },
+  { id: 'desktop', cat: 'desktop', icon: 'launcher', keywords: 'dock taskbar widgets icons grid desktop',
+    options: ['pz.position', 'pz.iconSize', 'pz.magnify', 'pz.autoHide', 'pz.recents', 'pz.dots', 'pz.showWidgets', 'pz.iconNames', 'pz.snap', 'pz.cleanUp'] },
+  { id: 'windows', cat: 'windows', icon: 'maximize', keywords: 'title bar menu bar',
+    options: ['pz.winButtons', 'pz.dblClick'] },
+  { id: 'notifications', cat: 'notifications', icon: 'bell', keywords: 'do not disturb dnd silence alerts banners toasts notification center focus',
+    options: ['sp.notifyAbout', 'su.focus', 'sp.ntUpdate', 'sp.ntAppUpdates', 'sp.ntAppErrors', 'sp.ntStorage', 'sp.ntBackups', 'sp.ntDevices'] },
+  { id: 'sound', cat: 'sound', icon: 'sound', keywords: 'volume mute clicks effects',
+    options: ['sp.playFx', 'sp.volume', 'sp.sClicks', 'sp.sWindows', 'sp.sAlerts', 'sp.sLock'] },
+  { id: 'security', cat: 'security', icon: 'shield', keywords: '2fa two-factor totp otp authenticator security password privacy',
+    options: ['sp.tf', 'sp.changePw'] },
+  { id: 'lock', cat: 'lock', icon: 'lock', keywords: 'screensaver screen saver idle auto-lock',
+    options: ['sp.lockAfter', 'sp.saver', 'sp.startAfter'] },
+  { id: 'account', cat: 'account', icon: 'user', keywords: 'profile avatar picture sign out log out logout sessions signed in devices sign-in alerts',
+    options: ['su.changePhoto', 'su.signOut', 'ses.yourTitle', 'ses.endOthers'] },
+  { id: 'users', cat: 'users', admin: true, icon: 'users', keywords: 'people roles admin linux accounts groups',
+    options: ['ug.addPerson', 'ug.menu.password', 'ug.menu.delete', 'ug.menu.disable', 'ug.tab.groups'] },
 ];
-
-/** Every Settings page, for universal search. */
-export const SETTINGS_PAGES: readonly { id: string; label: string; icon: IconName; admin?: boolean; keywords?: string }[] = ENTRIES.map((e) => ({
-  id: e.id, label: e.label, icon: e.icon, admin: e.admin, keywords: `${e.desc} ${e.keywords ?? ''} ${(e.options ?? []).join(' ')}`,
-}));
 
 type Translate = (key: string) => string;
 
@@ -125,3 +138,22 @@ export const pageName = (t: Translate, id: string) => t(`set.${id}`);
 
 /** The plain one-line description that goes under a page's name. */
 export const pageDesc = (t: Translate, id: string) => t(`set.${id}.desc`);
+
+/** All the words an entry answers to: its names, descriptions and options in both voices, and its keywords. */
+export function searchText(e: Entry): string {
+  const keys = [`set.${e.id}`, `set.${e.id}.desc`, ...(e.options ?? [])];
+  const words = keys.flatMap((k) => [translate('genz', k), translate('standard', k)]);
+  return `${words.join(' ')} ${e.keywords ?? ''}`.toLowerCase();
+}
+
+/** The options of an entry whose label (in either voice) matches q, in the current voice. */
+export function matchingOptions(e: Entry, q: string, t: Translate): string[] {
+  return (e.options ?? [])
+    .filter((k) => translate('genz', k).toLowerCase().includes(q) || translate('standard', k).toLowerCase().includes(q))
+    .map((k) => t(k));
+}
+
+/** Every Settings page, for universal search: names in the current voice, matched in both. */
+export function settingsPages(): { id: string; label: string; icon: IconName; admin?: boolean; keywords: string; app?: string }[] {
+  return ENTRIES.map((e) => ({ id: e.id, label: tr(`set.${e.id}`), icon: e.icon, admin: e.admin, app: e.app, keywords: searchText(e) }));
+}

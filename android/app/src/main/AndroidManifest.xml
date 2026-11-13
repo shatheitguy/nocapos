@@ -36,6 +36,8 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="tiramisu" />
     <!-- Timer widget: "ring with the clock app". -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Screen mirroring to NoCap OS: only after you OK it (here and in Android's prompt), every time. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <!-- Opt-in, you allow them in Android's settings: the NoCap lock screen appearing when the
          screen turns on, and the control-center edge strip in other apps ("Display over other apps");
          the control center's rotation lock and brightness slider ("Modify system settings"). -->
@@ -286,7 +288,7 @@
             </intent-filter>
         </service>
 
-        <!-- Double-tap to lock (opt-in), Android 9+. -->
+        <!-- Double-tap to lock (opt-in), Android 9+; also taps and typing from NoCap OS while you mirror. -->
         <service
             android:name=".system.LockService"
             android:exported="true"
@@ -299,6 +301,19 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/lock_service" />
         </service>
+
+        <!-- Screen mirroring: "<server> wants to mirror your screen", then the capture itself. -->
+        <activity
+            android:name=".mirror.MirrorConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.nocap.link.mirror"
+            android:theme="@style/Theme.NoCap.Sheet" />
+        <service
+            android:name=".mirror.MirrorService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- Double-tap to lock (opt-in), older phones. -->
         <receiver

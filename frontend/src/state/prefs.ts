@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
+import { tr } from '../i18n';
+import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
+import { cleanDefaults } from '../lib/openWith';
 
 export { isCustomWallpaper };
 
@@ -115,6 +118,7 @@ export interface PrefValues {
   saverDelay: number; // minutes
   language: LanguageId;
   lingo: Lingo; // Gen Z or Standard wording
+  openWith: Record<string, string>; // file type ("jpg") → the app Files opens it with
 
   welcomeDone: boolean; // the first-start welcome was finished or skipped
   welcomeStep: number; // where the welcome was left, to pick up there
@@ -169,6 +173,7 @@ export const DEFAULT_PREFS: PrefValues = {
   saverDelay: 5,
   language: 'en',
   lingo: 'genz',
+  openWith: {},
 
   welcomeDone: false,
   welcomeStep: 0,
@@ -229,6 +234,7 @@ function claimLegacy(id: string) {
 }
 
 let serverTimer = 0;
+let syncWarned = false; // one warning until a save works again
 
 /** Whether the signed-in person's prefs have come back from the server (or failed to). */
 export const usePrefsSynced = create<{ synced: boolean }>(() => ({ synced: false }));
@@ -239,7 +245,14 @@ function syncLater() {
   window.clearTimeout(serverTimer);
   serverTimer = window.setTimeout(() => {
     if (!userId) return;
-    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } });
+    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } }).then((r) => {
+      // The change is kept in this browser either way; say once that the server didn't take it.
+      if (r.ok || r.status === 404) syncWarned = false;
+      else if (!syncWarned && r.status !== 401) {
+        syncWarned = true;
+        toast('error', tr('set.syncFail'), tr('set.syncFailBody'));
+      }
+    });
   }, 1500);
 }
 
@@ -305,6 +318,7 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
     // (Retired built-ins, e.g. the old gradients, land here.)
     if (out.wallpaper && !BUILT_IN_IDS.includes(out.wallpaper) && !isCustomWallpaper(out.wallpaper)) delete out.wallpaper;
     if (out.lingo && !LINGOS.includes(out.lingo)) delete out.lingo;
+    if ('openWith' in out) out.openWith = cleanDefaults(out.openWith);
     // One-time move to the Glass look (people can switch back in Appearance).
     if (!raw.glass1 && out.uiTheme === 'classic') delete out.uiTheme;
     // The old on/off switch becomes the far end of the Transparency slider.

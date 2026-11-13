@@ -5,7 +5,7 @@
   "setup.passwordPh": "Password (at least 10 characters)",
   "setup.againPh": "Confirm password",
   "setup.tokenPh": "Setup token",
-  "setup.tokenWhy": "This device is not on the server's local network, so setup also needs the one-time setup token. It is shown on the server's screen (at the console login) and in its log (journalctl -u nocapos).",
+  "setup.tokenWhy": "This device is not on the server's local network, so setup also needs the one-time setup token, shown on the server's own screen.",
   "setup.tokenMissing": "Enter the setup token. It is shown on the server's screen and in its log.",
   "setup.nameRule": "User names are 3–32 letters, digits, dots, hyphens or underscores, starting with a letter or digit.",
   "setup.passwordShort": "The password must be at least 10 characters long.",

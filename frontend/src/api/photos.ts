@@ -37,6 +37,9 @@ export interface Camera {
   iso?: number;
   focal?: number;
   focal_35?: number;
+  /** Where it was taken, when the camera recorded it. */
+  lat?: number;
+  lon?: number;
 }
 
 export interface TrashItem {
