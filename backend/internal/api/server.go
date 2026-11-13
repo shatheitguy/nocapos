@@ -91,6 +91,7 @@ type Server struct {
 	pkgJobs          *syspkg.Jobs         // Packages app's background jobs
 	pkgAdmin         *syspkg.Admin
 	pairing          pairingState        // device pairing codes and the NoCap ID
+	discovery        discoveryState      // what mDNS and Bluetooth tell phones nearby
 	localGate        *hostaccess.Gate    // "Let other devices open NoCapOS" switch
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
@@ -137,6 +138,7 @@ func New(ctx context.Context, d Deps) *Server {
 	}
 	// NoCap Link: phones find this server nearby (_nocap._tcp).
 	go s.advertiseLink(ctx)
+	go s.advertiseBLE(ctx) // and over Bluetooth (link_discovery.go)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }
@@ -168,6 +170,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/pair/info", s.pairInfo)
 	mux.HandleFunc("POST /api/v1/pair/claim", s.pairClaim) // rate-limited per client
 	mux.Handle("POST /api/v1/devices/pair-code", s.authed(s.devicesPairCode))
+	mux.Handle("POST /api/v1/devices/link-self", s.authed(s.devicesLinkSelf)) // the phone that just signed in (setting up a new server)
+	// Finding NoCap servers: other ones on this network; this one over Bluetooth.
+	mux.Handle("GET /api/v1/link/discover", s.authed(s.linkDiscover))
+	mux.Handle("GET /api/v1/link/bluetooth", s.admin(s.linkBluetoothGet))
+	mux.Handle("PUT /api/v1/link/bluetooth", s.admin(s.linkBluetoothPut))
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
 	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))
