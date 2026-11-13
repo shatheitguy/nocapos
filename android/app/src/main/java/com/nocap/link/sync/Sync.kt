@@ -170,8 +170,10 @@ object Sync {
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(300_000L)
             } catch (e: CertChanged) {
                 return
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 LinkService.connected(false)
+                // Offline is normal; anything else failing over and over gets a report.
+                if (e !is java.io.IOException) com.nocap.link.system.CrashLog.failure("NoCap Link sync", e)
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(300_000L)
             }
         }

@@ -190,13 +190,15 @@ class ShareActivity : ComponentActivity() {
                 Text(t("Lands in NoCap Link, in your home on ${runCatching { Vault.get(this@ShareActivity).link?.serverName }.getOrNull() ?: "your server"}.", "Saved to the NoCap Link folder in your home folder."), style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(16.dp))
                 when (val s = state) {
-                    State.Ready -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GhostButton(t("Nah", "Cancel"), { finish() }, Modifier.weight(1f))
-                        RedButton(t("Send it", "Send"), { send() }, Modifier.weight(1f))
-                    }
-                    if (state == State.Ready && (uris.isNotEmpty() || sharedUrl != null)) {
-                        Spacer(Modifier.height(10.dp))
-                        GhostButton(t("Open on NoCap", "Open on NoCap OS"), { send(open = true) }, Modifier.fillMaxWidth())
+                    State.Ready -> Column {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GhostButton(t("Nah", "Cancel"), { finish() }, Modifier.weight(1f))
+                            RedButton(t("Send it", "Send"), { send() }, Modifier.weight(1f))
+                        }
+                        if (uris.isNotEmpty() || sharedUrl != null) {
+                            Spacer(Modifier.height(10.dp))
+                            GhostButton(t("Open on NoCap", "Open on NoCap OS"), { send(open = true) }, Modifier.fillMaxWidth())
+                        }
                     }
                     State.Sending -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(22.dp), color = NoCap.Red, strokeWidth = 2.dp)

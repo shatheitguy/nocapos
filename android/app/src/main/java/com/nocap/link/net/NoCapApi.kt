@@ -65,6 +65,17 @@ data class ChatMessage(val role: String, val content: String, val error: String 
 /** The server answered with an error ({"error":{"code","message"}}). */
 class ApiError(val status: Int, val code: String, message: String) : IOException(message)
 
+/** "Google Pixel 8" (the maker is left out when the model already names it). */
+internal fun deviceModel(): String {
+    val maker = android.os.Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
+    val model = android.os.Build.MODEL.orEmpty()
+    val s = if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
+    return s.trim().take(64)
+}
+
+/** "Android 15". */
+internal fun osVersion(): String = "Android ${android.os.Build.VERSION.RELEASE.orEmpty()}".trim().take(64)
+
 /** The server's certificate isn't the pinned one anymore. */
 class CertChanged(val seen: String) : IOException("certificate changed")
 
@@ -102,7 +113,9 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
 
     fun claim(code: String, deviceName: String): Claimed {
         val body = JSONObject().put("code", code).put("device_name", deviceName).put("platform", "android")
-        val o = JSONObject(call("POST", "/api/v1/pair/claim", body))
+        val full = JSONObject(body.toString()).put("model", deviceModel()).put("os_version", osVersion())
+        // Older servers refuse fields they don't know (before spending the code): retry without them.
+        val o = JSONObject(olderServerRetry({ call("POST", "/api/v1/pair/claim", full) }) { call("POST", "/api/v1/pair/claim", body) })
         return Claimed(
             o.getString("device_id"), o.getString("token"), o.optString("nocap_id"),
             o.optString("server_name"), o.optJSONObject("user")?.optString("username") ?: "",
@@ -126,11 +139,25 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
         }
     }
 
-    fun heartbeat(battery: Int?, appVersion: String) {
+    /**
+     * Still here: battery, app version, model, Android version and which
+     * NoCap Link features are on (shown in Settings → Linked Devices).
+     */
+    fun heartbeat(battery: Int?, appVersion: String, caps: Map<String, Boolean>? = null) {
         val body = JSONObject().put("app_version", appVersion)
         if (battery != null) body.put("battery", battery)
-        call("POST", "/api/v1/device/heartbeat", body)
+        val full = JSONObject(body.toString()).put("model", deviceModel()).put("os_version", osVersion())
+        if (caps != null) full.put("capabilities", JSONObject(caps))
+        olderServerRetry({ call("POST", "/api/v1/device/heartbeat", full) }) { call("POST", "/api/v1/device/heartbeat", body) }
     }
+
+    /** Runs [first]; when an older server rejects its body as unknown fields, runs [fallback] instead. */
+    private fun <T> olderServerRetry(first: () -> T, fallback: () -> T): T =
+        try {
+            first()
+        } catch (e: ApiError) {
+            if (e.status == 400 && e.code == "bad_request") fallback() else throw e
+        }
 
     /** A one-time, 60-second address that opens the web desktop signed in. */
     fun webSession(): String = JSONObject(call("POST", "/api/v1/device/session", JSONObject())).getString("url")

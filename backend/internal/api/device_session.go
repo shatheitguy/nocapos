@@ -58,7 +58,7 @@ func (s *Server) authLink(w http.ResponseWriter, r *http.Request) {
 	d, err := s.Store.DeviceByID(r.Context(), deviceID)
 	if errors.Is(err, store.ErrNotFound) || (err == nil && d.UserID != userID) {
 		s.audit(r, userID, "devices.web_session", deviceID, false, "device unlinked")
-		writeError(w, http.StatusUnauthorized, "invalid_ticket", "This device isn't linked anymore. Link it again from Settings → Devices.")
+		writeError(w, http.StatusUnauthorized, "invalid_ticket", "This device isn't linked anymore. Link it again from Settings → Linked Devices.")
 		return
 	}
 	if err != nil {

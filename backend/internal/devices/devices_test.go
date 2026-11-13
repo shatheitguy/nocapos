@@ -122,3 +122,26 @@ func TestValidName(t *testing.T) {
 		t.Error("platforms")
 	}
 }
+
+func TestLimitsAndCaps(t *testing.T) {
+	for _, c := range []struct {
+		used, limit int
+		full        bool
+	}{{0, 5, false}, {4, 5, false}, {5, 5, true}, {7, 5, true}, {50, 0, false}} {
+		if AtLimit(c.used, c.limit) != c.full {
+			t.Errorf("AtLimit(%d, %d) != %v", c.used, c.limit, c.full)
+		}
+	}
+	if ValidLimit(-1) || !ValidLimit(0) || !ValidLimit(MaxLimit) || ValidLimit(MaxLimit+1) {
+		t.Error("ValidLimit bounds")
+	}
+	if got := CapsString(map[string]bool{"files": true, "notifications": true, "clipboard": false, "x": true}); got != "notifications,files" {
+		t.Errorf("CapsString = %q", got)
+	}
+	if got := CapsList(""); got == nil || len(got) != 0 {
+		t.Errorf("CapsList empty = %#v", got)
+	}
+	if !ValidDetail("Android 15") || ValidDetail("bad\nmodel") {
+		t.Error("ValidDetail")
+	}
+}
