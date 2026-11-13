@@ -124,6 +124,9 @@ type pairInfo struct {
 	NocapID string `json:"nocap_id"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	// Setup: "new" while the server waits for its first administrator (the
+	// phone app offers to set it up), "done" after.
+	Setup string `json:"setup,omitempty"`
 }
 
 func (s *Server) pairInfo(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +135,7 @@ func (s *Server) pairInfo(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version})
+	writeJSON(w, http.StatusOK, pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version, Setup: setupWord(s.setupNew(r.Context()))})
 }
 
 var sixDigits = regexp.MustCompile(`^[0-9]{6}$`)
@@ -169,22 +172,11 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Code = strings.TrimSpace(req.Code)
-	req.DeviceName = strings.TrimSpace(req.DeviceName)
 	if !sixDigits.MatchString(req.Code) {
 		writeError(w, http.StatusBadRequest, "validation", "The code is 6 digits. Check Settings → Linked Devices on your NoCapOS and try again.")
 		return
 	}
-	if !devices.ValidName(req.DeviceName) {
-		writeError(w, http.StatusBadRequest, "validation", "Give your device a name (up to 64 characters).")
-		return
-	}
-	if !devices.ValidPlatform(req.Platform) {
-		writeError(w, http.StatusBadRequest, "validation", "platform must be android, ios or other")
-		return
-	}
-	req.Model, req.OSVersion = strings.TrimSpace(req.Model), strings.TrimSpace(req.OSVersion)
-	if !devices.ValidDetail(req.Model) || !devices.ValidDetail(req.OSVersion) {
-		writeError(w, http.StatusBadRequest, "validation", "model and os_version must be up to 64 printable characters")
+	if !checkNewDevice(w, &req) {
 		return
 	}
 	nocapID, err := s.nocapID()
@@ -225,6 +217,31 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.issueDevice(w, r, u, req, nocapID, "devices.claim", req.Platform)
+}
+
+// checkNewDevice cleans and checks what a phone says about itself.
+func checkNewDevice(w http.ResponseWriter, req *claimRequest) bool {
+	req.DeviceName = strings.TrimSpace(req.DeviceName)
+	if !devices.ValidName(req.DeviceName) {
+		writeError(w, http.StatusBadRequest, "validation", "Give your device a name (up to 64 characters).")
+		return false
+	}
+	if !devices.ValidPlatform(req.Platform) {
+		writeError(w, http.StatusBadRequest, "validation", "platform must be android, ios or other")
+		return false
+	}
+	req.Model, req.OSVersion = strings.TrimSpace(req.Model), strings.TrimSpace(req.OSVersion)
+	if !devices.ValidDetail(req.Model) || !devices.ValidDetail(req.OSVersion) {
+		writeError(w, http.StatusBadRequest, "validation", "model and os_version must be up to 64 printable characters")
+		return false
+	}
+	return true
+}
+
+// issueDevice links a new device to u (within u's device limit) and answers
+// with its token.
+func (s *Server) issueDevice(w http.ResponseWriter, r *http.Request, u *store.User, req claimRequest, nocapID, action, detail string) {
 	token, hash := devices.NewToken()
 	now := time.Now()
 	d := &store.Device{
@@ -235,16 +252,42 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	} else if full != nil {
-		s.audit(r, u.ID, "devices.claim", d.Name, false, "device limit reached")
+		s.audit(r, u.ID, action, d.Name, false, "device limit reached")
 		writeDeviceLimit(w, *full)
 		return
 	}
-	s.audit(r, u.ID, "devices.claim", d.Name, true, d.Platform)
+	s.audit(r, u.ID, action, d.Name, true, detail)
 	s.devicePaired(r, u, d)
 	writeJSON(w, http.StatusCreated, claimResponse{
 		DeviceID: d.ID, Token: token, NocapID: nocapID, ServerName: s.serverName(),
 		User: map[string]string{"username": u.Username},
 	})
+}
+
+// devicesLinkSelf links the phone making this request to the person signed
+// in on it, with no pairing code. The code only proves a phone is in the
+// hands of someone signed in; here the phone is the one signed in. It's how
+// the NoCap OS app finishes setting up a brand-new server: it creates the
+// administrator, then links itself in the same session as that account's
+// first device. Same device limit and audit as a claimed code.
+func (s *Server) devicesLinkSelf(w http.ResponseWriter, r *http.Request) {
+	if s.limited(w, r) {
+		return
+	}
+	var req claimRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if !checkNewDevice(w, &req) {
+		return
+	}
+	nocapID, err := s.nocapID()
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	u := userFrom(r.Context())
+	s.issueDevice(w, r, u, req, nocapID, "devices.link_self", req.Platform+", signed in on the device")
 }
 
 // ---------- signed-in people ----------

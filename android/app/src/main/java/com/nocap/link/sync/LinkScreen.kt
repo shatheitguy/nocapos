@@ -44,6 +44,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.nocap.link.data.Link
+import com.nocap.link.data.t
+import com.nocap.link.ui.GhostButton
 import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
 import com.nocap.link.net.ApiError
@@ -67,7 +69,7 @@ import kotlinx.coroutines.withContext
  * pinned before the code is sent.
  */
 @Composable
-fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit, onLinked: () -> Unit) {
+fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onFind: () -> Unit, onCancel: () -> Unit, onLinked: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var server by remember(start) { mutableStateOf(start.server) }
@@ -153,6 +155,18 @@ fun LinkScreen(start: Screen.LinkForm, onScan: () -> Unit, onCancel: () -> Unit,
             )
             Spacer(Modifier.height(18.dp))
             RedButton("Scan the QR code", onScan, Modifier.fillMaxWidth(), enabled = !busy)
+            Spacer(Modifier.height(8.dp))
+            GhostButton(t("Find NoCap servers nearby", "Find NoCap servers nearby"), onFind, Modifier.fillMaxWidth(), enabled = !busy)
+            if (start.server.isNotBlank() && start.code.isBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    t(
+                        "Found it. Now grab a 6-digit code: on your NoCap desktop open Settings → Your Squad → Add to the squad.",
+                        "Server found. Now get a 6-digit code: on the NoCap desktop, open Settings → Linked Devices → Link a device.",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium, color = NoCap.Text,
+                )
+            }
             Spacer(Modifier.height(18.dp))
             GlassCard(Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -217,7 +231,7 @@ private fun Field(label: String, value: String, onChange: (String) -> Unit, hint
     )
 }
 
-private fun deviceName(): String {
+internal fun deviceName(): String {
     val m = Build.MODEL.orEmpty().trim()
     val brand = Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
     return (if (m.startsWith(brand, ignoreCase = true)) m else "$brand $m").trim().ifBlank { "My phone" }.take(64)
