@@ -96,13 +96,11 @@ has dconf && dconf update >/dev/null 2>&1
 if [ -f "$BK/edits" ]; then
   grub=0
   while IFS='|' read -r kind a b c; do
+    # shellcheck disable=SC2086 # recorded token lists are split on purpose
     case "$kind" in
       configtxt) [ -f "$a" ] && config_txt_without "$b" <"$a" >"$a.nocap.tmp" && cat "$a.nocap.tmp" >"$a"; rm -f "$a.nocap.tmp" ;;
-      # shellcheck disable=SC2086 # recorded token lists
       line) [ -f "$a" ] && tokens_line_without $b <"$a" >"$a.nocap.tmp" && cat "$a.nocap.tmp" >"$a"; rm -f "$a.nocap.tmp" ;;
-      # shellcheck disable=SC2086
       keyword) [ -f "$a" ] && keyword_tokens_without "$b" $c <"$a" >"$a.nocap.tmp" && cat "$a.nocap.tmp" >"$a"; rm -f "$a.nocap.tmp" ;;
-      # shellcheck disable=SC2086
       var) [ -f "$a" ] && var_tokens_without "$b" $c <"$a" >"$a.nocap.tmp" && cat "$a.nocap.tmp" >"$a"; rm -f "$a.nocap.tmp"
         [ "$a" = /etc/default/u-boot ] && has u-boot-update && u-boot-update >/dev/null 2>&1 ;;
       armbian-bootlogo) [ -f "$a" ] && sed -i 's/^bootlogo=false/bootlogo=true/' "$a" ;;
