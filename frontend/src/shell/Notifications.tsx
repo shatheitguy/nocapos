@@ -8,7 +8,8 @@ import { fmtTime, useTimePrefs } from '../lib/time';
 import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
 import { useLink, useLinkUnseen } from '../state/link';
-import { ClipBanner, ClipboardSection, PhoneSection } from './LinkSync';
+import { ClipBanner, ClipboardSection, CarryBanner, PhoneSection } from './LinkSync';
+import { PhonesSection } from './LinkPhones';
 import { SigninBanners, SigninSection } from './Signins';
 import { useSignins } from '../state/signins';
 import { toast } from '../state/toasts';
@@ -160,7 +161,7 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
 
 function Banners({ look }: { look: Look }) {
   const banners = useNotifications((s) => s.banners);
-  const clip = useLink((s) => s.clipBanner);
+  const clip = useLink((s) => !!s.clipBanner || !!s.carryBanner);
   const signins = useSignins((s) => s.banners.length);
   if (!banners.length && !clip && !signins) return null;
   return (
@@ -170,6 +171,7 @@ function Banners({ look }: { look: Look }) {
         <Banner key={n.id} n={n} look={look} />
       ))}
       <ClipBanner look={look} />
+      <CarryBanner look={look} />
     </div>
   );
 }
@@ -305,6 +307,7 @@ function MacCenter({ items }: { items: Notice[] }) {
     <div className="nc-scroll">
       {!items.length && !phoneNotes && <div className="nc-none">No Notifications</div>}
       <SigninSection look="mac" />
+      <PhonesSection look="mac" />
       <PhoneSection look="mac" />
       <ClipboardSection look="mac" />
       {byApp(items).map(([k, list]) => (
@@ -371,6 +374,7 @@ function WinCenter({ items }: { items: Notice[] }) {
       <div className="nc-scroll">
         {!items.length && !phoneNotes && <Empty />}
         <SigninSection look="windows" />
+        <PhonesSection look="windows" />
         <PhoneSection look="windows" />
         <ClipboardSection look="windows" />
         {byApp(items).map(([k, list]) => (

@@ -96,6 +96,7 @@ fun Hub(a: MainActivity) {
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ServerCard(a)
+            LinkStatusCard(a)
             val online = a.server is ServerState.Online
             if (online) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

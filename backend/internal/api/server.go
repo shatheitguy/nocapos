@@ -97,6 +97,7 @@ type Server struct {
 	linkOnce         sync.Once
 	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
 	sessions         sessionFeed // sign-in alerts and session list changes, live
+	linkFeed         linkFeed    // the person's phones changed, or handed a link over
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -134,6 +135,8 @@ func New(ctx context.Context, d Deps) *Server {
 	if d.Removable != nil {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
+	// NoCap Link: phones find this server nearby (_nocap._tcp).
+	go s.advertiseLink(ctx)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }

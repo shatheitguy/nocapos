@@ -8,6 +8,7 @@ import { tr, useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
+import { LinkAddressesSettings } from './SettingsLinkAddresses';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
 // of your limit, a card per device (model, app, battery, address, NoCap Link
@@ -160,6 +161,7 @@ export function DevicesSettings() {
       {isAdmin && limits?.users && (
         <AdminView limits={limits} list={list ?? []} meId={me?.id ?? ''} onChanged={load} onUnlink={(d) => void unlink(d)} onRename={rename} />
       )}
+      <LinkAddressesSettings />
 
       {linking && (
         <LinkSheet
