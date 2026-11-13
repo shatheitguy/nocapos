@@ -293,6 +293,48 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 .agent-args summary { cursor: pointer; font-size: 12.5px; color: var(--muted); }
 .agent-args pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); font: 11.5px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow: auto; user-select: text; }
 .agent-approve-actions { flex-wrap: wrap; }
+.agent-act-dot.stopped { background: #ff453a; }
+.agent-hero-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.agent-risk { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); vertical-align: middle; }
+.agent-risk.low { background: rgba(48, 209, 88, 0.14); color: #30d158; }
+.agent-risk.medium { background: rgba(255, 159, 10, 0.16); color: #ff9f0a; }
+.agent-risk.high { background: rgba(255, 69, 58, 0.16); color: #ff453a; }
+.agent-effect { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.agent-effect.run { color: #ff453a; }
+.agent-detail { display: flex; flex-direction: column; gap: 12px; }
+.agent-detail > .settings-row { padding-left: 0; padding-right: 0; }
+.agent-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.agent-connect { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end; }
+.agent-connect select, .agent-field select { width: 100%; }
+.agent-profile { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.agent-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.agent-profile-risk { margin-left: auto; font-size: 12px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.agent-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; }
+.agent-chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.agent-chip code { font-family: var(--mono); font-size: 11.5px; }
+.agent-chip .icon-btn { width: 18px; height: 18px; min-width: 0; padding: 0; font-size: 10px; }
+.agent-capgroup { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); }
+.agent-capgroup.danger { border-color: rgba(255, 69, 58, 0.35); }
+.agent-capgroup h4 { margin: 0; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.agent-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.agent-cap-text { display: flex; flex-direction: column; gap: 1px; min-width: 160px; flex: 1; }
+.agent-cap-control { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.agent-seg { display: inline-flex; border-radius: 9px; border: 1px solid var(--border); overflow: hidden; }
+.agent-seg button { border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 10px; box-shadow: none; }
+.agent-seg button + button { border-left: 1px solid var(--border); }
+.agent-seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.agent-seg button.on.risk-high { background: rgba(255, 69, 58, 0.16); color: #ff453a; }
+.agent-seg button.on.risk-medium { background: rgba(255, 159, 10, 0.16); color: #ff9f0a; }
+.agent-ask { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.agent-folders { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.agent-folders > .muted { flex-basis: 100%; }
+.agent-folder-add { display: inline-flex; gap: 6px; align-items: center; }
+.agent-folder-add input { width: 200px; }
+.agent-tools-wrap summary { cursor: pointer; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+@media (max-width: 560px) {
+  .agent-hero-actions { align-items: stretch; width: 100%; }
+  .agent-folder-add input { width: 140px; }
+}
 
 /* Where you're signed in (Your Account, and Users for administrators). */
 .session-row.current .dev-row-icon { color: var(--accent); }
