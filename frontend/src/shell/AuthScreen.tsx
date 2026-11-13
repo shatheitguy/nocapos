@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { accountsMode, login, loginCode, setup } from '../api/client';
+import { accountsMode, login, loginCode, setup, setupStatus } from '../api/client';
+import { useT } from '../i18n';
 import { Icon } from '../components/Icon';
 import { Logo } from '../components/Logo';
 import { UserAvatar } from '../components/UserAvatar';
@@ -291,54 +292,96 @@ function MacAction({
   );
 }
 
+/**
+ * First start: create the administrator, like any computer's first boot.
+ * From the server's own screen or its local network that's a name and a
+ * password; from anywhere else the server also asks for the one-time setup
+ * token, and this explains where to find it.
+ */
 function SetupForm() {
+  const t = useT();
+  const [needsToken, setNeedsToken] = useState(false);
   const [token, setToken] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [again, setAgain] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
+  useEffect(() => {
+    void setupStatus().then((s) => setNeedsToken(s.tokenRequired));
+  }, []);
+
+  const fail = (msg: string) => {
+    setError(msg);
+    setShake((n) => n + 1);
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!token.trim()) return setError('First up: enter the setup token printed in the NoCapOS console.');
-    if (password.length < 10) {
-      setShake((n) => n + 1);
-      return setError('Too short — use a password of at least 10 characters.');
-    }
+    const name = username.trim();
+    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/i.test(name)) return fail(t('setup.nameRule'));
+    if (password.length < 10) return fail(t('setup.passwordShort'));
+    if (password !== again) return fail(t('setup.passwordMismatch'));
+    if (needsToken && !token.trim()) return fail(t('setup.tokenMissing'));
     setBusy(true);
-    const err = await setup(token.trim(), username.trim(), password);
+    const r = await setup(needsToken ? token.trim() : '', name, password);
     setBusy(false);
-    if (err) {
-      setError(err);
-      setShake((n) => n + 1);
+    if (!r) return;
+    if (r.done) {
+      window.location.reload(); // someone else finished first: sign in instead
+      return;
     }
+    if (r.needsToken) setNeedsToken(true);
+    fail(r.error);
   };
 
   return (
-    <form className="mac-login setup" onSubmit={submit}>
+    <form className="mac-login setup setup-create" onSubmit={submit}>
       <Logo size={64} />
-      <p className="mac-sub">Welcome in. Create the administrator account — the one-time setup token is printed in the NoCapOS console / log.</p>
-      <div className="mac-pill user">
-        <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Setup token" aria-label="Setup token" autoComplete="off" spellCheck={false} autoFocus />
-      </div>
+      <h1 className="setup-create-title">{t('setup.createTitle')}</h1>
+      <p className="mac-sub">{t('setup.createSub')}</p>
       <div className="mac-pill user">
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="Administrator name"
-          aria-label="Administrator name"
+          placeholder={t('setup.namePh')}
+          aria-label={t('setup.namePh')}
           autoComplete="username"
           minLength={3}
           maxLength={32}
           spellCheck={false}
+          autoCapitalize="none"
+          autoFocus
           required
         />
       </div>
-      <PasswordPill value={password} onChange={setPassword} autoComplete="new-password" placeholder="Choose a password (10+ characters)" busy={busy} shake={shake} />
+      <div className="mac-pill user">
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder={t('setup.passwordPh')}
+          aria-label={t('setup.passwordPh')}
+          autoComplete="new-password"
+          required
+        />
+      </div>
+      {needsToken && (
+        <>
+          <div className="mac-pill user">
+            <input type="password" value={again} onChange={(e) => setAgain(e.target.value)} placeholder={t('setup.againPh')} aria-label={t('setup.againPh')} autoComplete="new-password" required />
+          </div>
+          <p className="setup-token-why">{t('setup.tokenWhy')}</p>
+          <PasswordPill value={token} onChange={setToken} autoComplete="off" placeholder={t('setup.tokenPh')} busy={busy} shake={shake} />
+        </>
+      )}
+      {!needsToken && (
+        <PasswordPill value={again} onChange={setAgain} autoComplete="new-password" placeholder={t('setup.againPh')} busy={busy} shake={shake} />
+      )}
       <p className={`mac-hint ${error ? 'err' : ''}`} role="alert">
-        {error}
+        {error || (needsToken ? '' : t('setup.localHint'))}
       </p>
     </form>
   );

@@ -575,7 +575,11 @@ func applyIPv4(ctx context.Context, conn string, c IPv4Config) error {
 type pendingChange struct {
 	conn  string
 	old   IPv4Config
+	old6  *IPv6Config // set when the change touches IPv6 too
 	timer *time.Timer
+	// applied: the new settings are live, so reaching the server now proves
+	// they work (ConfirmIP only counts after this).
+	applied bool
 }
 
 var (
@@ -633,9 +637,16 @@ func RevertIPv4(token string) bool {
 	}
 	pendingMu.Unlock()
 	if ok {
-		go func() { _ = applyIPv4(context.Background(), pc.conn, pc.old) }()
+		go func() { _ = pc.revert(context.Background()) }()
 	}
 	return ok
+}
+
+func (pc *pendingChange) revert(ctx context.Context) error {
+	if pc.old6 == nil {
+		return applyIPv4(ctx, pc.conn, pc.old)
+	}
+	return applyIP(ctx, pc.conn, pc.old, *pc.old6)
 }
 
 // KeepIPv4 confirms a change made by ChangeIPv4.
@@ -649,6 +660,201 @@ func KeepIPv4(token string) bool {
 	pc.timer.Stop()
 	delete(pending, token)
 	return true
+}
+
+// ---------- IPv4 + IPv6 together, confirmed by reaching the server ----------
+
+// IPv6Config is a requested IPv6 setup.
+type IPv6Config struct {
+	Method  string   `json:"method"`  // auto (router advertisements / DHCPv6) | manual | disabled
+	Address string   `json:"address"` // CIDR, e.g. fd00::50/64 (manual)
+	Gateway string   `json:"gateway"`
+	DNS     []string `json:"dns"`
+}
+
+// Validate checks a requested IPv6 configuration.
+func (c IPv6Config) Validate() error {
+	switch c.Method {
+	case "auto", "disabled":
+	case "manual":
+		p, err := netip.ParsePrefix(strings.TrimSpace(c.Address))
+		if err != nil || !p.Addr().Is6() || p.Addr().Is4In6() || p.Bits() < 1 || p.Bits() > 128 {
+			return errors.New("enter the IPv6 address with its prefix, e.g. fd00::50/64")
+		}
+		if c.Gateway != "" {
+			g, err := netip.ParseAddr(strings.TrimSpace(c.Gateway))
+			if err != nil || !g.Is6() || g.Is4In6() {
+				return errors.New("the IPv6 gateway must be an IPv6 address")
+			}
+			// Routers often advertise themselves by their link-local address.
+			if !g.IsLinkLocalUnicast() && !p.Masked().Contains(g) {
+				return fmt.Errorf("the IPv6 gateway %s isn't on the %s network", g, p.Masked())
+			}
+		}
+	default:
+		return errors.New("IPv6 method must be auto, manual (static) or disabled")
+	}
+	for _, d := range c.DNS {
+		if a, err := netip.ParseAddr(strings.TrimSpace(d)); err != nil || !a.Is6() || a.Is4In6() {
+			return fmt.Errorf("%q isn't an IPv6 DNS server", d)
+		}
+	}
+	return nil
+}
+
+// modifyArgs6 is the IPv6 part of `nmcli connection modify`. method is passed
+// through as is, so reverting can restore whatever the profile had before.
+func modifyArgs6(c IPv6Config) []string {
+	dns := strings.Join(c.DNS, " ")
+	var args []string
+	if c.Method == "manual" {
+		args = []string{"ipv6.method", "manual", "ipv6.addresses", strings.TrimSpace(c.Address), "ipv6.gateway", strings.TrimSpace(c.Gateway)}
+	} else {
+		args = []string{"ipv6.method", c.Method, "ipv6.addresses", "", "ipv6.gateway", ""}
+	}
+	args = append(args, "ipv6.dns", dns)
+	if c.Method == "auto" && dns != "" {
+		args = append(args, "ipv6.ignore-auto-dns", "yes")
+	} else {
+		args = append(args, "ipv6.ignore-auto-dns", "no")
+	}
+	return args
+}
+
+// connIPv6 reads a profile's configured IPv6 settings (for revert).
+func connIPv6(ctx context.Context, conn string) (IPv6Config, error) {
+	out, err := runCmd(ctx, "nmcli", "-t", "-f", "ipv6.method,ipv6.addresses,ipv6.gateway,ipv6.dns", "connection", "show", conn)
+	if err != nil {
+		return IPv6Config{}, err
+	}
+	kv := keyValues(out)
+	c := IPv6Config{Method: "auto", DNS: splitList(kv["ipv6.dns"])}
+	if m := kv["ipv6.method"]; len(m) > 0 && validNMMethod6(m[0]) {
+		c.Method = m[0]
+	}
+	if a := splitList(kv["ipv6.addresses"]); len(a) > 0 {
+		c.Address = a[0]
+	}
+	if g := kv["ipv6.gateway"]; len(g) > 0 {
+		c.Gateway = g[0]
+	}
+	return c, nil
+}
+
+func validNMMethod6(m string) bool {
+	switch m {
+	case "auto", "dhcp", "link-local", "manual", "ignore", "disabled", "shared":
+		return true
+	}
+	return false
+}
+
+func applyIP(ctx context.Context, conn string, v4 IPv4Config, v6 IPv6Config) error {
+	args := append(modifyArgs(conn, v4), modifyArgs6(v6)...)
+	if _, err := runCmd(ctx, "nmcli", args...); err != nil {
+		return err
+	}
+	_, err := runCmd(ctx, "nmcli", "connection", "up", conn)
+	return err
+}
+
+// IPChange is a new address setup for one connection. IPv6 is optional
+// (nil leaves it as it is).
+type IPChange struct {
+	IPv4 IPv4Config  `json:"ipv4"`
+	IPv6 *IPv6Config `json:"ipv6,omitempty"`
+}
+
+// applyDelay lets the HTTP response get out before the address changes.
+var applyDelay = 800 * time.Millisecond
+
+// ChangeIP applies a new IPv4 (and optionally IPv6) setup shortly after
+// returning, and puts the old one back after keep unless the change is
+// confirmed: by ConfirmIP once the browser reaches the server on its new
+// address, or by KeepIPv4. A change that cuts the browser off undoes itself.
+func ChangeIP(ctx context.Context, conn string, c IPChange, keep time.Duration) (string, error) {
+	if err := canControl(); err != nil {
+		return "", err
+	}
+	if conn == "" || strings.ContainsAny(conn, "\x00\n") {
+		return "", errors.New("invalid connection")
+	}
+	if err := c.IPv4.Validate(); err != nil {
+		return "", err
+	}
+	if c.IPv6 != nil {
+		if err := c.IPv6.Validate(); err != nil {
+			return "", err
+		}
+	}
+	old, err := connIPv4(ctx, conn)
+	if err != nil {
+		return "", fmt.Errorf("couldn't read the current settings: %w", err)
+	}
+	pc := &pendingChange{conn: conn, old: old}
+	if c.IPv6 != nil {
+		old6, err := connIPv6(ctx, conn)
+		if err != nil {
+			return "", fmt.Errorf("couldn't read the current IPv6 settings: %w", err)
+		}
+		pc.old6 = &old6
+	}
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(b)
+	pendingMu.Lock()
+	pending[token] = pc
+	pc.timer = time.AfterFunc(keep, func() {
+		pendingMu.Lock()
+		_, still := pending[token]
+		delete(pending, token)
+		pendingMu.Unlock()
+		if still {
+			_ = pc.revert(context.Background()) // nobody confirmed: put it back
+		}
+	})
+	pendingMu.Unlock()
+	go func() {
+		time.Sleep(applyDelay)
+		var err error
+		if c.IPv6 != nil {
+			err = applyIP(context.Background(), conn, c.IPv4, *c.IPv6)
+		} else {
+			err = applyIPv4(context.Background(), conn, c.IPv4)
+		}
+		pendingMu.Lock()
+		if _, still := pending[token]; still && err == nil {
+			pc.applied = true
+		}
+		pendingMu.Unlock()
+	}()
+	return token, nil
+}
+
+// Confirm results.
+const (
+	ConfirmKept    = "kept"    // confirmed: the new settings stay
+	ConfirmPending = "pending" // not live yet: ask again in a moment
+	ConfirmGone    = "gone"    // unknown token, or already reverted
+)
+
+// ConfirmIP keeps a change made by ChangeIP, but only once it is live: the
+// browser reaching the server after that is the proof the new address works.
+func ConfirmIP(token string) string {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+	pc, ok := pending[token]
+	if !ok {
+		return ConfirmGone
+	}
+	if !pc.applied {
+		return ConfirmPending
+	}
+	pc.timer.Stop()
+	delete(pending, token)
+	return ConfirmKept
 }
 
 // ---------- Windows (read-only) ----------

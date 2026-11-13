@@ -214,6 +214,8 @@ object Opt {
     val forwardApps = SetPref("forward_apps")
     val clipSync = BoolPref("clip_sync", false)
     val liveNotices = BoolPref("live_notices", true)
+    /** NoCap OS may ask to mirror this screen (each session still needs an OK). */
+    val mirrorAsks = BoolPref("mirror_asks", true)
 
     // NoCap Link + one-offs (not part of a backup)
     val serverNotices = BoolPref("server_notices", false)
