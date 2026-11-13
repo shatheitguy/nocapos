@@ -71,7 +71,7 @@ object Weather {
     fun forecast(p: Place, f: Boolean, force: Boolean = false): Report {
         cached(p, f)?.let { if (!force && System.currentTimeMillis() - it.fetched < 20 * 60_000) return it }
         val unit = if (f) "&temperature_unit=fahrenheit&wind_speed_unit=mph" else ""
-        val url = "https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}" +
+        val url = "https://api.open-meteo.com/v1/forecast?latitude=${rough(p.lat)}&longitude=${rough(p.lon)}" +
             "&current=temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m,relative_humidity_2m" +
             "&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
             "&timezone=auto&forecast_days=7&forecast_hours=24$unit"
@@ -98,7 +98,18 @@ object Weather {
         return r
     }
 
-    private fun get(url: String): String = http.newCall(Request.Builder().url(url).header("User-Agent", "NoCapOS-phone").build()).execute().use { r ->
+    /** Weather is opt-in: nothing goes to Open-Meteo until you turn it on. */
+    class Off : IllegalStateException("Weather is off")
+
+    /** About 1 km: Open-Meteo never gets a precise location. */
+    fun rough(v: Double): Double = Math.round(v * 100.0) / 100.0
+
+    private fun get(url: String): String {
+        if (!Opt.weatherOn.v) throw Off()
+        return fetch(url)
+    }
+
+    private fun fetch(url: String): String = http.newCall(Request.Builder().url(url).header("User-Agent", "NoCapOS-phone").build()).execute().use { r ->
         if (!r.isSuccessful) error("weather service said HTTP ${r.code}")
         r.body?.string() ?: ""
     }
@@ -106,23 +117,19 @@ object Weather {
     fun hasLocation(ctx: Context) = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     /**
-     * The phone's rough location (only with permission), named if possible.
-     * Blocking (the place name comes from the network): call it off the main thread.
+     * The phone's rough location (only with permission), rounded to about
+     * 1 km. Not named through a geocoding service: that would send it to one
+     * more company.
      */
     @SuppressLint("MissingPermission")
     fun here(ctx: Context): Place? {
         // Checked right before use: location access can be revoked at any time.
-        if (!hasLocation(ctx)) return null
+        if (!Opt.weatherOn.v || !hasLocation(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
         val loc: Location = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER, LocationManager.GPS_PROVIDER)
             .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
             .maxByOrNull { it.time } ?: return null
-        val name = runCatching {
-            if (!android.location.Geocoder.isPresent()) return@runCatching null
-            @Suppress("DEPRECATION")
-            android.location.Geocoder(ctx.applicationContext).getFromLocation(loc.latitude, loc.longitude, 1)?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
-        }.getOrNull() ?: t("Right here", "My location")
-        val p = Place(name, loc.latitude, loc.longitude)
+        val p = Place(t("Right here", "My location"), rough(loc.latitude), rough(loc.longitude))
         Opt.weatherPlace.set(p.encode()) // remembered for home-screen widgets in other launchers
         return p
     }
