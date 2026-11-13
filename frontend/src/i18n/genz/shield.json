@@ -38,7 +38,7 @@
   "sh.fw.install": "Install ufw",
   "sh.fw.installing": "Installing…",
   "sh.fw.installed": "ufw is in",
-  "sh.fw.installYourself": "NoCapOS can't install packages here. Install ufw yourself, then come back.",
+  "sh.fw.installYourself": "The firewall can't be set up on this system.",
   "sh.policy.allow": "Let in",
   "sh.policy.deny": "Ghost (drop)",
   "sh.policy.reject": "Reject",

@@ -92,5 +92,12 @@
   "files.share.saved": "{name} saved",
   "files.share.deletedAll": "{name} and its files have been deleted",
   "files.share.stopped": "Stopped sharing {name}. Its files were kept.",
-  "files.share.created": "{name} is shared. Choose who can open it below."
+  "files.share.created": "{name} is shared. Choose who can open it below.",
+  "files.appdata.title": "App data",
+  "files.appdata.empty": "No app data",
+  "files.appdata.emptyText": "Installed apps keep their settings, databases and downloads here.",
+  "files.appdata.off": "Docker isn’t running, so app data can’t be listed.",
+  "files.appdata.blocked": "Can’t be opened: {why}",
+  "files.appdata.readOnly": "The app only reads this folder",
+  "files.appdata.volume": "Volume {name}"
 }

@@ -99,6 +99,8 @@ type Service struct {
 	// resolve finds locations that aren't in roots: people's homes and
 	// shared folders, which come and go with accounts and settings.
 	resolve Resolver
+	// extra are further lookups (each Docker app's data folders), tried in turn.
+	extra []Resolver
 }
 
 // Resolver maps the id of a location that isn't fixed (a person's home, a
@@ -112,6 +114,20 @@ func (s *Service) SetResolver(r Resolver) {
 	defer s.mu.Unlock()
 	s.resolve = r
 }
+
+// AddResolver adds a further lookup for locations that aren't fixed (tried
+// after the one SetResolver installs). Like Resolver, it does no access control.
+func (s *Service) AddResolver(r Resolver) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.extra = append(s.extra, r)
+}
+
+// Protected returns the folders NoCapOS protects completely (see Protect).
+func (s *Service) Protected() []string { return append([]string(nil), s.protected...) }
+
+// Within reports whether p is dir or inside it (case-insensitive on Windows).
+func Within(p, dir string) bool { return within(p, dir) }
 
 // ProtectPoints marks folders that may not themselves be removed or moved.
 func (s *Service) ProtectPoints(dirs ...string) {
@@ -182,6 +198,11 @@ func (s *Service) guard(rootID, rel string) error {
 					break
 				}
 			}
+			// A location found by a resolver (an app's data folder) that lives
+			// strictly inside the protected folder counts too.
+			if rp, err := filepath.Abs(r.Path); !inRoot && err == nil && within(rp, p) && !within(p, rp) && within(full, rp) && !within(rp, full) {
+				inRoot = true
+			}
 			if !inRoot {
 				return ErrProtected
 			}
@@ -224,9 +245,15 @@ func (s *Service) Root(id string) (*Root, error) {
 			return &r, nil
 		}
 	}
-	resolve := s.resolve
+	resolvers := append([]Resolver{s.resolve}, s.extra...)
 	s.mu.RUnlock()
-	if resolve != nil && id != "" {
+	if id == "" {
+		return nil, ErrUnknownRoot
+	}
+	for _, resolve := range resolvers {
+		if resolve == nil {
+			continue
+		}
 		if r, ok := resolve(id); ok {
 			return r, nil
 		}

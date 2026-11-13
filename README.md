@@ -177,6 +177,11 @@ deploy/             installer, systemd unit, Docker Compose files
   It prints a temporary password, turns two-factor authentication off for that account and ends its
   sessions. Restart the service (`systemctl restart nocapos`) to lift a lockout right away.
 - Everyone is signed out when the machine restarts.
+- Made NoCapOS local-only and can't reach the server's own screen? On the server's console,
+  `sudo cap web on` lets other devices back in.
+- Settings → General → Export & Restore downloads a backup of NoCapOS's database and restores one
+  (checked, then put in place at the next restart; the replaced database is kept next to it as
+  `alfa.db.before-restore-<time>`).
 - The Terminal's host shell runs as your own Linux account (use `sudo` for administration);
   administrators can open a root shell from the Terminal after re-entering their password.
 - Choosing who can use an App Store app controls who sees it in NoCapOS, not network access to the

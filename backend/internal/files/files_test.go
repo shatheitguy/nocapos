@@ -301,3 +301,40 @@ func TestIndexSearch(t *testing.T) {
 		t.Errorf("stats = %d %v", n, building)
 	}
 }
+
+func TestResolvedLocationInsideProtected(t *testing.T) {
+	base := t.TempDir()
+	data := filepath.Join(base, "data")
+	vol := filepath.Join(data, "volumes", "app", "_data")
+	if err := os.MkdirAll(filepath.Join(vol, "cache"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s, err := New([]Root{{ID: "home", Name: "Home", Path: filepath.Join(base, "home")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Protect(data)
+	s.SetResolver(func(string) (*Root, bool) { return nil, false })
+	s.AddResolver(func(id string) (*Root, bool) {
+		switch id {
+		case "app:x:0":
+			return &Root{ID: id, Name: "x", Path: vol}, true
+		case "app:whole:0":
+			return &Root{ID: id, Name: "whole", Path: data}, true
+		}
+		return nil, false
+	})
+	if r, err := s.Root("app:x:0"); err != nil || r.Path != vol {
+		t.Fatalf("Root = %+v, %v", r, err)
+	}
+	if err := s.Delete("app:x:0", []string{"cache"}, true); err != nil {
+		t.Errorf("delete inside an app's folder: %v", err)
+	}
+	// A resolved location that is the protected folder itself opens nothing up.
+	if err := s.Delete("app:whole:0", []string{"volumes"}, true); !errors.Is(err, ErrProtected) {
+		t.Errorf("delete in protected folder = %v, want ErrProtected", err)
+	}
+	if _, err := s.Root("app:none:0"); !errors.Is(err, ErrUnknownRoot) {
+		t.Errorf("unknown = %v", err)
+	}
+}

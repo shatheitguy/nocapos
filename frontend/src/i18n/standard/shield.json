@@ -38,7 +38,7 @@
   "sh.fw.install": "Install ufw",
   "sh.fw.installing": "Installing…",
   "sh.fw.installed": "ufw installed",
-  "sh.fw.installYourself": "NoCapOS cannot install packages on this system. Install ufw manually, then reopen Shield.",
+  "sh.fw.installYourself": "The firewall can't be set up on this system.",
   "sh.policy.allow": "Allow",
   "sh.policy.deny": "Deny (drop)",
   "sh.policy.reject": "Reject",

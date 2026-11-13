@@ -16,6 +16,7 @@ import {
 } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { confirmDialog } from '../state/confirm';
+import { toast } from '../state/toasts';
 import { tr, useT } from '../i18n';
 
 // Settings → Personalization pages, plus the layout pieces every settings page
@@ -285,7 +286,7 @@ export function DockSettings() {
   const prefs = usePrefs();
   const set = prefs.set;
   return (
-    <div className="stack settings-page">
+    <>
       <Section title={t('pz.layout')} hint={t('pz.layoutHint')}>
         <Row label={t('pz.position')}>
           <Choice value={prefs.dockPosition} onChange={(dockPosition) => set({ dockPosition })} options={[
@@ -308,7 +309,7 @@ export function DockSettings() {
       </Section>
 
       <p className="settings-tip">{t('pz.dockTip')}</p>
-    </div>
+    </>
   );
 }
 
@@ -321,7 +322,7 @@ export function DesktopSettings() {
   const cleanUp = useDesktopIcons((s) => s.cleanUp);
   const iconCount = useDesktopIcons((s) => s.icons.length);
   return (
-    <div className="stack settings-page">
+    <>
       <Section title={t('pz.widgets')} hint={t('pz.widgetsHint')}>
         <Toggle label={t('pz.showWidgets')} hint={t('pz.showWidgetsHint')}
           checked={prefs.widgets} onChange={(widgets) => set({ widgets })} />
@@ -341,7 +342,7 @@ export function DesktopSettings() {
           </button>
         </Row>
       </Section>
-    </div>
+    </>
   );
 }
 
@@ -373,14 +374,17 @@ export function WindowSettings() {
 function ResetSection() {
   const t = useT();
   const set = usePrefs((s) => s.set);
-  const reset = () => {
+  const reset = async () => {
+    const ok = await confirmDialog({ title: tr('su.resetTitle'), message: tr('su.resetMsg'), confirmLabel: tr('pz.reset'), danger: true });
+    if (!ok) return;
     const defaults = Object.fromEntries(PERSONALIZATION_KEYS.map((k) => [k, DEFAULT_PREFS[k]])) as Partial<PrefValues>;
     set(defaults);
+    toast('success', tr('su.resetDone'));
   };
   return (
     <Section title={t('pz.resetSection')} hint={t('pz.resetSectionHint')}>
       <Row label={t('pz.resetRow')} hint={t('pz.resetHint')}>
-        <button type="button" className="ghost small" onClick={reset}>
+        <button type="button" className="ghost small danger" onClick={() => void reset()}>
           {t('pz.reset')}
         </button>
       </Row>

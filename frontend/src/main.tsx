@@ -12,7 +12,6 @@ import './styles/files.css';
 import './styles/appstore.css';
 import './styles/settings.css';
 import './styles/devices.css';
-import './styles/photos.css';
 import './styles/storage.css';
 import './styles/containers.css';
 import './styles/virtualdesk.css';
@@ -22,6 +21,9 @@ import './styles/shield.css';
 import './styles/phone.css';
 import './themes.css';
 import './glass.css';
+// After the themes: Photos is always dark glass and keeps its own button styles.
+import './styles/photos.css';
+import './styles/media.css';
 import './styles/mobile.css';
 
 createRoot(document.getElementById('root')!).render(
