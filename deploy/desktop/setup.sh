@@ -161,13 +161,27 @@ desk_settings() {
   fi
   render_dconf_local "$favs" "${exts[@]}" >/etc/dconf/db/local.d/00-nocapos
   render_dconf_locks >/etc/dconf/db/local.d/locks/nocapos
-  # The sign-in screen.
-  if [ ! -f /etc/dconf/profile/gdm ]; then
-    desk_keep /etc/dconf/profile/gdm
-    printf 'user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n' >/etc/dconf/profile/gdm
-  fi
+  # The sign-in screen: the distribution's own profile plus NoCapOS's
+  # database. Earlier versions wrote a profile of their own whose file-db
+  # Debian doesn't have; that one is rebuilt.
+  desk_gdm_profile
   render_dconf_gdm >/etc/dconf/db/gdm.d/90-nocapos
   has dconf && { dconf update >/dev/null 2>&1 || warn "full desktop: dconf update failed"; }
+}
+
+desk_gdm_profile() {
+  local p=/etc/dconf/profile/gdm cur="" want
+  [ -f "$p" ] && cur="$(cat "$p")"
+  if [ ! -f "$p" ] || [ "$cur" = "$LEGACY_GDM_PROFILE" ]; then
+    desk_keep "$p"
+    want="$(render_gdm_profile </usr/share/dconf/profile/gdm 2>/dev/null || render_gdm_profile </dev/null)"
+  else
+    want="$(render_gdm_profile <"$p")"
+  fi
+  if [ "$cur" != "$want" ]; then
+    desk_keep "$p"
+    printf '%s\n' "$want" >"$p"
+  fi
 }
 
 desk_units() {
@@ -289,6 +303,41 @@ desk_take_display_manager() { # $1 = GDM unit
     systemctl disable "$u" >/dev/null 2>&1 || true
   done
   if [ "$DESK_DM_SWITCHED" -eq 1 ]; then printf '    sign-in screen: GDM from the next restart (was %s)\n' "$cur"; fi
+}
+
+# desk_link_display_manager UNIT: graphical.target starts whatever
+# /etc/systemd/system/display-manager.service points at. Debian's and
+# Ubuntu's gdm3.service has no [Install] section (their packages manage
+# that link through a debconf question instead), so "systemctl enable gdm3"
+# does nothing there: without this link the machine boots to a screen with
+# no sign-in screen at all.
+desk_link_display_manager() {
+  local unit="$1" link=/etc/systemd/system/display-manager.service path d
+  path="$(systemctl show -p FragmentPath --value "$unit" 2>/dev/null || true)"
+  if [ -z "$path" ] || [ ! -f "$path" ]; then
+    path=""
+    for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
+      if [ -f "$d/$unit" ] && [ ! -L "$d/$unit" ]; then path="$d/$unit"; break; fi
+    done
+  fi
+  [ -n "$path" ] || { warn "NoCap Desktop: $unit isn't installed"; return 1; }
+  if [ "$(readlink -f "$link" 2>/dev/null)" != "$(readlink -f "$path")" ]; then
+    ln -sfn "$path" "$link"
+    printf '    sign-in screen: %s starts at boot\n' "$unit"
+  fi
+  if [ -d /etc/X11 ] && [ -x /usr/sbin/gdm3 ] && [ "$unit" = gdm3.service ]; then
+    echo /usr/sbin/gdm3 >/etc/X11/default-display-manager
+  fi
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
+# desk_unlink_display_manager UNIT: the link goes when it's GDM's (off).
+desk_unlink_display_manager() {
+  local link=/etc/systemd/system/display-manager.service
+  if [ -L "$link" ] && [ "$(basename "$(readlink -f "$link")")" = "$1" ]; then
+    rm -f "$link"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
 }
 
 # desk_session: NoCapOS is the session GDM starts. Every account's saved
@@ -556,6 +605,7 @@ install_full_desktop() {
   conf="$(gdm_config "")"
   desk_take_display_manager "$dm"
   desk_session "$conf"
+  desk_pi_kms
   # NVIDIA's own driver without kernel modesetting can't run the Wayland
   # session; GDM falls back to Xorg, which needs the modeset switch too.
   if nvidia_proprietary "" && [ "$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null)" != Y ]; then
@@ -564,6 +614,45 @@ install_full_desktop() {
   desk_write_conf "$dm" "$conf"
   first_user_hint
   return 0
+}
+
+# desk_pi_kms: a Raspberry Pi gets its KMS graphics driver (GNOME Shell
+# can't draw without it). Recorded, so uninstall takes it out again.
+desk_pi_kms() {
+  local f
+  [ "$(boot_methods "" | grep -c '^pi$')" -gt 0 ] || return 0
+  for f in /boot/firmware/config.txt /boot/config.txt; do
+    [ -f "$f" ] || continue
+    if pi_kms_missing <"$f"; then
+      config_txt_append "$PI_KMS_OVERLAY" <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
+      rm -f "$f.nocap.tmp"
+      desk_record "configtxt|$f|$PI_KMS_OVERLAY"
+      desk_restart_needed "the Raspberry Pi's graphics driver (KMS) was turned on for NoCap Desktop"
+    fi
+    break
+  done
+  return 0
+}
+
+# desk_verify UNIT: everything the screen needs is really there. Says what
+# isn't (each of these ends in a black screen).
+desk_verify() {
+  local ok=0 f found
+  for f in gnome-shell gnome-session; do has "$f" || { warn "NoCap Desktop: $f is missing"; ok=1; }; done
+  [ -f "/usr/share/wayland-sessions/$NOCAP_SESSION.desktop" ] || { warn "NoCap Desktop: the NoCapOS session file is missing"; ok=1; }
+  [ -f "/usr/share/xsessions/$NOCAP_SESSION.desktop" ] || { warn "NoCap Desktop: the NoCapOS Xorg session file is missing"; ok=1; }
+  if ! has Xorg && [ ! -x /usr/lib/xorg/Xorg ] && [ ! -x /usr/libexec/Xorg ]; then
+    warn "NoCap Desktop: Xorg is missing, so there's no fallback when Wayland can't run on this graphics card"; ok=1
+  fi
+  found=0
+  for f in /usr/lib/*/dri/swrast_dri.so /usr/lib/dri/swrast_dri.so /usr/lib64/dri/swrast_dri.so /usr/lib/*/libgallium-*.so /usr/lib64/libgallium-*.so /usr/lib/libgallium-*.so; do
+    if [ -e "$f" ]; then found=1; break; fi
+  done
+  [ "$found" -eq 1 ] || { warn "NoCap Desktop: the Mesa graphics drivers are missing"; ok=1; }
+  [ "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)")" = "$1" ] ||
+    { warn "NoCap Desktop: $1 isn't set to start at boot"; ok=1; }
+  if grep -qs 'NoCapOS install.sh' /usr/sbin/policy-rc.d; then rm -f /usr/sbin/policy-rc.d; fi
+  return "$ok"
 }
 
 # GDM signs in with this machine's Linux accounts (the same ones NoCapOS
@@ -587,8 +676,14 @@ apply_desktop_mode() {
   case "$1" in
     full)
       systemctl set-default graphical.target >/dev/null 2>&1 || true
-      systemctl enable --force "$dm" >/dev/null 2>&1 || warn "NoCap Desktop: couldn't enable the sign-in screen"
-      if systemctl is-active --quiet "$dm"; then
+      systemctl enable --force "$dm" >/dev/null 2>&1 || true
+      desk_link_display_manager "$dm" || warn "NoCap Desktop: couldn't enable the sign-in screen"
+      desk_verify "$dm" || warn "NoCap Desktop: some parts are missing (above); fix with Settings → General → NoCap Desktop → Repair, or: sudo cap desktop repair"
+      if systemctl is-active --quiet "$dm" && display_connected && has pgrep && ! pgrep -x gnome-shell >/dev/null 2>&1; then
+        # GDM runs but nothing is on the screen (a black screen): nobody can
+        # be signed in, so restarting it signs nobody out.
+        systemctl restart "$dm" >/dev/null 2>&1 || desk_restart_needed "NoCap Desktop's sign-in screen didn't restart; it starts after a restart"
+      elif systemctl is-active --quiet "$dm"; then
         if [ "$DESK_SESSION_CHANGED" -eq 1 ]; then
           desk_restart_needed "the screen moves to the NoCapOS desktop after a restart (or sign out and back in)"
         fi
@@ -602,6 +697,7 @@ apply_desktop_mode() {
       ;;
     off)
       systemctl disable --now "$dm" >/dev/null 2>&1 || true
+      desk_unlink_display_manager "$dm"
       systemctl set-default multi-user.target >/dev/null 2>&1 || true
       systemctl --no-block start getty@tty1.service >/dev/null 2>&1 || true
       ;;
