@@ -90,5 +90,13 @@
   "sn.ip.apply": "Apply",
   "sn.ip.applying": "Applying…",
   "set.shield": "Shield",
-  "set.shield.desc": "Firewall & DNS blocker: rules, what's exposed, and blocking ads and trackers"
+  "set.shield.desc": "Firewall & DNS blocker: rules, what's exposed, and blocking ads and trackers",
+  "set.setup": "Setup wizard",
+  "set.setup.desc": "Run the first-start steps again: voice, look and the rest",
+  "set.setupRun": "Run it back",
+  "set.storageApp": "Pools, snapshots & shares",
+  "set.storageApp.desc": "Drive health, pools, snapshots, shares and the boot drive live in the Storage app",
+  "set.storageOpen": "Open Storage",
+  "set.setupRow": "Do the setup again",
+  "set.storageRow": "Manage your drives"
 }
