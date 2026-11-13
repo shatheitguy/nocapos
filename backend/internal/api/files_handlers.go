@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"alfaos/alfad/internal/appdata"
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
 	"alfaos/alfad/internal/spaces"
@@ -920,4 +921,21 @@ func (s *Server) startArchiveJob(w http.ResponseWriter, r *http.Request, kind, r
 		}
 	})
 	writeJSON(w, http.StatusAccepted, j)
+}
+
+// filesAppData lists every Docker app with its data folders (administrators
+// only). Each folder opens in Files as its own location; folders that would
+// lead into the system or NoCapOS's own files are listed with the reason
+// and never open.
+func (s *Server) filesAppData(w http.ResponseWriter, r *http.Request) {
+	if s.appData == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"apps": []appdata.App{}, "available": false})
+		return
+	}
+	apps, err := s.appData.Apps(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"apps": []appdata.App{}, "available": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "available": true})
 }

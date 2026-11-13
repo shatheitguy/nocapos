@@ -2,6 +2,7 @@
 package api
 
 import (
+	"alfaos/alfad/internal/appdata"
 	"context"
 	"log/slog"
 	"net/http"
@@ -73,6 +74,7 @@ type Deps struct {
 
 type Server struct {
 	Deps
+	appData         *appdata.Manager // each Docker app's data folders in Files
 	hub             *ws.Hub
 	tickets         *auth.TicketStore
 	fileTickets     fileTicketStore
@@ -118,6 +120,10 @@ func New(ctx context.Context, d Deps) *Server {
 	s.notify.OnAdd(s.link().noticeAdded) // wakes phones' long-polls
 	s.crashes = notify.NewCrashWatch()
 	s.ctStats = docker.NewStatsSampler(d.Docker)
+	if d.Docker != nil && d.Files != nil {
+		s.appData = appdata.New(d.Docker, d.Files.Protected)
+		d.Files.AddResolver(s.appData.Resolve)
+	}
 	s.webBook = webaddr.NewBook(d.Store)
 	s.pkgJobs = syspkg.NewJobs()
 	s.pkgAdmin = syspkg.NewAdmin()
@@ -198,6 +204,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/info", s.authed(s.systemInfo))
 	mux.Handle("GET /api/v1/system/metrics", s.authed(s.systemMetrics))
 	mux.Handle("GET /api/v1/system/backup", s.admin(s.systemBackup))
+	mux.Handle("GET /api/v1/system/restore", s.admin(s.systemRestoreStatus))
+	mux.Handle("POST /api/v1/system/restore", s.admin(s.systemRestore))
+	mux.Handle("DELETE /api/v1/system/restore", s.admin(s.systemRestoreCancel))
 	mux.Handle("GET /api/v1/system/logs", s.admin(s.systemLogs))
 	mux.Handle("GET /api/v1/system/update", s.admin(s.systemUpdate))
 	mux.Handle("GET /api/v1/system/update/run", s.admin(s.systemUpdateRunStatus))
@@ -344,6 +353,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/files/favorites", s.authed(s.filesFavorites))
 	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))
 	mux.Handle("GET /api/v1/files/external", s.authed(s.filesExternal))
+	mux.Handle("GET /api/v1/files/appdata", s.admin(s.filesAppData))
 	mux.Handle("POST /api/v1/files/external/eject", s.admin(s.filesEject))
 	mux.Handle("POST /api/v1/files/compress", s.authed(s.filesCompress))
 	mux.Handle("POST /api/v1/files/extract", s.authed(s.filesExtract))

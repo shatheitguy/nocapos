@@ -77,8 +77,32 @@ export const fileApi = {
   eject: (path: string) => api<{ name: string; powered_off: boolean }>('/api/v1/files/external/eject', { method: 'POST', body: { path } }),
   compress: (root: string, paths: string[], dest: string, name: string) =>
     api<TransferJob>('/api/v1/files/compress', { method: 'POST', body: { root, paths, dest, name } }),
+  appData: () => api<{ apps: AppData[]; available: boolean }>('/api/v1/files/appdata'),
   extract: (root: string, path: string, dest: string) => api<TransferJob>('/api/v1/files/extract', { method: 'POST', body: { root, paths: [path], dest } }),
 };
+
+/** A data folder of a Docker app; `id` opens it in Files as its own location. */
+export interface AppDataFolder {
+  id: string;
+  target: string;
+  source: string;
+  type: 'bind' | 'volume';
+  volume?: string;
+  rw: boolean;
+  /** Why it can't be opened. */
+  blocked?: string;
+}
+export interface AppData {
+  name: string;
+  container: string;
+  image: string;
+  state: string;
+  folders: AppDataFolder[];
+}
+
+/** Names for app data locations ("media · /config"), filled in when App data is listed. */
+export const appDataNames = new Map<string, string>();
+export const isAppData = (root: string) => root.startsWith('app:');
 
 /** A file or folder found by search or listed in Recents. */
 export interface FileHit {

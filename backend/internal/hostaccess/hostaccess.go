@@ -23,7 +23,7 @@ import (
 const RemoteOffFile = "remote-access-off"
 
 // LocalOnlyMessage is what a blocked device is told.
-const LocalOnlyMessage = "NoCapOS is local-only right now. Turn it back on from the server's own screen or run `sudo cap web on`."
+const LocalOnlyMessage = "NoCapOS is local-only right now. Turn it back on in Settings on the server's own screen."
 
 // RemoteEnabled reports whether other devices may open NoCapOS.
 func RemoteEnabled(dataDir string) bool {

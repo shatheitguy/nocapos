@@ -94,11 +94,23 @@ func serve() error {
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("data dir: %w", err)
 	}
+	// A backup restored from Settings goes in before the database opens.
+	restored, err := store.ApplyStagedRestore(cfg.DataDir)
+	if err != nil {
+		log.Error("restoring the backup failed; starting with the current data", "err", err)
+	}
 	st, err := store.Open(ctx, cfg.DataDir)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
+	if restored {
+		// Sign-ins saved in the backup don't carry over.
+		if _, err := st.RevokeAllSessions(ctx, time.Now()); err != nil {
+			return fmt.Errorf("sessions after restore: %w", err)
+		}
+		log.Info("restored the backup chosen in Settings; everyone signs in again")
+	}
 
 	// Sessions don't survive a reboot: everyone signs in again.
 	if n, err := auth.EndSessionsAfterReboot(ctx, st, auth.BootID()); err != nil {

@@ -255,7 +255,7 @@ type PowerInfo struct {
 func Power() PowerInfo {
 	switch {
 	case InContainer():
-		return PowerInfo{Reason: "NoCapOS is running in a container; restart or shut down the host from its own console"}
+		return PowerInfo{Reason: "Restart and shut down aren't available while NoCapOS runs in a container"}
 	case runtime.GOOS == "windows":
 		return PowerInfo{Supported: true}
 	case runtime.GOOS == "linux":
@@ -265,9 +265,9 @@ func Power() PowerInfo {
 		if _, err := exec.LookPath("shutdown"); err == nil {
 			return PowerInfo{Supported: true}
 		}
-		return PowerInfo{Reason: "Neither systemctl nor shutdown is available"}
+		return PowerInfo{Reason: "Restart and shut down aren't available on this system"}
 	}
-	return PowerInfo{Reason: "Power control isn't available on this platform"}
+	return PowerInfo{Reason: "Restart and shut down aren't available on this system"}
 }
 
 // Schedule restarts or shuts down the host after a short delay, so the HTTP

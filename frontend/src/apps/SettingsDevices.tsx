@@ -8,6 +8,7 @@ import { tr, useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
+import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
@@ -45,6 +46,9 @@ export function DevicesSettings() {
   const [info, setInfo] = useState<PairInfo | null>(null);
   const [list, setList] = useState<LinkedDevice[] | null>(null);
   const [limits, setLimits] = useState<DeviceLimits | null>(null);
+  // The server couldn't say (older server or a failure): count what's listed, no limit shown.
+  const [limitsGone, setLimitsGone] = useState(false);
+  const [infoGone, setInfoGone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
 
@@ -55,11 +59,16 @@ export function DevicesSettings() {
         setError(null);
       } else setError(r.error ?? tr('ld.loadFail'));
     });
-    void devicesApi.limits().then((r) => r.ok && setLimits(r.data));
+    void devicesApi.limits().then((r) => {
+      if (r.ok && !missing(r)) {
+        setLimits(r.data);
+        setLimitsGone(false);
+      } else setLimitsGone(true);
+    });
   }, []);
 
   useEffect(() => {
-    void devicesApi.info().then((r) => r.ok && setInfo(r.data));
+    void devicesApi.info().then((r) => (r.ok && !missing(r) ? setInfo(r.data) : setInfoGone(true)));
     load();
     // Keep "online" and "last seen" fresh while the page is open.
     const id = window.setInterval(load, 30_000);
@@ -92,11 +101,12 @@ export function DevicesSettings() {
     return true;
   };
 
-  const copyId = () => info && void navigator.clipboard?.writeText(info.nocap_id).then(() => toast('success', tr('ld.idCopied')));
+  const copyId = () => info && void copyWithToast(info.nocap_id, tr('ld.idCopied'));
 
   const used = limits?.used ?? mine.length;
   const limit = limits?.limit ?? 0;
   const full = isFull(used, limit);
+  const ready = !!limits || limitsGone;
 
   let status: string;
   if (!limits) status = '';
@@ -108,16 +118,16 @@ export function DevicesSettings() {
   return (
     <div className="stack settings-page ld">
       <section className={`ucard ld-hero ${full ? 'is-full' : ''}`}>
-        <Meter used={used} limit={limit} ready={!!limits} />
+        <Meter used={used} limit={limit} ready={ready} />
         <div className="ld-hero-body">
           <span className="ld-eyebrow">
             <Icon name="phone" size={12} /> {t('ld.eyebrow')}
           </span>
-          <h3 className="ld-hero-title">{limits ? (limit > 0 ? t('ld.linkedOf', { used, limit }) : t('ld.linkedNoLimit', { used })) : '…'}</h3>
+          <h3 className="ld-hero-title">{ready ? (limit > 0 ? t('ld.linkedOf', { used, limit }) : t('ld.linkedNoLimit', { used })) : '…'}</h3>
           {status && <p className={`ld-hero-status ${full ? 'warn' : ''}`}>{status}</p>}
           <div className="ld-hero-id">
             <span className="ld-hero-id-label">{t('ld.nocapId')}</span>
-            <code>{info?.nocap_id ?? '…'}</code>
+            <code>{info?.nocap_id ?? (infoGone ? t('set.notAvailable') : '…')}</code>
             {info && (
               <button type="button" className="icon-btn neutral" title={t('ld.copyId')} aria-label={t('ld.copyId')} onClick={copyId}>
                 <Icon name="copy" size={14} />

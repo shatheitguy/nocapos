@@ -56,7 +56,7 @@ func TestLocalOnlyBlocksOtherDevicesWhenOff(t *testing.T) {
 		}
 		var body map[string]errorBody
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body["error"].Code != "local_only" ||
-			!strings.Contains(body["error"].Message, "sudo cap web on") {
+			!strings.Contains(body["error"].Message, "Settings") {
 			t.Errorf("API answer = %s", w.Body.String())
 		}
 	}
@@ -67,7 +67,7 @@ func TestLocalOnlyBlocksOtherDevicesWhenOff(t *testing.T) {
 		}
 	}
 	if w := do("192.168.1.50:5000", "/", nil); !strings.Contains(w.Header().Get("Content-Type"), "text/html") ||
-		!strings.Contains(w.Body.String(), "sudo cap web on") {
+		!strings.Contains(w.Body.String(), "This Screen &amp; Access") {
 		t.Errorf("UI answer should be a friendly page: %q %s", w.Header().Get("Content-Type"), w.Body.String())
 	}
 

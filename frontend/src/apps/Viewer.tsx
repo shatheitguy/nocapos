@@ -13,7 +13,9 @@ export function Viewer({ win }: { win: WinState }) {
   const root = win.props?.root ?? '';
   const path = win.props?.path ?? '';
   const name = baseName(path);
-  const kind = fileKind(name);
+  // "Open with → Text editor" opens any file as text.
+  const asText = win.props?.mode === 'text';
+  const kind = asText ? 'text' : fileKind(name);
   const [url, setUrl] = useState<string | null>(null);
   const [linkError, setLinkError] = useState(false);
 
