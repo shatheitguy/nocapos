@@ -13,8 +13,8 @@ import (
 
 // TimeZoneState is what the setup and Settings show.
 type TimeZoneState struct {
-	Zone      string `json:"zone"`              // "" when unknown
-	Supported bool   `json:"supported"`         // NoCapOS can change it here
+	Zone      string `json:"zone"`             // "" when unknown
+	Supported bool   `json:"supported"`        // NoCapOS can change it here
 	Reason    string `json:"reason,omitempty"` // why not
 }
 
