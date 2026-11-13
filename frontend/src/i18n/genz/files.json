@@ -92,5 +92,12 @@
   "files.share.saved": "Bet — {name} saved",
   "files.share.deletedAll": "{name} and its files are deleted for good",
   "files.share.stopped": "Stopped sharing {name} — its files stay put",
-  "files.share.created": "{name} is shared — pick who can open it below"
+  "files.share.created": "{name} is shared — pick who can open it below",
+  "files.appdata.title": "App data",
+  "files.appdata.empty": "No app data yet",
+  "files.appdata.emptyText": "Apps you install keep their stuff here: settings, databases, downloads.",
+  "files.appdata.off": "Docker isn’t running, so there’s no app data to show.",
+  "files.appdata.blocked": "Can’t open: {why}",
+  "files.appdata.readOnly": "The app only reads this one",
+  "files.appdata.volume": "Volume {name}"
 }

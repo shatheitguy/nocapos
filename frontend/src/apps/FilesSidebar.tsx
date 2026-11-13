@@ -1,6 +1,6 @@
 import { tr } from '../i18n';
 import { useState, type DragEvent, type MouseEvent } from 'react';
-import { RECYCLE, baseName, inRecycle, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
+import { RECYCLE, baseName, inRecycle, isAppData, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
 import type { NetShare } from '../api/netdrive';
 import { Bar } from '../components/Charts';
 import type { MenuEntry } from '../components/Dialog';
@@ -137,6 +137,12 @@ export function FilesSidebar({
           <Icon name="clock" size={17} />
           <span className="fs-name">Recents</span>
         </button>
+        {admin && (
+          <button type="button" className={`fs-item ${special === 'appdata' || (!special && current && isAppData(current.root)) ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'appdata')}>
+            <Icon name="appData" size={17} />
+            <span className="fs-name">{tr('files.appdata.title')}</span>
+          </button>
+        )}
         {others.map((r) => (
           <button key={r.id} type="button" className={`fs-item ${inside(r.id) ? 'on' : ''}`} title={r.total ? `${fmtBytes(r.free, 0)} free of ${fmtBytes(r.total, 0)}` : r.name} onClick={() => onGo(r.id, '/')}>
             <Icon name={r.kind === 'share' ? 'network' : r.kind === 'homes' ? 'users' : r.id === 'home' ? 'user' : 'drive'} size={17} />
@@ -150,7 +156,7 @@ export function FilesSidebar({
         {favs.map((f) => {
           const key = `fav:${f.root}:${f.path}`;
           const name = f.path === '/' ? rootLabel(f.root) : baseName(f.path);
-          const missing = !roots.some((r) => r.id === f.root);
+          const missing = !roots.some((r) => r.id === f.root) && !isAppData(f.root);
           return (
             <button
               key={key}

@@ -35,6 +35,9 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   vmscreen: app(() => import('./VirtualDeskScreen').then((m) => m.VmScreen)),
   scripts: app(() => import('./Scripts').then((m) => m.Scripts)),
   viewer: app(() => import('./Viewer').then((m) => m.Viewer)),
+  imageviewer: app(() => import('./MediaImage').then((m) => m.ImageViewerApp)),
+  videoplayer: app(() => import('./MediaVideo').then((m) => m.VideoPlayerApp)),
+  musicplayer: app(() => import('./MediaMusic').then((m) => m.MusicPlayerApp)),
   logs: app(() => import('./Logs').then((m) => m.Logs)),
   phone: app(() => import('./Phone').then((m) => m.Phone)),
 };
