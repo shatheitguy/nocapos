@@ -346,6 +346,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/cloud/imports/{id}/run", s.admin(s.cloudRunImport))
 	mux.Handle("GET /api/v1/cloud/jobs/{job}", s.admin(s.cloudJob))
 	mux.Handle("POST /api/v1/cloud/jobs/{job}/cancel", s.admin(s.cloudCancel))
+	s.cloudMountRoutes(mux)
 
 	mux.Handle("GET /api/v1/netdrives", s.admin(s.netOverview))
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))

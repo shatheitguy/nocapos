@@ -44,6 +44,7 @@ func (s *Server) storageRoutes(mux *http.ServeMux) {
 	mux.Handle("GET "+p+"/jobs", s.admin(s.stJobs))
 	mux.Handle("GET "+p+"/jobs/{id}", s.admin(s.stJob))
 	mux.Handle("GET "+p+"/alerts", s.admin(s.stAlerts))
+	s.storageExtraRoutes(mux, p)
 }
 
 func (s *Server) stError(w http.ResponseWriter, err error) {
@@ -399,9 +400,12 @@ func (s *Server) stSetSettings(w http.ResponseWriter, r *http.Request) {
 	if req.AutoScrub {
 		detail = "auto_scrub=on"
 	}
+	if req.ScrubEvery != "" {
+		detail += " every=" + req.ScrubEvery
+	}
 	s.stAudit(r, "settings", detail, err)
 	if err != nil {
-		s.internalError(w, r, err)
+		s.stError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, req)

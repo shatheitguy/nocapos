@@ -25,6 +25,7 @@ type Demo struct {
 	snapshots  map[string][]Snapshot
 	formatted  map[string]string // disk -> label
 	delay      time.Duration
+	ex         demoExtras
 }
 
 type demoDisk struct {
@@ -346,6 +347,10 @@ func (d *Demo) poolView(p *demoPool) Pool {
 			sizes = append(sizes, x.size)
 			id := byIDOf(x) + "-part1"
 			kids = append(kids, Vdev{Name: id, Type: "disk", Health: "ONLINE", Path: id, Children: []Vdev{}})
+		}
+		if t, ok := demoSupportGroup[g.layout]; ok {
+			out.Vdevs = append(out.Vdevs, Vdev{Name: t, Type: t, Children: kids})
+			continue
 		}
 		out.Size += usable(g.layout, sizes)
 		if g.layout == "stripe" {
