@@ -82,7 +82,7 @@ fun ScanScreen(onResult: (Uri) -> Unit, onCancel: () -> Unit) {
                     Text("SCAN TO LINK", style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        camError ?: if (allowed) "Point at the QR in Settings → Devices → Link a device on your NoCap desktop."
+                        camError ?: if (allowed) "Point at the QR in Settings → Linked Devices → Link a device on your NoCap desktop."
                         else if (asked) "No camera, no scan — that's okay. Go back and type the address and code instead, or allow the camera in Settings."
                         else "The camera is only used to read the QR code. Nothing gets recorded or uploaded.",
                         style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted, textAlign = TextAlign.Start,

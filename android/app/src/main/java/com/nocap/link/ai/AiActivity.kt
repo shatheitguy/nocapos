@@ -111,9 +111,43 @@ class AiActivity : ComponentActivity() {
         Prefs.init(this)
         // A broken keystore or a bad saved link shows the "link first" screen instead of crashing.
         api = runCatching { Vault.get(this).link?.let { NoCapApi(it) } }.getOrNull()
-        intent.getStringExtra(EXTRA_PROMPT)?.let { input = it }
+        val prompt = intent.getStringExtra(EXTRA_PROMPT)
+        // Reopened: the chat you had open, as you left it (then refreshed from the server).
+        val restored = prompt == null && Kept.current != null
+        if (restored) {
+            current = Kept.current
+            messages.addAll(Kept.messages)
+            input = Kept.input
+        }
+        prompt?.let { input = it }
         setContent { NoCapTheme { Screen() } }
-        if (api != null) loadList(pickLatest = intent.getStringExtra(EXTRA_PROMPT) == null)
+        if (api != null) {
+            loadList(pickLatest = prompt == null && !restored)
+            if (restored) Kept.current?.let { refresh(it) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Already open (singleTop): a new prompt just lands in the input box.
+        intent.getStringExtra(EXTRA_PROMPT)?.let { input = it }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Kept.current = current
+        Kept.input = input
+        Kept.messages = messages.filter { it.content.isNotEmpty() }.toList()
+    }
+
+    /** Reloads the open chat without blanking it first (no flash on reopen). */
+    private fun refresh(id: String) {
+        val api = api ?: return
+        val mine = shown
+        lifecycleScope.launch {
+            val list = runCatching { withContext(Dispatchers.IO) { api.conversation(id) } }.getOrNull() ?: return@launch
+            if (mine == shown && current == id && !thinking) { messages.clear(); messages.addAll(list) }
+        }
     }
 
     private fun fail(e: Exception) {
@@ -353,6 +387,13 @@ class AiActivity : ComponentActivity() {
             drawArc(NoCap.Text, 0f, 180f, false, topLeft = androidx.compose.ui.geometry.Offset(w * 0.2f, h * 0.2f), size = androidx.compose.ui.geometry.Size(w * 0.6f, h * 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.08f))
             drawLine(NoCap.Text, androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.75f), androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.95f), strokeWidth = w * 0.08f)
         }
+    }
+
+    /** What survives closing the AI sheet, for this app session. */
+    private object Kept {
+        var current: String? = null
+        var input: String = ""
+        var messages: List<ChatMessage> = emptyList()
     }
 
     companion object {

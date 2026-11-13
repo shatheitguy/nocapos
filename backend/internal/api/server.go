@@ -167,6 +167,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/devices/pair-code", s.authed(s.devicesPairCode))
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
+	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))
+	mux.Handle("GET /api/v1/devices/limits", s.authed(s.devicesLimits))
+	mux.Handle("PUT /api/v1/devices/limits", s.admin(s.devicesSetDefaultLimit))
+	mux.Handle("PUT /api/v1/devices/limits/{user}", s.admin(s.devicesSetUserLimit))
 	mux.Handle("GET /api/v1/device/me", s.device(s.deviceMe))
 	mux.Handle("GET /api/v1/device/apps", s.device(s.deviceApps))
 	mux.Handle("POST /api/v1/device/heartbeat", s.device(s.deviceHeartbeat))
@@ -222,6 +226,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/users", s.admin(s.usersCreate))
 	mux.Handle("PATCH /api/v1/users/{name}", s.admin(s.usersUpdate))
 	mux.Handle("DELETE /api/v1/users/{name}", s.admin(s.usersDelete))
+	mux.Handle("GET /api/v1/users/{name}/avatar", s.admin(s.userAvatarGet))
+	// Groups of people (admin, audited).
+	mux.Handle("GET /api/v1/groups", s.admin(s.groupsList))
+	mux.Handle("POST /api/v1/groups", s.admin(s.groupsCreate))
+	mux.Handle("PUT /api/v1/groups/{id}", s.admin(s.groupsUpdate))
+	mux.Handle("DELETE /api/v1/groups/{id}", s.admin(s.groupsDelete))
 	// Each person's shared folders and apps (admin, audited).
 	mux.Handle("GET /api/v1/users/{name}/spaces", s.admin(s.userSpaces))
 	mux.Handle("PUT /api/v1/users/{name}/folders/{id}", s.admin(s.userFolderPerm))

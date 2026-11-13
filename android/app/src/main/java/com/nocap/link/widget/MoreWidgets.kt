@@ -216,8 +216,9 @@ fun WeatherWidget(a: MainActivity, item: NoCapItem) {
     var place by remember(item.cfg, Opt.weatherPlace.v) { mutableStateOf<Weather.Place?>(null) }
     var err by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
-    LaunchedEffect(item.cfg, Opt.weatherPlace.v, f, refresh) {
-        while (true) {
+    val on = Opt.weatherOn.v
+    LaunchedEffect(item.cfg, Opt.weatherPlace.v, f, refresh, on) {
+        while (on) {
             val p = try { withContext(Dispatchers.IO) { weatherPlace(ctx, item) } } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
             place = p
             if (p != null) {
@@ -236,7 +237,15 @@ fun WeatherWidget(a: MainActivity, item: NoCapItem) {
     }
     val shown = place
     val r = shown?.let { Weather.cached(it, f) }
-    WSurface(item, onClick = { if (shown == null) a.editing = item else a.weatherFor = item }) {
+    WSurface(item, onClick = { if (shown == null || !on) a.editing = item else a.weatherFor = item }) {
+        if (!on) {
+            // Opt-in: no request leaves the phone until it's switched on (in the widget's edit sheet or Settings → Privacy).
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                WTitle(t("Weather", "Weather"))
+                Text(t("Off for now. Tap to turn it on (Open-Meteo).", "Weather is off. Tap to turn it on (Open-Meteo)."), style = MaterialTheme.typography.bodySmall, maxLines = 3)
+            }
+            return@WSurface
+        }
         if (shown == null) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
                 WTitle(t("Weather", "Weather"))

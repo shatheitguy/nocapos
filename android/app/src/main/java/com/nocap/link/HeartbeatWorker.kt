@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import com.nocap.link.data.Link
+import com.nocap.link.data.Opt
 import com.nocap.link.data.Prefs
 import com.nocap.link.data.t
 import com.nocap.link.data.Vault
@@ -25,7 +26,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Tells the server this phone is still around (battery + app version), so
- * Settings → Devices shows when it was last seen. Every 15 minutes, only
+ * Settings → Linked Devices shows when it was last seen. Every 15 minutes, only
  * with a network.
  */
 class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
@@ -34,9 +35,10 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
         val link = vault.link ?: return@withContext Result.success()
         try {
             val api = NoCapApi(link)
-            api.heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME)
-            if (vault.unlinked) vault.unlinked = false
             Prefs.init(applicationContext)
+            val caps = mapOf("notifications" to Opt.forward.v, "clipboard" to Opt.clipSync.v, "files" to true)
+            api.heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME, caps)
+            if (vault.unlinked) vault.unlinked = false
             if (Prefs.serverNotices) runCatching { notices(api, link.serverName) }
             // Sign-in alerts always (a server without them answers ServerTooOld: skip).
             runCatching { com.nocap.link.sync.Signins.deliver(applicationContext, api.sessions().second, live = false) }
