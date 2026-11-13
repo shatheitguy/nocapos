@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -166,6 +167,7 @@ func (d *Demo) Encryption(_ context.Context, pool string) ([]CryptInfo, error) {
 		}
 		out = append(out, c)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
 

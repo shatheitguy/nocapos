@@ -275,3 +275,16 @@
   .st-backdrop { padding: 8px; }
   .st-layouts { grid-template-columns: 1fr 1fr; }
 }
+
+/* Storage extras: dry runs, boot mirror, schedules */
+.stx-dry { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.stx-cmds summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.stx-cmds pre { margin: 6px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-3); font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+.stx-list { margin: 6px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.stx-mirror { display: flex; flex-direction: column; gap: 8px; }
+.stx-mirror.good .row-head svg { color: var(--ok); }
+.stx-mirror.bad .row-head svg, .stx-mirror.single .row-head svg { color: var(--warn); }
+.stx-sched { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.stx-sched label { display: flex; flex-direction: column; gap: 2px; }
+.stx-sched input { width: 72px; }
+.stx-every { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
