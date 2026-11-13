@@ -33,6 +33,8 @@ type Approval struct {
 	Agent     string         `json:"agent"`
 	Tool      string         `json:"tool"`
 	ToolTitle string         `json:"tool_title"`
+	Cap       string         `json:"capability"`
+	Risk      Risk           `json:"risk"`
 	Summary   string         `json:"summary"`
 	Arguments map[string]any `json:"arguments"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -126,6 +128,29 @@ func (b *Broker) Decide(id, userID string, d Decision) error {
 	a.answer <- d
 	b.changed(userID)
 	return nil
+}
+
+// DenyAll answers deny to every waiting approval of a person ("" = of
+// everyone): Stop all agents. It returns how many it denied.
+func (b *Broker) DenyAll(userID string) int {
+	b.mu.Lock()
+	var hit []*Approval
+	users := map[string]bool{}
+	for id, a := range b.pending {
+		if userID == "" || a.UserID == userID {
+			hit = append(hit, a)
+			users[a.UserID] = true
+			delete(b.pending, id)
+		}
+	}
+	b.mu.Unlock()
+	for _, a := range hit {
+		a.answer <- Deny
+	}
+	for u := range users {
+		b.changed(u)
+	}
+	return len(hit)
 }
 
 // Pending lists a person's waiting approvals, oldest first.

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Talks to your NoCapOS server. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -25,10 +26,27 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Timer widget: "ring with the clock app". -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Opt-in, you allow them in Android's settings: the NoCap lock screen appearing when the
+         screen turns on, and the control-center edge strip in other apps ("Display over other apps");
+         the control center's rotation lock and brightness slider ("Modify system settings"). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- In-app updates (Settings → About → Updates): installs NoCap OS itself, signed with the same key. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Setup guide: "no battery limits" asks Android directly (you still confirm). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- NoCap Link, always connected: a foreground service holding one
+         connection to your own server, started again after a reboot. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Finding your server on the home network (mDNS). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- "Find my phone" vibrates too. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Decline a call from NoCap OS (asked only when you turn calls on). -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -210,6 +228,40 @@
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity="com.nocap.link.signout"
+            android:theme="@style/Theme.NoCap.Sheet" />
+
+        <!-- NoCap Link, always connected (quiet "NoCap Link connected" notification). -->
+        <service
+            android:name=".sync.LinkService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+        <receiver android:name=".sync.LinkBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Stop button of "Find my phone". -->
+        <receiver android:name=".sync.FindPhoneStop" android:exported="false" />
+
+        <!-- NoCap lock screen (opt-in): shown over Android's own lock screen, which still
+             asks for your PIN / fingerprint when you swipe up. -->
+        <activity
+            android:name=".lock.LockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.nocap.link.lock"
+            android:theme="@style/Theme.NoCap" />
+
+        <!-- The NoCap control center over other apps (opt-in edge swipe). -->
+        <activity
+            android:name=".control.ControlActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.nocap.link.control"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.NoCap.Sheet" />
 
         <!-- Notification dots (opt-in: only after you allow notification access). -->

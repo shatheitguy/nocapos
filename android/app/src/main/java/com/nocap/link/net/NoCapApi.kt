@@ -27,6 +27,12 @@ data class ServerApp(val id: String, val name: String, val iconUrl: String, val 
 
 data class Me(val deviceName: String, val username: String, val server: PairInfo)
 
+/** A Wi-Fi network saved on the server that can be shared with a QR code. */
+data class SavedWifi(val uuid: String, val ssid: String, val active: Boolean)
+
+/** What a phone needs to join a saved network (WifiQr.payload). */
+data class WifiShare(val ssid: String, val password: String, val type: String, val hidden: Boolean)
+
 data class Usage(val total: Long, val used: Long, val percent: Double)
 
 data class Summary(
@@ -93,7 +99,7 @@ private val JSON = "application/json".toMediaType()
 /**
  * The NoCapOS device API. Blocking calls: run them off the main thread.
  */
-class NoCapApi(private val server: String, pin: String?, private val token: String? = null) {
+class NoCapApi(val server: String, pin: String?, private val token: String? = null) {
     init {
         require(!server.startsWith("https://") || pin != null) { "https needs a pinned certificate" }
     }
@@ -105,7 +111,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         http.newBuilder().readTimeout(5, TimeUnit.MINUTES).writeTimeout(10, TimeUnit.MINUTES).build()
     }
 
-    constructor(link: Link) : this(link.server, link.pin, link.token)
+    constructor(link: Link) : this(Endpoint.server(link), link.pin, link.token)
 
     fun pairInfo(): PairInfo = info(JSONObject(call("GET", "/api/v1/pair/info")))
 
@@ -129,6 +135,21 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
             o.getJSONObject("user").optString("username"),
             info(o.getJSONObject("server")),
         )
+    }
+
+    /** The server's shareable Wi-Fi networks (administrators' phones only). */
+    fun wifiSaved(): List<SavedWifi> {
+        val a = JSONArray(call("GET", "/api/v1/device/wifi/saved"))
+        return (0 until a.length()).map {
+            val o = a.getJSONObject(it)
+            SavedWifi(o.optString("uuid"), o.optString("ssid"), o.optBoolean("active"))
+        }
+    }
+
+    /** A saved network's password, after the administrator's own account password. */
+    fun wifiShare(uuid: String, accountPassword: String): WifiShare {
+        val o = JSONObject(call("POST", "/api/v1/device/wifi/share", JSONObject().put("uuid", uuid).put("password", accountPassword)))
+        return WifiShare(o.optString("ssid"), o.optString("password"), o.optString("type", "WPA"), o.optBoolean("hidden"))
     }
 
     fun apps(): List<ServerApp> {
@@ -347,7 +368,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         val signins: List<SigninAlert> = emptyList(),
     )
 
-    private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
+    internal val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
     /** Waits (up to [wait] s) for anything new: server notices, clipboard from the web, dismissals. */
     fun events(after: Long, wait: Int = 25): Events {
@@ -428,7 +449,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         return b.build()
     }
 
-    private fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
+    internal fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
         val req = request(method, path, raw ?: body?.toString()?.toRequestBody(JSON))
         return guarded {
             client.newCall(req).execute().use { r ->

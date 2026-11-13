@@ -1,4 +1,5 @@
 import { api, getAccessToken, refresh } from './client';
+import { tr } from '../i18n';
 
 export type ProviderKind = 'ollama' | 'anthropic' | 'openai';
 
@@ -83,9 +84,12 @@ export const aiApi = {
   conversation: (id: string) => api<ConversationDetail>(`/api/v1/ai/conversations/${id}`),
   createConversation: (provider: string, model: string) =>
     api<Conversation>('/api/v1/ai/conversations', { method: 'POST', body: { provider, model } }),
-  patchConversation: (id: string, patch: { title?: string; pinned?: boolean }) =>
+  patchConversation: (id: string, patch: { title?: string; pinned?: boolean; provider?: string; model?: string }) =>
     api(`/api/v1/ai/conversations/${id}`, { method: 'PATCH', body: patch }),
   deleteConversation: (id: string) => api(`/api/v1/ai/conversations/${id}`, { method: 'DELETE' }),
+  /** Removes a message and every later one (regenerate, edit and resend, delete). */
+  deleteMessagesFrom: (id: string, messageId: number) =>
+    api(`/api/v1/ai/conversations/${id}/messages/${messageId}`, { method: 'DELETE' }),
 
   memory: () => api<{ enabled: boolean; memories: Memory[] }>('/api/v1/ai/memory'),
   addMemory: (content: string) => api<Memory>('/api/v1/ai/memory', { method: 'POST', body: { content } }),
@@ -124,7 +128,7 @@ export async function sendMessage(conversationId: string, text: string, cb: Send
     if (res.status === 401 && (await refresh())) res = await run();
   } catch (e) {
     if ((e as Error).name === 'AbortError') return;
-    cb.onError('NoCapOS is not reachable');
+    cb.onError(tr('ai.unreachable'));
     return;
   }
 
@@ -165,7 +169,7 @@ export async function sendMessage(conversationId: string, text: string, cb: Send
       }
     }
   } catch (e) {
-    if ((e as Error).name !== 'AbortError') cb.onError('The connection was interrupted');
+    if ((e as Error).name !== 'AbortError') cb.onError(tr('ai.interrupted'));
   }
 }
 

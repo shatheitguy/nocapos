@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"alfaos/alfad/internal/ai"
@@ -162,8 +163,10 @@ func (s *Server) aiGetConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 type patchConversationRequest struct {
-	Title  *string `json:"title"`
-	Pinned *bool   `json:"pinned"`
+	Title    *string `json:"title"`
+	Pinned   *bool   `json:"pinned"`
+	Provider *string `json:"provider"`
+	Model    *string `json:"model"`
 }
 
 func (s *Server) aiPatchConversation(w http.ResponseWriter, r *http.Request) {
@@ -183,6 +186,27 @@ func (s *Server) aiPatchConversation(w http.ResponseWriter, r *http.Request) {
 			s.aiError(w, r, err)
 			return
 		}
+	}
+	if req.Provider != nil || req.Model != nil {
+		if err := s.AI.SetConversationModel(r.Context(), uid, id, req.Provider, req.Model); err != nil {
+			s.aiError(w, r, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// aiDeleteMessagesFrom removes a message and every later one in the
+// conversation (regenerate, edit-and-resend, delete).
+func (s *Server) aiDeleteMessagesFrom(w http.ResponseWriter, r *http.Request) {
+	from, err := strconv.ParseInt(r.PathValue("msg"), 10, 64)
+	if err != nil || from <= 0 {
+		writeError(w, http.StatusBadRequest, "bad_request", "bad message id")
+		return
+	}
+	if err := s.AI.DeleteMessagesFrom(r.Context(), userFrom(r.Context()).ID, r.PathValue("id"), from); err != nil {
+		s.aiError(w, r, err)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

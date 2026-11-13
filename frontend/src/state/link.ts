@@ -1,10 +1,13 @@
 import { create } from 'zustand';
-import { api } from '../api/client';
-import { devicesApi, type LinkedDevice } from '../api/devices';
+import { api, type ApiResult } from '../api/client';
+import { onSocketStatus, subscribe } from '../api/socket';
 
-// NoCap Link sync, NoCap OS's side: notifications from the person's phones
-// and a shared clipboard. Kept in memory on the server for a day; polled here
-// every 15 s while signed in.
+// NoCap Link sync, NoCap OS's side: notifications and status from the
+// person's phones, a shared clipboard, and "Open on NoCap" carries. Live over
+// the "link.phone" topic; polled as a fallback (every 15 s while the socket is
+// down, once a minute while it's up).
+
+export type CallState = 'incoming' | 'ongoing' | 'missed';
 
 export interface PhoneNote {
   device_id: string;
@@ -18,6 +21,12 @@ export interface PhoneNote {
   icon: string;
   /** When the phone showed it (ms since the epoch). */
   posted: number;
+  kind?: '' | 'message' | 'call';
+  call_state?: CallState;
+  number?: string;
+  sender?: string;
+  can_reply?: boolean;
+  can_decline?: boolean;
 }
 
 export interface Clip {
@@ -30,78 +39,199 @@ export interface Clip {
   at: string;
 }
 
+/** How the phone reaches this server: on the same network or over the internet. */
+export type Route = 'local' | 'remote' | '';
+export type PhoneNetwork = 'wifi' | 'cellular' | 'ethernet' | 'other' | 'none' | '';
+
+export interface PhoneState {
+  /** Percent, -1 = unknown. */
+  battery: number;
+  charging: boolean;
+  network: PhoneNetwork;
+  /** 0-4 bars, -1 = unknown. */
+  signal: number;
+  route: Route;
+  /** "Find my phone" is ringing right now. */
+  ringing: boolean;
+  at: string;
+}
+
+export interface Phone {
+  id: string;
+  name: string;
+  platform: string;
+  online: boolean;
+  route: Route;
+  last_seen?: string;
+  state?: PhoneState;
+}
+
+/** A phone did "Open on NoCap": a web address, or one of this person's files. */
+export interface Carry {
+  id: string | number;
+  device_id: string;
+  device_name: string;
+  url?: string;
+  title: string;
+  root?: string;
+  path?: string;
+  at: string;
+}
+
+export type PhoneAction =
+  | { kind: 'reply'; key: string; text: string }
+  | { kind: 'decline'; key: string }
+  | { kind: 'ring' }
+  | { kind: 'stop_ring' }
+  | { kind: 'open'; url: string }
+  | { kind: 'file'; root: string; path: string; open?: boolean };
+
+export interface LinkAddresses {
+  nocap_id: string;
+  lan: string[];
+  remote: string;
+  /** Administrators only: what was set by hand. */
+  saved_lan: string[];
+  saved_remote: string;
+}
+
+type LinkEvent = { type: 'changed' } | { type: 'open'; carry: Carry } | { type: 'clip'; clip: Clip };
+
+const enc = encodeURIComponent;
+
 export const linkApi = {
   notes: () => api<{ items: PhoneNote[] }>('/api/v1/phone-notifications'),
-  dismiss: (n: PhoneNote) =>
-    api<{ ok: boolean }>(`/api/v1/phone-notifications/${encodeURIComponent(n.device_id)}/${encodeURIComponent(n.key)}`, { method: 'DELETE' }),
+  dismiss: (n: PhoneNote) => api<{ ok: boolean }>(`/api/v1/phone-notifications/${enc(n.device_id)}/${enc(n.key)}`, { method: 'DELETE' }),
   clips: () => api<{ items: Clip[] }>('/api/v1/clipboard'),
   send: (text: string, device_id?: string) =>
     api<{ ok: boolean; id: number }>('/api/v1/clipboard', { method: 'POST', body: device_id ? { text, device_id } : { text } }),
+  phones: () => api<{ phones: Phone[]; carries: Carry[] }>('/api/v1/phones'),
+  action: (deviceId: string, a: PhoneAction) =>
+    api<{ ok: boolean; id: string | number }>(`/api/v1/phones/${enc(deviceId)}/actions`, { method: 'POST', body: a }),
+  addresses: () => api<LinkAddresses>('/api/v1/link/addresses'),
+  saveAddresses: (remote: string, lan: string[]) =>
+    api<LinkAddresses>('/api/v1/link/addresses', { method: 'PUT', body: { remote, lan } }),
 };
 
+/** The API's error code ("gone", "not_found", …), when there is one. */
+export const errorCode = (r: ApiResult<unknown>): string => (r.data as { error?: { code?: string } } | null)?.error?.code ?? '';
+
 export const POLL_MS = 15_000;
+/** While the socket is up, the poll only catches up on anything missed. */
+export const SOCKET_POLL_MS = 60_000;
 export const CLIP_BANNER_MS = 12_000;
+export const CARRY_BANNER_MS = 20_000;
 
 interface LinkStore {
   notes: PhoneNote[];
   clips: Clip[];
-  /** This person's own linked phones. */
-  phones: LinkedDevice[];
+  /** This person's own linked phones, with their live status. */
+  phones: Phone[];
+  /** Recent "Open on NoCap" carries, newest first. */
+  carries: Carry[];
   /** A clip that just arrived from a phone (shown as a banner). */
   clipBanner: Clip | null;
+  /** A carry that just arrived (shown as a banner with an Open button). */
+  carryBanner: Carry | null;
   /** Phone notifications posted after this were added since the center was last opened. */
   seenAt: number;
   load: () => Promise<void>;
+  loadPhones: () => Promise<void>;
   dismiss: (n: PhoneNote) => void;
+  /** Forget a notification here only (the phone already dropped it). */
+  drop: (n: PhoneNote) => void;
   markSeen: () => void;
   _reset: () => void;
 }
 
 let lastClip = 0;
 let loaded = false;
+let lastLoad = 0;
+
+const sameNote = (a: PhoneNote, b: PhoneNote) => a.device_id === b.device_id && a.key === b.key;
 
 export const useLink = create<LinkStore>((set, get) => ({
   notes: [],
   clips: [],
   phones: [],
+  carries: [],
   clipBanner: null,
+  carryBanner: null,
   seenAt: Date.now(),
   load: async () => {
-    const [n, c] = await Promise.all([linkApi.notes(), linkApi.clips()]);
-    if (n.ok) set({ notes: n.data.items });
+    lastLoad = Date.now();
+    const [n, c] = await Promise.all([linkApi.notes(), linkApi.clips(), get().loadPhones()]);
+    if (n.ok) set({ notes: n.data.items ?? [] });
     if (!c.ok) return;
-    set({ clips: c.data.items });
-    const fresh = c.data.items.filter((x) => x.id > lastClip && x.source === 'phone');
-    if (c.data.items.length) lastClip = Math.max(lastClip, ...c.data.items.map((x) => x.id));
+    const items = c.data.items ?? [];
+    set({ clips: items });
+    const fresh = items.filter((x) => x.id > lastClip && x.source === 'phone');
+    if (items.length) lastClip = Math.max(lastClip, ...items.map((x) => x.id));
     // Only clips that arrive while we're watching pop up, not the backlog.
     if (loaded && fresh.length) set({ clipBanner: fresh[0] });
     loaded = true;
   },
+  loadPhones: async () => {
+    const r = await linkApi.phones();
+    if (r.ok) set({ phones: r.data.phones ?? [], carries: r.data.carries ?? [] });
+  },
   dismiss: (n) => {
-    set({ notes: get().notes.filter((x) => !(x.device_id === n.device_id && x.key === n.key)) });
+    get().drop(n);
     void linkApi.dismiss(n);
   },
+  drop: (n) => set({ notes: get().notes.filter((x) => !sameNote(x, n)) }),
   markSeen: () => set({ seenAt: Date.now() }),
-  _reset: () => set({ notes: [], clips: [], phones: [], clipBanner: null, seenAt: Date.now() }),
+  _reset: () => set({ notes: [], clips: [], phones: [], carries: [], clipBanner: null, carryBanner: null, seenAt: Date.now() }),
 }));
 
 /** Phone notifications that came in since the center was last opened. */
 export const useLinkUnseen = () => useLink((s) => s.notes.filter((n) => n.posted > s.seenAt).length);
 
-/** Follow phone notifications and the clipboard for username; returns a stop function. */
-export function watchLink(username: string): () => void {
+function clipArrived(c: Clip) {
+  const s = useLink.getState();
+  if (s.clips.some((x) => x.id === c.id)) return;
+  const fresh = c.id > lastClip && c.source === 'phone';
+  lastClip = Math.max(lastClip, c.id);
+  useLink.setState({ clips: [c, ...s.clips], ...(fresh ? { clipBanner: c } : {}) });
+}
+
+function carryArrived(h: Carry) {
+  const s = useLink.getState();
+  useLink.setState({ carries: [h, ...s.carries.filter((x) => x.id !== h.id)].slice(0, 20), carryBanner: h });
+}
+
+/** Follow the person's phones; returns a stop function. */
+export function watchLink(_username: string): () => void {
   lastClip = 0;
   loaded = false;
-  const st = useLink.getState();
-  void st.load();
-  void devicesApi.list().then((r) => {
-    if (r.ok) useLink.setState({ phones: r.data.filter((d) => !d.username || d.username === username) });
+  void useLink.getState().load();
+
+  let reloadTimer: number | undefined;
+  const reload = () => {
+    window.clearTimeout(reloadTimer);
+    reloadTimer = window.setTimeout(() => void useLink.getState().load(), 300);
+  };
+  const off = subscribe('link.phone', (d) => {
+    const e = d as LinkEvent;
+    if (e.type === 'open' && e.carry) carryArrived(e.carry);
+    else if (e.type === 'clip' && e.clip) clipArrived(e.clip);
+    else reload();
+  });
+  // A reconnect may have missed events: catch up.
+  let live: boolean | null = null;
+  const offStatus = onSocketStatus((on) => {
+    if (on && live === false) reload();
+    live = on;
   });
   const timer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') void useLink.getState().load();
+    if (document.visibilityState !== 'visible') return;
+    if (!live || Date.now() - lastLoad >= SOCKET_POLL_MS) void useLink.getState().load();
   }, POLL_MS);
   return () => {
+    off();
+    offStatus();
     window.clearInterval(timer);
+    window.clearTimeout(reloadTimer);
     useLink.getState()._reset();
   };
 }

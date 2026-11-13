@@ -15,6 +15,7 @@ import { ClockPanel } from './ClockPanel';
 import { useSpotlight } from '../state/spotlight';
 import { QuickSettings } from './QuickSettings';
 import { NotifyBell } from './Notifications';
+import { PhoneTray } from './LinkPhones';
 import { useLink } from '../state/link';
 
 /**
@@ -66,6 +67,7 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
           </button>
         )}
         <TransfersButton className="mb-icon" />
+        <PhoneTray className="mb-icon" />
         {(isAdmin || hasPhone) && <NotifyBell className="mb-icon" size={15} />}
         <button type="button" className="mb-icon" title={t('mb.search')} aria-label={t('mb.searchLabel')} onClick={() => useSpotlight.getState().toggle()}>
           <Icon name="search" size={15} />

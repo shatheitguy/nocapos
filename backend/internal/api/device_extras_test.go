@@ -371,6 +371,7 @@ func TestDeviceRoutesRegistered(t *testing.T) {
 		"POST /api/v1/device/ai/conversations/x/send",
 		"POST /api/v1/device/phone-notifications", "DELETE /api/v1/device/phone-notifications/0%7Ccom.chat%2F1",
 		"POST /api/v1/device/clipboard", "GET /api/v1/device/events?after=0&wait=0",
+		"GET /api/v1/device/wifi/saved", "POST /api/v1/device/wifi/share",
 		// NoCap OS's side (a session, not a device token).
 		"GET /api/v1/phone-notifications", "DELETE /api/v1/phone-notifications/d1/k%2F1",
 		"GET /api/v1/clipboard", "POST /api/v1/clipboard",
