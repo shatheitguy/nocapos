@@ -109,8 +109,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
   useEffect(() => {
-    const app = takeHubApp();
-    if (app) openApp(app);
+    const want = takeHubApp();
+    if (want) openApp(want.app, want.section ? { props: { section: want.section } } : {});
   }, [user.id]);
 
   // Installed App Store apps for the home screen and Launchpad (the server

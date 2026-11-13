@@ -223,9 +223,15 @@ class MainActivity : ComponentActivity() {
         if (!vault.introDone) {
             // Back where setup was, after Android stopped the app in the background.
             val step = savedInstanceState?.getString(STATE_SETUP)?.let { s -> SetupStep.entries.firstOrNull { it.name == s } }
-            screen = Screen.Setup(step ?: SetupStep.WELCOME)
+            screen = Screen.Setup(step ?: com.nocap.link.settings.Guide.savedStep(this) ?: SetupStep.WELCOME)
         }
         crashReport = CrashLog.pending(this)
+        // An ANR or native crash last time (Android 11+): offered like a crash, never sent by itself.
+        if (crashReport == null) lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { CrashLog.checkExits(this@MainActivity) }
+            val r = CrashLog.pending(this@MainActivity)
+            withContext(Dispatchers.Main) { if (crashReport == null) crashReport = r }
+        }
         handle(intent)
         setContent {
             // Rotation, and the status bar on the home screen, from Settings.
@@ -276,6 +282,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 crashReport?.let { report -> com.nocap.link.settings.CrashPrompt(this, report) { crashReport = null } }
+                com.nocap.link.settings.ExtrasLayer(this)
             }
         }
     }
@@ -454,7 +461,7 @@ class MainActivity : ComponentActivity() {
     private fun linked() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
-        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.BASICS)
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
     }
@@ -561,14 +568,22 @@ class MainActivity : ComponentActivity() {
         refresh()
     }
 
-    fun openDesktop() {
+    fun openDesktop(app: String? = null, section: String? = null) {
         if (vault.link == null) { screen = Screen.LinkForm(); return }
-        runCatching { startActivity(Intent(this, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-            .onFailure { toast = friendly(it) }
+        val i = Intent(this, DesktopActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (app != null) i.putExtra(DesktopActivity.EXTRA_OPEN, app)
+        if (section != null) i.putExtra(DesktopActivity.EXTRA_SECTION, section)
+        runCatching { startActivity(i) }.onFailure { toast = friendly(it) }
     }
 
+    /** Opens NoCap AI once, however fast it's tapped. */
+    private var aiOpenedAt = 0L
+
     fun openAi(prompt: String? = null) {
-        val i = Intent(this, AiActivity::class.java)
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (prompt.isNullOrBlank() && now - aiOpenedAt < 800) return
+        aiOpenedAt = now
+        val i = Intent(this, AiActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         if (!prompt.isNullOrBlank()) i.putExtra(AiActivity.EXTRA_PROMPT, prompt)
         runCatching { startActivity(i) }.onFailure { toast = friendly(it) }
     }
