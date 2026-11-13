@@ -17,7 +17,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 if [ -n "$token" ]; then
-  printf '  First-run setup token: %s\n  (enter it on the NoCapOS page, then create your admin account)\n\n' "$token" >"$hint"
+  printf '  First start: open NoCapOS from a device on this network and create your admin.\n  From outside the local network, setup also asks for this token: %s\n\n' "$token" >"$hint"
 else
   rm -f "$hint"
 fi

@@ -24,6 +24,7 @@ import { DevicesSettings } from './SettingsDevices';
 import { AgentsSettings } from './SettingsAgents';
 import { Backup, DateTime, LockScreen, Security, SoundSettings } from './SettingsSections';
 import { LanguageRegion } from './SettingsLanguage';
+import { openApp } from './meta';
 import { CATS, ENTRIES, SUBS, pageDesc, pageName, type Cat, type Sub } from './settingsPages';
 import { tr, useGenZ, useT } from '../i18n';
 
@@ -189,7 +190,7 @@ function Results({ query, isAdmin, go }: { query: string; isAdmin: boolean; go: 
   return (
     <div className="ucard ulist">
       {hits.map(({ e, desc }) => (
-        <button key={e.id} type="button" className="urow" onClick={() => go(e.cat, e.sub ?? null)}>
+        <button key={e.id} type="button" className="urow" onClick={() => (e.app ? openApp(e.app) : go(e.cat, e.sub ?? null))}>
           <IconTile icon={e.icon} color={(e.sub && SUBS[e.sub]?.color) || CATS.find((c) => c.id === e.cat)?.color || '#8e8e93'} />
           <span className="urow-text">
             <span className="urow-title">{SUBS[e.id] || CATS.some((c) => c.id === e.id) ? pageName(t, e.id) : e.label}</span>

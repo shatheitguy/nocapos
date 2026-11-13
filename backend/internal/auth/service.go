@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"time"
 
 	"alfaos/alfad/internal/store"
@@ -21,6 +22,8 @@ var (
 	ErrTokenReuse         = errors.New("refresh token reuse detected")
 	ErrSetupDone          = errors.New("setup's already done — just sign in")
 	ErrSetupToken         = errors.New("that setup token's not it — copy it again from the NoCapOS console")
+	// ErrSetupTokenNeeded: setup from outside the local network without a token.
+	ErrSetupTokenNeeded = errors.New("this device isn't on the server's local network, so setup needs the one-time setup token from the NoCapOS console")
 	// ErrFilesOnly: the account is for file sharing only (SMB / WebDAV),
 	// not for signing in to the desktop.
 	ErrFilesOnly = errors.New("this account is for file sharing only; connect to the shared folders from your computer or phone instead")
@@ -65,6 +68,8 @@ type Service struct {
 	now  func() time.Time
 	lock *Lockout // per-account failed attempts (password and 2FA code)
 	mfa  mfaStore // sign-ins waiting for their 2FA code
+
+	setupMu sync.Mutex // one first-run setup at a time (the store is the final guard)
 }
 
 func NewService(st *store.Store, iss *Issuer, opt Options) *Service {
@@ -82,10 +87,28 @@ func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
 	return n == 0, err
 }
 
-// Setup creates the first administrator. It requires the one-time setup token
-// printed to the daemon log so a device on the LAN cannot be claimed by whoever
-// reaches the web UI first.
-func (s *Service) Setup(ctx context.Context, setupToken, username, password string, meta ClientMeta) (*Session, error) {
+// SetupRequest is a first-run setup attempt.
+type SetupRequest struct {
+	Username string
+	Password string
+	// Token is the one-time setup token from the console / log
+	// (ALFA_SETUP_TOKEN when set). Only checked when Local is false.
+	Token string
+	// Local: the request comes from this machine or its private local
+	// network, so the owner just creates the account, like on any computer's
+	// first start. The caller decides this from the real TCP peer.
+	Local bool
+}
+
+// Setup creates the first administrator. From this machine or the private
+// local network that's just a name and password; from anywhere else it also
+// takes the one-time setup token printed to the daemon log, so a server
+// reachable from outside can't be claimed by whoever finds it first. It is
+// one-shot: the first completed setup wins and every later attempt (even a
+// concurrent one) gets ErrSetupDone.
+func (s *Service) Setup(ctx context.Context, req SetupRequest, meta ClientMeta) (*Session, error) {
+	s.setupMu.Lock()
+	defer s.setupMu.Unlock()
 	required, err := s.SetupRequired(ctx)
 	if err != nil {
 		return nil, err
@@ -93,9 +116,15 @@ func (s *Service) Setup(ctx context.Context, setupToken, username, password stri
 	if !required {
 		return nil, ErrSetupDone
 	}
-	if s.opt.SetupToken == "" || subtle.ConstantTimeCompare([]byte(setupToken), []byte(s.opt.SetupToken)) != 1 {
-		return nil, ErrSetupToken
+	if !req.Local {
+		if req.Token == "" {
+			return nil, ErrSetupTokenNeeded
+		}
+		if !s.SetupTokenOK(req.Token) {
+			return nil, ErrSetupToken
+		}
 	}
+	username, password := req.Username, req.Password
 	if err := ValidateUsername(username); err != nil {
 		return nil, err
 	}
@@ -115,6 +144,11 @@ func (s *Service) Setup(ctx context.Context, setupToken, username, password stri
 		return nil, err
 	}
 	return s.startSession(ctx, u, meta)
+}
+
+// SetupTokenOK checks the one-time setup token in constant time.
+func (s *Service) SetupTokenOK(token string) bool {
+	return s.opt.SetupToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.opt.SetupToken)) == 1
 }
 
 // Login checks a password. Accounts with 2FA get an *MFAChallenge error

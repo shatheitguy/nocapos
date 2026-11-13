@@ -149,8 +149,28 @@ export async function accountsMode(): Promise<'system' | 'app'> {
 }
 
 export async function setupRequired(): Promise<boolean> {
-  const r = await raw<{ setup_required: boolean }>('/api/v1/auth/status', { auth: false });
-  return r.ok && r.data.setup_required;
+  return (await setupStatus()).required;
+}
+
+/**
+ * First-run setup: whether it's needed, and whether this browser needs the
+ * one-time setup token (only when it isn't on the server or its local network).
+ */
+export async function setupStatus(): Promise<{ required: boolean; tokenRequired: boolean }> {
+  const r = await raw<{ setup_required: boolean; setup_token_required?: boolean }>('/api/v1/auth/status', { auth: false });
+  return { required: r.ok && r.data.setup_required, tokenRequired: r.ok && !!r.data.setup_token_required };
+}
+
+/**
+ * The browser reached the server after an address change: keep the new
+ * settings. kept / pending (not live yet, ask again) / gone (already undone).
+ */
+export async function confirmNetwork(token: string): Promise<'kept' | 'pending' | 'gone' | 'offline'> {
+  const r = await raw<{ status?: string }>('/api/v1/system/network/confirm', { method: 'POST', auth: false, body: { token } });
+  if (r.status === 0) return 'offline';
+  if (r.status === 200) return 'kept';
+  if (r.status === 202) return 'pending';
+  return r.status === 410 ? 'gone' : 'offline';
 }
 
 /** What the password step returns: signed in, an error, or (2FA) a code is needed. */
@@ -207,13 +227,21 @@ export async function linkSignIn(): Promise<boolean> {
   return true;
 }
 
-export async function setup(setupToken: string, username: string, password: string): Promise<string | null> {
+/**
+ * Creates the first administrator. The token is only needed away from the
+ * server's local network. On failure: the message, and whether the server
+ * asked for the token (needsToken) or setup was already done elsewhere (done).
+ */
+export async function setup(setupToken: string, username: string, password: string): Promise<{ error: string; needsToken: boolean; done: boolean } | null> {
   const r = await raw<Session>('/api/v1/auth/setup', {
     method: 'POST',
     auth: false,
     body: { setup_token: setupToken, username, password },
   });
-  if (!r.ok) return r.error ?? 'Setup failed';
+  if (!r.ok) {
+    const code = (r.data as unknown as { error?: { code?: string } } | null)?.error?.code;
+    return { error: r.error ?? 'Setup failed', needsToken: code === 'setup_token_required' || code === 'invalid_setup_token', done: code === 'setup_done' };
+  }
   setSession(r.data);
   return null;
 }

@@ -7,8 +7,6 @@ import { powerHost } from '../lib/hostActions';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
-import { openApp } from './meta';
-import { Section as Group } from './Personalize';
 import { confirmChange, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
 
 // Settings → Glow Up: one place for every update. One check looks at
@@ -428,21 +426,6 @@ export function SoftwareUpdate() {
       {sys && !sys.supported && sys.reason && <p className="muted small glowup-note">{sys.reason}</p>}
       {sys?.error && <p className="muted small glowup-note">{sys.error}</p>}
 
-      {u && (u.available || u.dev) && !u.error && run && !run.supported && (
-        <Group title={t('sp.howUpdate')} hint={t('sp.howUpdateHint')}>
-          <div className="settings-row full">
-            <pre className="set-logs set-cmd">{u.command}</pre>
-            <div className="btn-group set-logs-actions">
-              <button type="button" className="ghost small" onClick={() => void navigator.clipboard?.writeText(u.command).then(() => toast('success', tr('sp.cmdCopied')))}>
-                <Icon name="copy" size={13} /> {t('sp.copyCmd')}
-              </button>
-              <button type="button" className="ghost small" onClick={() => openApp('terminal')}>
-                <Icon name="terminal" size={13} /> {t('sp.openTerminal')}
-              </button>
-            </div>
-          </div>
-        </Group>
-      )}
       {u?.notes && !u.error && nocPending && (
         <details className="settings-section glowup-details">
           <summary className="settings-section-title">{t('sp.whatsNew', { version: vtag(u.latest) })}</summary>
