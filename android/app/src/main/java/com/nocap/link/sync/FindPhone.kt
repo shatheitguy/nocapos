@@ -86,7 +86,14 @@ object FindPhone {
         if (am != null && oldVolume >= 0) runCatching { am.setStreamVolume(AudioManager.STREAM_ALARM, oldVolume, 0) }
         oldVolume = -1
         val nm = ctx.getSystemService(NotificationManager::class.java)
-        if (nm != null && oldFilter >= 0 && nm.isNotificationPolicyAccessGranted) runCatching { nm.setInterruptionFilter(oldFilter) }
+        val restore = when (oldFilter) {
+            NotificationManager.INTERRUPTION_FILTER_NONE -> NotificationManager.INTERRUPTION_FILTER_NONE
+            NotificationManager.INTERRUPTION_FILTER_PRIORITY -> NotificationManager.INTERRUPTION_FILTER_PRIORITY
+            NotificationManager.INTERRUPTION_FILTER_ALARMS -> NotificationManager.INTERRUPTION_FILTER_ALARMS
+            NotificationManager.INTERRUPTION_FILTER_ALL -> NotificationManager.INTERRUPTION_FILTER_ALL
+            else -> null
+        }
+        if (nm != null && restore != null && nm.isNotificationPolicyAccessGranted) runCatching { nm.setInterruptionFilter(restore) }
         oldFilter = -1
         NotificationManagerCompat.from(ctx).cancel(ID)
         onChange?.invoke(false)
