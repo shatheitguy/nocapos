@@ -161,16 +161,18 @@
 /* Files: toolbar fits, drawer sidebar gets a backdrop-free full height */
 :root[data-compact] .fx-pill, :root[data-compact] .fx-crumb { min-height: 36px; }
 
-/* Assistant: chat list is a drawer under the top bar */
-:root[data-compact] .assistant { position: relative; }
-:root[data-compact] .ai-sidebar { position: absolute; top: 57px; bottom: 0; left: 0; height: auto; width: min(280px, 85%); z-index: 5; box-shadow: var(--shadow-win); }
-:root[data-compact] .ai-topbar { padding: 8px; gap: 6px; }
-:root[data-compact] .ai-tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-:root[data-compact] .ai-tabs button { flex: none; min-height: 36px; padding: 6px 10px; }
-:root[data-compact] .ai-topbar > .spacer, :root[data-compact] .ai-provider-pill { display: none; }
-:root[data-compact] .ai-conv .icon-btn { min-width: 40px; min-height: 40px; }
-:root[data-compact] .ai-compose { padding-bottom: 10px; }
-:root[data-compact] .ai-send { min-width: 44px; min-height: 44px; }
+/* Assistant: bigger touch targets; message tools always shown (no hover on touch) */
+:root[data-compact] .ai-topbar { padding: 6px 8px; gap: 6px; }
+:root[data-compact] .ai-tabs button { min-height: 36px; }
+:root[data-compact] .ai-topbar .icon-btn { min-width: 40px; min-height: 40px; }
+:root[data-compact] .ai-conv-open { min-height: 44px; }
+:root[data-compact] .ai-conv .ai-conv-actions { display: flex; }
+:root[data-compact] .ai-conv-actions .icon-btn { min-width: 36px; min-height: 36px; }
+:root[data-compact] .ai-actions { opacity: 1; }
+:root[data-compact] .ai-actions .icon-btn { min-width: 34px; min-height: 34px; }
+:root[data-compact] .ai-compose textarea { font-size: max(16px, var(--ai-fs)); }
+:root[data-compact] .ai-send { width: 42px; height: 42px; }
+:root[data-compact] .ai-picker select { min-height: 32px; }
 
 /* Terminal: tools on their own scrollable row */
 :root[data-compact] .terminal-bar { flex-wrap: wrap; row-gap: 6px; padding: 6px 10px; }

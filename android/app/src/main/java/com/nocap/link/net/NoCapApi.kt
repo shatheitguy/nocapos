@@ -27,6 +27,12 @@ data class ServerApp(val id: String, val name: String, val iconUrl: String, val 
 
 data class Me(val deviceName: String, val username: String, val server: PairInfo)
 
+/** A Wi-Fi network saved on the server that can be shared with a QR code. */
+data class SavedWifi(val uuid: String, val ssid: String, val active: Boolean)
+
+/** What a phone needs to join a saved network (WifiQr.payload). */
+data class WifiShare(val ssid: String, val password: String, val type: String, val hidden: Boolean)
+
 data class Usage(val total: Long, val used: Long, val percent: Double)
 
 data class Summary(
@@ -129,6 +135,21 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
             o.getJSONObject("user").optString("username"),
             info(o.getJSONObject("server")),
         )
+    }
+
+    /** The server's shareable Wi-Fi networks (administrators' phones only). */
+    fun wifiSaved(): List<SavedWifi> {
+        val a = JSONArray(call("GET", "/api/v1/device/wifi/saved"))
+        return (0 until a.length()).map {
+            val o = a.getJSONObject(it)
+            SavedWifi(o.optString("uuid"), o.optString("ssid"), o.optBoolean("active"))
+        }
+    }
+
+    /** A saved network's password, after the administrator's own account password. */
+    fun wifiShare(uuid: String, accountPassword: String): WifiShare {
+        val o = JSONObject(call("POST", "/api/v1/device/wifi/share", JSONObject().put("uuid", uuid).put("password", accountPassword)))
+        return WifiShare(o.optString("ssid"), o.optString("password"), o.optString("type", "WPA"), o.optBoolean("hidden"))
     }
 
     fun apps(): List<ServerApp> {
