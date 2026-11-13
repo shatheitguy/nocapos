@@ -350,6 +350,15 @@ fun HomeScreen(a: MainActivity) {
                     val start = down.position
                     val h = hit(start)
                     if (h is Hit.OnItem && h.item is WidgetItem) return@awaitEachGesture // the widget handles its own touches
+                    // A button on top (AI, search bar, banners) already took this touch: it is
+                    // theirs, so it must never turn into a long-press or a tap here.
+                    if (down.isConsumed || a.layer != Layer.NONE) {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            if (ev.changes.none { it.pressed }) break
+                        }
+                        return@awaitEachGesture
+                    }
                     var upConsumed = false
                     var moved = false
                     var multi = false
@@ -361,8 +370,9 @@ fun HomeScreen(a: MainActivity) {
                             val ch = ev.changes.firstOrNull { it.id == down.id }
                             if (ch == null) {
                                 done = true
-                            } else if (ch.changedToUp()) {
-                                upConsumed = ch.isConsumed
+                            } else if (ch.changedToUpIgnoringConsumed() || !ch.pressed) {
+                                // Lifted (or cancelled because another screen opened), even if a child consumed it.
+                                upConsumed = ch.isConsumed || !ch.changedToUpIgnoringConsumed()
                                 done = true
                             } else if ((ch.position - start).getDistance() > slop) {
                                 moved = true
@@ -399,6 +409,14 @@ fun HomeScreen(a: MainActivity) {
                                 cy1 - cy0 < -swipe -> runGesture(a, Gesture.TWO_UP, ::firstPage)
                                 cy1 - cy0 > swipe -> runGesture(a, Gesture.TWO_DOWN, ::firstPage)
                             }
+                        }
+                        return@awaitEachGesture
+                    }
+                    if (timedOut && (a.layer != Layer.NONE || !a.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))) {
+                        // Something opened on top while the finger was down: not a long-press.
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            if (ev.changes.all { !it.pressed }) break
                         }
                         return@awaitEachGesture
                     }
@@ -715,9 +733,11 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
     val over = drag != null && drag.moved && ui.dockRect.contains(drag.pos)
     val style = Opt.dockStyle.v
     val buttons = Opt.dockButtons.v
+    // The app drawer button can be hidden on its own; the drawer still opens with its gesture.
+    val roster = Opt.dockDrawerButton.v
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = if (style == DockStyle.FLOATING) 20.dp else 12.dp), contentAlignment = Alignment.Center) {
         // Fit everything on one row, however narrow the screen.
-        val slots = apps.size.coerceAtLeast(1) + if (buttons) 2 else 0
+        val slots = apps.size.coerceAtLeast(1) + (if (buttons) 1 else 0) + (if (roster) 1 else 0)
         val avail = maxWidth - 20.dp - (if (buttons) 18.dp else 0.dp)
         val s = minOf((Opt.iconSize.v - 4).coerceAtLeast(40).dp, avail / slots - 8.dp).coerceAtLeast(32.dp)
         val shape = RoundedCornerShape(if (style == DockStyle.FLOATING) 30.dp else 26.dp)
@@ -731,7 +751,7 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
             horizontalArrangement = if (style == DockStyle.FLOATING) Arrangement.spacedBy(8.dp) else Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
         ) {
             ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
-            if (buttons) {
+            if (roster) {
                 Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
                     Box(Modifier.size(s).nocapTile(iconShape(s, nocapDefault = true) ?: RoundedCornerShape(s * 0.24f), NoCap.Red, NoCap.light), contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
                 }

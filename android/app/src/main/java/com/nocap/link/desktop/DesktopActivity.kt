@@ -109,6 +109,7 @@ class DesktopActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         link = runCatching { Vault.get(this).link }.getOrNull() ?: run { finish(); return }
+        takeOpen(intent)
         current = WeakReference(this)
 
         // The system WebView can be missing, disabled or mid-update.
@@ -177,7 +178,7 @@ class DesktopActivity : ComponentActivity() {
             try {
                 val url = withContext(Dispatchers.IO) { NoCapApi(link).webSession() }
                 if (NoCapApi.origin(url) != link.server) throw IllegalStateException("The server sent an address that isn't itself.")
-                web.loadUrl(url)
+                web.loadUrl(withOpen(url))
             } catch (e: ServerTooOld) {
                 // An older NoCapOS without phone sign-in: say so, with its version.
                 val v = runCatching { withContext(Dispatchers.IO) { NoCapApi(link).pairInfo().version } }.getOrNull()
@@ -328,7 +329,35 @@ class DesktopActivity : ComponentActivity() {
         }
     }
 
+    /** An app (and Settings page) to open once signed in, e.g. settings + update for Glow Up. */
+    private var openApp: String? = null
+    private var openSection: String? = null
+
+    private fun takeOpen(i: Intent?) {
+        val app = i?.getStringExtra(EXTRA_OPEN)?.takeIf { it.matches(Regex("[a-z0-9-]{1,32}")) } ?: return
+        openApp = app
+        openSection = i.getStringExtra(EXTRA_SECTION)?.takeIf { it.matches(Regex("[a-z0-9-]{1,32}")) }
+    }
+
+    private fun withOpen(url: String): String {
+        val app = openApp ?: return url
+        openApp = null
+        val b = android.net.Uri.parse(url).buildUpon().appendQueryParameter("open", app)
+        openSection?.let { b.appendQueryParameter("section", it) }
+        openSection = null
+        return b.build().toString()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeOpen(intent)
+        // Already open: sign in again, straight into the page asked for.
+        if (openApp != null && ::web.isInitialized) signIn()
+    }
+
     companion object {
+        const val EXTRA_OPEN = "open"
+        const val EXTRA_SECTION = "section"
         private var current: WeakReference<DesktopActivity>? = null
 
         /** Sign out here for good (the link was forgotten). */
