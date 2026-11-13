@@ -2,8 +2,8 @@
 // native desktop on the server's own monitor (on or off), and whether other
 // devices may open NoCapOS at all.
 import { useEffect, useState } from 'react';
-import { hostAccessApi, type HostAccess } from '../api/hostaccess';
-import { useT } from '../i18n';
+import { hostAccessApi, type DesktopHealth, type HostAccess } from '../api/hostaccess';
+import { useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { openApp } from './meta';
@@ -13,7 +13,9 @@ export function HostAccessPage() {
   const t = useT();
   const [st, setSt] = useState<HostAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'desktop' | 'remote' | null>(null);
+  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | null>(null);
+  const [diag, setDiag] = useState<string | null>(null);
+  const [diagOpen, setDiagOpen] = useState(false);
 
   useEffect(() => {
     void hostAccessApi.get().then((r) => (r.ok ? setSt(r.data) : setError(r.error ?? 'Couldn’t load these settings')));
@@ -40,6 +42,29 @@ export function HostAccessPage() {
     setBusy(null);
     if (!r.ok) return toast('error', t('nd.autologin.failed'), r.error);
     setSt(r.data);
+  };
+
+  const repair = async () => {
+    const ok = await confirmDialog({ title: t('nd.repair.confirmTitle'), message: t('nd.repair.confirmBody'), confirmLabel: t('nd.repair.confirmGo'), danger: true });
+    if (!ok) return;
+    setBusy('repair');
+    const r = await hostAccessApi.repairDesktop();
+    setBusy(null);
+    if (!r.ok) return toast('error', t('nd.repair.failed'), r.error);
+    setSt(r.data.state);
+    toast('success', t('nd.repair.done'), r.data.actions.join(' · '));
+  };
+
+  const toggleDiagnostics = async () => {
+    if (diagOpen) return setDiagOpen(false);
+    setDiagOpen(true);
+    setDiag(null);
+    const r = await hostAccessApi.desktopDiagnostics();
+    if (!r.ok) {
+      setDiagOpen(false);
+      return toast('error', t('nd.diag.failed'), r.error);
+    }
+    setDiag(r.data.text);
   };
 
   const setRemote = async (on: boolean) => {
@@ -108,6 +133,35 @@ export function HostAccessPage() {
               <Toggle label={t('nd.autologin')} hint={d.autologin && d.autologin_user ? t('nd.autologin.on', { user: d.autologin_user }) : t('nd.autologin.hint')}
                 checked={d.autologin} disabled={busy === 'desktop'} onChange={(on) => void setAutologin(on)} />
             )}
+            {d.health && d.health.status !== 'off' && d.health.status !== 'unavailable' && (
+              <Row label={t('nd.health')} hint={healthHint(d.health, t)}>
+                <span className="settings-value">
+                  <span className={`status-dot ${d.health.status === 'ok' ? 'on' : 'off'}`} /> {t(`nd.health.${d.health.status}`)}
+                </span>
+              </Row>
+            )}
+            <Row label={t('nd.repair')} hint={t('nd.repair.hint')}>
+              <button type="button" disabled={busy === 'repair'} onClick={() => void repair()}>{t('nd.repair.button')}</button>
+            </Row>
+            <Row label={t('nd.diag')} hint={t('nd.diag.hint')}>
+              <button type="button" className="ghost" onClick={() => void toggleDiagnostics()}>{t(diagOpen ? 'nd.diag.hide' : 'nd.diag.button')}</button>
+            </Row>
+            {diagOpen && (
+              <div className="stack">
+                {diag === null ? (
+                  <p className="muted">{t('nd.diag.loading')}</p>
+                ) : (
+                  <>
+                    <div>
+                      <button type="button" className="ghost" onClick={() => void navigator.clipboard?.writeText(diag).then(() => toast('success', t('nd.diag.copied')))}>
+                        {t('nd.diag.copy')}
+                      </button>
+                    </div>
+                    <pre style={{ maxHeight: '24rem', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.75rem', margin: 0 }}>{diag}</pre>
+                  </>
+                )}
+              </div>
+            )}
             {d.remote && !st.client_local && (
               <Row label={t('nd.open')} hint={t('nd.open.hint')}>
                 <button type="button" onClick={() => openApp('nocapdesktop')}>{t('nd.open.button')}</button>
@@ -125,4 +179,11 @@ export function HostAccessPage() {
       </Group>
     </div>
   );
+}
+
+/** What's wrong with the screen, in the reader's voice (problems, then the fallback in use). */
+function healthHint(h: DesktopHealth, t: T): string | undefined {
+  const parts = (h.problems ?? []).map((p) => t(`nd.health.p.${p.code}`));
+  if (h.fallback) parts.push(t(`nd.health.fallback.${h.fallback}`));
+  return parts.length ? parts.join(' ') : undefined;
 }

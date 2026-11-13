@@ -16,7 +16,7 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   long-press → Customize): NoCap status (server *and* this phone: animated
   rings, network sparklines, updates waiting), server status, phone status,
   clock (NoCap glow, big digits, analog, stacked, minimal; next alarm),
-  weather (Open-Meteo; your city, or rough location only if you allow it;
+  weather (Open-Meteo, off until you turn it on; your city, or rough location only if you allow it;
   tap for hourly + 7 days), calendar agenda (opt-in), now playing with
   controls (needs notification access), quick toggles (flashlight, Wi-Fi,
   Bluetooth, Do not disturb, internet, location, volume, display), notes and
@@ -41,8 +41,8 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **Notification dots** (opt-in: needs notification access; only counts).
 - **Settings you can search**, grouped like NoCapOS's own Settings:
   - *Look*: dark / light / follow the phone, accent color (NoCap red,
-    presets or any color, or synced from your NoCap desktop), font, Gen Z or
-    Standard wording.
+    presets or any color, or synced from your NoCap desktop), font, Gen Z,
+    Standard or your server's wording, NoCap lock screen, NoCap phone theme.
   - *Home*: grid 3–7 columns × 4–9 rows, page transitions (slide, fade,
     zoom, cube, stack, carousel), folder style (grid or stack), search bar,
     page dots, lock the layout.
@@ -56,8 +56,9 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
     buttons; labels.
   - *Wallpaper*: dim, blur, parallax.
   - *Gestures*: swipe up/down, double-tap, pinch in/out, two-finger swipe
-    up/down and the Home button (while home) can each open the drawer,
-    search, NoCap AI, notifications, quick settings, lock the screen
+    up/down and the Home button (while home) can each open the drawer, the
+    NoCap control center, search, NoCap AI, Android's notification shade,
+    quick settings, lock the screen
     (opt-in helper), any app, your NoCap desktop, NoCap Link, settings,
     widgets or the first page.
   - *System*: status bar clear / tinted / hidden, navigation bar clear /
@@ -67,13 +68,39 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **Wallpapers**: the three NoCapOS wallpapers (Tide, Nebula, Midnight), a
   classic grid, or a picture from your gallery; dim it, set it as the phone's
   own wallpaper too, or sync the one you picked on your NoCap desktop.
-- **Language**: Gen Z (default) or Standard, like NoCapOS's own setting.
+- **Language**: Gen Z (default), Standard, or *Same as my server* (follows the
+  Language setting saved on your NoCap desktop, read from the device API's
+  saved look; it keeps the last answer for offline use, and is Gen Z until
+  there is one). All text switches instantly.
+- **NoCap control center**: swipe down on the home screen (the new default;
+  *Android's shade* is still a Gestures option) for a glass, NoCap-red panel:
+  Wi-Fi, Bluetooth, flashlight, Do not disturb, rotation lock, a brightness
+  slider, music controls, NoCap Link tiles (send clipboard, Find my phone,
+  server status) and your notifications grouped by app, with reply and
+  dismiss. Wi-Fi and Bluetooth open Android's own panel (apps can't flip them
+  since Android 10); rotation lock and brightness need *Modify system
+  settings*. Optional (Settings → Gestures → Control center): pull down on an
+  invisible strip just under the status bar to open it in any app — needs
+  *Display over other apps*, and only sees touches on that strip.
+- **NoCap lock screen** (opt-in, Settings → Look): when the screen turns on
+  and the phone is locked, a NoCap screen with the clock, logo, server status,
+  music controls and notifications (app names and counts unless you allow the
+  text) shows *over* Android's lock screen. Swipe up asks Android to dismiss
+  the keyguard, so your PIN, pattern or fingerprint is still required; the
+  system lock screen is never disabled or bypassed. Needs *Display over other
+  apps* (Android only lets apps open a screen from the background with it).
+- **NoCap phone theme** (Settings → Look → NoCap phone): sets NoCap
+  wallpapers (the NoCapOS wallpaper you use, washed in NoCap red; the lock one
+  carries the NoCap mark) on the phone's home and lock screens, or just the
+  lock one. Red is the dominant color, so on Android 12+ the phone's Material
+  You colors follow it and go NoCap red. Without root, apps can't restyle
+  Android's own system screens; the setting says so.
 - **Backup & restore** of pages, folders, dock and settings — to your NoCap
   server (if linked) or a file.
 
 ## NoCap Link
 
-- **Link with NoCap Link** — scan the QR from *Settings → Devices → Link a
+- **Link with NoCap Link** — scan the QR from *Settings → Linked Devices → Link a
   device*, tap a `nocap://pair` link, or type the address + 6-digit code.
 - **Open my NoCap desktop** — your server's web desktop, full screen, signed
   in with a one-time ticket.
@@ -83,15 +110,58 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **NoCap AI** — chats with the server's AI Assistant as you (your own
   conversations, memory and rules), with streaming replies and voice input.
   Also a home-screen widget for any launcher.
-- **Server notifications** on the phone (opt-in): live while NoCap OS runs
-  and the screen is on (one long-poll, `GET /api/v1/device/events`), and
-  otherwise checked with the heartbeat about every 15 minutes.
+- **Always connected** (on by default once linked): a foreground service
+  (`sync/LinkService`, type `remoteMessaging`) with a quiet, minimum-priority
+  *NoCap Link connected* notification keeps one long-poll
+  (`GET /api/v1/device/events`) open to your own server, so server
+  notifications, the clipboard and requests from NoCap OS arrive in the
+  background, after the app is swiped away and after a reboot. It's started
+  again by `LinkBootReceiver` (`BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`) and a
+  15-minute WorkManager watchdog (`LinkWatchdog`). Settings → Notifications
+  and clipboard asks Android to leave it alone in Doze (battery-optimisation
+  exemption, Android's own dialog). No push service: only your server. Turn
+  *Always connected* off and it's live only while the app runs (plus the
+  15-minute heartbeat).
+- **Nearby or Remote**: at home the phone talks to the server directly;
+  away it uses the remote address. The server announces itself on the home
+  network as `_nocap._tcp` over mDNS (through Avahi; TXT `nocap_id`,
+  `scheme`) and lists its addresses at `GET /api/v1/device/addresses`
+  (home-network addresses it found, plus a remote address and extra home
+  addresses an administrator saves in Settings → Devices). On Wi-Fi or
+  Ethernet the phone tries what mDNS found, then the listed home addresses,
+  then the remote one and the paired address; on mobile data only the last
+  two. Each must answer with the same NoCap ID behind the **same pinned
+  certificate**, so a server reached through a proxy with another
+  certificate isn't used. It checks again on every network change
+  (`ConnectivityManager` callback); the hub, Settings and the notification
+  show *Nearby* or *Remote*, and NoCap OS shows the same per phone.
+- **Phone status on NoCap OS**: battery %, charging, network and
+  Nearby/Remote (`POST /api/v1/device/state`), shown in NoCap OS's
+  notification center and tray.
+- **Find my phone**: NoCap OS rings the phone at full alarm volume, even on
+  silent (alarm stream); through Do not disturb only when NoCap OS has Do not
+  disturb access. Stop from the notification, from NoCap OS, or after two
+  minutes; volume and Do not disturb go back as they were.
+- **Open on phone / Send to phone**: NoCap OS sends a link or a file; files
+  are saved in Downloads/NoCap (fetched with this phone's own token, so only
+  what you may read). Android doesn't let a background app open things, so
+  unless NoCap OS is in front a notification asks for one tap.
+- **Open on NoCap**: the share sheet's *Open on NoCap* opens a link in NoCap
+  OS, or sends files and opens the first one there (`POST /api/v1/device/open`).
+- **Calls on NoCap OS** (opt-in, needs notification access): incoming,
+  ongoing and missed calls show as call cards; *Decline* uses the call
+  notification's own decline action, or `TelecomManager.endCall` (Android 9+,
+  `ANSWER_PHONE_CALLS`, asked when you turn calls on).
+- **Reply from NoCap OS**: messages whose notification has a reply field can
+  be answered from NoCap OS (the phone fills the notification's own
+  `RemoteInput`, so the messaging app sends it; no SMS permission needed).
 - **Phone notifications on NoCap OS** (opt-in, per app): they show in the
   web desktop's notification center as "From <phone>"; dismissing on either
   side dismisses on the other where Android allows. Needs notification
   access; only goes to your own server.
 - **Shared clipboard** (opt-in): copy on NoCap OS → it's on the phone's
-  clipboard. Phone → NoCap OS is sent when NoCap OS comes to the front, or
+  clipboard at once (over the live connection); a phone's clip reaches open
+  NoCap OS desktops at once too (WebSocket topic `link.phone`). Phone → NoCap OS is sent when NoCap OS comes to the front, or
   from the *Send clipboard to NoCap* quick-settings tile — Android 10+ only
   lets the app in front read the clipboard, so there's no silent background
   copying.
@@ -104,14 +174,23 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   itself when nobody has watched for 30 seconds. The screen is encoded with
   the phone's hardware H.264 encoder (up to 1080p, about 6 Mbps; pictures
   for browsers that can't decode video) and goes only to your own server,
-  through the same address as everything else (`/api/v1/device/mirror`, a
+  through the address NoCap Link picked (`/api/v1/device/mirror`, a
   WebSocket on the device token). Only your own account can watch it —
-  administrators can't open other people's phones. The ask arrives on the
-  events long-poll, so NoCap OS must be running with the screen on.
+  administrators can't open other people's phones. The ask arrives over
+  the NoCap Link connection, Nearby or Remote like everything else.
   Taps and typing use the opt-in accessibility helper (the same one as the
   lock gesture); without it you can still watch. Turn off the asks in
   Settings → Notifications & clipboard.
+- **Share Wi-Fi** (administrators) — pick a Wi-Fi network saved on the
+  server, confirm with your account password, and the phone shows its join
+  QR code and password (drawn on the phone; enterprise networks can't be
+  shared this way).
 - **Unlink** — removes the phone on the server too.
+- **Linked Devices** — the heartbeat tells only your own server the phone's
+  battery, app version, model, Android version and which of notifications /
+  clipboard / files are on, so *Settings → Linked Devices* can show them.
+  An administrator can cap how many devices each person links (5 by
+  default); at the cap, linking answers `device_limit` until one is unlinked.
 - **Older servers** — anything a server doesn't support yet says *Your NoCap
   server needs an update (Settings → Glow Up)* with the version it's running,
   instead of an error.
@@ -129,25 +208,78 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   warning that the connection isn't encrypted.
 - Device tokens only work on `/api/v1/device/*`: the server's summary, your
   saved look, your files (with your normal permissions), Send to NoCap (your
-  home folder only), the layout backup, notifications (administrators), your
-  own AI conversations (no provider settings), and unlinking itself.
+  home folder only), the layout backup, notifications (administrators), the
+  phone's own state, addresses, actions and "Open on NoCap", your
+  own AI conversations (no provider settings), the server's saved Wi-Fi
+  names and, after the administrator's account password, a network's
+  password for Share Wi-Fi (administrators; audited), and unlinking itself.
+- A phone's notifications, calls, messages, state and requests belong to
+  its owner only: NoCap OS shows them to that person and nobody else, not
+  even administrators, and only the owner can ring, reply from or send to it.
 - "Open my NoCap desktop" calls `POST /api/v1/device/session`, which returns
   a one-time, 60-second ticket; the web desktop trades it for a normal
   session at `POST /api/v1/auth/link`.
 
+## First run: privacy, then the setup guide
+
+1. **Welcome.**
+2. **Terms & privacy**, once: a short card ("NoCap OS doesn't collect a single
+   piece of your data…"), no checkboxes. The glowing red *Join the NoCap Fam*
+   (Gen Z) / *Join the NoCap Community* (Standard) button records that you
+   agreed and moves on. Reopen it from Settings → About → Privacy.
+3. **Link your NoCap server** (or later).
+4. **The setup guide**: one screen per permission, each saying what it's for,
+   the exact steps, and a button that opens the right Android page. Its status
+   turns green once Android reports it's on (re-checked every time you come
+   back), with progress like "6 of 11 done". Every step can be skipped; *Skip*
+   at the top ends setup. It picks up where you left off and reopens from
+   Settings → Privacy & permissions (or About) → *Setup guide*.
+
 ## Permissions
 
-Asked only when you use the feature: notifications, camera (QR scan only),
-approximate location (weather widget, only if you choose "My location"),
-calendar (calendar widget). Opt-in in Android's settings: notification
-access (dots, now playing, forwarding notifications), accessibility or
-device admin (lock gesture, and taps and typing while you mirror the
-screen — sideloaded installs need App info → ⋮ → *Allow restricted settings*
-first), Do not disturb access (quick toggles). Screen capture (Android's
-prompt, every mirroring session) and a foreground service while mirroring.
-Normal permissions: set wallpaper, expand the notification shade, ask to
+The guide, in order (steps that don't apply to the phone are left out):
+
+| Step | What it's for |
+| --- | --- |
+| Default home app | NoCap OS as your home screen |
+| Notifications | Unlinked / download / opt-in server notifications |
+| Allow restricted settings (Android 13+) | Android blocks accessibility, notification access and device admin for apps installed from a file until you tap App info → ⋮ → *Allow restricted settings*. That item only appears after you've tried once, so the step is "try, then App info". Status is read from Android where it allows it |
+| Accessibility (lock helper) | Lock-screen gesture, and taps, swipes and typing from NoCap OS while you mirror the screen (opt-in; you can still watch without it) |
+| Notification access | Dots, now playing, forwarding chosen apps to your server |
+| Device admin (Android 9+) | Fallback lock; its only policy is "lock the screen" |
+| No battery limits | Keeps NoCap Link, sign-in alerts and clipboard sync alive |
+| Install unknown apps | In-app updates (only NoCap OS signed with the same key) |
+| Camera | Scanning the pairing QR code |
+| Calls & messages | Phone calls (`ANSWER_PHONE_CALLS`), so NoCap OS can decline a call; also asked when you turn on *Calls on NoCap OS*. No SMS permission: replies go through the messaging app's own notification |
+| Weather | Turns weather on and asks for *approximate* location |
+| Calendar | The calendar widget |
+| Screen mirroring | Nothing to switch on: NoCap OS and Android both ask every time mirroring starts; a foreground service (screen capture) runs while it's on |
+
+Also opt-in in Android's settings: Do not disturb access (quick toggles),
+display over other apps (NoCap lock screen, control-center edge swipe) and
+modify system settings (control center rotation lock and brightness).
+Notification access also feeds the control center and lock screen.
+Normal permissions: foreground service (NoCap Link connection), start at
+boot, ask for the battery-optimisation exemption, Wi-Fi multicast (finding
+your server with mDNS), vibrate (Find my phone), set wallpaper, expand the notification shade, ask to
 uninstall an app, Wi-Fi/Bluetooth state (toggles), set a timer in the clock
-app. Weather requests go to Open-Meteo with only the coordinates.
+app. Settings → Privacy & permissions → *Manage permissions* shows them all,
+with the same restricted-settings help.
+
+## Privacy
+
+NoCap OS collects nothing: no tracking, analytics, ads, advertising ID or
+third-party crash reporting. It connects only to:
+
+| Host | Why | When |
+| --- | --- | --- |
+| Your NoCap server | Everything NoCap Link does, backups, reports you choose to send | Once linked |
+| `api.github.com`, `github.com`, `*.githubusercontent.com` | Update checks and downloads; *Report to NoCap developers* opens github.com in your browser | When you check (or turn on automatic checks, off by default), or tap report |
+| `api.open-meteo.com`, `geocoding-api.open-meteo.com` | Weather: a city you search for, or your location rounded to about 1 km | Only if weather is on (it's **off** until you turn it on) |
+
+The phone's location is never named through a geocoding service. The list
+lives in `settings/Privacy.kt` (Settings → About → Privacy shows it, with the
+weather switch).
 
 ## Build
 
@@ -174,12 +306,15 @@ Kotlin + Jetpack Compose, minSdk 26, target 34, application ID
 | `home` | Home screen, pages and layout file, gestures, menus, wallpaper |
 | `drawer` | App drawer styles, search, icon styles |
 | `widget` | NoCap widgets, hosting Android widgets, weather, now playing, and the widgets for other home screens |
-| `settings` | Settings, Permissions page, first-run setup, crash report dialogs |
+| `settings` | Settings, Permissions page, first-run setup and the setup guide, restricted-settings help, privacy page, crash and bug report dialogs |
 | `sync` | NoCap Link: pairing, QR scan, hub, notification and clipboard sync, sign-in alerts, notifications |
 | `net` | The NoCapOS device API client and certificate pinning |
 | `ai`, `desktop`, `share` | NoCap AI, the web desktop, "Send to NoCap" |
-| `system` | Notification listener, lock helper, crash log |
+| `system` | Notification listener, lock helper, crash log (and report scrubbing) |
 | `mirror` | Phone mirroring: the consent screen, the capture service (MediaProjection → H.264 or JPEG) and its wire format |
+| `update` | In-app updates from GitHub releases |
+| `lock` | NoCap lock screen (`LockActivity`, screen-on watch) and the NoCap wallpapers for the phone |
+| `control` | NoCap control center, its toggles, notifications (reply / dismiss), the edge strip and `ControlActivity` |
 | `ui` | Theme (NoCap colors, fonts, glass) and shared controls |
 
 Manifest components (services, receivers, the widget providers, activities)
@@ -189,9 +324,30 @@ for people who turned them on, and remove placed widgets.
 
 ### Crash reports
 
-If the app crashes, the report is kept on the phone (Settings → About). On
-the next start it offers, once, to send it to your linked server, where it is
-saved in NoCap Link in your home folder. Nothing is sent anywhere else.
+If the app crashes, freezes (ANR, Android 11+) or a background job keeps
+failing, the report is kept on the phone. On the next start NoCap OS asks
+once, showing exactly what the report contains: the error and stack trace,
+app and Android version, phone model. Addresses, emails, IPs, host names,
+file paths, tokens and other long secrets are blanked out first. Then:
+
+- **Send to my server**: saved in NoCap Link in your home folder.
+- **Report to NoCap developers**: opens a prefilled
+  `https://github.com/shatheitguy/nocapos/issues/new?title=…&body=…` in your
+  browser (cut to fit URL limits); you review and submit it there yourself.
+- **Don't send**.
+
+Nothing is ever sent automatically. Settings → About → *Report a bug* does the
+same for anything you describe (with the last crash attached if there is one).
+
+### Updates
+
+Settings → About → Updates checks the latest NoCapOS release on GitHub,
+downloads `nocap-os.apk`, checks its checksum (from `nocap-os.json`, when
+published), package name, version and signing key, and installs it through
+Android's package installer. It also says when your server is behind and
+opens Glow Up on it. Automatic checks (when Settings opens and once a day)
+are off until you turn them on. After the first in-app update Android
+usually lifts the restricted-settings block for sideloaded installs.
 
 ## Releases and signing
 

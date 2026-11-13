@@ -12,7 +12,10 @@ import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.view.accessibility.AccessibilityEvent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationManagerCompat
 
 /**
@@ -29,11 +32,13 @@ class DotsService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         recount()
+        changes++
         if (sbn != null) runCatching { com.nocap.link.sync.Sync.posted(this, sbn) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         recount()
+        changes++
         if (sbn != null) runCatching { com.nocap.link.sync.Sync.removed(this, sbn) }
     }
 
@@ -52,6 +57,9 @@ class DotsService : NotificationListenerService() {
     companion object {
         /** package → number of notifications, read by the home screen. */
         val counts = mutableStateMapOf<String, Int>()
+
+        /** Bumped on every post/removal, so the control center and lock screen redraw their lists. */
+        var changes by mutableIntStateOf(0)
 
         @SuppressLint("StaticFieldLeak")
         @Volatile var instance: DotsService? = null
@@ -113,6 +121,23 @@ object Phone {
 
     private fun admin(ctx: Context) = ComponentName(ctx, LockAdmin::class.java)
 
+    /** The device admin receiver, as written in the manifest (for the device-owner command). */
+    const val ADMIN_RECEIVER = ".system.LockAdmin"
+
+    /** Android's "activate device admin" page for the lock-only admin. */
+    fun adminIntent(ctx: Context): Intent =
+        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx))
+            .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets NoCap OS lock the screen when you use your lock gesture. Nothing else.")
+
+    fun isDeviceOwner(ctx: Context) = runCatching { ctx.getSystemService(DevicePolicyManager::class.java)?.isDeviceOwnerApp(ctx.packageName) == true }.getOrDefault(false)
+
+    /** Gives up device owner (only if it was set with the USB command). */
+    @Suppress("DEPRECATION")
+    fun releaseDeviceOwner(ctx: Context) {
+        if (isDeviceOwner(ctx)) runCatching { ctx.getSystemService(DevicePolicyManager::class.java).clearDeviceOwnerApp(ctx.packageName) }
+    }
+
     fun adminActive(ctx: Context) = ctx.getSystemService(DevicePolicyManager::class.java)?.isAdminActive(admin(ctx)) == true
 
     /** Where to switch the lock helper on. */
@@ -120,9 +145,7 @@ object Phone {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         } else {
-            Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
-                .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx))
-                .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Lets NoCap OS lock the screen when you double-tap the home screen. Nothing else.")
+            adminIntent(ctx)
         }
 
     fun turnOffLockHelpers(ctx: Context) {

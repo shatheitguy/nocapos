@@ -267,3 +267,30 @@ func (s *Server) desktopView(w http.ResponseWriter, r *http.Request) {
 	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: p})
 	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(rdpTicketTTL.Seconds()), "protocol": t.Protocol, "sign_in": t.SignIn})
 }
+
+// desktopRepair puts NoCap Desktop back on the screen (Settings → Repair
+// NoCap Desktop): the boot link, the session files, a fallback when the
+// sign-in screen wasn't coming up; then the sign-in screen restarts.
+func (s *Server) desktopRepair(w http.ResponseWriter, r *http.Request) {
+	res, err := s.desktop.Repair(r.Context())
+	s.audit(r, userFrom(r.Context()).ID, "system.desktop_repair", strings.Join(res.Actions, ", "), err == nil, errText(err))
+	if err != nil {
+		if errors.Is(err, hostaccess.ErrDesktopUnavailable) {
+			writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "desktop_repair_failed", "NoCap Desktop couldn't be repaired: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"actions": res.Actions, "health": res.Health, "state": s.hostAccessState(r)})
+}
+
+// desktopDiagnostics is the text bundle for a black screen: health, the
+// sign-in screen's and GNOME Shell's journal, sessions, the GPU, screens.
+func (s *Server) desktopDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if !s.desktop.Native {
+		writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"text": s.desktop.Diagnostics(r.Context())})
+}

@@ -27,6 +27,12 @@ data class ServerApp(val id: String, val name: String, val iconUrl: String, val 
 
 data class Me(val deviceName: String, val username: String, val server: PairInfo)
 
+/** A Wi-Fi network saved on the server that can be shared with a QR code. */
+data class SavedWifi(val uuid: String, val ssid: String, val active: Boolean)
+
+/** What a phone needs to join a saved network (WifiQr.payload). */
+data class WifiShare(val ssid: String, val password: String, val type: String, val hidden: Boolean)
+
 data class Usage(val total: Long, val used: Long, val percent: Double)
 
 data class Summary(
@@ -65,6 +71,17 @@ data class ChatMessage(val role: String, val content: String, val error: String 
 /** The server answered with an error ({"error":{"code","message"}}). */
 class ApiError(val status: Int, val code: String, message: String) : IOException(message)
 
+/** "Google Pixel 8" (the maker is left out when the model already names it). */
+internal fun deviceModel(): String {
+    val maker = android.os.Build.MANUFACTURER.orEmpty().replaceFirstChar { it.uppercase() }
+    val model = android.os.Build.MODEL.orEmpty()
+    val s = if (model.startsWith(maker, ignoreCase = true)) model else "$maker $model"
+    return s.trim().take(64)
+}
+
+/** "Android 15". */
+internal fun osVersion(): String = "Android ${android.os.Build.VERSION.RELEASE.orEmpty()}".trim().take(64)
+
 /** The server's certificate isn't the pinned one anymore. */
 class CertChanged(val seen: String) : IOException("certificate changed")
 
@@ -82,7 +99,7 @@ private val JSON = "application/json".toMediaType()
 /**
  * The NoCapOS device API. Blocking calls: run them off the main thread.
  */
-class NoCapApi(private val server: String, pin: String?, private val token: String? = null) {
+class NoCapApi(val server: String, pin: String?, private val token: String? = null) {
     init {
         require(!server.startsWith("https://") || pin != null) { "https needs a pinned certificate" }
     }
@@ -94,7 +111,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         http.newBuilder().readTimeout(5, TimeUnit.MINUTES).writeTimeout(10, TimeUnit.MINUTES).build()
     }
 
-    constructor(link: Link) : this(link.server, link.pin, link.token)
+    constructor(link: Link) : this(Endpoint.server(link), link.pin, link.token)
 
     fun pairInfo(): PairInfo = info(JSONObject(call("GET", "/api/v1/pair/info")))
 
@@ -102,7 +119,9 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
 
     fun claim(code: String, deviceName: String): Claimed {
         val body = JSONObject().put("code", code).put("device_name", deviceName).put("platform", "android")
-        val o = JSONObject(call("POST", "/api/v1/pair/claim", body))
+        val full = JSONObject(body.toString()).put("model", deviceModel()).put("os_version", osVersion())
+        // Older servers refuse fields they don't know (before spending the code): retry without them.
+        val o = JSONObject(olderServerRetry({ call("POST", "/api/v1/pair/claim", full) }) { call("POST", "/api/v1/pair/claim", body) })
         return Claimed(
             o.getString("device_id"), o.getString("token"), o.optString("nocap_id"),
             o.optString("server_name"), o.optJSONObject("user")?.optString("username") ?: "",
@@ -118,6 +137,21 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         )
     }
 
+    /** The server's shareable Wi-Fi networks (administrators' phones only). */
+    fun wifiSaved(): List<SavedWifi> {
+        val a = JSONArray(call("GET", "/api/v1/device/wifi/saved"))
+        return (0 until a.length()).map {
+            val o = a.getJSONObject(it)
+            SavedWifi(o.optString("uuid"), o.optString("ssid"), o.optBoolean("active"))
+        }
+    }
+
+    /** A saved network's password, after the administrator's own account password. */
+    fun wifiShare(uuid: String, accountPassword: String): WifiShare {
+        val o = JSONObject(call("POST", "/api/v1/device/wifi/share", JSONObject().put("uuid", uuid).put("password", accountPassword)))
+        return WifiShare(o.optString("ssid"), o.optString("password"), o.optString("type", "WPA"), o.optBoolean("hidden"))
+    }
+
     fun apps(): List<ServerApp> {
         val a = JSONArray(call("GET", "/api/v1/device/apps"))
         return (0 until a.length()).map {
@@ -126,11 +160,25 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         }
     }
 
-    fun heartbeat(battery: Int?, appVersion: String) {
+    /**
+     * Still here: battery, app version, model, Android version and which
+     * NoCap Link features are on (shown in Settings → Linked Devices).
+     */
+    fun heartbeat(battery: Int?, appVersion: String, caps: Map<String, Boolean>? = null) {
         val body = JSONObject().put("app_version", appVersion)
         if (battery != null) body.put("battery", battery)
-        call("POST", "/api/v1/device/heartbeat", body)
+        val full = JSONObject(body.toString()).put("model", deviceModel()).put("os_version", osVersion())
+        if (caps != null) full.put("capabilities", JSONObject(caps))
+        olderServerRetry({ call("POST", "/api/v1/device/heartbeat", full) }) { call("POST", "/api/v1/device/heartbeat", body) }
     }
+
+    /** Runs [first]; when an older server rejects its body as unknown fields, runs [fallback] instead. */
+    private fun <T> olderServerRetry(first: () -> T, fallback: () -> T): T =
+        try {
+            first()
+        } catch (e: ApiError) {
+            if (e.status == 400 && e.code == "bad_request") fallback() else throw e
+        }
 
     /** A one-time, 60-second address that opens the web desktop signed in. */
     fun webSession(): String = JSONObject(call("POST", "/api/v1/device/session", JSONObject())).getString("url")
@@ -322,7 +370,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         val mirror: String? = null,
     )
 
-    private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
+    internal val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
     /** Waits (up to [wait] s) for anything new: server notices, clipboard from the web, dismissals. */
     fun events(after: Long, wait: Int = 25): Events {
@@ -404,7 +452,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         return b.build()
     }
 
-    private fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
+    internal fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
         val req = request(method, path, raw ?: body?.toString()?.toRequestBody(JSON))
         return guarded {
             client.newCall(req).execute().use { r ->

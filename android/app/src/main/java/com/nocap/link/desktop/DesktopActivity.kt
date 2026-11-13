@@ -109,6 +109,7 @@ class DesktopActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         link = runCatching { Vault.get(this).link }.getOrNull() ?: run { finish(); return }
+        takeOpen(intent)
         current = WeakReference(this)
 
         // The system WebView can be missing, disabled or mid-update.
@@ -176,8 +177,8 @@ class DesktopActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val url = withContext(Dispatchers.IO) { NoCapApi(link).webSession() }
-                if (NoCapApi.origin(url) != link.server) throw IllegalStateException("The server sent an address that isn't itself.")
-                web.loadUrl(url)
+                if (NoCapApi.origin(url) != com.nocap.link.net.Endpoint.server(link)) throw IllegalStateException("The server sent an address that isn't itself.")
+                web.loadUrl(withOpen(url))
             } catch (e: ServerTooOld) {
                 // An older NoCapOS without phone sign-in: say so, with its version.
                 val v = runCatching { withContext(Dispatchers.IO) { NoCapApi(link).pairInfo().version } }.getOrNull()
@@ -244,7 +245,7 @@ class DesktopActivity : ComponentActivity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
-            if (NoCapApi.origin(url) == link.server) return false
+            if (NoCapApi.origin(url).let { it == link.server || it == com.nocap.link.net.Endpoint.server(link) }) return false
             // Anything else (server apps on other ports, outside links) opens in a browser.
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, request.url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -262,7 +263,7 @@ class DesktopActivity : ComponentActivity() {
             if (url == null || url == "about:blank") return
             if (!pinOk(view)) return blockPage(view)
             pageOrigin = NoCapApi.origin(url)
-            if (pageOrigin == link.server) view.evaluateJavascript(downloads.hookJs, null)
+            if (pageOrigin == link.server || pageOrigin == com.nocap.link.net.Endpoint.server(link)) view.evaluateJavascript(downloads.hookJs, null)
             if (state is DeskState.Loading) state = DeskState.Ready
         }
 
@@ -328,7 +329,35 @@ class DesktopActivity : ComponentActivity() {
         }
     }
 
+    /** An app (and Settings page) to open once signed in, e.g. settings + update for Glow Up. */
+    private var openApp: String? = null
+    private var openSection: String? = null
+
+    private fun takeOpen(i: Intent?) {
+        val app = i?.getStringExtra(EXTRA_OPEN)?.takeIf { it.matches(Regex("[a-z0-9-]{1,32}")) } ?: return
+        openApp = app
+        openSection = i.getStringExtra(EXTRA_SECTION)?.takeIf { it.matches(Regex("[a-z0-9-]{1,32}")) }
+    }
+
+    private fun withOpen(url: String): String {
+        val app = openApp ?: return url
+        openApp = null
+        val b = android.net.Uri.parse(url).buildUpon().appendQueryParameter("open", app)
+        openSection?.let { b.appendQueryParameter("section", it) }
+        openSection = null
+        return b.build().toString()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        takeOpen(intent)
+        // Already open: sign in again, straight into the page asked for.
+        if (openApp != null && ::web.isInitialized) signIn()
+    }
+
     companion object {
+        const val EXTRA_OPEN = "open"
+        const val EXTRA_SECTION = "section"
         private var current: WeakReference<DesktopActivity>? = null
 
         /** Sign out here for good (the link was forgotten). */

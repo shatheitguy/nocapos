@@ -97,6 +97,7 @@ type Server struct {
 	linkOnce         sync.Once
 	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
 	sessions         sessionFeed // sign-in alerts and session list changes, live
+	linkFeed         linkFeed    // the person's phones changed, or handed a link over
 	mirror           mirrorState // phone mirroring: rooms and viewer tickets
 }
 
@@ -135,6 +136,8 @@ func New(ctx context.Context, d Deps) *Server {
 	if d.Removable != nil {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
+	// NoCap Link: phones find this server nearby (_nocap._tcp).
+	go s.advertiseLink(ctx)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }
@@ -168,6 +171,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/devices/pair-code", s.authed(s.devicesPairCode))
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
+	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))
+	mux.Handle("GET /api/v1/devices/limits", s.authed(s.devicesLimits))
+	mux.Handle("PUT /api/v1/devices/limits", s.admin(s.devicesSetDefaultLimit))
+	mux.Handle("PUT /api/v1/devices/limits/{user}", s.admin(s.devicesSetUserLimit))
 	mux.Handle("GET /api/v1/device/me", s.device(s.deviceMe))
 	mux.Handle("GET /api/v1/device/apps", s.device(s.deviceApps))
 	mux.Handle("POST /api/v1/device/heartbeat", s.device(s.deviceHeartbeat))
@@ -205,6 +212,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/system/wifi", s.admin(s.wifiList))
 	mux.Handle("POST /api/v1/system/wifi/connect", s.admin(s.wifiConnect))
 	mux.Handle("POST /api/v1/system/wifi/disconnect", s.admin(s.wifiDisconnect))
+	s.wifiRoutes(mux)
 	mux.Handle("POST /api/v1/system/network/ipv4", s.admin(s.ipv4Set))
 	mux.Handle("POST /api/v1/system/network/ipv4/keep", s.admin(s.ipv4Keep))
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))
@@ -218,12 +226,21 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
 	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
+	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.
+	mux.Handle("POST /api/v1/system/desktop/repair", s.admin(s.desktopRepair))
+	mux.Handle("GET /api/v1/system/desktop/diagnostics", s.admin(s.desktopDiagnostics))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))
 	mux.Handle("POST /api/v1/users", s.admin(s.usersCreate))
 	mux.Handle("PATCH /api/v1/users/{name}", s.admin(s.usersUpdate))
 	mux.Handle("DELETE /api/v1/users/{name}", s.admin(s.usersDelete))
+	mux.Handle("GET /api/v1/users/{name}/avatar", s.admin(s.userAvatarGet))
+	// Groups of people (admin, audited).
+	mux.Handle("GET /api/v1/groups", s.admin(s.groupsList))
+	mux.Handle("POST /api/v1/groups", s.admin(s.groupsCreate))
+	mux.Handle("PUT /api/v1/groups/{id}", s.admin(s.groupsUpdate))
+	mux.Handle("DELETE /api/v1/groups/{id}", s.admin(s.groupsDelete))
 	// Each person's shared folders and apps (admin, audited).
 	mux.Handle("GET /api/v1/users/{name}/spaces", s.admin(s.userSpaces))
 	mux.Handle("PUT /api/v1/users/{name}/folders/{id}", s.admin(s.userFolderPerm))
@@ -337,6 +354,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/cloud/imports/{id}/run", s.admin(s.cloudRunImport))
 	mux.Handle("GET /api/v1/cloud/jobs/{job}", s.admin(s.cloudJob))
 	mux.Handle("POST /api/v1/cloud/jobs/{job}/cancel", s.admin(s.cloudCancel))
+	s.cloudMountRoutes(mux)
 
 	mux.Handle("GET /api/v1/netdrives", s.admin(s.netOverview))
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))
@@ -417,6 +435,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PATCH /api/v1/ai/conversations/{id}", s.authed(s.aiPatchConversation))
 	mux.Handle("DELETE /api/v1/ai/conversations/{id}", s.authed(s.aiDeleteConversation))
 	mux.Handle("POST /api/v1/ai/conversations/{id}/send", s.authed(s.aiSend))
+	mux.Handle("DELETE /api/v1/ai/conversations/{id}/messages/{msg}", s.authed(s.aiDeleteMessagesFrom))
 
 	mux.Handle("GET /api/v1/ai/memory", s.authed(s.aiListMemory))
 	mux.Handle("POST /api/v1/ai/memory", s.authed(s.aiAddMemory))

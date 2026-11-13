@@ -60,6 +60,7 @@ export function AgentApprovals() {
           {tr('agent.wants', { agent: a.agent, tool: a.tool_title.toLowerCase() })}
         </h3>
         <p>{a.summary}</p>
+        {a.risk && a.risk !== 'none' && <span className={`agent-risk ${a.risk}`}>{tr(`ag.risk.${a.risk}`)}</span>}
         {args && (
           <details className="agent-args">
             <summary>
@@ -79,9 +80,11 @@ export function AgentApprovals() {
           <button type="button" className="ghost" disabled={busy} onClick={() => void decide('deny')}>
             {tr('agent.deny')}
           </button>
-          <button type="button" className="ghost" disabled={busy} onClick={() => void decide('always')} title={tr('agent.alwaysTitle')}>
-            {tr('agent.always')}
-          </button>
+          {a.capability !== 'power' && (
+            <button type="button" className="ghost" disabled={busy} onClick={() => void decide('always')} title={tr('agent.alwaysTitle')}>
+              {tr('agent.always')}
+            </button>
+          )}
           <button type="button" disabled={busy} onClick={() => void decide('once')}>
             {tr('agent.once')}
           </button>

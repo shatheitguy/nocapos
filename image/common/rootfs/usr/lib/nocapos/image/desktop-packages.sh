@@ -33,7 +33,9 @@ done < <(
 echo "    desktop: ${want[*]}"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${want[@]}"
 
-# Off until the first boot has branded it (install.sh switches it on).
+# Off until the first boot has branded it: install.sh switches it on and
+# makes the display-manager.service link itself (Debian's gdm3.service has
+# no [Install] section, so "systemctl enable" alone never would).
 for u in gdm3.service gdm.service; do systemctl disable "$u" >/dev/null 2>&1 || true; done
 rm -f /etc/systemd/system/display-manager.service
 systemctl set-default multi-user.target >/dev/null 2>&1 || true

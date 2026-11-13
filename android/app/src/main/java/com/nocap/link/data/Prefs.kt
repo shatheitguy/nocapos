@@ -42,7 +42,7 @@ enum class Rotation { AUTO, PORTRAIT, LANDSCAPE }
 enum class Gesture { SWIPE_UP, SWIPE_DOWN, DOUBLE_TAP, PINCH_IN, PINCH_OUT, TWO_UP, TWO_DOWN, HOME }
 
 /** What a gesture does. APP carries an app key ("APP:pkg/activity"). */
-enum class Act { NONE, DRAWER, SEARCH, AI, NOTIFICATIONS, QUICK_SETTINGS, LOCK, APP, DESKTOP, HUB, SETTINGS, WIDGETS, FIRST_PAGE }
+enum class Act { NONE, DRAWER, SEARCH, AI, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, LOCK, APP, DESKTOP, HUB, SETTINGS, WIDGETS, FIRST_PAGE }
 
 /**
  * One launcher setting, saved in plain SharedPreferences (nothing secret) and
@@ -180,6 +180,7 @@ object Opt {
     val dockCount = IntPref("dock_count", 5, 3..7)
     val dockStyle = EnumPref("dock_style", DockStyle.GLASS, DockStyle.entries.toTypedArray())
     val dockButtons = BoolPref("dock_buttons", true)
+    val dockDrawerButton = BoolPref("dock_drawer_button", true)
     val dockLabels = BoolPref("dock_labels", false)
 
     // Drawer
@@ -195,7 +196,7 @@ object Opt {
     val gestures = MapPref(
         "gestures",
         mapOf(
-            Gesture.SWIPE_UP.name to Act.DRAWER.name, Gesture.SWIPE_DOWN.name to Act.NOTIFICATIONS.name,
+            Gesture.SWIPE_UP.name to Act.DRAWER.name, Gesture.SWIPE_DOWN.name to Act.CONTROL_CENTER.name,
             Gesture.DOUBLE_TAP.name to Act.NONE.name, Gesture.PINCH_IN.name to Act.SETTINGS.name,
             Gesture.PINCH_OUT.name to Act.NONE.name, Gesture.TWO_UP.name to Act.AI.name,
             Gesture.TWO_DOWN.name to Act.QUICK_SETTINGS.name, Gesture.HOME.name to Act.FIRST_PAGE.name,
@@ -205,6 +206,8 @@ object Opt {
     // Widgets
     val weatherPlace = StrPref("weather_place", "")
     val fahrenheit = BoolPref("fahrenheit", false)
+    /** Weather (Open-Meteo) is off until you turn it on: no weather requests at all before that. */
+    val weatherOn = BoolPref("weather_on", false)
 
     // NoCap Link sync
     val forward = BoolPref("forward_notifications", false)
@@ -218,11 +221,20 @@ object Opt {
     val serverNotices = BoolPref("server_notices", false)
     val homeAsked = BoolPref("home_asked", false)
 
+    // Phone style: language source, NoCap lock screen, control center (see lock/, control/)
+    /** The server's language, for Language → "Same as my server" (refetched, so not backed up). */
+    val serverLingo = StrPref("server_lingo", "", backup = false)
+    val lockScreen = BoolPref("nocap_lock", false)
+    val lockNotifText = BoolPref("lock_notif_text", false)
+    val edgeSwipe = BoolPref("edge_swipe", false)
+
     fun init(ctx: Context) {
         if (sp != null) return
         val s = ctx.applicationContext.getSharedPreferences("nocap_launcher", Context.MODE_PRIVATE)
         sp = s
         all.forEach { it.load(s) }
+        // "Roster + NoCap buttons" became two switches: keep a hidden drawer button hidden.
+        if (!s.contains("dock_drawer_button") && s.contains("dock_buttons") && !dockButtons.v) dockDrawerButton.set(false)
         // v2 → v3: "double-tap to lock" and "swipe down" became gesture bindings.
         if (!s.contains("gestures")) {
             val m = gestures.v.toMutableMap()
@@ -233,9 +245,18 @@ object Opt {
             }
             gestures.set(m)
         }
+        // v3 → v4: swipe down opens the NoCap control center (the shade stays one tap away in Gestures).
+        if (!s.getBoolean("cc_default", false)) {
+            gestures.set(controlCenterDefault(gestures.v))
+            s.edit().putBoolean("cc_default", true).apply()
+        }
     }
 
-    private val skip = setOf("server_notices", "home_asked", "custom_icons", "forward_notifications", "clip_sync")
+    /** Swipe down → the NoCap control center, unless someone picked something other than the old default. */
+    fun controlCenterDefault(m: Map<String, String>): Map<String, String> =
+        if (m[Gesture.SWIPE_DOWN.name] == Act.NOTIFICATIONS.name) m + (Gesture.SWIPE_DOWN.name to Act.CONTROL_CENTER.name) else m
+
+    private val skip = setOf("server_notices", "home_asked", "custom_icons", "forward_notifications", "clip_sync", "nocap_lock", "edge_swipe")
 
     /** Every setting that travels with a backup. */
     fun export(): JSONObject {
@@ -263,7 +284,7 @@ object Opt {
  * Compose state, so the home screen redraws the moment something changes.
  */
 object Prefs {
-    val genz get() = Opt.lingo.v != "standard"
+    val genz get() = Lingo.isGenz(Opt.lingo.v, Opt.serverLingo.v)
     val drawer get() = Opt.drawer.v
     val columns get() = Opt.columns.v
     val rows get() = Opt.rows.v

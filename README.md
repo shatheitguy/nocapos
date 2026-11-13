@@ -84,8 +84,9 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
   live usage, snapshots, and the machine's screen in its own window.
 - **Docker** — edit any container (ports, folders, macvlan/ipvlan networks with fixed IPs, environment,
   limits), create networks and run Compose stacks.
-- **Your server, managed** — sign in with the machine's Linux accounts, users and roles, Wi-Fi and network
-  (DHCP/static with automatic rollback), software update check, restart and shut down.
+- **Your server, managed** — sign in with the machine's Linux accounts, users and roles, Wi-Fi (saved
+  networks, WPA Enterprise sign-in, share with a QR code) and network (DHCP/static with automatic rollback), software update check,
+  restart and shut down.
 - **Notifications** — updates, app updates, app errors, storage and backups, as macOS-style banners with
   the menu-bar desktop or Windows-style toasts with the taskbar.
 - **Terminal, Monitor, Remote Desktop, Brave, Scripts and an AI Assistant** (local Ollama or cloud).

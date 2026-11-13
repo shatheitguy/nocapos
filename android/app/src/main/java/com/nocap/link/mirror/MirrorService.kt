@@ -343,7 +343,7 @@ class MirrorService : Service() {
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(15, TimeUnit.SECONDS)
             .build().also { client = it }
-        val url = l.server + "/api/v1/device/mirror" + (ask?.let { "?ask=" + URLEncoder.encode(it, "UTF-8") } ?: "")
+        val url = com.nocap.link.net.Endpoint.server(l) + "/api/v1/device/mirror" + (ask?.let { "?ask=" + URLEncoder.encode(it, "UTF-8") } ?: "")
         val req = Request.Builder().url(url).header("Authorization", "Device ${l.token}").build()
         val gen = ++wsGen
         ws = c.newWebSocket(req, object : WebSocketListener() {

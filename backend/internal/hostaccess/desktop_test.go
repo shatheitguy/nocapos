@@ -23,6 +23,9 @@ type fakeHost struct {
 	calls   []string
 	stdins  []string
 	open    map[int]bool
+	linked  string // what display-manager.service points at
+	target  string // systemctl get-default
+	removed []string
 }
 
 func newFakeHost() *fakeHost {
@@ -38,6 +41,17 @@ func (f *fakeHost) run(_ context.Context, name string, args ...string) ([]byte, 
 		}
 	}
 	switch {
+	case name == "systemctl" && len(args) > 1 && args[0] == "show" && args[1] == "display-manager.service":
+		if f.linked == "" {
+			return []byte("display-manager.service\n"), nil
+		}
+		return []byte(f.linked + "\n"), nil
+	case name == "systemctl" && len(args) > 4 && args[0] == "show" && args[2] == "FragmentPath":
+		return []byte("/lib/systemd/system/" + args[4] + "\n"), nil
+	case name == "systemctl" && args[0] == "get-default":
+		return []byte(f.target + "\n"), nil
+	case name == "systemctl" && args[0] == "set-default":
+		f.target = args[1]
 	case name == "systemctl" && args[0] == "is-enabled":
 		if f.enabled[args[1]] {
 			return []byte("enabled\n"), nil
@@ -92,6 +106,23 @@ func (f *fakeHost) desktop() *Desktop {
 			return Account{UID: 1000, GID: 1000, Home: "/home/" + n}, nil
 		},
 		Chown: func(string, int, int) error { return nil },
+		Symlink: func(target, link string) error {
+			if link == DisplayManagerLink {
+				f.linked = filepath.Base(target)
+			}
+			return nil
+		},
+		Remove: func(p string) error {
+			f.removed = append(f.removed, p)
+			if p == DisplayManagerLink {
+				f.linked = ""
+			}
+			if _, ok := f.files[p]; !ok && p != DisplayManagerLink {
+				return os.ErrNotExist
+			}
+			delete(f.files, p)
+			return nil
+		},
 		Dial: func(addr string, _ time.Duration) error {
 			for p, ok := range f.open {
 				if ok && strings.HasSuffix(addr, ":"+strconv.Itoa(p)) {
@@ -174,7 +205,7 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	if err := d.SetMode(context.Background(), ModeOff); err != nil {
 		t.Fatal(err)
 	}
-	want := "systemctl disable --now gdm3.service|systemctl set-default multi-user.target|systemctl --no-block start getty@tty1.service"
+	want := "systemctl disable --now gdm3.service|systemctl show display-manager.service -p Id --value|systemctl set-default multi-user.target|systemctl --no-block start getty@tty1.service"
 	if got := strings.Join(f.calls, "|"); got != want {
 		t.Fatalf("calls = %s", got)
 	}
