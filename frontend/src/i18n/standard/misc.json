@@ -27,8 +27,6 @@
   "sp.sysPkgNone": "No updates right now.",
   "sp.photoUpdated": "Photo updated",
   "sp.photoUpdatedBody": "It also shows on this device’s login screen.",
-  "sp.closeOthers": "Close other windows",
-  "sp.closeOthersHint": "Closes every window except Settings",
   "sp.passwordSet": "New password set for {name}",
   "vm.settingsSaved": "Settings saved",
   "pkg.repairTitle": "Your packages need a repair",

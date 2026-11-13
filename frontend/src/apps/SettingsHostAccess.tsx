@@ -6,6 +6,7 @@ import { hostAccessApi, type DesktopHealth, type HostAccess } from '../api/hosta
 import { useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import { copyWithToast, missing } from '../lib/settingsKit';
 import { openApp } from './meta';
 import { Row, Section as Group, Toggle } from './Personalize';
 
@@ -18,7 +19,7 @@ export function HostAccessPage() {
   const [diagOpen, setDiagOpen] = useState(false);
 
   useEffect(() => {
-    void hostAccessApi.get().then((r) => (r.ok ? setSt(r.data) : setError(r.error ?? 'Couldn’t load these settings')));
+    void hostAccessApi.get().then((r) => (r.ok && !missing(r) ? setSt(r.data) : setError(missing(r) ? t('set.notAvailable') : (r.error ?? t('set.loadFail')))));
   }, []);
 
   const setDesktop = async (on: boolean) => {
@@ -73,11 +74,9 @@ export function HostAccessPage() {
     if (!on) {
       const away = !st.client_local;
       const ok = await confirmDialog({
-        title: away ? 'Lock this browser out?' : 'Make NoCapOS local-only?',
-        message: away
-          ? 'You’ll lock yourself out of this browser — undo from the server’s screen or `sudo cap web on`. Linked phones and every other device won’t reach the server either while it’s off.'
-          : 'Only this machine’s own screen will open NoCapOS. Linked phones and every other device won’t reach the server while it’s off. Undo here or with `sudo cap web on`.',
-        confirmLabel: away ? 'Lock me out' : 'Go local-only',
+        title: t(away ? 'su.lockOutTitle' : 'su.localTitle'),
+        message: t(away ? 'su.lockOutMsg' : 'su.localMsg'),
+        confirmLabel: t(away ? 'su.lockOutGo' : 'su.localGo'),
         danger: true,
       });
       if (!ok) return;
@@ -86,15 +85,15 @@ export function HostAccessPage() {
     setBusy('remote');
     const r = await hostAccessApi.setRemote(on, confirm);
     setBusy(null);
-    if (!r.ok) return toast('error', 'Couldn’t change who can open NoCapOS', r.error);
+    if (!r.ok) return toast('error', t('su.remoteFail'), r.error);
     setSt(r.data);
-    if (on) toast('success', 'Other devices can open NoCapOS again');
-    else if (!st.client_local) toast('info', 'Local-only is on. This browser is locked out now — see you on the server’s screen.');
-    else toast('success', 'NoCapOS is local-only now');
+    if (on) toast('success', t('su.remoteBack'));
+    else if (!st.client_local) toast('info', t('su.lockedOut'));
+    else toast('success', t('su.localNow'));
   };
 
   if (error) return <p className="muted">{error}</p>;
-  if (!st) return <p className="muted">Loading…</p>;
+  if (!st) return <p className="muted">{t('sp.loading')}</p>;
 
   const d = st.desktop;
   const status = d.mode === 'off'
@@ -108,10 +107,10 @@ export function HostAccessPage() {
           : t('nd.status.running');
 
   const remoteHint = !st.remote.supported
-    ? (st.remote.reason ?? 'Not available here.')
+    ? (st.remote.reason ?? t('set.notAvailable'))
     : st.remote.enabled
-      ? 'Phones, laptops and other devices on your network can open NoCapOS (they still sign in).'
-      : 'Local-only: just this machine’s own screen. Linked phones and other devices can’t reach it. Undo from the console: sudo cap web on';
+      ? t('su.remoteOn')
+      : t('su.remoteOff');
 
   return (
     <div className="stack settings-page">
@@ -153,7 +152,7 @@ export function HostAccessPage() {
                 ) : (
                   <>
                     <div>
-                      <button type="button" className="ghost" onClick={() => void navigator.clipboard?.writeText(diag).then(() => toast('success', t('nd.diag.copied')))}>
+                      <button type="button" className="ghost" onClick={() => void copyWithToast(diag, t('nd.diag.copied'))}>
                         {t('nd.diag.copy')}
                       </button>
                     </div>
@@ -170,11 +169,11 @@ export function HostAccessPage() {
           </>
         )}
       </Group>
-      <Group title="Access from other devices">
-        <Toggle label="Let other devices open NoCapOS" hint={remoteHint} checked={st.remote.enabled}
+      <Group title={t('su.remoteTitle')}>
+        <Toggle label={t('su.remoteRow')} hint={remoteHint} checked={st.remote.enabled}
           disabled={!st.remote.supported || busy === 'remote'} onChange={(on) => void setRemote(on)} />
-        <Row label="This browser" hint={st.client_local ? 'You’re on the server itself, so you stay in either way.' : 'You’re on another device. Turning access off locks this browser out.'}>
-          <span className="settings-value">{st.client_local ? 'On the server' : 'Another device'}</span>
+        <Row label={t('su.thisBrowser')} hint={t(st.client_local ? 'su.onServerHint' : 'su.otherDeviceHint')}>
+          <span className="settings-value">{t(st.client_local ? 'su.onServer' : 'su.otherDevice')}</span>
         </Row>
       </Group>
     </div>
