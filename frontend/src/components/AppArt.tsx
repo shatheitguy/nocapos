@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { Fragment, useId, type ReactNode } from 'react';
 import { usePrefs } from '../state/prefs';
 
 // NoCapOS's own app icons, drawn on a 64×64 grid: one glossy, colourful
@@ -60,7 +60,7 @@ const ICONS: Record<string, Draw> = {
             ['e', '#c4b5fd', '#7c3aed'],
             ['f', '#f9a8d4', '#db2777'],
           ] as const
-        ).map(([k, a, b]) => lin(g(k), a, b, 0, 1))}
+        ).map(([k, a, b]) => <Fragment key={k}>{lin(g(k), a, b, 0, 1)}</Fragment>)}
       </defs>
       {['a', 'b', 'c', 'd', 'e', 'f', 'c', 'd', 'a'].map((k, i) => {
         const x = 13 + (i % 3) * 14;
