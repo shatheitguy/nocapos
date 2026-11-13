@@ -11,7 +11,13 @@ BUNDLE=/usr/lib/nocapos/bundle
 export DEBIAN_FRONTEND=noninteractive
 
 arch="$(dpkg --print-architecture)"
-avail() { apt-cache show "$1" >/dev/null 2>&1; }
+# Installable: has a candidate version (apt-cache show also answers for
+# names other packages merely mention).
+avail() {
+  local c
+  c="$(apt-cache policy "$1" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+  [ -n "$c" ] && [ "$c" != "(none)" ]
+}
 apt_install() {
   apt-get install -y -q --no-install-recommends \
     -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"

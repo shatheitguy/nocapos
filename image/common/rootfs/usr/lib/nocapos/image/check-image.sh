@@ -108,7 +108,7 @@ run "smbd" smbd --version
 run "ffmpeg" ffmpeg -hide_banner -version
 run "rclone" rclone version
 run "restic" restic version
-run "guacd" sh -c 'command -v guacd'
+if grep -qx guacd /usr/lib/nocapos/image/preinstalled 2>/dev/null; then run "guacd" sh -c 'command -v guacd'; fi
 run "flatpak" flatpak --version
 for build in /lib/modules/*/build; do
   [ -e "$build" ] || continue
