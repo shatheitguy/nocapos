@@ -1,3 +1,4 @@
+import { DryRun } from './StorageExtras';
 import { tr } from '../i18n';
 import { WinClose } from '../components/WinClose';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -408,6 +409,7 @@ export function CreatePoolWizard({ disks, onClose, onDone }: { disks: Disk[]; on
           {layout === 'stripe' && picked.length > 0 && (
             <p className="st-note warn"><Icon name="alert" size={14} /> A stripe has no redundancy: if any disk fails, the whole pool is lost.</p>
           )}
+          <DryRun req={{ action: 'create', name, layout: layout ?? 'stripe', disks: picked, compression }} />
           <EraseReview disks={chosen} word="ERASE" value={confirm} onChange={setConfirm} what={`They become the new ${def?.title} pool “${name}”.`} />
         </>
       )}
