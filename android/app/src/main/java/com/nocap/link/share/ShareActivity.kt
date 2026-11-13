@@ -44,6 +44,7 @@ import com.nocap.link.data.t
 import com.nocap.link.data.Vault
 import com.nocap.link.MainActivity
 import com.nocap.link.net.NoCapApi
+import com.nocap.link.net.openOnNoCap
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.R
 import com.nocap.link.ui.GhostButton
@@ -114,20 +115,32 @@ class ShareActivity : ComponentActivity() {
         return -1
     }
 
-    private fun send() {
+    /** The first web link in the shared text, for "Open on NoCap". */
+    private val sharedUrl: String? get() = text?.let { Regex("https?://\\S+").find(it)?.value }
+
+    private fun send(open: Boolean = false) {
         val link = runCatching { Vault.get(this).link }.getOrNull() ?: return
         val api = runCatching { NoCapApi(link) }.getOrElse { state = State.Failed(MainActivity.friendly(it)); return }
         state = State.Sending
         lifecycleScope.launch {
             state = try {
+                val opened = open && uris.isEmpty() && sharedUrl != null
                 val saved = withContext(Dispatchers.IO) {
-                    if (uris.isNotEmpty()) {
+                    if (opened) {
+                        api.openOnNoCap(url = sharedUrl, title = subject)
+                        emptyList()
+                    } else if (uris.isNotEmpty()) {
                         api.send(uris.map { u -> NoCapApi.Upload(name(u), contentResolver.getType(u), size(u)) { contentResolver.openInputStream(u) ?: error("can't read it") } })
                     } else {
                         api.sendText(text.orEmpty(), subject)
                     }
                 }
-                State.Done(t("Sent ${saved.size} to NoCap Link in your home. W.", "Saved ${saved.size} item(s) to NoCap Link in your home folder."))
+                if (open && !opened) saved.firstOrNull()?.let { path -> withContext(Dispatchers.IO) { api.openOnNoCap(path = path) } }
+                when {
+                    opened -> State.Done(t("Opened on NoCap OS. Check your desktop.", "Opened on NoCap OS."))
+                    open -> State.Done(t("Sent and opened on NoCap OS. W.", "Saved to NoCap Link and opened on NoCap OS."))
+                    else -> State.Done(t("Sent ${saved.size} to NoCap Link in your home. W.", "Saved ${saved.size} item(s) to NoCap Link in your home folder."))
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: ServerTooOld) {
@@ -180,6 +193,10 @@ class ShareActivity : ComponentActivity() {
                     State.Ready -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         GhostButton(t("Nah", "Cancel"), { finish() }, Modifier.weight(1f))
                         RedButton(t("Send it", "Send"), { send() }, Modifier.weight(1f))
+                    }
+                    if (state == State.Ready && (uris.isNotEmpty() || sharedUrl != null)) {
+                        Spacer(Modifier.height(10.dp))
+                        GhostButton(t("Open on NoCap", "Open on NoCap OS"), { send(open = true) }, Modifier.fillMaxWidth())
                     }
                     State.Sending -> Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(22.dp), color = NoCap.Red, strokeWidth = 2.dp)

@@ -555,6 +555,7 @@ class MainActivity : ComponentActivity() {
         }
         vault.link = null
         HeartbeatWorker.cancel(this)
+        Sync.start(this) // not linked anymore: stops the link service
         DesktopActivity.forget()
         serverIcons.clear()
         outdated = null
