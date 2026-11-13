@@ -206,31 +206,33 @@ function OtherNetwork({
   );
 }
 
-const METHOD_LABEL: Record<string, string> = { auto: 'DHCP', manual: 'Static', disabled: 'Disabled', unknown: '—' };
+const METHOD_KEY: Record<string, string> = { auto: 'sn.ip.dhcp', manual: 'sn.ip.static', disabled: 'sn.ip.disabled' };
 
 /** One-line IP summary for an interface. */
 export function IPv4Summary({ iface }: { iface: NetInterface }) {
+  const t = useT();
   const ip = iface.ipv4;
   const addrs = ip?.addresses.length ? ip.addresses : iface.addresses;
+  const method = METHOD_KEY[ip?.method ?? ''];
   return (
     <div className="ipv4-summary">
       <div>
-        <span>IP address</span>
-        <b>{addrs.length ? addrs.join(', ') : 'none'}</b>
+        <span>{t('sn.ip.address')}</span>
+        <b>{addrs.length ? addrs.join(', ') : t('sp.none')}</b>
       </div>
       <div>
-        <span>Configure</span>
-        <b>{METHOD_LABEL[ip?.method ?? 'unknown']}</b>
+        <span>{t('sn.ip.configure')}</span>
+        <b>{method ? t(method) : '—'}</b>
       </div>
       {ip?.gateway && (
         <div>
-          <span>Router</span>
+          <span>{t('sn.ip.router')}</span>
           <b>{ip.gateway}</b>
         </div>
       )}
       {!!ip?.dns.length && (
         <div>
-          <span>DNS</span>
+          <span>{t('sn.ip.dnsShort')}</span>
           <b>{ip.dns.join(', ')}</b>
         </div>
       )}
@@ -240,6 +242,7 @@ export function IPv4Summary({ iface }: { iface: NetInterface }) {
 
 /** DHCP / static editor for one interface (Settings → Network). */
 export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplied: () => void }) {
+  const t = useT();
   const ip = iface.ipv4;
   const [method, setMethod] = useState<'auto' | 'manual'>(ip?.method === 'manual' ? 'manual' : 'auto');
   const [address, setAddress] = useState(ip?.addresses[0] ?? '');
@@ -249,6 +252,7 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
   const editable = !!ip?.editable && !!iface.connection;
 
   const apply = async () => {
+    if (busy) return;
     const cfg: IPv4Config = {
       method,
       address: method === 'manual' ? address.trim() : undefined,
@@ -265,18 +269,16 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
     <div className={`ipv4-editor ${editable ? '' : 'readonly'}`}>
       <div className="settings-row">
         <span className="settings-row-text">
-          <span className="settings-row-label">Configure IPv4</span>
-          <span className="settings-row-hint">
-            {editable ? 'DHCP gets an address from your router; Static uses the one you set' : 'Read-only: changing it needs NetworkManager on a Linux host'}
-          </span>
+          <span className="settings-row-label">{t('sn.ip.configureV4')}</span>
+          <span className="settings-row-hint">{editable ? t('sn.ip.configureHint') : t('sn.readOnlyRow')}</span>
         </span>
         <div className="settings-row-control">
           <div className="segmented">
             <button type="button" className={method === 'auto' ? 'on' : ''} disabled={!editable} onClick={() => setMethod('auto')}>
-              DHCP
+              {t('sn.ip.dhcp')}
             </button>
             <button type="button" className={method === 'manual' ? 'on' : ''} disabled={!editable} onClick={() => setMethod('manual')}>
-              Static
+              {t('sn.ip.static')}
             </button>
           </div>
         </div>
@@ -285,8 +287,8 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
         <>
           <div className="settings-row">
             <span className="settings-row-text">
-              <span className="settings-row-label">IP address</span>
-              <span className="settings-row-hint">With prefix, e.g. 192.168.1.50/24</span>
+              <span className="settings-row-label">{t('sn.ip.address')}</span>
+              <span className="settings-row-hint">{t('sn.ip.addressHint')}</span>
             </span>
             <div className="settings-row-control">
               <input value={address} disabled={!editable} placeholder="192.168.1.50/24" spellCheck={false} onChange={(e) => setAddress(e.target.value)} />
@@ -294,7 +296,7 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
           </div>
           <div className="settings-row">
             <span className="settings-row-text">
-              <span className="settings-row-label">Router (gateway)</span>
+              <span className="settings-row-label">{t('sn.ip.gateway')}</span>
             </span>
             <div className="settings-row-control">
               <input value={gateway} disabled={!editable} placeholder="192.168.1.1" spellCheck={false} onChange={(e) => setGateway(e.target.value)} />
@@ -304,8 +306,8 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
       )}
       <div className="settings-row">
         <span className="settings-row-text">
-          <span className="settings-row-label">DNS servers</span>
-          <span className="settings-row-hint">{method === 'auto' ? 'Leave empty to use the router’s DNS' : 'Separate with commas'}</span>
+          <span className="settings-row-label">{t('sn.ip.dns')}</span>
+          <span className="settings-row-hint">{method === 'auto' ? t('sn.ip.dnsAutoHint') : t('sn.ip.dnsHint')}</span>
         </span>
         <div className="settings-row-control">
           <input value={dns} disabled={!editable} placeholder="1.1.1.1, 8.8.8.8" spellCheck={false} onChange={(e) => setDns(e.target.value)} />
@@ -314,7 +316,7 @@ export function IPv4Editor({ iface, onApplied }: { iface: NetInterface; onApplie
       {editable && (
         <div className="ipv4-apply">
           <button type="button" disabled={busy} onClick={() => void apply()}>
-            {busy ? 'Applying…' : 'Apply'}
+            {busy ? t('sn.ip.applying') : t('sn.ip.apply')}
           </button>
         </div>
       )}

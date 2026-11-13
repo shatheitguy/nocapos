@@ -31,14 +31,18 @@ export function LanguageRegion() {
         </Row>
       </Section>
       <Section title={t('set.lang.language')}>
-        <Row label={t('set.lang.languageRow')} hint={t('set.lang.languageHint')}>
-          <select className="select" value={prefs.language} onChange={(e) => prefs.set({ language: e.target.value as typeof prefs.language })}>
-            {LANGUAGES.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
+        <Row label={t('set.lang.languageRow')}>
+          {LANGUAGES.length > 1 ? (
+            <select className="select" value={prefs.language} onChange={(e) => prefs.set({ language: e.target.value as typeof prefs.language })}>
+              {LANGUAGES.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="settings-value">{LANGUAGES[0].name}</span>
+          )}
         </Row>
       </Section>
       <Section title={t('set.lang.region')} hint={t('set.lang.regionHint', { locale })}>

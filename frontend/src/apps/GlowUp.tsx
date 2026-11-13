@@ -6,6 +6,7 @@ import { Logo } from '../components/Logo';
 import { powerHost } from '../lib/hostActions';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import { missing } from '../lib/settingsKit';
 import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
 import { confirmChange, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
 
@@ -119,23 +120,32 @@ export function SoftwareUpdate() {
   const [checking, setChecking] = useState(false);
   const [starting, setStarting] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [relErr, setRelErr] = useState<string | null>(null);
   const updating = useUpdate((s) => s.phase !== 'idle');
   const logRef = useRef<HTMLPreElement>(null);
 
   const loadRelease = async (refresh: boolean) => {
     const r = await api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`);
-    if (r.ok) setU(r.data);
-    else if (refresh) toast('error', tr('sp.updCheckFail'), r.error);
-    return r.ok ? r.data : null;
+    const ok = r.ok && !missing(r);
+    if (ok) {
+      setU(r.data);
+      setRelErr(null);
+    } else {
+      setRelErr(missing(r) ? tr('set.notAvailable') : (r.error ?? tr('sp.updCantCheck')));
+      if (refresh) toast('error', tr('sp.updCheckFail'), r.error);
+    }
+    return ok ? r.data : null;
   };
   const loadSys = async () => {
     const r = await api<SysStatus>('/api/v1/system/update/packages');
-    if (r.ok) setSys(r.data);
-    return r.ok ? r.data : null;
+    const ok = r.ok && !missing(r);
+    // A server that can't list the system's packages just leaves them out.
+    setSys(ok ? r.data : { supported: false, updates: [], security: 0, kernel: false, restart_needed: false, error: missing(r) ? undefined : r.error });
+    return ok ? r.data : null;
   };
   const loadAll = async () => {
     const r = await api<AllStatus>('/api/v1/system/update/all');
-    if (r.ok) setAll(r.data);
+    if (r.ok && !missing(r)) setAll(r.data);
     return r.ok ? r.data : null;
   };
 
@@ -147,7 +157,7 @@ export function SoftwareUpdate() {
   useEffect(() => {
     if (updating) return;
     void api<UpdateRunStatus>('/api/v1/system/update/run').then((r) => {
-      if (!r.ok) return;
+      if (!r.ok || missing(r)) return;
       setRun(r.data);
       // Opened mid-update (another tab started it): follow along full-screen.
       if (r.data.running && useUpdate.getState().phase === 'idle') void resumeRunningUpdate();
@@ -194,6 +204,7 @@ export function SoftwareUpdate() {
 
   // One check: the NoCapOS release and the system's package lists together.
   const check = async () => {
+    if (checking) return;
     setChecking(true);
     const refresh = sys?.supported
       ? api<{ job: PkgJob }>('/api/v1/system/update/packages/refresh', { method: 'POST' }).then(async (r) => {
@@ -262,6 +273,9 @@ export function SoftwareUpdate() {
     detail = ar.phase === 'packages' ? t('gu.runningBody') : '';
   } else if (checking) {
     headline = t('gu.checking');
+  } else if (!u && relErr) {
+    headline = t('sp.updCantCheck');
+    detail = relErr;
   } else if (!u || !sys) {
     headline = t('gu.checking');
   } else if (nocPending && pending.length) {

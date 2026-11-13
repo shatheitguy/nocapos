@@ -26,13 +26,13 @@ func (s *Server) systemLogs(w http.ResponseWriter, r *http.Request) {
 	n = min(n, 2000)
 	resp := systemLogsResponse{Lines: []string{}}
 	if runtime.GOOS != "linux" {
-		resp.Reason = "Logs are read from the systemd journal, which needs a Linux host."
+		resp.Reason = "Logs aren't available on this system."
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 	bin, err := exec.LookPath("journalctl")
 	if err != nil {
-		resp.Reason = "journalctl is not available on this host."
+		resp.Reason = "Logs aren't available on this system."
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -40,7 +40,7 @@ func (s *Server) systemLogs(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "-u", "nocapos", "-n", strconv.Itoa(n), "--no-pager", "-o", "short-iso").Output()
 	if err != nil {
-		resp.Reason = "Could not read the journal: " + errText(err)
+		resp.Reason = "Couldn't read the logs: " + errText(err)
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
