@@ -1,3 +1,4 @@
+import { DryRun } from './StorageExtras';
 import { tr } from '../i18n';
 import { WinClose } from '../components/WinClose';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -302,9 +303,9 @@ function Steps({ step, names }: { step: number; names: string[] }) {
 
 // ---------------- Create pool wizard ----------------
 
-export function CreatePoolWizard({ disks, onClose, onDone }: { disks: Disk[]; onClose: () => void; onDone: () => void }) {
+export function CreatePoolWizard({ disks, initial, onClose, onDone }: { disks: Disk[]; initial?: string[]; onClose: () => void; onDone: () => void }) {
   const [step, setStep] = useState(0);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(() => (initial ?? []).filter((n) => disks.some((d) => d.name === n && d.available)));
   const [layout, setLayout] = useState<Layout | null>(null);
   const [touched, setTouched] = useState(false);
   const [name, setName] = useState('');
@@ -408,6 +409,7 @@ export function CreatePoolWizard({ disks, onClose, onDone }: { disks: Disk[]; on
           {layout === 'stripe' && picked.length > 0 && (
             <p className="st-note warn"><Icon name="alert" size={14} /> A stripe has no redundancy: if any disk fails, the whole pool is lost.</p>
           )}
+          <DryRun req={{ action: 'create', name, layout: layout ?? 'stripe', disks: picked, compression }} />
           <EraseReview disks={chosen} word="ERASE" value={confirm} onChange={setConfirm} what={`They become the new ${def?.title} pool “${name}”.`} />
         </>
       )}
@@ -636,8 +638,8 @@ export function TypeConfirm({ title, message, word, action, onClose, onConfirm }
 
 // ---------------- Disk details (partitions + SMART) ----------------
 
-export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }: {
-  disk: Disk; onClose: () => void; onFormat: () => void; onChanged: () => void; smartInstalled: boolean;
+export function DiskSheet({ disk, onClose, onFormat, onUsePool, onChanged, smartInstalled }: {
+  disk: Disk; onClose: () => void; onFormat: () => void; onUsePool?: () => void; onChanged: () => void; smartInstalled: boolean;
 }) {
   const [smart, setSmart] = useState<SmartReport | null>(null);
   const [smartErr, setSmartErr] = useState<string | null>(null);
@@ -693,6 +695,11 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
               <Icon name="drive" size={14} /> Use as storage
             </button>
           )}
+          {disk.available && onUsePool && (
+            <button type="button" className="ghost" onClick={onUsePool}>
+              <Icon name="layers" size={14} /> {tr('stx.disk.usePool')}
+            </button>
+          )}
           {storageMount && <FilesToggleDisk disk={disk} onChanged={onChanged} />}
         </div>
       </div>
@@ -707,11 +714,11 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
             <tbody>
               {disk.partitions.map((p) => (
                 <tr key={p.name}>
-                  <td className="mono">{p.name}</td>
-                  <td>{fmtSize(p.size)}</td>
-                  <td>{p.fstype ?? '–'}</td>
-                  <td>{p.label ?? ''}</td>
-                  <td className="mono">{p.mountpoints.join(', ')}</td>
+                  <td className="mono" data-label="Name">{p.name}</td>
+                  <td data-label="Size">{fmtSize(p.size)}</td>
+                  <td data-label="Type">{p.fstype ?? '–'}</td>
+                  <td data-label="Label">{p.label || '–'}</td>
+                  <td className="mono" data-label="Mounted at">{p.mountpoints.join(', ') || '–'}</td>
                 </tr>
               ))}
             </tbody>
@@ -771,12 +778,12 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
                 <tbody>
                   {rows.map((a) => (
                     <tr key={a.id} className={a.failing ? 'st-failing' : ''}>
-                      <td>{a.id}</td>
-                      <td>{a.name}</td>
-                      <td>{a.value}</td>
-                      <td>{a.worst}</td>
-                      <td>{a.thresh}</td>
-                      <td className="mono">{a.raw}</td>
+                      <td data-label="ID">{a.id}</td>
+                      <td data-label="Attribute">{a.name}</td>
+                      <td data-label="Value">{a.value}</td>
+                      <td data-label="Worst">{a.worst}</td>
+                      <td data-label="Threshold">{a.thresh}</td>
+                      <td className="mono" data-label="Raw">{a.raw}</td>
                     </tr>
                   ))}
                 </tbody>
