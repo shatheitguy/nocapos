@@ -36,6 +36,18 @@
     <!-- Setup guide: "no battery limits" asks Android directly (you still confirm). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- NoCap Link, always connected: a foreground service holding one
+         connection to your own server, started again after a reboot. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Finding your server on the home network (mDNS). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- "Find my phone" vibrates too. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Decline a call from NoCap OS (asked only when you turn calls on). -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -217,6 +229,20 @@
             android:noHistory="true"
             android:taskAffinity="com.nocap.link.signout"
             android:theme="@style/Theme.NoCap.Sheet" />
+
+        <!-- NoCap Link, always connected (quiet "NoCap Link connected" notification). -->
+        <service
+            android:name=".sync.LinkService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+        <receiver android:name=".sync.LinkBootReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- Stop button of "Find my phone". -->
+        <receiver android:name=".sync.FindPhoneStop" android:exported="false" />
 
         <!-- NoCap lock screen (opt-in): shown over Android's own lock screen, which still
              asks for your PIN / fingerprint when you swipe up. -->

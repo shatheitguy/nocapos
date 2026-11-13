@@ -35,6 +35,7 @@ import { useNetwork } from './NetworkDrives';
 import { getUser } from '../api/client';
 import { netApi, type NetShare } from '../api/netdrive';
 import { FileLightbox } from './Viewer';
+import { linkPhones, sendFilesToPhone } from '../shell/linkActions';
 import { startArchiveJob, startTransfer, startUpload, useTransfers } from '../state/transfers';
 
 // Clipboard shared by all Files windows.
@@ -999,6 +1000,24 @@ function FilePane({
       ? { label: 'Remove from Favorites', icon: 'star', onClick: () => onRemoveFav(r, p) }
       : { label: 'Add to Favorites', icon: 'star', onClick: () => onAddFavs(r, [p]) };
 
+  // NoCap Link: "Send to phone" / "Open on phone" (one pair per phone when there are several).
+  const phoneItems = (list: Item[]): MenuEntry[] => {
+    const phones = linkPhones();
+    const many = phones.length > 1;
+    const root0 = list[0]?.root ?? root;
+    const paths = list.filter((i) => i.root === root0).map((i) => i.path);
+    return phones.flatMap((p): MenuEntry[] => [
+      {
+        label: many ? tr('link.sendToNamed', { device: p.name }) : tr('link.sendToPhone'),
+        icon: 'send',
+        onClick: () => void sendFilesToPhone(p, root0, paths),
+      },
+      ...(paths.length === 1
+        ? [{ label: many ? tr('link.openOnNamed', { device: p.name }) : tr('link.openOnPhone'), icon: 'phone' as const, onClick: () => void sendFilesToPhone(p, root0, paths, true) }]
+        : []),
+    ]);
+  };
+
   const menuItems = (list: Item[]): MenuEntry[] => {
     const out: MenuEntry[] = [];
     const push = (...e: (MenuEntry | null | false)[]) => e.forEach((x) => x && out.push(x));
@@ -1046,6 +1065,7 @@ function FilePane({
       else if (list.every((i) => i.entry.dir) && list.length > 1 && !special) push({ label: 'Add to Favorites', icon: 'star', onClick: () => onAddFavs(root, list.map((i) => i.path)) });
     }
     if (files.length) push({ label: files.length > 1 ? `Download ${files.length} Files` : 'Download', icon: 'download', onClick: () => void download(files) });
+    if (files.length && !recycle) push(...phoneItems(files));
     if (one) push({ label: 'Get Info', icon: 'info', shortcut: 'Ctrl+I', onClick: () => setInfo(one) });
     if (other && !recycle && !special) {
       push('sep');

@@ -5,15 +5,31 @@ import { Icon } from '../components/Icon';
 import { useClock } from '../lib/hooks';
 import { relTime } from '../state/notifications';
 import { toast } from '../state/toasts';
-import { CLIP_BANNER_MS, copyText, linkApi, readClipboard, useLink, type Clip, type PhoneNote } from '../state/link';
+import {
+  CLIP_BANNER_MS,
+  CARRY_BANNER_MS,
+  copyText,
+  errorCode,
+  linkApi,
+  readClipboard,
+  useLink,
+  type Clip,
+  type PhoneNote,
+} from '../state/link';
+import { carryLabel, openCarry } from './linkActions';
+import '../styles/link.css';
 
-// NoCap Link in the Notification Center: the phone's notifications, the
-// shared clipboard, and the "Paste from <phone>" banner.
+// NoCap Link in the Notification Center: the phones' notifications (grouped
+// by phone, then by app; calls as call cards; quick replies), the shared
+// clipboard, and the "Paste from <phone>" / "Open from <phone>" banners.
 
 type Look = 'mac' | 'windows';
 
-const PHONE_TILE: [string, string] = ['#38bdf8', '#0ea5e9'];
+export const PHONE_TILE: [string, string] = ['#38bdf8', '#0ea5e9'];
 const CLIP_TILE: [string, string] = ['#a78bfa', '#7c3aed'];
+const CALL_TILE: [string, string] = ['#4ade80', '#16a34a'];
+const MISSED_TILE: [string, string] = ['#f87171', '#dc2626'];
+const CARRY_TILE: [string, string] = ['#fbbf24', '#f59e0b'];
 
 function NoteIcon({ n, size }: { n: PhoneNote; size: number }) {
   if (n.icon) return <AppIcon app={{ id: 'phone-' + n.package, icon: 'phone', tile: PHONE_TILE, logo: 'data:image/png;base64,' + n.icon }} size={size} />;
@@ -25,25 +41,87 @@ async function copy(text: string) {
   else toast('error', tr('link.copyFailed'));
 }
 
+const noteId = (n: PhoneNote) => n.device_id + '\u0000' + n.key;
+const appName = (n: PhoneNote) => n.app || n.package;
+
+function ClearX({ look, label, onClick }: { look: Look; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="nb-x"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <Icon name="close" size={look === 'mac' ? 9 : 12} />
+    </button>
+  );
+}
+
+/** Quick reply to a message notification, right from here. */
+function ReplyBox({ n, onDone }: { n: PhoneNote; onDone: (sent: boolean) => void }) {
+  const t = useT();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const send = async () => {
+    const v = text.trim();
+    if (!v) return;
+    setBusy(true);
+    const r = await linkApi.action(n.device_id, { kind: 'reply', key: n.key, text: v });
+    setBusy(false);
+    if (r.ok) {
+      onDone(true);
+      return;
+    }
+    if (r.status === 409 && errorCode(r) === 'gone') {
+      toast('info', tr('link.gone'));
+      useLink.getState().drop(n);
+      return;
+    }
+    toast('error', tr('link.replyFailed'), r.error);
+  };
+  return (
+    <form
+      className="link-reply"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      <input
+        autoFocus
+        value={text}
+        maxLength={2000}
+        placeholder={t('link.replyPlaceholder', { name: n.sender || n.title || appName(n) })}
+        aria-label={t('link.reply')}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && (e.stopPropagation(), onDone(false))}
+      />
+      <button type="submit" className="nb-btn primary" disabled={busy || !text.trim()}>
+        {busy ? t('link.sending') : t('link.send')}
+      </button>
+    </form>
+  );
+}
+
 function PhoneCard({ n, look }: { n: PhoneNote; look: Look }) {
   const t = useT();
   const dismiss = useLink((s) => s.dismiss);
   const now = useClock(30_000);
-  const title = n.title ? t('link.noteTitle', { app: n.app || n.package, title: n.title }) : n.app || n.package;
+  const [replying, setReplying] = useState(false);
+  const [sent, setSent] = useState(false);
+  useEffect(() => {
+    if (!sent) return;
+    const tm = window.setTimeout(() => setSent(false), 4000);
+    return () => window.clearTimeout(tm);
+  }, [sent]);
+  const title = n.title ? t('link.noteTitle', { app: appName(n), title: n.title }) : appName(n);
   return (
     <div className={`nc-card ${look} lvl-info link-card`}>
-      <button
-        type="button"
-        className="nb-x"
-        aria-label={t('nc.clear')}
-        title={t('nc.clear')}
-        onClick={(e) => {
-          e.stopPropagation();
-          dismiss(n);
-        }}
-      >
-        <Icon name="close" size={look === 'mac' ? 9 : 12} />
-      </button>
+      <ClearX look={look} label={t('nc.clear')} onClick={() => dismiss(n)} />
       <NoteIcon n={n} size={look === 'mac' ? 36 : 28} />
       <div className="nb-text">
         <div className="nb-top">
@@ -51,27 +129,168 @@ function PhoneCard({ n, look }: { n: PhoneNote; look: Look }) {
           <span className="nb-time">{relTime(new Date(n.posted).toISOString(), now.getTime())}</span>
         </div>
         {n.text && <div className="nb-body">{n.text}</div>}
-        <div className="link-from">{t('link.from', { device: n.device_name })}</div>
+        {n.can_reply && !replying && (
+          <div className="link-actions">
+            {sent ? (
+              <span className="link-sent">
+                <Icon name="check" size={12} /> {t('link.replySent')}
+              </span>
+            ) : (
+              <button type="button" className="nb-btn" onClick={() => setReplying(true)}>
+                <Icon name="send" size={12} /> {t('link.reply')}
+              </button>
+            )}
+          </div>
+        )}
+        {n.can_reply && replying && (
+          <ReplyBox
+            n={n}
+            onDone={(ok) => {
+              setReplying(false);
+              setSent(ok);
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-/** The phone's notifications, newest first. */
+/** A call: incoming / ongoing / missed, who's calling, and Decline. */
+function CallCard({ n, look }: { n: PhoneNote; look: Look }) {
+  const t = useT();
+  const dismiss = useLink((s) => s.dismiss);
+  const now = useClock(30_000);
+  const [busy, setBusy] = useState(false);
+  const state = n.call_state ?? 'incoming';
+  const who = n.title || n.sender || n.number || t('link.call.unknown');
+  const sub = n.number && n.number !== who ? n.number : n.text && n.text !== who ? n.text : '';
+  const decline = async () => {
+    setBusy(true);
+    const r = await linkApi.action(n.device_id, { kind: 'decline', key: n.key });
+    setBusy(false);
+    if (r.ok) {
+      useLink.getState().drop(n);
+      toast('success', tr('link.call.declined'));
+    } else if (r.status === 409 && errorCode(r) === 'gone') {
+      toast('info', tr('link.call.gone'));
+      useLink.getState().drop(n);
+    } else toast('error', tr('link.call.declineFailed'), r.error);
+  };
+  return (
+    <div className={`nc-card ${look} lvl-info link-card link-call ${state}`}>
+      {state === 'missed' && <ClearX look={look} label={t('nc.clear')} onClick={() => dismiss(n)} />}
+      <AppIcon app={{ icon: 'phone', tile: state === 'missed' ? MISSED_TILE : CALL_TILE }} size={look === 'mac' ? 36 : 28} />
+      <div className="nb-text">
+        <div className="nb-top">
+          <span className={`link-call-state ${state}`}>{t(`link.call.${state}`)}</span>
+          <span className="nb-time">{relTime(new Date(n.posted).toISOString(), now.getTime())}</span>
+        </div>
+        <b className="nb-title link-caller">{who}</b>
+        {sub && <div className="nb-body">{sub}</div>}
+      </div>
+      {n.can_decline && state !== 'missed' && (
+        <button type="button" className="nb-btn link-decline" disabled={busy} onClick={() => void decline()}>
+          {t('link.call.decline')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One app's notifications from one phone: the newest, or all of them when opened. */
+function AppGroup({ list, look }: { list: PhoneNote[]; look: Look }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const dismiss = useLink((s) => s.dismiss);
+  if (list.length === 1) return <PhoneCard n={list[0]} look={look} />;
+  const name = appName(list[0]);
+  return (
+    <div className="link-app">
+      <div className="link-app-head">
+        <button type="button" className="link-app-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <NoteIcon n={list[0]} size={16} />
+          <span className="link-app-name">{name}</span>
+          <span className="link-count">{list.length}</span>
+          <Icon name={open ? 'chevronUp' : 'chevronDown'} size={12} />
+        </button>
+        <button
+          type="button"
+          className="nb-tool"
+          aria-label={t('nc.clearFrom', { name })}
+          title={t('nc.clearFrom', { name })}
+          onClick={() => list.forEach(dismiss)}
+        >
+          <Icon name="close" size={11} />
+        </button>
+      </div>
+      {(open ? list : list.slice(0, 1)).map((n) => (
+        <PhoneCard key={noteId(n)} n={n} look={look} />
+      ))}
+      {!open && (
+        <button type="button" className="link-more" onClick={() => setOpen(true)}>
+          {t('link.showMore', { n: list.length - 1 })}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface DeviceGroup {
+  id: string;
+  name: string;
+  calls: PhoneNote[];
+  apps: PhoneNote[][];
+}
+
+/** Newest first; per phone, calls on top and then one group per app. */
+function group(notes: PhoneNote[]): DeviceGroup[] {
+  const sorted = [...notes].sort((a, b) => b.posted - a.posted);
+  const devices = new Map<string, DeviceGroup & { byApp: Map<string, PhoneNote[]> }>();
+  for (const n of sorted) {
+    let d = devices.get(n.device_id);
+    if (!d) {
+      d = { id: n.device_id, name: n.device_name, calls: [], apps: [], byApp: new Map() };
+      devices.set(n.device_id, d);
+    }
+    if (n.kind === 'call') {
+      d.calls.push(n);
+      continue;
+    }
+    const k = n.package || n.app;
+    const g = d.byApp.get(k);
+    if (g) g.push(n);
+    else {
+      const fresh = [n];
+      d.byApp.set(k, fresh);
+      d.apps.push(fresh);
+    }
+  }
+  return [...devices.values()].map(({ id, name, calls, apps }) => ({ id, name, calls, apps }));
+}
+
+/** The phones' notifications, by phone and then by app. */
 export function PhoneSection({ look }: { look: Look }) {
   const t = useT();
   const notes = useLink((s) => s.notes);
   if (!notes.length) return null;
   return (
-    <section className="nc-group link-group">
-      <div className={look === 'mac' ? 'nc-ghead' : 'nc-app'}>
-        {look === 'windows' && <AppIcon app={{ icon: 'phone', tile: PHONE_TILE }} size={16} />}
-        <b>{t('link.phoneTitle')}</b>
-      </div>
-      {notes.map((n) => (
-        <PhoneCard key={n.device_id + '\u0000' + n.key} n={n} look={look} />
+    <>
+      {group(notes).map((d) => (
+        <section key={d.id} className="nc-group link-group">
+          <div className={look === 'mac' ? 'nc-ghead' : 'nc-app'}>
+            {look === 'windows' && <AppIcon app={{ icon: 'phone', tile: PHONE_TILE }} size={16} />}
+            <b>{d.name || t('link.phoneTitle')}</b>
+          </div>
+          {d.calls.map((n) => (
+            <CallCard key={noteId(n)} n={n} look={look} />
+          ))}
+          {d.apps.map((list) => (
+            <AppGroup key={noteId(list[0])} list={list} look={look} />
+          ))}
+        </section>
       ))}
-    </section>
+    </>
   );
 }
 
@@ -175,21 +394,29 @@ export function ClipboardSection({ look }: { look: Look }) {
   );
 }
 
+/** Auto-close a banner after ms unless the pointer is on it. */
+function useBannerTimer(active: boolean, ms: number, close: () => void) {
+  const [hold, setHold] = useState(false);
+  useEffect(() => {
+    if (!active || hold) return;
+    const tm = window.setTimeout(close, ms);
+    return () => window.clearTimeout(tm);
+  }, [active, hold, ms, close]);
+  return { onPointerEnter: () => setHold(true), onPointerLeave: () => setHold(false) };
+}
+
+const closeClip = () => useLink.setState({ clipBanner: null });
+const closeCarry = () => useLink.setState({ carryBanner: null });
+
 /** "Paste from <phone>": a clip that just arrived, with a Copy button. */
 export function ClipBanner({ look }: { look: Look }) {
   const t = useT();
   const clip = useLink((s) => s.clipBanner);
-  const [hold, setHold] = useState(false);
-  const close = () => useLink.setState({ clipBanner: null });
-  useEffect(() => {
-    if (!clip || hold) return;
-    const tm = window.setTimeout(close, CLIP_BANNER_MS);
-    return () => window.clearTimeout(tm);
-  }, [clip, hold]);
+  const hover = useBannerTimer(!!clip, CLIP_BANNER_MS, closeClip);
   if (!clip) return null;
   return (
-    <div className={`nb ${look} lvl-info link-banner`} role="status" onPointerEnter={() => setHold(true)} onPointerLeave={() => setHold(false)}>
-      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={close}>
+    <div className={`nb ${look} lvl-info link-banner`} role="status" {...hover}>
+      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={closeClip}>
         <Icon name="close" size={look === 'mac' ? 9 : 12} />
       </button>
       <AppIcon app={{ icon: 'clipboard', tile: CLIP_TILE }} size={look === 'mac' ? 36 : 28} />
@@ -202,10 +429,41 @@ export function ClipBanner({ look }: { look: Look }) {
         className="nb-btn link-banner-copy"
         onClick={() => {
           void copy(clip.text);
-          close();
+          closeClip();
         }}
       >
         {t('link.copy')}
+      </button>
+    </div>
+  );
+}
+
+/** "Open <page> from <phone>": a phone did "Open on NoCap". Opening waits for a click (popup blockers). */
+export function CarryBanner({ look }: { look: Look }) {
+  const t = useT();
+  const h = useLink((s) => s.carryBanner);
+  const hover = useBannerTimer(!!h, CARRY_BANNER_MS, closeCarry);
+  if (!h) return null;
+  const isFile = !!(h.root && h.path);
+  return (
+    <div className={`nb ${look} lvl-info link-banner`} role="status" {...hover}>
+      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={closeCarry}>
+        <Icon name="close" size={look === 'mac' ? 9 : 12} />
+      </button>
+      <AppIcon app={{ icon: isFile ? 'file' : 'globe', tile: CARRY_TILE }} size={look === 'mac' ? 36 : 28} />
+      <div className="nb-text">
+        <b className="nb-title">{t('link.carryFrom', { device: h.device_name })}</b>
+        <div className="nb-body">{carryLabel(h)}</div>
+      </div>
+      <button
+        type="button"
+        className="nb-btn link-banner-copy"
+        onClick={() => {
+          openCarry(h);
+          closeCarry();
+        }}
+      >
+        {t('link.open')}
       </button>
     </div>
   );

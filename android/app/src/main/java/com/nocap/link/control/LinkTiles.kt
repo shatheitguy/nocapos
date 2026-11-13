@@ -15,9 +15,14 @@ interface FindMyPhone {
 }
 
 object LinkTiles {
-    // TODO(live-link): the ecosystem / live-link branch sets this to its Find my phone
-    // implementation (e.g. from NoCapApp.onCreate). Until then the tile explains it isn't here yet.
-    @Volatile var findMyPhone: FindMyPhone? = null
+    /** The tile stops the ringing when NoCap OS is ringing this phone, and otherwise plays a test ring. */
+    @Volatile var findMyPhone: FindMyPhone? = object : FindMyPhone {
+        override fun open(ctx: Context): Boolean {
+            if (com.nocap.link.sync.FindPhone.ringing) com.nocap.link.sync.FindPhone.stop(ctx)
+            else com.nocap.link.sync.FindPhone.ring(ctx)
+            return true
+        }
+    }
 }
 
 /** The server's status as last seen (from the numbers the status widgets keep), for screens outside the launcher. */

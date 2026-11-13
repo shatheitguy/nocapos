@@ -13,6 +13,7 @@ import android.service.notification.StatusBarNotification
 import android.service.quicksettings.TileService
 import android.util.Base64
 import android.widget.Toast
+import com.nocap.link.data.LinkOpt
 import com.nocap.link.data.Opt
 import com.nocap.link.data.Prefs
 import com.nocap.link.data.t
@@ -21,6 +22,9 @@ import com.nocap.link.MainActivity
 import com.nocap.link.net.ApiError
 import com.nocap.link.net.CertChanged
 import com.nocap.link.net.NoCapApi
+import com.nocap.link.net.PhoneNote
+import com.nocap.link.net.liveEvents
+import com.nocap.link.net.postNote
 import com.nocap.link.net.ServerTooOld
 import com.nocap.link.system.DotsService
 import java.io.ByteArrayOutputStream
@@ -53,7 +57,10 @@ object Sync {
     // ---------- phone notifications → NoCap OS ----------
 
     fun forwardable(ctx: Context, sbn: StatusBarNotification): Boolean {
-        if (!Opt.forward.v || sbn.packageName == ctx.packageName) return false
+        if (sbn.packageName == ctx.packageName) return false
+        // Calls (incoming, ongoing, missed) when that's on, whatever the app list says.
+        if (LinkOpt.calls.v && PhoneActions.isCall(sbn.notification)) return true
+        if (!Opt.forward.v) return false
         if (sbn.packageName !in Opt.forwardApps.v) return false
         val n = sbn.notification
         if (!sbn.isClearable || sbn.isOngoing) return false
@@ -63,30 +70,30 @@ object Sync {
 
     fun posted(ctx: Context, sbn: StatusBarNotification) {
         Prefs.init(ctx)
+        LinkOpt.init(ctx)
         if (!forwardable(ctx, sbn)) return
         val api = api(ctx) ?: return
         val ex = sbn.notification.extras
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = (ex.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: ex.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return
-        val hash = (title + "\u0000" + text).hashCode()
+        val pm = ctx.packageManager
+        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrDefault(sbn.packageName)
+        val note = PhoneActions.describe(ctx, sbn, PhoneNote(sbn.key, label, sbn.packageName, title, text, null, sbn.postTime))
+        val hash = listOf(title, text, note.kind, note.callState, note.canReply, note.canDecline).joinToString("\u0000").hashCode()
         synchronized(sent) {
             if (sent[sbn.key] == hash) return
             if (sent.size > 500) sent.clear() // keys of long-gone notifications
             sent[sbn.key] = hash
         }
-        val pm = ctx.packageManager
-        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrDefault(sbn.packageName)
         io.execute {
-            runCatching {
-                api.postPhoneNotification(sbn.key, label, sbn.packageName, title, text, icon(ctx, sbn.packageName), sbn.postTime)
-            }
+            runCatching { api.postNote(note.copy(icon = icon(ctx, sbn.packageName))) }
         }
     }
 
     fun removed(ctx: Context, sbn: StatusBarNotification) {
         val had = synchronized(sent) { sent.remove(sbn.key) != null }
-        if (!had || !Opt.forward.v) return
+        if (!had) return
         val api = api(ctx) ?: return
         io.execute { runCatching { api.deletePhoneNotification(sbn.key) } }
     }
@@ -117,27 +124,42 @@ object Sync {
     fun start(ctx: Context) {
         val app = ctx.applicationContext
         Prefs.init(app)
+        LinkOpt.init(app)
         loop?.cancel()
-        if (runCatching { Vault.get(app).link }.getOrNull() == null) return
-        loop = scope.launch { listen(app) }
+        loop = null
+        if (runCatching { Vault.get(app).link }.getOrNull() == null) {
+            LinkService.stop(app)
+            com.nocap.link.net.Endpoint.reset()
+            return
+        }
+        // Always connected: the link service holds the connection, in the
+        // background too. Without it, only while the app runs.
+        if (LinkOpt.alwaysOn.v && LinkService.start(app)) return
+        LinkService.stop(app)
+        loop = scope.launch { listen(app, inService = false) }
     }
 
     fun stop() { loop?.cancel(); loop = null }
 
     private fun wantsNotices() = Opt.liveNotices.v && Opt.serverNotices.v
 
-    private suspend fun listen(ctx: Context) {
+    /** Follows the server until cancelled (or until it's clear it never will work). */
+    suspend fun listen(ctx: Context, inService: Boolean) {
         var cursor = 0L
         var backoff = 5_000L
         val power = ctx.getSystemService(android.os.PowerManager::class.java)
         while (isActiveSafe()) {
             // Screen off: rest (the 15-minute heartbeat still checks for server notices).
-            if (power != null && !power.isInteractive) { delay(60_000); continue }
+            if (!inService && power != null && !power.isInteractive) { delay(60_000); continue }
             val api = api(ctx) ?: return
             try {
-                val ev = api.events(cursor, 25)
+                val (ev, actions) = api.liveEvents(cursor, 25)
                 backoff = 5_000L
-                if (cursor != 0L) handle(ctx, ev)
+                LinkService.connected(true)
+                if (cursor != 0L) {
+                    handle(ctx, ev)
+                    for (a in actions) runCatching { PhoneActions.handle(ctx, api, a) }
+                }
                 cursor = ev.cursor
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -149,6 +171,7 @@ object Sync {
             } catch (e: CertChanged) {
                 return
             } catch (e: Exception) {
+                LinkService.connected(false)
                 // Offline is normal; anything else failing over and over gets a report.
                 if (e !is java.io.IOException) com.nocap.link.system.CrashLog.failure("NoCap Link sync", e)
                 delay(backoff); backoff = (backoff * 2).coerceAtMost(300_000L)
