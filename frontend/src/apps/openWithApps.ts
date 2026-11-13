@@ -24,7 +24,7 @@ export const HANDLER_ICON: Record<HandlerId, IconName> = {
   archive: 'archiveBox',
 };
 
-setAvailableHandlers(['photo', 'text', 'quicklook', 'browser', 'archive']);
+setAvailableHandlers(['photo', 'video', 'music', 'text', 'quicklook', 'browser', 'archive']);
 
 export const handlerName = (id: HandlerId) => tr(`openwith.app.${id}`);
 export const handlerHint = (id: HandlerId) => tr(`openwith.hint.${id}`);
@@ -50,6 +50,13 @@ export function openWith(id: HandlerId, f: OpenTarget, extract?: () => void) {
   switch (id) {
     case 'photo':
       openApp('imageviewer', { title: f.name, props: { root: f.root, path: f.path }, key: `imageviewer:${key}` });
+      return;
+    case 'video':
+      openApp('videoplayer', { title: f.name, props: { root: f.root, path: f.path }, key: `videoplayer:${key}` });
+      return;
+    case 'music':
+      // One music player: a new song replaces what was playing.
+      openApp('musicplayer', { title: f.name, props: { root: f.root, path: f.path }, key: 'musicplayer' });
       return;
     case 'text':
       openApp('viewer', { title: f.name, props: { root: f.root, path: f.path, mode: 'text' }, key: `text:${key}` });
