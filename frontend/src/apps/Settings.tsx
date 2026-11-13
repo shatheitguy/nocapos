@@ -24,7 +24,9 @@ import { DevicesSettings } from './SettingsDevices';
 import { AgentsSettings } from './SettingsAgents';
 import { Backup, DateTime, LockScreen, Security, SoundSettings } from './SettingsSections';
 import { LanguageRegion } from './SettingsLanguage';
-import { CATS, ENTRIES, SUBS, pageDesc, pageName, type Cat, type Sub } from './settingsPages';
+import { openApp } from './meta';
+import { CATS, ENTRIES, SUBS, matchingOptions, pageDesc, pageName, searchText, type Cat, type Sub } from './settingsPages';
+import { copyWithToast, missing } from '../lib/settingsKit';
 import { tr, useGenZ, useT } from '../i18n';
 
 // Settings, organised like a phone or Mac: a short sidebar of categories
@@ -177,22 +179,24 @@ export function Settings({ win }: { win: WinState }) {
 function Results({ query, isAdmin, go }: { query: string; isAdmin: boolean; go: (c: Cat, s?: Sub | null) => void }) {
   const t = useT();
   const q = query.trim().toLowerCase();
+  // Every word typed has to match somewhere (names, descriptions and options in either voice, keywords).
+  const words = q.split(/\s+/).filter(Boolean);
   const hits = ENTRIES.filter((e) => isAdmin || !e.admin)
     .map((e) => {
-      const fun = SUBS[e.id] || CATS.some((c) => c.id === e.id) ? `${pageName(t, e.id)} ${pageDesc(t, e.id)}` : '';
-      const head = `${e.label} ${fun} ${e.desc} ${e.keywords ?? ''}`.toLowerCase().includes(q);
-      const opts = (e.options ?? []).filter((o) => o.toLowerCase().includes(q));
-      return head || opts.length ? { e, desc: opts.length ? t('set.has', { list: opts.join(', ') }) : e.desc } : null;
+      const text = searchText(e);
+      if (!words.every((w) => text.includes(w))) return null;
+      const opts = matchingOptions(e, q, t);
+      return { e, desc: opts.length ? t('set.has', { list: opts.join(', ') }) : pageDesc(t, e.id) };
     })
     .filter((x) => x !== null);
   if (!hits.length) return <p className="muted set-empty">{t('set.noResults', { q: query.trim() })}</p>;
   return (
     <div className="ucard ulist">
       {hits.map(({ e, desc }) => (
-        <button key={e.id} type="button" className="urow" onClick={() => go(e.cat, e.sub ?? null)}>
+        <button key={e.id} type="button" className="urow" onClick={() => (e.app ? openApp(e.app) : go(e.cat, e.sub ?? null))}>
           <IconTile icon={e.icon} color={(e.sub && SUBS[e.sub]?.color) || CATS.find((c) => c.id === e.cat)?.color || '#8e8e93'} />
           <span className="urow-text">
-            <span className="urow-title">{SUBS[e.id] || CATS.some((c) => c.id === e.id) ? pageName(t, e.id) : e.label}</span>
+            <span className="urow-title">{pageName(t, e.id)}</span>
             <span className="urow-desc">{desc}</span>
           </span>
           <span className="urow-control"><Icon name="chevronRight" size={16} /></span>
@@ -280,7 +284,7 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
     case 'access':
       return isAdmin ? <HostAccessPage /> : null;
     case 'storage':
-      return <StoragePage />;
+      return <StoragePage isAdmin={isAdmin} />;
     case 'datetime':
       return <DateTime />;
     case 'language':
@@ -331,7 +335,7 @@ function Hero({ isAdmin }: { isAdmin: boolean }) {
   const uptime = useSystem((s) => s.latest?.uptime);
   const [power, setPower] = useState<PowerInfo | null>(null);
   useEffect(() => {
-    if (isAdmin) void hostApi.power().then((r) => r.ok && setPower(r.data));
+    if (isAdmin) void hostApi.power().then((r) => setPower(r.ok && !missing(r) ? r.data : { supported: false, reason: tr('set.notAvailable') }));
   }, [isAdmin]);
   const can = isAdmin && !!power?.supported;
   const why = power && !power.supported ? power.reason : undefined;
@@ -396,20 +400,28 @@ const notifyTopics = (): { key: keyof NotifySettings; label: string; hint: strin
 ];
 
 function Notifications({ isAdmin }: { isAdmin: boolean }) {
-  const prefs = usePrefs();
   const t = useT();
-  const [topics, setTopics] = useState<NotifySettings | null>(null);
+  // null while loading; 'missing' on a server without the setting; 'error' when loading failed.
+  const [topics, setTopics] = useState<NotifySettings | 'missing' | 'error' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const load = () => {
+    setTopics(null);
+    void notifyApi.settings().then((r) => setTopics(r.ok && !missing(r) ? r.data : missing(r) ? 'missing' : 'error'));
+  };
   useEffect(() => {
-    if (isAdmin) void notifyApi.settings().then((r) => r.ok && setTopics(r.data));
-  }, [isAdmin]);
+    if (isAdmin) load();
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ready = topics !== null && typeof topics === 'object' ? topics : null;
+  // Shown at once, put back if the server says no; one save at a time.
   const setTopic = (key: keyof NotifySettings, on: boolean) => {
-    if (!topics) return;
-    const next = { ...topics, [key]: on };
-    setTopics(next);
-    void notifyApi.saveSettings(next).then((r) => {
+    if (!ready || saving) return;
+    setTopics({ ...ready, [key]: on });
+    setSaving(true);
+    void notifyApi.saveSettings({ ...ready, [key]: on }).then((r) => {
+      setSaving(false);
       if (r.ok) setTopics(r.data);
       else {
-        setTopics(topics);
+        setTopics(ready);
         toast('error', tr('sp.saveFail'), r.error);
       }
     });
@@ -418,16 +430,18 @@ function Notifications({ isAdmin }: { isAdmin: boolean }) {
     <div className="stack settings-page">
       {isAdmin && (
         <Group title={t('sp.notifyAbout')} hint={t('sp.notifyAboutHint')}>
-          {notifyTopics().map((n) => (
-            <Toggle key={n.key} label={n.label} hint={n.hint} checked={topics?.[n.key] ?? true} disabled={!topics} onChange={(on) => setTopic(n.key, on)} />
-          ))}
+          {topics === 'missing' || topics === 'error' ? (
+            <Row label={topics === 'missing' ? t('set.notAvailable') : t('set.loadFail')}>
+              {topics === 'error' && <button type="button" className="ghost small" onClick={load}>{t('set.retry')}</button>}
+            </Row>
+          ) : (
+            notifyTopics().map((n) => (
+              <Toggle key={n.key} label={n.label} hint={n.hint} checked={ready?.[n.key] ?? true} disabled={!ready || saving} onChange={(on) => setTopic(n.key, on)} />
+            ))
+          )}
         </Group>
       )}
       <FocusSettings />
-      <Group title={t('sp.alerts')} hint={t('sp.alertsHint')}>
-        <Toggle label={t('sp.alertSound')} hint={prefs.uiSounds ? t('sp.alertSoundOn') : t('sp.alertSoundOff')}
-          checked={prefs.soundAlerts} disabled={!prefs.uiSounds} onChange={(soundAlerts) => prefs.set({ soundAlerts })} />
-      </Group>
     </div>
   );
 }
@@ -462,8 +476,7 @@ function About({ isAdmin }: { isAdmin: boolean }) {
       ? [['Docker', info.docker ? `${info.docker.server_version} · ${info.docker.storage_driver}` : t('sp.dockerOff', { error: info.docker_error })] as [string, string]]
       : []),
   ];
-  const copy = () =>
-    void navigator.clipboard?.writeText(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n')).then(() => toast('success', tr('sp.infoCopied')));
+  const copy = () => void copyWithToast(rows.map(([k, v]) => `${k}: ${v.replace(/\n/g, ', ')}`).join('\n'), tr('sp.infoCopied'));
   return (
     <div className="stack settings-page">
       <div className="set-about-hero">
@@ -482,6 +495,15 @@ function About({ isAdmin }: { isAdmin: boolean }) {
       <button type="button" className="ghost small align-start" onClick={copy}>
         <Icon name="copy" size={13} /> {t('sp.copyDetails')}
       </button>
+      {isAdmin && (
+        <Group title={t('set.setup')}>
+          <Row label={t('set.setupRow')} hint={t('set.setup.desc')}>
+            <button type="button" className="ghost small" onClick={() => usePrefs.getState().set({ welcomeDone: false, welcomeStep: 0 })}>
+              {t('set.setupRun')}
+            </button>
+          </Row>
+        </Group>
+      )}
     </div>
   );
 }
@@ -551,7 +573,7 @@ function HostnameEdit({ name }: { name: string }) {
 
 // ---------------- Storage ----------------
 
-function StoragePage() {
+function StoragePage({ isAdmin }: { isAdmin: boolean }) {
   const latest = useSystem((s) => s.latest);
   const disks = latest?.disks ?? [];
   const total = storageTotals(latest);
@@ -584,6 +606,15 @@ function StoragePage() {
           </Row>
         )}
       </Group>
+      {isAdmin && (
+        <Group title={t('set.storageApp')}>
+          <Row label={t('set.storageRow')} hint={t('set.storageApp.desc')}>
+            <button type="button" className="ghost small" onClick={() => openApp('storage')}>
+              {t('set.storageOpen')}
+            </button>
+          </Row>
+        </Group>
+      )}
     </div>
   );
 }
@@ -595,10 +626,15 @@ function Troubleshoot() {
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLPreElement>(null);
   const t = useT();
+  const [loading, setLoading] = useState(false);
   const load = () => {
+    if (loading) return;
     setError(null);
+    setLoading(true);
     void api<{ supported: boolean; reason?: string; lines: string[] }>('/api/v1/system/logs?lines=400').then((r) => {
-      if (r.ok) setLogs(r.data);
+      setLoading(false);
+      if (missing(r)) setLogs({ supported: false, reason: tr('set.notAvailable'), lines: [] });
+      else if (r.ok) setLogs({ ...r.data, lines: r.data.lines ?? [] });
       else setError(r.error ?? tr('sp.logsFail'));
     });
   };
@@ -606,7 +642,7 @@ function Troubleshoot() {
   useEffect(() => {
     if (box.current) box.current.scrollTop = box.current.scrollHeight;
   }, [logs]);
-  const copy = () => void navigator.clipboard?.writeText(logs?.lines.join('\n') ?? '').then(() => toast('success', tr('sp.logsCopied')));
+  const copy = () => void copyWithToast(logs?.lines.join('\n') ?? '', tr('sp.logsCopied'));
   return (
     <div className="stack settings-page">
       <Group title={t('sp.logs')} hint={t('sp.logsHint')}>
@@ -621,7 +657,7 @@ function Troubleshoot() {
             <p className="muted small">{logs.reason}</p>
           )}
           <div className="btn-group set-logs-actions">
-            <button type="button" className="ghost small" onClick={load}>
+            <button type="button" className="ghost small" disabled={loading} onClick={load}>
               <Icon name="restart" size={13} /> {t('sp.refresh')}
             </button>
             {logs?.supported && (

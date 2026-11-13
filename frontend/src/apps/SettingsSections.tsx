@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { accountApi, downloadBackup } from '../api/account';
+import { accountApi, downloadBackup, uploadRestore } from '../api/account';
 import { Icon } from '../components/Icon';
 import { useClock } from '../lib/hooks';
+import { powerHost } from '../lib/hostActions';
+import { missing } from '../lib/settingsKit';
+import { confirmDialog } from '../state/confirm';
 import { playCue, type Cue } from '../lib/uiSound';
 import { deviceTimeZone, fmtDate, fmtTime, timeZones, useTimePrefs } from '../lib/time';
 import {
@@ -195,11 +198,14 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   const [offCode, setOffCode] = useState('');
   const [askErr, setAskErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loadFail, setLoadFail] = useState(false);
   const t = useT();
 
   const load = async () => {
+    setLoadFail(false);
     const r = await accountApi.totpStatus();
-    if (r.ok) setEnabled(r.data.enabled);
+    if (r.ok && !missing(r)) setEnabled(r.data.enabled);
+    else setLoadFail(true);
     return r.ok ? r.data.enabled : null;
   };
 
@@ -234,7 +240,10 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
   }, []);
 
   const confirm = async () => {
+    if (busy) return;
+    setBusy(true);
     const r = await accountApi.totpEnable(code.trim());
+    setBusy(false);
     if (!r.ok) {
       setEnrollErr(r.error ?? tr('sp.tfBadCode'));
       return;
@@ -260,7 +269,12 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
 
   return (
     <Section title={t('sp.tf')} hint={t('sp.tfHint')}>
-      <Toggle label={t('sp.tfAsk')} hint={enabled === null ? t('sp.checking') : enabled ? t('sp.on') : enroll ? t('sp.tfFinish') : t('sp.off')}
+      {loadFail && enabled === null && (
+        <Row label={t('su.tfLoadFail')}>
+          <button type="button" className="ghost small" onClick={() => void load()}>{t('set.retry')}</button>
+        </Row>
+      )}
+      <Toggle label={t('sp.tfAsk')} hint={enabled === null ? (loadFail ? t('set.loadFail') : t('sp.checking')) : enabled ? t('sp.on') : enroll ? t('sp.tfFinish') : t('sp.off')}
         checked={!!enabled || !!enroll || ask === 'on'} disabled={enabled === null}
         onChange={(on) => {
           setAskErr('');
@@ -327,7 +341,7 @@ export function TwoFactor({ autoStart = false }: { autoStart?: boolean }) {
             </label>
             {enrollErr && <p className="error">{enrollErr}</p>}
             <div className="btn-group">
-              <button type="button" disabled={code.length !== 6} onClick={() => void confirm()}>
+              <button type="button" disabled={code.length !== 6 || busy} onClick={() => void confirm()}>
                 {t('sp.enable')}
               </button>
               <button type="button" className="ghost" onClick={() => setEnroll(null)}>
@@ -350,6 +364,7 @@ export function ChangePassword() {
   const t = useT();
 
   const submit = async () => {
+    if (busy) return;
     setError('');
     if (next.length < 10) return setError(tr('sp.pwShort'));
     if (next !== confirm) return setError(tr('sp.pwMismatch'));
@@ -404,6 +419,7 @@ export function Backup() {
   const [busy, setBusy] = useState(false);
   const t = useT();
   const run = async () => {
+    if (busy) return;
     setBusy(true);
     const err = await downloadBackup();
     setBusy(false);
@@ -418,10 +434,110 @@ export function Backup() {
             <Icon name="download" size={13} /> {busy ? t('sp.preparing') : t('sp.download')}
           </button>
         </Row>
-        <Row label={t('sp.restore')} hint={t('sp.restoreHint')}>
-          <span />
-        </Row>
+        <Restore />
       </Section>
     </div>
+  );
+}
+
+/** Restore a downloaded backup: choose the file, confirm with your password; it goes in at the next restart. */
+function Restore() {
+  const t = useT();
+  // null while loading; 'missing' on a server that can't restore.
+  const [pending, setPending] = useState<boolean | 'missing' | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void accountApi.restoreStatus().then((r) => setPending(r.ok && !missing(r) ? !!r.data.pending : 'missing'));
+  }, []);
+
+  const close = () => {
+    setFile(null);
+    setPassword('');
+    setError('');
+  };
+  const submit = async () => {
+    if (!file || !password || busy) return;
+    const ok = await confirmDialog({ title: tr('su.restoreTitle'), message: tr('su.restoreMsg'), confirmLabel: tr('su.restoreGo'), danger: true });
+    if (!ok) return;
+    setBusy(true);
+    setError('');
+    const err = await uploadRestore(file, password);
+    setBusy(false);
+    if (err) return setError(err);
+    close();
+    setPending(true);
+    toast('success', tr('su.restoreStaged'), tr('su.restoreStagedBody'));
+  };
+  const cancel = async () => {
+    if (busy) return;
+    setBusy(true);
+    const r = await accountApi.cancelRestore();
+    setBusy(false);
+    if (!r.ok) return toast('error', tr('sp.saveFail'), r.error);
+    setPending(false);
+    toast('success', tr('su.restoreCanceled'));
+  };
+
+  if (pending === 'missing') {
+    return (
+      <Row label={t('sp.restore')} hint={t('set.notAvailable')}>
+        <span />
+      </Row>
+    );
+  }
+  if (pending === true) {
+    return (
+      <Row label={t('su.restoreReady')} hint={t('su.restoreReadyHint')}>
+        <div className="btn-group">
+          <button type="button" className="ghost small" disabled={busy} onClick={() => void cancel()}>{t('su.restoreCancel')}</button>
+          <button type="button" className="small" onClick={() => void powerHost('reboot')}>{t('gu.restart')}</button>
+        </div>
+      </Row>
+    );
+  }
+  return (
+    <>
+      <Row label={t('sp.restore')} hint={t('sp.restoreHint')}>
+        <button type="button" className="ghost small" disabled={pending === null || busy} onClick={() => input.current?.click()}>
+          <Icon name="upload" size={13} /> {t('su.restoreChoose')}
+        </button>
+        <input ref={input} type="file" accept=".db,application/octet-stream" hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) {
+              setFile(f);
+              setPassword('');
+              setError('');
+            }
+          }} />
+      </Row>
+      {file && (
+        <div className="settings-row full">
+          <form className="totp-enroll" onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}>
+            <p className="small">{t('su.restorePw', { name: file.name })}</p>
+            <label>
+              {t('sp.password')}
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus required />
+            </label>
+            {error && <p className="error">{error}</p>}
+            <div className="btn-group">
+              <button type="submit" className="danger" disabled={busy || !password}>
+                {busy ? t('su.restoreChecking') : t('su.restoreGo')}
+              </button>
+              <button type="button" className="ghost" disabled={busy} onClick={close}>{t('sp.cancel')}</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 }

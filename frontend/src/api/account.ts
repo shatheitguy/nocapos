@@ -9,7 +9,28 @@ export const accountApi = {
   totpDisable: (password: string, code: string) => api('/api/v1/auth/totp/disable', { method: 'POST', body: { password, code } }),
   changePassword: (current: string, next: string) =>
     api('/api/v1/auth/password', { method: 'POST', body: { current, new: next } }),
+  /** Whether a restored backup is waiting for the next restart. */
+  restoreStatus: () => api<{ pending: boolean }>('/api/v1/system/restore'),
+  cancelRestore: () => api<{ pending: boolean }>('/api/v1/system/restore', { method: 'DELETE' }),
 };
+
+/** Upload a backup to restore (it's checked, then put in place at the next restart). Null on success, else the error. */
+export async function uploadRestore(file: File, password: string): Promise<string | null> {
+  const form = new FormData();
+  form.append('password', password); // before the file: the server checks it first
+  form.append('file', file);
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  try {
+    const r = await fetch('/api/v1/system/restore', { method: 'POST', body: form, headers, credentials: 'same-origin' });
+    if (r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return j?.error?.message ?? `HTTP ${r.status}`;
+  } catch {
+    return 'NoCapOS is not reachable';
+  }
+}
 
 /** Download the NoCapOS backup via a bearer-authorized blob fetch. */
 export async function downloadBackup(): Promise<string | null> {

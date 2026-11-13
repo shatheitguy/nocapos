@@ -370,6 +370,44 @@ func TestReadCamera(t *testing.T) {
 	}
 }
 
+func TestReadGPS(t *testing.T) {
+	le := binary.LittleEndian
+	b := []byte{'I', 'I'}
+	b = le.AppendUint16(b, 42)
+	b = le.AppendUint32(b, 8)
+	entry := func(tag, typ uint16, count uint32, value []byte) {
+		b = le.AppendUint16(b, tag)
+		b = le.AppendUint16(b, typ)
+		b = le.AppendUint32(b, count)
+		b = append(b, append(value, make([]byte, 4-len(value))...)...)
+	}
+	// IFD0: just the GPS pointer.
+	b = le.AppendUint16(b, 1)
+	entry(0x8825, 4, 1, le.AppendUint32(nil, 26))
+	b = le.AppendUint32(b, 0)
+	// GPS IFD at 26; its rationals follow at 80.
+	b = le.AppendUint16(b, 4)
+	entry(1, 2, 2, []byte("N\x00"))
+	entry(2, 5, 3, le.AppendUint32(nil, 80))
+	entry(3, 2, 2, []byte("W\x00"))
+	entry(4, 5, 3, le.AppendUint32(nil, 104))
+	b = le.AppendUint32(b, 0)
+	for _, v := range [][2]uint32{{48, 1}, {51, 1}, {2964, 100}, {2, 1}, {17, 1}, {4020, 100}} {
+		b = le.AppendUint32(le.AppendUint32(b, v[0]), v[1])
+	}
+	info := exifInfo{orientation: 1}
+	parseTIFF(b, &info)
+	if lat, lon := info.camera.Lat, info.camera.Lon; lat < 48.8582 || lat > 48.8583 || lon > -2.2944 || lon < -2.2946 {
+		t.Errorf("location = %v, %v; want 48.8582, -2.2945", lat, lon)
+	}
+	// A picture without GPS has no location.
+	info = exifInfo{}
+	parseTIFF(b[:26], &info)
+	if info.camera.Lat != 0 || info.camera.Lon != 0 {
+		t.Errorf("truncated GPS gave %v, %v", info.camera.Lat, info.camera.Lon)
+	}
+}
+
 func TestReadMP4Length(t *testing.T) {
 	data := mp4With(time.Date(2023, 1, 2, 3, 4, 5, 0, time.UTC))
 	// mvhd body starts after ftyp (16) + moov header (8) + mvhd header (8); timescale at +12, duration at +16.

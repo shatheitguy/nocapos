@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import { logOutClean } from '../lib/signOut';
 import { fileKind } from '../api/files';
 import { openApp, visibleApps } from '../apps/meta';
-import { SETTINGS_PAGES } from '../apps/settingsPages';
+import { settingsPages } from '../apps/settingsPages';
 import { AppIcon } from '../components/AppTile';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes } from '../lib/format';
@@ -130,7 +130,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
     if (!needle) return out.slice(0, 8);
 
     // Settings pages
-    for (const p of SETTINGS_PAGES) {
+    for (const p of settingsPages()) {
       if (p.admin && !isAdmin) continue;
       const s = match(needle, p.label, p.keywords);
       if (!s) continue;
@@ -143,7 +143,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         big: <span className="sl-big-glyph">{<Icon name={p.icon} size={34} />}</span>,
         details: [['Opens', `Settings → ${p.label}`]],
         score: s,
-        run: go(() => openApp('settings', { props: { section: p.id } })),
+        run: go(() => (p.app ? openApp(p.app) : openApp('settings', { props: { section: p.id } }))),
       });
     }
 

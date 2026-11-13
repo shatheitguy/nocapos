@@ -14,11 +14,6 @@
   "sp.saveFail": "Your change wasn't saved. Please try again.",
   "sp.notifyAbout": "Notify me about",
   "sp.notifyAboutHint": "Applies to every administrator. Anything you turn off is also left out of the Notification Center.",
-  "sp.alerts": "Alerts",
-  "sp.alertsHint": "How notifications sound",
-  "sp.alertSound": "Play a sound for notifications",
-  "sp.alertSoundOn": "Uses the volume set in Sound",
-  "sp.alertSoundOff": "Turn on sound effects in Sound first",
   "sp.updCheckFail": "Couldn't check for updates",
   "sp.updStartFail": "The update didn't start",
   "sp.updChecking": "Checking for updates…",
@@ -179,5 +174,5 @@
   "sp.preparing": "Preparing…",
   "sp.download": "Download",
   "sp.restore": "Restore",
-  "sp.restoreHint": "Stop NoCapOS, replace nocap.db in the data folder with your backup, and start it again. One-click restore is coming."
+  "sp.restoreHint": "Put back a backup you downloaded. It replaces every account and setting, and takes effect after a restart."
 }

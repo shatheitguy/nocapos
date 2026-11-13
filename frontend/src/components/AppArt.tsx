@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { Fragment, useId, type ReactNode } from 'react';
 import { usePrefs } from '../state/prefs';
 
 // NoCapOS's own app icons, drawn on a 64×64 grid: one glossy, colourful
@@ -60,7 +60,7 @@ const ICONS: Record<string, Draw> = {
             ['e', '#c4b5fd', '#7c3aed'],
             ['f', '#f9a8d4', '#db2777'],
           ] as const
-        ).map(([k, a, b]) => lin(g(k), a, b, 0, 1))}
+        ).map(([k, a, b]) => <Fragment key={k}>{lin(g(k), a, b, 0, 1)}</Fragment>)}
       </defs>
       {['a', 'b', 'c', 'd', 'e', 'f', 'c', 'd', 'a'].map((k, i) => {
         const x = 13 + (i % 3) * 14;
@@ -244,6 +244,15 @@ const ICONS: Record<string, Draw> = {
   ),
 };
 
+ICONS.shield = (g) => (
+  <>
+    <defs>{lin(g('shield'), '#ff5a5f', '#9b1015')}</defs>
+    <path d="M32 9l19 7v13c0 12-8 21.5-19 26-11-4.5-19-14-19-26V16Z" fill={url(g('shield'))} />
+    {gloss('M13 16l19-7 19 7v5H13Z')}
+    <path d="m24 32 6 6 11-12" fill="none" stroke="#fff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+  </>
+);
+
 // A virtual machine's screen window wears Virtual Desk's icon.
 ICONS.vmscreen = ICONS.virtualdesk;
 ICONS.nocapdesktop = ICONS.remotedesktop;
@@ -270,6 +279,7 @@ const SHAPES: Record<string, () => ReactNode> = {
   logs: () => (<>{bg('#111827')}{[16, 25, 34, 43].map((y, i) => <rect key={y} x="14" y={y} width={[36, 26, 32, 18][i]} height="5" rx="2.5" fill={['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][i]} />)}</>),
 };
 SHAPES.vmscreen = SHAPES.virtualdesk;
+SHAPES.shield = () => (<>{bg('#9b1015')}<path d="M32 12l17 6v11c0 11-7 19-17 23-10-4-17-12-17-23V18Z" fill="#ff5a5f" /><path d="m25 32 5 5 10-11" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></>);
 SHAPES.nocapdesktop = () => (<>{bg('#7a0f12')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#e5383b" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#fecaca" /></>);
 
 /**

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { hostApi, type NetInterface, type NetworkState } from '../api/hostctl';
 import { Icon, type IconName } from '../components/Icon';
 import { setNetwork } from '../lib/hostActions';
+import { missing } from '../lib/settingsKit';
 import { IPv4Editor, IPv4Summary, WifiList } from './NetworkParts';
 import { Section, Toggle } from './Personalize';
 import { FindServersSection } from './SettingsFindServers';
@@ -18,10 +19,11 @@ function useNetwork() {
   const load = useCallback(
     () =>
       void hostApi.network().then((r) => {
-        if (r.ok) {
+        if (r.ok && !missing(r)) {
+          setError(null);
           setNet(r.data);
           setRev((v) => v + 1);
-        } else setError(r.error ?? 'Couldn’t check the network right now. Try again in a sec.');
+        } else setError(missing(r) ? tr('set.notAvailable') : (r.error ?? tr('sn.loadFail')));
       }),
     [],
   );
@@ -32,7 +34,7 @@ function useNetwork() {
 const ipOf = (i: NetInterface) => (i.ipv4?.addresses[0] ?? i.addresses.find((a) => !a.includes(':')))?.replace(/\/\d+$/, '');
 const connected = (i: NetInterface) => i.up && !!ipOf(i);
 const ifaceIcon = (i: NetInterface): IconName => (i.kind === 'wifi' ? 'wifi' : i.kind === 'ethernet' ? 'ethernet' : 'network');
-const ifaceKind = (i: NetInterface) => (i.kind === 'wifi' ? 'Wi-Fi' : i.kind === 'ethernet' ? 'Ethernet' : 'Network adapter');
+const ifaceKind = (i: NetInterface) => tr(i.kind === 'wifi' ? 'sn.kindWifi' : i.kind === 'ethernet' ? 'sn.kindEthernet' : 'sn.kindOther');
 
 function Switch({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -46,7 +48,7 @@ function ViewOnly({ net }: { net: NetworkState }) {
   if (net.manager === 'networkmanager') return null;
   return (
     <p className="set-note">
-      <Icon name="info" size={15} /> {(net.wifi.reason ?? 'Changing network settings needs NetworkManager on a Linux host').replace(/\.?\s*$/, '.')} Settings are shown read-only.
+      <Icon name="info" size={15} /> {tr('sn.readOnly')}
     </p>
   );
 }
@@ -72,8 +74,8 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
           <Icon name={primary ? ifaceIcon(primary) : 'network'} size={22} />
         </span>
         <div className="set-status-text">
-          <b>{primary ? `Connected${primary.connection ? ` to ${primary.connection}` : ''}` : 'Not connected'}</b>
-          <span>{primary ? `${ifaceKind(primary)} · ${primary.name} · ${ipOf(primary)}` : 'No adapter has an address — check the cable or Wi-Fi'}</span>
+          <b>{primary ? (primary.connection ? tr('sn.connectedTo', { name: primary.connection }) : tr('sn.connected')) : tr('sn.notConnected')}</b>
+          <span>{primary ? `${ifaceKind(primary)} · ${primary.name} · ${ipOf(primary)}` : tr('sn.noAddressAll')}</span>
         </div>
       </div>
       <ViewOnly net={net} />
@@ -82,13 +84,13 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
         <div className="urow">
           <span className="urow-icon set-ico" style={{ ['--c' as string]: '#0a84ff' }}><Icon name="wifi" size={16} /></span>
           <button type="button" className="urow-text set-row-link" disabled={!net.wifi.supported} onClick={() => open('wifi')}>
-            <span className="urow-title">Wi-Fi</span>
+            <span className="urow-title">{tr('set.wifi')}</span>
             <span className="urow-desc">
-              {!net.wifi.supported ? 'Not available on this host' : !net.wifi.enabled ? 'Off' : wireless?.connection || 'Not connected'}
+              {!net.wifi.supported ? tr('set.notAvailable') : !net.wifi.enabled ? tr('sn.off') : wireless?.connection || tr('sn.notConnected')}
             </span>
           </button>
           <span className="urow-control">
-            <Switch label="Wi-Fi" checked={net.wifi.enabled} disabled={!net.wifi.supported || busy} onChange={(on) => void flip('wifi', on)} />
+            <Switch label={tr('sn.kindWifi')} checked={net.wifi.enabled} disabled={!net.wifi.supported || busy} onChange={(on) => void flip('wifi', on)} />
             {net.wifi.supported && <Icon name="chevronRight" size={16} />}
           </span>
         </div>
@@ -96,8 +98,8 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
           <button key={i.name} type="button" className="urow" onClick={() => open(`iface:${i.name}`)}>
             <span className="urow-icon set-ico" style={{ ['--c' as string]: connected(i) ? '#30d158' : '#8e8e93' }}><Icon name={ifaceIcon(i)} size={16} /></span>
             <span className="urow-text">
-              <span className="urow-title">{i.kind === 'ethernet' ? `Ethernet · ${i.name}` : i.name}</span>
-              <span className="urow-desc">{connected(i) ? `Connected · ${ipOf(i)}` : i.up ? 'No address' : 'Not connected'}</span>
+              <span className="urow-title">{i.kind === 'ethernet' ? tr('sn.ethernetName', { name: i.name }) : i.name}</span>
+              <span className="urow-desc">{connected(i) ? tr('sn.connectedIp', { ip: ipOf(i) }) : i.up ? tr('sn.noAddress') : tr('sn.notConnected')}</span>
             </span>
             <span className="urow-control">
               <span className={`set-dot ${connected(i) ? 'on' : ''}`} />
@@ -111,11 +113,11 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
         <div className="urow">
           <span className="urow-icon set-ico" style={{ ['--c' as string]: '#636366' }}><Icon name="globe" size={16} /></span>
           <span className="urow-text">
-            <span className="urow-title">Networking</span>
-            <span className="urow-desc">Every network connection on this machine</span>
+            <span className="urow-title">{tr('sn.networking')}</span>
+            <span className="urow-desc">{tr('sn.networkingHint')}</span>
           </span>
           <span className="urow-control">
-            <Switch label="Networking" checked={net.networking.enabled} disabled={!net.networking.supported || busy} onChange={(on) => void flip('networking', on)} />
+            <Switch label={tr('sn.networking')} checked={net.networking.enabled} disabled={!net.networking.supported || busy} onChange={(on) => void flip('networking', on)} />
           </span>
         </div>
       </div>
@@ -129,7 +131,7 @@ export function WifiPage() {
   const { net, setNet, error, rev, load } = useNetwork();
   const [busy, setBusy] = useState(false);
   if (error) return <p className="error">{error}</p>;
-  if (!net) return <p className="muted">Checking Wi-Fi…</p>;
+  if (!net) return <p className="muted">{tr('sn.checkingWifi')}</p>;
   const wireless = net.interfaces.find((i) => i.kind === 'wifi');
   const flip = async (on: boolean) => {
     setBusy(true);
@@ -140,8 +142,8 @@ export function WifiPage() {
   return (
     <div className="stack settings-page">
       <ViewOnly net={net} />
-      <Section title="Wi-Fi">
-        <Toggle label="Wi-Fi" hint={net.wifi.supported ? (net.wifi.enabled ? wireless?.connection || 'Not connected' : 'Off') : 'Not available on this host'}
+      <Section title={tr('sn.kindWifi')}>
+        <Toggle label={tr('sn.kindWifi')} hint={net.wifi.supported ? (net.wifi.enabled ? wireless?.connection || tr('sn.notConnected') : tr('sn.off')) : tr('set.notAvailable')}
           checked={net.wifi.enabled} disabled={!net.wifi.supported || busy} onChange={(on) => void flip(on)} />
         {net.wifi.supported && net.wifi.enabled && (
           <div className="settings-row full">
@@ -172,7 +174,7 @@ export function InterfacePage({ name }: { name: string }) {
       <ViewOnly net={net} />
       <AddressSection key={`${iface.name}-${rev}`} iface={iface} onApplied={load} />
       <button type="button" className="ghost small align-start" onClick={load}>
-        <Icon name="restart" size={13} /> Refresh
+        <Icon name="restart" size={13} /> {tr('sp.refresh')}
       </button>
     </div>
   );
@@ -180,7 +182,7 @@ export function InterfacePage({ name }: { name: string }) {
 
 function AddressSection({ iface, onApplied }: { iface: NetInterface; onApplied: () => void }) {
   return (
-    <Section title="TCP/IP" hint={[ifaceKind(iface), iface.connection, iface.mac].filter(Boolean).join(' · ')}>
+    <Section title={tr('sn.tcpip')} hint={[ifaceKind(iface), iface.connection, iface.mac].filter(Boolean).join(' · ')}>
       <div className="settings-row full">
         <IPv4Summary iface={iface} />
       </div>
