@@ -11,6 +11,8 @@ import {
   fileKind,
   fileTicket,
   inRecycle,
+  appDataNames,
+  isAppData,
   isArchive,
   joinPath,
   parentPath,
@@ -55,7 +57,7 @@ const useClipboard = create<{ clip: Clip | null; set: (c: Clip | null) => void }
 type SortKey = 'name' | 'mod' | 'size' | 'kind';
 type View = 'grid' | 'list';
 /** Views that are not a folder: recently changed files and search results. */
-export type Special = 'recents' | 'search' | null;
+export type Special = 'recents' | 'search' | 'appdata' | null;
 
 const SORT_LABEL: Record<SortKey, string> = { name: 'Name', mod: 'Date modified', size: 'Size', kind: 'Kind' };
 
@@ -114,6 +116,9 @@ interface Item {
   /** Full path inside root, e.g. "/Photos/cat.png". */
   path: string;
   entry: FileEntry;
+  /** App data: the app the folder belongs to, and where it is on this server. */
+  app?: string;
+  source?: string;
 }
 
 const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:') && r.kind !== 'share' && r.kind !== 'homes';
@@ -269,7 +274,7 @@ export function Files({ win }: { win: WinState }) {
   const cur = states[active];
   const home = roots?.find((r) => r.kind === 'home') ?? roots?.find(isLocal) ?? roots?.[0];
   const firstRoot = home?.id ?? '';
-  const rootLabel = (id: string) => (id === home?.id ? 'Home' : (roots?.find((r) => r.id === id)?.name ?? 'Files'));
+  const rootLabel = (id: string) => (id === home?.id ? 'Home' : (roots?.find((r) => r.id === id)?.name ?? appDataNames.get(id) ?? 'Files'));
   const pane = (side: 0 | 1) => {
     const other = states[side === 0 ? 1 : 0];
     return (
@@ -455,13 +460,36 @@ function FilePane({
   // ---------- data ----------
 
   useEffect(() => {
-    if (roots?.length && !roots.some((r) => r.id === root)) setRoot(roots[0].id);
+    // App data locations aren't in the list (they come and go with the apps).
+    if (roots?.length && !roots.some((r) => r.id === root) && !isAppData(root)) setRoot(roots[0].id);
   }, [roots, root]);
 
   const reload = useCallback(async () => {
     if (!root) return;
     setLoading(true);
     setNote(null);
+    if (special === 'appdata') {
+      const r = await fileApi.appData();
+      setLoading(false);
+      if (!r.ok) {
+        setListError(r.error ?? 'Couldn’t load');
+        setItems([]);
+        return;
+      }
+      setListError(null);
+      setNote(r.data.available ? null : t('files.appdata.off'));
+      const list: Item[] = [];
+      for (const a of r.data.apps) {
+        for (const f of a.folders) {
+          appDataNames.set(f.id, `${a.name} · ${f.target}`);
+          if (f.blocked) continue;
+          list.push({ key: f.id, root: f.id, path: '/', entry: { name: f.target, dir: true, size: 0, mod_time: '', mode: '', perm: 0 }, app: a.name, source: f.source });
+        }
+      }
+      setItems(list);
+      setSelected((sel) => new Set([...sel].filter((k) => list.some((i) => i.key === k))));
+      return;
+    }
     if (special) {
       const r = special === 'recents' ? await fileApi.recent(150) : await fileApi.search(query, 100);
       setLoading(false);
@@ -1000,7 +1028,7 @@ function FilePane({
 
   const shareItem = (folder: string, name: string): MenuEntry | null => {
     // Sharing is for administrators, from the fixed storage locations.
-    if (!isAdminUser() || root === 'system' || root.startsWith('net:') || rootInfo?.kind || special) return null;
+    if (!isAdminUser() || root === 'system' || root.startsWith('net:') || isAppData(root) || rootInfo?.kind || special) return null;
     const existing = shares.find((sh) => sh.root === root && sh.path === folder);
     return existing
       ? { label: `Stop Sharing “${existing.name}”`, icon: 'network', onClick: () => onUnshare(existing) }
@@ -1057,6 +1085,8 @@ function FilePane({
     }
     const one = list.length === 1 ? list[0] : null;
     const files = list.filter((i) => !i.entry.dir);
+    // An app's data folder is a location of its own: it opens, nothing more.
+    if (special === 'appdata') return one ? [{ label: 'Open', icon: 'folder', shortcut: 'Enter', onClick: () => open(one) }] : [];
     if (one) {
       push({ label: 'Open', icon: one.entry.dir ? 'folder' : 'eye', shortcut: 'Enter', onClick: () => open(one) });
       if (!one.entry.dir && !recycle && appsFor(one.entry.name).length) push({ label: tr('openwith.menu'), icon: 'layers', onClick: () => setChooser(one) });
@@ -1117,7 +1147,7 @@ function FilePane({
   const selList = selItems();
   const selSize = selList.reduce((a, i) => a + (i.entry.dir ? 0 : i.entry.size), 0);
   const isCut = (i: Item) => !!clip?.move && clip.root === i.root && clip.paths.includes(i.path);
-  const subtitle = (i: Item) => (i.entry.dir ? 'Folder' : fmtBytes(i.entry.size));
+  const subtitle = (i: Item) => (i.source ?? (i.entry.dir ? 'Folder' : fmtBytes(i.entry.size)));
   const where = (i: Item) => {
     const p = parentPath(i.path);
     return p === '/' ? rootLabel(i.root) : baseName(p);
@@ -1126,7 +1156,9 @@ function FilePane({
   const groups: { title: string | null; list: Item[] }[] =
     special === 'recents' && sort.key === 'name' && sort.asc
       ? ['Today', 'This week', 'Earlier'].map((t) => ({ title: t, list: shown.filter((i) => ageGroup(i.entry.mod_time) === t) })).filter((g) => g.list.length)
-      : [{ title: null, list: shown }];
+      : special === 'appdata'
+        ? [...new Set(shown.map((i) => i.app ?? ''))].map((a) => ({ title: a, list: shown.filter((i) => (i.app ?? '') === a) }))
+        : [{ title: null, list: shown }];
 
   const thumb = (i: Item, size: number) => {
     const kind = fileKind(i.entry.name, i.entry.dir);
@@ -1146,17 +1178,18 @@ function FilePane({
 
   const itemProps = (i: Item) => ({
     'data-key': i.key,
-    draggable: !recycle,
+    draggable: !recycle && special !== 'appdata',
     onDragStart: (e: DragEvent) => dragStart(e, i),
     onClick: (ev: MouseEvent) => clickItem(ev, i.key),
     onDoubleClick: () => open(i),
     onContextMenu: (ev: MouseEvent) => onContext(ev, i.key),
-    ...(i.entry.dir && !recycle ? folderDrop(i.key, i.root, i.path) : {}),
+    ...(i.entry.dir && !recycle && special !== 'appdata' ? folderDrop(i.key, i.root, i.path) : {}),
   });
 
   const emptyState = () => {
     if (filter && !special) return <EmptyState icon="search" title={t('files.empty.noMatches')} text={t('files.empty.noMatchesText', { filter })} />;
     if (special === 'recents') return <EmptyState icon="clock" title={t('files.empty.recents')} text={note ?? t('files.empty.recentsText')} />;
+    if (special === 'appdata') return <EmptyState glyph title={t('files.appdata.empty')} text={note ?? t('files.appdata.emptyText')} />;
     if (special === 'search') return <EmptyState icon="search" title={t('files.empty.nothingFound')} text={note ?? t('files.empty.nothingFoundText', { query })} />;
     if (recycle) return <EmptyState icon="trash" title={t('files.empty.trash')} text={t('files.empty.trashText')} />;
     return (
@@ -1190,8 +1223,8 @@ function FilePane({
         <div className="crumbs fx-crumbs">
           {special ? (
             <span className="crumb fx-crumb current">
-              <Icon name={special === 'recents' ? 'clock' : 'search'} size={13} />
-              {special === 'recents' ? 'Recents' : `Search: “${query}”`}
+              <Icon name={special === 'recents' ? 'clock' : special === 'appdata' ? 'appData' : 'search'} size={13} />
+              {special === 'recents' ? 'Recents' : special === 'appdata' ? t('files.appdata.title') : `Search: “${query}”`}
             </span>
           ) : (
             <>
@@ -1327,7 +1360,7 @@ function FilePane({
                   <div key={i.key} className={`fx-tile ${selected.has(i.key) ? 'selected' : ''} ${isCut(i) ? 'cut' : ''} ${dropKey === i.key ? 'drop' : ''}`} title={special ? `${i.entry.name}\n${rootLabel(i.root)}${parentPath(i.path) === '/' ? '' : parentPath(i.path)}` : i.entry.name} {...itemProps(i)}>
                     <div className="fx-tile-icon">{thumb(i, 68)}</div>
                     <span className="fx-tile-name">{i.entry.name}</span>
-                    <span className="fx-tile-sub">{special ? `${subtitle(i)} · ${where(i)}` : subtitle(i)}</span>
+                    <span className="fx-tile-sub">{special && special !== 'appdata' ? `${subtitle(i)} · ${where(i)}` : subtitle(i)}</span>
                   </div>
                 ))}
               </div>
@@ -1375,12 +1408,12 @@ function FilePane({
                         <FileGlyph name={i.entry.name} dir={i.entry.dir} size={24} shared={i.entry.dir && i.root === root && sharedPaths.has(i.path)} />
                         <span className="name-text" title={i.entry.name}>
                           {i.entry.name}
-                          {special && <span className="fx-where"> — {where(i)}</span>}
+                          {special && special !== 'appdata' && <span className="fx-where"> — {where(i)}</span>}
                         </span>
                         {i.entry.symlink && <span className="chip tiny">link</span>}
                       </div>
                     </td>
-                    <td className="muted col-mod">{new Date(i.entry.mod_time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                    <td className="muted col-mod">{i.entry.mod_time ? new Date(i.entry.mod_time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : (i.source ?? '—')}</td>
                     <td className="num muted col-size">{i.entry.dir ? '—' : fmtBytes(i.entry.size)}</td>
                     <td className="muted col-kind">{kindLabel(i.entry.name, i.entry.dir)}</td>
                     {!special && (
