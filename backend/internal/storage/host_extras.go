@@ -65,6 +65,11 @@ func parseDF(s string) (size, used, avail int64) {
 }
 
 func (h *Host) MirrorBoot(ctx context.Context, p BootMirrorPlan) error {
+	for _, bin := range []string{"sgdisk", "grub-install"} {
+		if !h.has(bin) {
+			return bad("%s is missing; install the gdisk and GRUB packages first", bin)
+		}
+	}
 	mounted := false
 	defer func() {
 		if mounted {
