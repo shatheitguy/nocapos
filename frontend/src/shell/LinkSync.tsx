@@ -7,7 +7,7 @@ import { relTime } from '../state/notifications';
 import { toast } from '../state/toasts';
 import {
   CLIP_BANNER_MS,
-  HANDOFF_BANNER_MS,
+  CARRY_BANNER_MS,
   copyText,
   errorCode,
   linkApi,
@@ -16,7 +16,7 @@ import {
   type Clip,
   type PhoneNote,
 } from '../state/link';
-import { handoffLabel, openHandoff } from './linkActions';
+import { carryLabel, openCarry } from './linkActions';
 import '../styles/link.css';
 
 // NoCap Link in the Notification Center: the phones' notifications (grouped
@@ -29,7 +29,7 @@ export const PHONE_TILE: [string, string] = ['#38bdf8', '#0ea5e9'];
 const CLIP_TILE: [string, string] = ['#a78bfa', '#7c3aed'];
 const CALL_TILE: [string, string] = ['#4ade80', '#16a34a'];
 const MISSED_TILE: [string, string] = ['#f87171', '#dc2626'];
-const HANDOFF_TILE: [string, string] = ['#fbbf24', '#f59e0b'];
+const CARRY_TILE: [string, string] = ['#fbbf24', '#f59e0b'];
 
 function NoteIcon({ n, size }: { n: PhoneNote; size: number }) {
   if (n.icon) return <AppIcon app={{ id: 'phone-' + n.package, icon: 'phone', tile: PHONE_TILE, logo: 'data:image/png;base64,' + n.icon }} size={size} />;
@@ -406,7 +406,7 @@ function useBannerTimer(active: boolean, ms: number, close: () => void) {
 }
 
 const closeClip = () => useLink.setState({ clipBanner: null });
-const closeHandoff = () => useLink.setState({ handoffBanner: null });
+const closeCarry = () => useLink.setState({ carryBanner: null });
 
 /** "Paste from <phone>": a clip that just arrived, with a Copy button. */
 export function ClipBanner({ look }: { look: Look }) {
@@ -439,28 +439,28 @@ export function ClipBanner({ look }: { look: Look }) {
 }
 
 /** "Open <page> from <phone>": a phone did "Open on NoCap". Opening waits for a click (popup blockers). */
-export function HandoffBanner({ look }: { look: Look }) {
+export function CarryBanner({ look }: { look: Look }) {
   const t = useT();
-  const h = useLink((s) => s.handoffBanner);
-  const hover = useBannerTimer(!!h, HANDOFF_BANNER_MS, closeHandoff);
+  const h = useLink((s) => s.carryBanner);
+  const hover = useBannerTimer(!!h, CARRY_BANNER_MS, closeCarry);
   if (!h) return null;
   const isFile = !!(h.root && h.path);
   return (
     <div className={`nb ${look} lvl-info link-banner`} role="status" {...hover}>
-      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={closeHandoff}>
+      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={closeCarry}>
         <Icon name="close" size={look === 'mac' ? 9 : 12} />
       </button>
-      <AppIcon app={{ icon: isFile ? 'file' : 'globe', tile: HANDOFF_TILE }} size={look === 'mac' ? 36 : 28} />
+      <AppIcon app={{ icon: isFile ? 'file' : 'globe', tile: CARRY_TILE }} size={look === 'mac' ? 36 : 28} />
       <div className="nb-text">
-        <b className="nb-title">{t('link.handoffFrom', { device: h.device_name })}</b>
-        <div className="nb-body">{handoffLabel(h)}</div>
+        <b className="nb-title">{t('link.carryFrom', { device: h.device_name })}</b>
+        <div className="nb-body">{carryLabel(h)}</div>
       </div>
       <button
         type="button"
         className="nb-btn link-banner-copy"
         onClick={() => {
-          openHandoff(h);
-          closeHandoff();
+          openCarry(h);
+          closeCarry();
         }}
       >
         {t('link.open')}

@@ -87,7 +87,7 @@ type linkUser struct {
 	alerts    []signinAlert          // new sign-ins, oldest first
 	phones    map[string]*phoneState // live state by device id
 	actions   []phoneAction          // asked of the phones, oldest first
-	handoffs  []linkHandoff          // "Open on NoCap" from the phones, oldest first
+	carries   []linkCarry            // "Open on NoCap" from the phones, oldest first
 }
 
 // linkHub holds everyone's synced state and the event sequence the
@@ -161,10 +161,10 @@ func (h *linkHub) user(uid string) *linkUser {
 	}
 	u.actions = u.actions[i:]
 	i = 0
-	for i < len(u.handoffs) && u.handoffs[i].At.Before(h.now().Add(-linkHandoffKeep)) {
+	for i < len(u.carries) && u.carries[i].At.Before(h.now().Add(-linkCarryKeep)) {
 		i++
 	}
-	u.handoffs = u.handoffs[i:]
+	u.carries = u.carries[i:]
 	return u
 }
 
@@ -308,13 +308,13 @@ func (h *linkHub) forgetDevice(uid, deviceID string) {
 		}
 	}
 	u.actions = acts
-	offs := u.handoffs[:0]
-	for _, x := range u.handoffs {
+	offs := u.carries[:0]
+	for _, x := range u.carries {
 		if x.DeviceID != deviceID {
 			offs = append(offs, x)
 		}
 	}
-	u.handoffs = offs
+	u.carries = offs
 	go h.tell(uid, linkEvent{Type: "changed"})
 }
 

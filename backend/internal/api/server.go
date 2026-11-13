@@ -135,7 +135,8 @@ func New(ctx context.Context, d Deps) *Server {
 	if d.Removable != nil {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
-	go s.advertiseLink(ctx) // NoCap Link: phones find this server nearby (_nocap._tcp)
+	// NoCap Link: phones find this server nearby (_nocap._tcp).
+	go s.advertiseLink(ctx)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }

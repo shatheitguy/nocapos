@@ -36,7 +36,7 @@ import java.io.File
  * notification is going over (a call, a message you can answer, or other).
  */
 object PhoneActions {
-    private const val HANDOFF = "nocap_handoff"
+    private const val CARRY = "nocap_carry"
 
     fun handle(ctx: Context, api: NoCapApi, a: PhoneAction) {
         when (a.kind) {
@@ -162,13 +162,13 @@ object PhoneActions {
         if (!Notices.allowed(ctx)) return
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         runCatching {
-            nm.createNotificationChannel(NotificationChannel(HANDOFF, "Open on phone", NotificationManager.IMPORTANCE_HIGH).apply {
+            nm.createNotificationChannel(NotificationChannel(CARRY, "Open on phone", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Links and files NoCap OS sends to this phone"
             })
         }
         val nid = 5000 + (id % 1000).toInt()
         val pi = PendingIntent.getActivity(ctx, nid, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, HANDOFF)
+        val n = NotificationCompat.Builder(ctx, CARRY)
             .setSmallIcon(R.drawable.ic_stat_nocap)
             .setContentTitle(title)
             .setContentText(text)

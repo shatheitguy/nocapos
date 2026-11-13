@@ -8,7 +8,7 @@ import { fmtTime, useTimePrefs } from '../lib/time';
 import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
 import { useLink, useLinkUnseen } from '../state/link';
-import { ClipBanner, ClipboardSection, HandoffBanner, PhoneSection } from './LinkSync';
+import { ClipBanner, ClipboardSection, CarryBanner, PhoneSection } from './LinkSync';
 import { PhonesSection } from './LinkPhones';
 import { SigninBanners, SigninSection } from './Signins';
 import { useSignins } from '../state/signins';
@@ -161,7 +161,7 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
 
 function Banners({ look }: { look: Look }) {
   const banners = useNotifications((s) => s.banners);
-  const clip = useLink((s) => !!s.clipBanner || !!s.handoffBanner);
+  const clip = useLink((s) => !!s.clipBanner || !!s.carryBanner);
   const signins = useSignins((s) => s.banners.length);
   if (!banners.length && !clip && !signins) return null;
   return (
@@ -171,7 +171,7 @@ function Banners({ look }: { look: Look }) {
         <Banner key={n.id} n={n} look={look} />
       ))}
       <ClipBanner look={look} />
-      <HandoffBanner look={look} />
+      <CarryBanner look={look} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { openApp } from '../apps/meta';
 import { toast } from '../state/toasts';
-import { linkApi, useLink, type Handoff, type Phone } from '../state/link';
+import { linkApi, useLink, type Carry, type Phone } from '../state/link';
 
 // NoCap Link actions shared by the Notification Center, Files and the browser:
 // send a file or a web address to a phone, and open what a phone handed off.
@@ -52,7 +52,7 @@ export async function openUrlOnPhone(phone: Phone, url: string): Promise<boolean
 }
 
 /** Open what a phone handed off: its file in the viewer, or its web address in a new tab. */
-export function openHandoff(h: Handoff) {
+export function openCarry(h: Carry) {
   if (h.root && h.path) {
     openApp('viewer', { title: baseName(h.path), props: { root: h.root, path: h.path }, key: `viewer:${h.root}:${h.path}` });
     return;
@@ -61,8 +61,8 @@ export function openHandoff(h: Handoff) {
   if (u) window.open(u, '_blank', 'noopener');
 }
 
-/** What a handoff is called: its title, else its address or file name. */
-export const handoffLabel = (h: Handoff) => h.title || h.url || (h.path ? baseName(h.path) : '');
+/** What a carry is called: its title, else its address or file name. */
+export const carryLabel = (h: Carry) => h.title || h.url || (h.path ? baseName(h.path) : '');
 
 /** This person's phones, outside React (menus built on demand). */
 export const linkPhones = () => useLink.getState().phones;

@@ -24,9 +24,9 @@ import (
 
 const (
 	linkActionKeep  = 10 * time.Minute // undelivered actions go stale
-	linkHandoffKeep = 10 * time.Minute
+	linkCarryKeep   = 10 * time.Minute
 	linkMaxActions  = 50               // per person
-	linkMaxHandoffs = 20               // per person
+	linkMaxCarries  = 20               // per person
 	linkOnlineGrace = 40 * time.Second // between two long-polls a phone still counts as online
 	linkMaxURL      = 2048
 	linkMaxReply    = 2000
@@ -66,9 +66,9 @@ type phoneAction struct {
 	At       time.Time `json:"at"`
 }
 
-// linkHandoff is a link (or one of the person's files) a phone asked NoCap
+// linkCarry is a link (or one of the person's files) a phone asked NoCap
 // OS to open.
-type linkHandoff struct {
+type linkCarry struct {
 	ID         int64     `json:"id"`
 	DeviceID   string    `json:"device_id"`
 	DeviceName string    `json:"device_name"`
@@ -81,9 +81,9 @@ type linkHandoff struct {
 
 // linkEvent goes out on the link.phone topic.
 type linkEvent struct {
-	Type    string       `json:"type"` // changed | open | clip
-	Handoff *linkHandoff `json:"handoff,omitempty"`
-	Clip    *linkClip    `json:"clip,omitempty"`
+	Type  string     `json:"type"` // changed | open | clip
+	Carry *linkCarry `json:"carry,omitempty"`
+	Clip  *linkClip  `json:"clip,omitempty"`
 }
 
 // tell passes ev to uid's desktops. It doesn't take mu.
@@ -155,17 +155,17 @@ func (h *linkHub) addAction(uid string, a phoneAction) int64 {
 	return a.ID
 }
 
-func (h *linkHub) addHandoff(uid string, x linkHandoff) linkHandoff {
+func (h *linkHub) addCarry(uid string, x linkCarry) linkCarry {
 	h.mu.Lock()
 	u := h.user(uid)
 	x.ID = h.bump()
 	x.At = h.now().UTC().Truncate(time.Second)
-	u.handoffs = append(u.handoffs, x)
-	if len(u.handoffs) > linkMaxHandoffs {
-		u.handoffs = u.handoffs[len(u.handoffs)-linkMaxHandoffs:]
+	u.carries = append(u.carries, x)
+	if len(u.carries) > linkMaxCarries {
+		u.carries = u.carries[len(u.carries)-linkMaxCarries:]
 	}
 	h.mu.Unlock()
-	h.tell(uid, linkEvent{Type: "open", Handoff: &x})
+	h.tell(uid, linkEvent{Type: "open", Carry: &x})
 	return x
 }
 
@@ -307,7 +307,7 @@ func (s *Server) deviceOpen(w http.ResponseWriter, r *http.Request) {
 	if req.Root == "" && req.Path != "" {
 		req.Root = s.sendHome(r) // a file it just sent: its NoCap Link folder is in the home
 	}
-	x := linkHandoff{DeviceID: d.ID, DeviceName: d.Name, Title: cutRunes(strings.TrimSpace(req.Title), linkMaxTitle)}
+	x := linkCarry{DeviceID: d.ID, DeviceName: d.Name, Title: cutRunes(strings.TrimSpace(req.Title), linkMaxTitle)}
 	if req.Root != "" || req.Path != "" {
 		if req.Root == "" || req.Path == "" || len(req.Root) > 200 || len(req.Path) > 4096 || !s.canSendFile(r, u, req.Root, req.Path) {
 			writeError(w, http.StatusNotFound, "not_found", "That file isn't there (or isn't yours to open).")
@@ -325,7 +325,7 @@ func (s *Server) deviceOpen(w http.ResponseWriter, r *http.Request) {
 		}
 		x.URL = link
 	}
-	x = s.link().addHandoff(u.ID, x)
+	x = s.link().addCarry(u.ID, x)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": x.ID})
 }
 
@@ -382,9 +382,9 @@ func (s *Server) phonesList(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, p)
 	}
-	handoffs := make([]linkHandoff, 0, len(lu.handoffs))
-	for i := len(lu.handoffs) - 1; i >= 0; i-- {
-		handoffs = append(handoffs, lu.handoffs[i])
+	carries := make([]linkCarry, 0, len(lu.carries))
+	for i := len(lu.carries) - 1; i >= 0; i-- {
+		carries = append(carries, lu.carries[i])
 	}
 	h.mu.Unlock()
 	sort.SliceStable(out, func(i, j int) bool {
@@ -393,7 +393,7 @@ func (s *Server) phonesList(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].Name < out[j].Name
 	})
-	writeJSON(w, http.StatusOK, map[string]any{"phones": out, "handoffs": handoffs})
+	writeJSON(w, http.StatusOK, map[string]any{"phones": out, "carries": carries})
 }
 
 // routeOf guesses nearby or remote from the address a phone called from.

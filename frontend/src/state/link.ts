@@ -3,7 +3,7 @@ import { api, type ApiResult } from '../api/client';
 import { onSocketStatus, subscribe } from '../api/socket';
 
 // NoCap Link sync, NoCap OS's side: notifications and status from the
-// person's phones, a shared clipboard, and "Open on NoCap" handoffs. Live over
+// person's phones, a shared clipboard, and "Open on NoCap" carries. Live over
 // the "link.phone" topic; polled as a fallback (every 15 s while the socket is
 // down, once a minute while it's up).
 
@@ -67,7 +67,7 @@ export interface Phone {
 }
 
 /** A phone did "Open on NoCap": a web address, or one of this person's files. */
-export interface Handoff {
+export interface Carry {
   id: string | number;
   device_id: string;
   device_name: string;
@@ -95,7 +95,7 @@ export interface LinkAddresses {
   saved_remote: string;
 }
 
-type LinkEvent = { type: 'changed' } | { type: 'open'; handoff: Handoff } | { type: 'clip'; clip: Clip };
+type LinkEvent = { type: 'changed' } | { type: 'open'; carry: Carry } | { type: 'clip'; clip: Clip };
 
 const enc = encodeURIComponent;
 
@@ -105,7 +105,7 @@ export const linkApi = {
   clips: () => api<{ items: Clip[] }>('/api/v1/clipboard'),
   send: (text: string, device_id?: string) =>
     api<{ ok: boolean; id: number }>('/api/v1/clipboard', { method: 'POST', body: device_id ? { text, device_id } : { text } }),
-  phones: () => api<{ phones: Phone[]; handoffs: Handoff[] }>('/api/v1/phones'),
+  phones: () => api<{ phones: Phone[]; carries: Carry[] }>('/api/v1/phones'),
   action: (deviceId: string, a: PhoneAction) =>
     api<{ ok: boolean; id: string | number }>(`/api/v1/phones/${enc(deviceId)}/actions`, { method: 'POST', body: a }),
   addresses: () => api<LinkAddresses>('/api/v1/link/addresses'),
@@ -120,19 +120,19 @@ export const POLL_MS = 15_000;
 /** While the socket is up, the poll only catches up on anything missed. */
 export const SOCKET_POLL_MS = 60_000;
 export const CLIP_BANNER_MS = 12_000;
-export const HANDOFF_BANNER_MS = 20_000;
+export const CARRY_BANNER_MS = 20_000;
 
 interface LinkStore {
   notes: PhoneNote[];
   clips: Clip[];
   /** This person's own linked phones, with their live status. */
   phones: Phone[];
-  /** Recent "Open on NoCap" handoffs, newest first. */
-  handoffs: Handoff[];
+  /** Recent "Open on NoCap" carries, newest first. */
+  carries: Carry[];
   /** A clip that just arrived from a phone (shown as a banner). */
   clipBanner: Clip | null;
-  /** A handoff that just arrived (shown as a banner with an Open button). */
-  handoffBanner: Handoff | null;
+  /** A carry that just arrived (shown as a banner with an Open button). */
+  carryBanner: Carry | null;
   /** Phone notifications posted after this were added since the center was last opened. */
   seenAt: number;
   load: () => Promise<void>;
@@ -154,9 +154,9 @@ export const useLink = create<LinkStore>((set, get) => ({
   notes: [],
   clips: [],
   phones: [],
-  handoffs: [],
+  carries: [],
   clipBanner: null,
-  handoffBanner: null,
+  carryBanner: null,
   seenAt: Date.now(),
   load: async () => {
     lastLoad = Date.now();
@@ -173,7 +173,7 @@ export const useLink = create<LinkStore>((set, get) => ({
   },
   loadPhones: async () => {
     const r = await linkApi.phones();
-    if (r.ok) set({ phones: r.data.phones ?? [], handoffs: r.data.handoffs ?? [] });
+    if (r.ok) set({ phones: r.data.phones ?? [], carries: r.data.carries ?? [] });
   },
   dismiss: (n) => {
     get().drop(n);
@@ -181,7 +181,7 @@ export const useLink = create<LinkStore>((set, get) => ({
   },
   drop: (n) => set({ notes: get().notes.filter((x) => !sameNote(x, n)) }),
   markSeen: () => set({ seenAt: Date.now() }),
-  _reset: () => set({ notes: [], clips: [], phones: [], handoffs: [], clipBanner: null, handoffBanner: null, seenAt: Date.now() }),
+  _reset: () => set({ notes: [], clips: [], phones: [], carries: [], clipBanner: null, carryBanner: null, seenAt: Date.now() }),
 }));
 
 /** Phone notifications that came in since the center was last opened. */
@@ -195,9 +195,9 @@ function clipArrived(c: Clip) {
   useLink.setState({ clips: [c, ...s.clips], ...(fresh ? { clipBanner: c } : {}) });
 }
 
-function handoffArrived(h: Handoff) {
+function carryArrived(h: Carry) {
   const s = useLink.getState();
-  useLink.setState({ handoffs: [h, ...s.handoffs.filter((x) => x.id !== h.id)].slice(0, 20), handoffBanner: h });
+  useLink.setState({ carries: [h, ...s.carries.filter((x) => x.id !== h.id)].slice(0, 20), carryBanner: h });
 }
 
 /** Follow the person's phones; returns a stop function. */
@@ -213,7 +213,7 @@ export function watchLink(_username: string): () => void {
   };
   const off = subscribe('link.phone', (d) => {
     const e = d as LinkEvent;
-    if (e.type === 'open' && e.handoff) handoffArrived(e.handoff);
+    if (e.type === 'open' && e.carry) carryArrived(e.carry);
     else if (e.type === 'clip' && e.clip) clipArrived(e.clip);
     else reload();
   });

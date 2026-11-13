@@ -5,13 +5,13 @@ import { Icon } from '../components/Icon';
 import { useClock } from '../lib/hooks';
 import { relTime, useNotifications } from '../state/notifications';
 import { toast } from '../state/toasts';
-import { linkApi, useLink, type Handoff, type Phone } from '../state/link';
-import { handoffLabel, openHandoff, openUrlOnPhone, webUrl } from './linkActions';
+import { linkApi, useLink, type Carry, type Phone } from '../state/link';
+import { carryLabel, openCarry, openUrlOnPhone, webUrl } from './linkActions';
 import { PHONE_TILE } from './LinkSync';
 
 // NoCap Link phone status in the Notification Center: each phone's
 // connection (Nearby / Remote), battery and network, "Find my phone",
-// "Send a link to phone" and recent "Open on NoCap" handoffs. Plus the
+// "Send a link to phone" and recent "Open on NoCap" carries. Plus the
 // phone battery in the tray.
 
 type Look = 'mac' | 'windows';
@@ -172,32 +172,32 @@ export function SendLinkForm({ onDone, initial = '' }: { onDone?: () => void; in
   );
 }
 
-function HandoffRow({ h, look }: { h: Handoff; look: Look }) {
+function CarryRow({ h, look }: { h: Carry; look: Look }) {
   const t = useT();
   const now = useClock(30_000);
   const isFile = !!(h.root && h.path);
   return (
-    <div className={`nc-card ${look} lvl-info link-card link-handoff`}>
+    <div className={`nc-card ${look} lvl-info link-card link-carry`}>
       <Icon name={isFile ? 'file' : 'globe'} size={16} />
       <div className="nb-text">
         <div className="nb-top">
-          <b className="nb-title">{handoffLabel(h)}</b>
+          <b className="nb-title">{carryLabel(h)}</b>
           <span className="nb-time">{relTime(h.at, now.getTime())}</span>
         </div>
         <span className="link-from">{t('link.from', { device: h.device_name })}</span>
       </div>
-      <button type="button" className="nb-btn" onClick={() => openHandoff(h)}>
+      <button type="button" className="nb-btn" onClick={() => openCarry(h)}>
         {t('link.open')}
       </button>
     </div>
   );
 }
 
-/** Phones, Find my phone, Send a link, recent handoffs. */
+/** Phones, Find my phone, Send a link, recent carries. */
 export function PhonesSection({ look }: { look: Look }) {
   const t = useT();
   const phones = useLink((s) => s.phones);
-  const handoffs = useLink((s) => s.handoffs);
+  const carries = useLink((s) => s.carries);
   const [sending, setSending] = useState(false);
   if (!phones.length) return null;
   return (
@@ -218,9 +218,9 @@ export function PhonesSection({ look }: { look: Look }) {
       {phones.map((p) => (
         <PhoneRow key={p.id} p={p} look={look} />
       ))}
-      {handoffs.length > 0 && <div className="link-sub">{t('link.recentHandoffs')}</div>}
-      {handoffs.slice(0, 3).map((h) => (
-        <HandoffRow key={h.id} h={h} look={look} />
+      {carries.length > 0 && <div className="link-sub">{t('link.recentCarries')}</div>}
+      {carries.slice(0, 3).map((h) => (
+        <CarryRow key={h.id} h={h} look={look} />
       ))}
     </section>
   );
