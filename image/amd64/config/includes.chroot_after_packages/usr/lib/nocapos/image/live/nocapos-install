@@ -1,0 +1,15 @@
+#!/bin/sh
+# Starts the graphical NoCapOS installer (Calamares with NoCapOS's settings
+# and look, /etc/calamares) from the live session, the way Debian's own
+# launcher does: as root through polkit, on this session's screen.
+set -u
+if pgrep -x calamares >/dev/null 2>&1; then exit 0; fi
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+if [ -x /usr/bin/calamares-install-debian ]; then
+  exec /usr/bin/calamares-install-debian
+fi
+xhost +si:localuser:root >/dev/null 2>&1 || true
+pkexec calamares
+rc=$?
+xhost -si:localuser:root >/dev/null 2>&1 || true
+exit "$rc"

@@ -1,0 +1,111 @@
+/* NoCapOS look for the graphical installer: near-black, NoCap red. */
+
+QWidget {
+  background-color: #0b0b10;
+  color: #f2f2f5;
+  selection-background-color: #e5383b;
+  selection-color: #ffffff;
+}
+
+#mainApp {
+  background-color: #0b0b10;
+}
+
+#sidebarApp,
+#sidebarMenuApp {
+  background-color: #050508;
+}
+
+QLabel {
+  background: transparent;
+}
+
+QPushButton {
+  background-color: #1c1c24;
+  color: #f2f2f5;
+  border: 1px solid #2c2c36;
+  border-radius: 8px;
+  padding: 6px 16px;
+  min-height: 22px;
+}
+
+QPushButton:hover {
+  border-color: #e5383b;
+}
+
+QPushButton:default,
+#view-button-next,
+#view-button-install {
+  background-color: #e5383b;
+  border-color: #e5383b;
+  color: #ffffff;
+}
+
+QPushButton:disabled {
+  background-color: #15151b;
+  color: #6b6b76;
+  border-color: #202028;
+}
+
+QLineEdit,
+QComboBox,
+QSpinBox,
+QListView,
+QTreeView,
+QTableView,
+QTextBrowser,
+QPlainTextEdit {
+  background-color: #14141b;
+  color: #f2f2f5;
+  border: 1px solid #2c2c36;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+QLineEdit:focus,
+QComboBox:focus {
+  border-color: #e5383b;
+}
+
+QComboBox QAbstractItemView {
+  background-color: #14141b;
+  color: #f2f2f5;
+  selection-background-color: #e5383b;
+}
+
+QRadioButton,
+QCheckBox {
+  background: transparent;
+  spacing: 8px;
+}
+
+QProgressBar {
+  background-color: #1c1c24;
+  border: none;
+  border-radius: 4px;
+  height: 8px;
+  text-align: center;
+  color: #f2f2f5;
+}
+
+QProgressBar::chunk {
+  background-color: #e5383b;
+  border-radius: 4px;
+}
+
+QScrollBar:vertical {
+  background: #0b0b10;
+  width: 10px;
+}
+
+QScrollBar::handle:vertical {
+  background: #2c2c36;
+  border-radius: 5px;
+  min-height: 24px;
+}
+
+QToolTip {
+  background-color: #1c1c24;
+  color: #f2f2f5;
+  border: 1px solid #e5383b;
+}

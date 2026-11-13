@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Puts NoCap Desktop's packages (the full desktop) into the image, so the
-# first boot only has to brand it and switch it on: firstboot runs the
-# bundled install.sh with --desktop (NOCAP_FIRSTBOOT_ARGS in
-# /etc/nocapos/image.conf). The package list is the installer's own
+# Puts NoCap Desktop's packages (the full desktop) into the image;
+# desktop-brand.sh then gives it NoCapOS's look and switches it on, and the
+# first boot's install.sh --desktop (NOCAP_FIRSTBOOT_ARGS in
+# /etc/nocapos/image.conf) only updates it. The package list is the installer's own
 # (desktop/lib.sh in the bundle). Run by layer.sh inside the image.
 set -euo pipefail
 BUNDLE=/usr/lib/nocapos/bundle
@@ -33,9 +33,9 @@ done < <(
 echo "    desktop: ${want[*]}"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${want[@]}"
 
-# Off until the first boot has branded it: install.sh switches it on and
-# makes the display-manager.service link itself (Debian's gdm3.service has
-# no [Install] section, so "systemctl enable" alone never would).
+# Off until desktop-brand.sh has given it NoCapOS's look and switches it on
+# (it makes the display-manager.service link itself: Debian's gdm3.service
+# has no [Install] section, so "systemctl enable" alone never would).
 for u in gdm3.service gdm.service; do systemctl disable "$u" >/dev/null 2>&1 || true; done
 rm -f /etc/systemd/system/display-manager.service
 systemctl set-default multi-user.target >/dev/null 2>&1 || true
