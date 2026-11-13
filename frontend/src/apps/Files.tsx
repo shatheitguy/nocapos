@@ -35,6 +35,9 @@ import { useNetwork } from './NetworkDrives';
 import { getUser } from '../api/client';
 import { netApi, type NetShare } from '../api/netdrive';
 import { FileLightbox } from './Viewer';
+import { OpenWithDialog } from './FilesOpenWith';
+import { appsFor, defaultAppFor, openWith } from './openWithApps';
+import type { HandlerId } from '../lib/openWith';
 import { linkPhones, sendFilesToPhone } from '../shell/linkActions';
 import { startArchiveJob, startTransfer, startUpload, useTransfers } from '../state/transfers';
 
@@ -431,6 +434,7 @@ function FilePane({
   const [dialog, setDialog] = useState<DialogSpec | null>(null);
   const [info, setInfo] = useState<Item | null>(null);
   const [look, setLook] = useState<number | null>(null);
+  const [chooser, setChooser] = useState<Item | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const [tickets, setTickets] = useState<Record<string, string>>({});
@@ -628,10 +632,17 @@ function FilePane({
       navigate(i.path, i.root);
       return;
     }
+    // The app the person chose for this type ("Always use this app") wins.
+    const app = recycle ? null : defaultAppFor(i.entry.name);
+    if (app) {
+      openWithApp(app, i);
+      return;
+    }
     const idx = lookList.findIndex((x) => x.key === i.key);
     if (idx >= 0) setLook(idx);
     else openInWindow(i);
   };
+  const openWithApp = (app: HandlerId, i: Item) => openWith(app, { root: i.root, path: i.path, name: i.entry.name }, () => void extract(i));
   const openInWindow = (i: Item) => openApp('viewer', { title: i.entry.name, props: { root: i.root, path: i.path }, key: `viewer:${i.root}:${i.path}` });
   const showInFolder = (i: Item) => {
     pendingSel.current = i.entry.name;
@@ -1048,6 +1059,7 @@ function FilePane({
     const files = list.filter((i) => !i.entry.dir);
     if (one) {
       push({ label: 'Open', icon: one.entry.dir ? 'folder' : 'eye', shortcut: 'Enter', onClick: () => open(one) });
+      if (!one.entry.dir && !recycle && appsFor(one.entry.name).length) push({ label: tr('openwith.menu'), icon: 'layers', onClick: () => setChooser(one) });
       if (!one.entry.dir) push({ label: 'Open in Window', icon: 'external', onClick: () => openInWindow(one) });
       if (special) push({ label: 'Show in Folder', icon: 'folder', onClick: () => showInFolder(one) });
     }
@@ -1466,6 +1478,17 @@ function FilePane({
           }}
           onClose={() => {
             setLook(null);
+            requestAnimationFrame(() => pane.current?.focus());
+          }}
+        />,
+        pane.current.closest('.files')!,
+      )}
+      {chooser && pane.current?.closest('.files') && createPortal(
+        <OpenWithDialog
+          name={chooser.entry.name}
+          onOpen={(app) => openWithApp(app, chooser)}
+          onClose={() => {
+            setChooser(null);
             requestAnimationFrame(() => pane.current?.focus());
           }}
         />,

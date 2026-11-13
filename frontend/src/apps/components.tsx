@@ -34,5 +34,6 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   vmscreen: app(() => import('./VirtualDeskScreen').then((m) => m.VmScreen)),
   scripts: app(() => import('./Scripts').then((m) => m.Scripts)),
   viewer: app(() => import('./Viewer').then((m) => m.Viewer)),
+  imageviewer: app(() => import('./MediaImage').then((m) => m.ImageViewerApp)),
   logs: app(() => import('./Logs').then((m) => m.Logs)),
 };

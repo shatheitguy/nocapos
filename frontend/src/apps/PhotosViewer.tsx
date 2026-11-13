@@ -22,6 +22,33 @@ function exposureText(c: Camera) {
 export const coordText = (lat: number, lon: number) =>
   `${Math.abs(lat).toFixed(5)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(5)}° ${lon >= 0 ? 'E' : 'W'}`;
 
+/** Where the viewer gets each picture (null while a link is still being made). */
+export interface ViewerLinks {
+  /** The picture or video to show. */
+  full: (p: Photo) => string | null;
+  /** A small preview ("l": a large one). */
+  thumb: (p: Photo, size?: 's' | 'l') => string | null;
+  download: (p: Photo) => string | null;
+}
+
+/** Links for the Photos library (and its recycle bin), from its tickets. */
+export function ticketLinks(tickets: Tickets): ViewerLinks {
+  return {
+    full: (p) => {
+      const tk = ticketFor(tickets, p);
+      return tk ? (browserCanShow(p) ? originalUrl(p, tk) : thumbUrl(p, tk, 'l')) : null;
+    },
+    thumb: (p, size = 's') => {
+      const tk = ticketFor(tickets, p);
+      return tk ? thumbUrl(p, tk, size) : null;
+    },
+    download: (p) => {
+      const tk = ticketFor(tickets, p);
+      return tk ? originalUrl(p, tk, true) : null;
+    },
+  };
+}
+
 interface View {
   s: number;
   x: number;
@@ -38,7 +65,7 @@ const FIT: View = { s: 1, x: 0, y: 0 };
 export function PhotoViewer({
   photos,
   index,
-  tickets,
+  links,
   rootName,
   onIndex,
   onClose,
@@ -47,23 +74,28 @@ export function PhotoViewer({
   onShare,
   onDelete,
   onRestore,
+  strip: showStrip = true,
 }: {
   photos: Photo[];
   index: number;
-  tickets: Tickets;
+  links: ViewerLinks;
   rootName: (id: string) => string;
   onIndex: (i: number) => void;
   onClose: () => void;
-  onFavorite: (p: Photo) => void;
-  onAlbum: (e: RMouseEvent, p: Photo) => void;
+  onFavorite?: (p: Photo) => void;
+  onAlbum?: (e: RMouseEvent, p: Photo) => void;
   onShare?: (e: RMouseEvent, p: Photo) => void;
-  onDelete: (p: Photo) => void;
+  onDelete?: (p: Photo) => void;
   onRestore?: (p: Photo) => void;
+  /** The filmstrip of neighbours along the bottom. */
+  strip?: boolean;
 }) {
   const t = useT();
   const reduced = useReducedMotion();
   const p = photos[index];
-  const ticket = ticketFor(tickets, p);
+  const src = links.full(p);
+  const thumb = links.thumb(p);
+  const download = links.download(p);
   const deleted = !!p.trash;
   // Keyed by photo, so a picture that loads straight from the cache can't be marked unloaded afterwards.
   const [loadedKey, setLoadedKey] = useState('');
@@ -149,10 +181,10 @@ export function PhotoViewer({
   // The neighbours load in the background so moving on is instant.
   useEffect(() => {
     for (const q of [photos[index + 1], photos[index - 1]]) {
-      const tk = q && ticketFor(tickets, q);
-      if (q && tk && !q.video) new Image().src = browserCanShow(q) ? originalUrl(q, tk) : thumbUrl(q, tk, 'l');
+      const u = q && !q.video ? links.full(q) : null;
+      if (u) new Image().src = u;
     }
-  }, [index, photos, tickets]);
+  }, [index, photos, links]);
 
   // Slideshow: pictures move on by themselves; a video plays to its end first.
   useEffect(() => {
@@ -380,9 +412,9 @@ export function PhotoViewer({
           else onClose();
         } else if (k === 'ArrowLeft') go(-1);
         else if (k === 'ArrowRight') go(1);
-        else if (k === 'Delete') onDelete(p);
+        else if (k === 'Delete') onDelete?.(p);
         else if (k === 'i') setInfo((v) => !v);
-        else if (k === 'f' && !deleted) onFavorite(p);
+        else if (k === 'f' && !deleted && onFavorite) onFavorite(p);
         else if (k === 'r' && !p.video) rotate();
         else if (k === 's') setSlideshow((v) => !v);
         else if ((k === '+' || k === '=') && !p.video) zoomBy(1.5);
@@ -394,7 +426,7 @@ export function PhotoViewer({
         e.stopPropagation();
       }}
     >
-      {ticket && <div className="pg-vback" style={{ backgroundImage: `url("${thumbUrl(p, ticket)}")` }} />}
+      {thumb && <div className="pg-vback" style={{ backgroundImage: `url("${thumb}")` }} />}
       <header className="pg-vbar">
         <button type="button" className="pg-vbtn" aria-label={t('photos.v.back')} title={t('photos.v.backKey')} onClick={onClose}>
           <Icon name="chevronLeft" size={20} />
@@ -415,24 +447,28 @@ export function PhotoViewer({
             )
           ) : (
             <>
-              <button
-                type="button"
-                className={`pg-vbtn${p.favorite ? ' faved' : ''}`}
-                aria-pressed={!!p.favorite}
-                aria-label={p.favorite ? t('photos.unfavorite') : t('photos.favorite')}
-                title={`${p.favorite ? t('photos.unfavorite') : t('photos.favorite')} (F)`}
-                onClick={() => onFavorite(p)}
-              >
-                <Icon name="heart" size={18} />
-              </button>
+              {onFavorite && (
+                <button
+                  type="button"
+                  className={`pg-vbtn${p.favorite ? ' faved' : ''}`}
+                  aria-pressed={!!p.favorite}
+                  aria-label={p.favorite ? t('photos.unfavorite') : t('photos.favorite')}
+                  title={`${p.favorite ? t('photos.unfavorite') : t('photos.favorite')} (F)`}
+                  onClick={() => onFavorite(p)}
+                >
+                  <Icon name="heart" size={18} />
+                </button>
+              )}
               {onShare && (
                 <button type="button" className="pg-vbtn" aria-label={t('photos.share')} title={t('photos.share')} onClick={(e) => onShare(e, p)}>
                   <Icon name="share" size={18} />
                 </button>
               )}
-              <button type="button" className="pg-vbtn hide-narrow" aria-label={t('photos.addToAlbum')} title={t('photos.addToAlbum')} onClick={(e) => onAlbum(e, p)}>
-                <Icon name="albums" size={18} />
-              </button>
+              {onAlbum && (
+                <button type="button" className="pg-vbtn hide-narrow" aria-label={t('photos.addToAlbum')} title={t('photos.addToAlbum')} onClick={(e) => onAlbum(e, p)}>
+                  <Icon name="albums" size={18} />
+                </button>
+              )}
             </>
           )}
           {!p.video && (
@@ -452,8 +488,8 @@ export function PhotoViewer({
               <Icon name={slideshow ? 'pause' : 'play'} size={17} />
             </button>
           )}
-          {ticket && (
-            <a className="pg-vbtn hide-narrow" href={originalUrl(p, ticket, true)} aria-label={t('photos.download')} title={t('photos.download')}>
+          {download && (
+            <a className="pg-vbtn hide-narrow" href={download} download={p.name} aria-label={t('photos.download')} title={t('photos.download')}>
               <Icon name="download" size={18} />
             </a>
           )}
@@ -463,15 +499,17 @@ export function PhotoViewer({
           <button type="button" className="pg-vbtn hide-narrow" aria-label={full ? t('photos.v.exitFull') : t('photos.v.full')} title={full ? t('photos.v.exitFull') : t('photos.v.full')} onClick={toggleFull}>
             <Icon name={full ? 'fullscreenExit' : 'fullscreen'} size={18} />
           </button>
-          <button
-            type="button"
-            className="pg-vbtn danger"
-            aria-label={deleted ? t('photos.deleteForever') : t('photos.delete')}
-            title={deleted ? t('photos.deleteForever') : t('photos.delete')}
-            onClick={() => onDelete(p)}
-          >
-            <Icon name="trash" size={18} />
-          </button>
+          {onDelete && (
+            <button
+              type="button"
+              className="pg-vbtn danger"
+              aria-label={deleted ? t('photos.deleteForever') : t('photos.delete')}
+              title={deleted ? t('photos.deleteForever') : t('photos.delete')}
+              onClick={() => onDelete(p)}
+            >
+              <Icon name="trash" size={18} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -484,18 +522,18 @@ export function PhotoViewer({
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          {!ticket ? (
+          {!src ? (
             <span className="spinner" />
           ) : p.video ? (
             <div key={photoKey(p)} className="pg-video">
-              <video src={originalUrl(p, ticket)} poster={thumbUrl(p, ticket, 'l')} controls autoPlay playsInline onEnded={slideshow ? () => go(1, true) : undefined} />
+              <video src={src} poster={links.thumb(p, 'l') ?? undefined} controls autoPlay playsInline onEnded={slideshow ? () => go(1, true) : undefined} />
             </div>
           ) : (
             <div key={photoKey(p)} className={`pg-frame${reduced ? '' : ' fade'}`}>
-              {!loaded && <img className="pg-img pg-preview" src={thumbUrl(p, ticket)} alt="" draggable={false} style={imgStyle} />}
+              {!loaded && thumb && thumb !== src && <img className="pg-img pg-preview" src={thumb} alt="" draggable={false} style={imgStyle} />}
               <img
                 className={`pg-img pg-full${loaded ? ' ready' : ''}`}
-                src={browserCanShow(p) ? originalUrl(p, ticket) : thumbUrl(p, ticket, 'l')}
+                src={src}
                 alt={p.name}
                 draggable={false}
                 style={imgStyle}
@@ -619,12 +657,12 @@ export function PhotoViewer({
         )}
       </div>
 
-      {photos.length > 1 && (
+      {showStrip && photos.length > 1 && (
         <div ref={strip} className="pg-strip" aria-hidden>
           {lo > 0 && <span className="pg-strip-more" />}
           {photos.slice(lo, hi).map((q, j) => (
             <button key={photoKey(q)} type="button" tabIndex={-1} className={`pg-strip-item${lo + j === index ? ' cur' : ''}`} onClick={() => onIndex(lo + j)}>
-              <Thumb photo={q} ticket={ticketFor(tickets, q)} />
+              <Thumb photo={q} src={links.thumb(q)} />
             </button>
           ))}
           {hi < photos.length && <span className="pg-strip-more" />}

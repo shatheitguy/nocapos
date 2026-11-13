@@ -189,6 +189,15 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Preview and edit files',
     hidden: true,
   },
+  imageviewer: {
+    id: 'imageviewer',
+    title: 'Photo Viewer',
+    icon: 'image',
+    tile: ['#e8232b', '#7a0f12'],
+    size: { w: 1000, h: 680 },
+    description: 'Look through the pictures in a folder',
+    hidden: true,
+  },
   logs: {
     id: 'logs',
     title: 'Logs',

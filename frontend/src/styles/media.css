@@ -1,0 +1,43 @@
+/* Media: "Open with" in Files, the photo viewer window, and the video and music players. */
+
+/* ---------- Open with ---------- */
+.ow-scrim {
+  position: absolute; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px;
+  background: rgba(0, 0, 0, 0.36); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: fade 0.12s ease-out;
+}
+.ow-sheet {
+  width: min(440px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow: auto;
+  border-radius: 20px; background: var(--sheet-solid, var(--surface)); color: var(--text); border: 1px solid var(--border);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); backdrop-filter: blur(40px) saturate(1.5); -webkit-backdrop-filter: blur(40px) saturate(1.5);
+}
+.ow-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ow-head > div { min-width: 0; }
+.ow-head h2 { margin: 0; font-size: 18px; font-weight: 750; }
+.ow-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.ow-file { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
+.ow-list { display: flex; flex-direction: column; gap: 4px; }
+.ow-sheet button.ow-app {
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; padding: 9px 10px; border-radius: 14px; text-align: left;
+  background: transparent; color: var(--text); border: 1px solid transparent; font-weight: 500;
+}
+.ow-sheet button.ow-app:hover:not(:disabled) { background: var(--surface-3); filter: none; }
+.ow-sheet button.ow-app.on { background: color-mix(in srgb, #e8232b 14%, transparent); border-color: color-mix(in srgb, #e8232b 55%, transparent); }
+.ow-icon { flex: none; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, #5d6475, #2f3542); }
+.ow-photo { background: linear-gradient(140deg, #ff6b6f, #b3141b); }
+.ow-video { background: linear-gradient(140deg, #ff8a3d, #c2410c); }
+.ow-music { background: linear-gradient(140deg, #f472b6, #9d174d); }
+.ow-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ow-text strong { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 650; }
+.ow-text em { font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--surface-3); color: var(--muted); }
+.ow-text small { font-size: 12px; color: var(--muted); }
+.ow-sheet .ow-text { background: none; }
+.ow-none { margin: 0; color: var(--muted); font-size: 13px; }
+.ow-always { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 2px 2px; cursor: pointer; }
+.ow-always input { accent-color: #e8232b; }
+.ow-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.ow-foot button:not(.ghost) { background: #e8232b; color: #fff; }
+
+/* ---------- photo viewer window ---------- */
+.media-image { height: 100%; }
+.media-image .pg-viewer { animation: none; }
+.media-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; color: var(--muted); text-align: center; }

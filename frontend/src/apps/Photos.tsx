@@ -12,7 +12,7 @@ import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { countText, itemsText, Thumb, ticketFor, type Tickets } from './PhotosCommon';
 import { addedOf, deletedOf, Memories, PeriodCards, PhotoGrid, type Grouping } from './PhotosGrid';
-import { PhotoViewer } from './PhotosViewer';
+import { PhotoViewer, ticketLinks } from './PhotosViewer';
 
 type View =
   | { kind: 'library' }
@@ -495,6 +495,7 @@ export function Photos(_: { win: WinState }) {
   const dateOf = view.kind === 'recent' ? addedOf : view.kind === 'trash' ? deletedOf : undefined;
   const periods = library && (zoom === 'years' || zoom === 'months') && !query;
 
+  const links = useMemo(() => ticketLinks(tickets), [tickets]);
   const viewerList = viewer ? viewer.keys.map((k) => byKey.get(k)).filter((p): p is Photo => !!p) : [];
   const viewerIndex = viewer ? Math.min(viewer.index, viewerList.length - 1) : -1;
 
@@ -812,7 +813,7 @@ export function Photos(_: { win: WinState }) {
           <PhotoViewer
             photos={viewerList}
             index={viewerIndex}
-            tickets={tickets}
+            links={links}
             rootName={rootName}
             onIndex={(i) => setViewer((v) => (v ? { ...v, index: i } : v))}
             onClose={() => setViewer(null)}
