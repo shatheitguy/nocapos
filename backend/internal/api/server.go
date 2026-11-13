@@ -214,6 +214,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/system/network/ipv4", s.admin(s.ipv4Set))
 	mux.Handle("POST /api/v1/system/network/ipv4/keep", s.admin(s.ipv4Keep))
 	mux.Handle("POST /api/v1/system/network/ipv4/revert", s.admin(s.ipv4Revert))
+	mux.Handle("POST /api/v1/system/network/ip", s.admin(s.ipSet))
+	mux.HandleFunc("POST /api/v1/system/network/confirm", s.ipConfirm) // authorized by the change's token
+	mux.Handle("GET /api/v1/system/timezone", s.admin(s.timezoneGet))
+	mux.Handle("PUT /api/v1/system/timezone", s.admin(s.timezoneSet))
+	mux.Handle("GET /api/v1/setup/machine", s.admin(s.setupMachineGet))
+	mux.Handle("POST /api/v1/setup/machine/done", s.admin(s.setupMachineDone))
 	mux.Handle("GET /api/v1/system/power", s.authed(s.powerInfo))
 	mux.Handle("PUT /api/v1/system/hostname", s.admin(s.hostnameSet))
 	// This machine itself: NoCap Desktop on its screen, and whether other
