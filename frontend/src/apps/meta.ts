@@ -152,6 +152,16 @@ export const APPS: Record<string, AppMeta> = {
     adminOnly: true,
     hidden: true,
   },
+  shield: {
+    id: 'shield',
+    title: 'Shield',
+    icon: 'shield',
+    tile: ['#e8232b', '#7a0f12'],
+    size: { w: 1000, h: 720 },
+    description: 'Firewall and DNS ad blocker: lock the doors, block the junk',
+    single: true,
+    adminOnly: true,
+  },
   settings: {
     id: 'settings',
     title: 'Settings',
@@ -188,6 +198,14 @@ export const APPS: Record<string, AppMeta> = {
     size: { w: 900, h: 620 },
     description: 'Preview and edit files',
     hidden: true,
+  },
+  phone: {
+    id: 'phone',
+    title: 'Phone',
+    icon: 'phone',
+    tile: ['#34d399', '#0f766e'],
+    size: { w: 440, h: 860 },
+    description: 'Your linked phone’s live screen: see it, tap it, type on it',
   },
   logs: {
     id: 'logs',

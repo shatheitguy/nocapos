@@ -843,7 +843,7 @@ finish() { # $1 = URL, $2 = token
   info "$NAME is running."
   echo "   Open:  ${1//HOST/$ip}"
   echo "   Your browser warns about the self-signed certificate once; that's expected on a local network."
-  if [ -n "$2" ]; then echo "   First-run setup token:  $2"; else echo "   Sign in with your existing account."; fi
+  if [ -n "$2" ]; then echo "   First start: create your admin from a device on this network (from anywhere else, use the setup token:  $2)"; else echo "   Sign in with your existing account."; fi
   echo "   Files: NoCap Drive is $STORAGE"
   if has ufw && ufw status 2>/dev/null | grep -q "Status: active"; then
     echo "   ufw is active — allow access with:  sudo ufw allow $PORT/tcp && sudo ufw allow 80/tcp && sudo ufw allow 5353/udp"

@@ -88,5 +88,7 @@
   "sn.ip.dnsAutoHint": "Leave empty to use the router's DNS",
   "sn.ip.dnsHint": "Separate with commas",
   "sn.ip.apply": "Apply",
-  "sn.ip.applying": "Applying…"
+  "sn.ip.applying": "Applying…",
+  "set.shield": "Shield: Firewall & DNS Blocker",
+  "set.shield.desc": "Firewall rules, what's exposed, and blocking ads and trackers for every device"
 }

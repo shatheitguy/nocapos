@@ -50,7 +50,8 @@ rebuilds NoCapOS's version after every dpkg run
   (`amd64/config/hooks/normal/9000-nocapos-boot-menu.hook.binary`).
 - Installer: NoCapOS banner in debian-installer, hostname `nocap`.
 - Console: NoCapOS banner on the login screen with the addresses to open, and
-  the first-run setup token until the first admin account exists.
+  the first-run setup token until the first admin account exists (only needed
+  when setting up from outside the local network).
 - Artwork is drawn from `frontend/public/brand` by `common/make-art.py`.
 
 **NoCapOS layer.** The build downloads the release bundle
@@ -88,7 +89,8 @@ swap in memory, no file indexing or calendar store, and no animations.
   those set in Raspberry Pi Imager's OS customisation).
 
 Then open `https://<address>/` (shown on the console) or `http://nocap.local`,
-enter the setup token shown on the console, and create the NoCapOS admin.
+and create the NoCapOS admin. From outside the local network, setup also asks
+for the setup token shown on the console.
 
 ### Update flow
 
