@@ -71,8 +71,8 @@ export interface Entry {
 }
 
 export const ENTRIES: Entry[] = [
-  { id: 'network', cat: 'network', admin: true, icon: 'wifi', keywords: 'internet lan connection',
-    options: ['sn.networking'] },
+  { id: 'network', cat: 'network', admin: true, icon: 'wifi', keywords: 'internet lan connection find other servers discover nearby mdns bluetooth ble',
+    options: ['sn.networking', 'find.label', 'find.btLabel'] },
   { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, icon: 'wifi', keywords: 'wireless wlan ssid hotspot',
     options: ['wifi.savedTitle', 'wifi.share', 'wifi.forget', 'wifi.autoConnect'] },
   { id: 'shield', cat: 'network', admin: true, app: 'shield', icon: 'shield',

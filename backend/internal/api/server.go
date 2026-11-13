@@ -148,7 +148,7 @@ func New(ctx context.Context, d Deps) *Server {
 	// NoCap Link: phones find this server nearby (_nocap._tcp).
 	go s.advertiseLink(ctx)
 	go s.advertiseBLE(ctx) // and over Bluetooth (link_discovery.go)
-	s.versionSince() // note when this version first ran (stale update results go by it)
+	s.versionSince()       // note when this version first ran (stale update results go by it)
 	return s
 }
 
