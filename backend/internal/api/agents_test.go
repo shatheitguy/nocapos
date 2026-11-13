@@ -30,7 +30,13 @@ func agentWorld(t *testing.T) *authWorld {
 
 func makeAgentToken(t *testing.T, w *authWorld, as *store.User, scope string) (raw, id string) {
 	t.Helper()
-	rec := w.do(t, w.s.agentTokenCreate, as, "POST", "/api/v1/agents/tokens", map[string]string{"name": "Hermes", "scope": scope})
+	return makeAgent(t, w, as, map[string]any{"name": "Helper", "scope": scope})
+}
+
+// makeAgent makes an agent from a create request and returns its token.
+func makeAgent(t *testing.T, w *authWorld, as *store.User, body map[string]any) (raw, id string) {
+	t.Helper()
+	rec := w.do(t, w.s.agentTokenCreate, as, "POST", "/api/v1/agents/tokens", body)
 	var out struct {
 		Token string         `json:"token"`
 		Agent agentTokenJSON `json:"agent"`
@@ -122,13 +128,18 @@ func TestMCPAuth(t *testing.T) {
 			t.Fatalf("token %q: %d", bad, rec.Code)
 		}
 	}
-	// Loopback only (the default) keeps the network out; the switch lets it in.
-	if rec := mcpPost(w.s, mcpReq{token: tok, remote: "192.168.1.20:4000", body: ping}); rec.Code != http.StatusForbidden {
+	// Loopback only (the default) keeps the network out; the switch lets
+	// remote agents in. Local agents stay on this machine either way.
+	remote, _ := makeAgent(t, w, boss, map[string]any{"name": "Laptop", "kind": "remote", "scope": "read"})
+	if rec := mcpPost(w.s, mcpReq{token: remote, remote: "192.168.1.20:4000", body: ping}); rec.Code != http.StatusForbidden {
 		t.Fatalf("remote: %d", rec.Code)
 	}
 	_ = w.st.SetSetting(context.Background(), agentsLoopbackKey, "0")
-	if rec := mcpPost(w.s, mcpReq{token: tok, remote: "192.168.1.20:4000", body: ping}); rec.Code != http.StatusOK {
+	if rec := mcpPost(w.s, mcpReq{token: remote, remote: "192.168.1.20:4000", body: ping}); rec.Code != http.StatusOK {
 		t.Fatalf("remote allowed: %d", rec.Code)
+	}
+	if rec := mcpPost(w.s, mcpReq{token: tok, remote: "192.168.1.20:4000", body: ping}); rec.Code != http.StatusForbidden {
+		t.Fatalf("local agent from the network: %d", rec.Code)
 	}
 	// Web pages can't drive it.
 	if rec := mcpPost(w.s, mcpReq{token: tok, origin: "https://evil.example", body: ping}); rec.Code != http.StatusForbidden {
@@ -186,7 +197,11 @@ func TestMCPScopes(t *testing.T) {
 
 	act, actID := makeAgentToken(t, w, w.users["boss"], store.AgentScopeAct)
 	names = toolNames(rpc(t, w.s, act, list))
-	if !slices.Contains(names, "write_file") || !slices.Contains(names, "click") || len(names) != len(agentTools) {
+	actAll := len(names)
+	// The old "act" scope keeps what it could do before, nothing more.
+	if !slices.Contains(names, "write_file") || !slices.Contains(names, "click") || !slices.Contains(names, "run_command") ||
+		slices.Contains(names, "power") || slices.Contains(names, "run_code") || slices.Contains(names, "set_user_disabled") ||
+		slices.Contains(names, "delete_photo") || slices.Contains(names, "wifi_connect") {
 		t.Fatalf("act admin tools: %v", names)
 	}
 
@@ -206,7 +221,7 @@ func TestMCPScopes(t *testing.T) {
 	}
 
 	// The per-tool list narrows a token down.
-	tools := []string{"system_info", "read_file"}
+	tools := []string{"read_file", "system_info"} // in the tool list's order
 	rec := patchToken(t, w, w.users["boss"], actID, map[string]any{"tools": tools})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("patch: %d %s", rec.Code, rec.Body)
@@ -227,7 +242,7 @@ func TestMCPScopes(t *testing.T) {
 	if rec := patchToken(t, w, w.users["boss"], actID, map[string]any{"all_tools": true}); rec.Code != http.StatusOK {
 		t.Fatalf("all tools: %d", rec.Code)
 	}
-	if names = toolNames(rpc(t, w.s, act, list)); len(names) != len(agentTools) {
+	if names = toolNames(rpc(t, w.s, act, list)); len(names) != actAll {
 		t.Fatalf("all tools again: %v", names)
 	}
 }
@@ -298,7 +313,7 @@ func TestMCPApprovalFlow(t *testing.T) {
 	// Deny: it doesn't run.
 	res := asyncRPC(t, w.s, tok, call)
 	card := decideNext(t, w, boss, mcp.Deny)
-	if card.Agent != "Hermes" || card.Tool != "open_url" || card.Arguments["url"] != "file:///etc/shadow" || !strings.Contains(card.Summary, "file:///etc/shadow") {
+	if card.Agent != "Helper" || card.Tool != "open_url" || card.Arguments["url"] != "file:///etc/shadow" || !strings.Contains(card.Summary, "file:///etc/shadow") {
 		t.Fatalf("card: %+v", card)
 	}
 	if r := <-res; !r.Result.IsError || !strings.Contains(resultText(r), "said no") {
@@ -343,7 +358,7 @@ func TestMCPApprovalFlow(t *testing.T) {
 	for _, a := range acts {
 		outcomes = append(outcomes, a.Outcome)
 	}
-	if !slices.Equal(outcomes, []string{"error", "error", "error", "denied"}) || acts[0].Agent != "Hermes" {
+	if !slices.Equal(outcomes, []string{"error", "error", "error", "denied"}) || acts[0].Agent != "Helper" {
 		t.Fatalf("activity: %v", outcomes)
 	}
 }

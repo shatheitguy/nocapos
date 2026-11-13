@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BRAVE_URL, braveStatus, startBrave, type BraveStatus } from '../api/brave';
 import { Icon } from '../components/Icon';
+import { useT } from '../i18n';
+import { useLink } from '../state/link';
+import { SendLinkForm } from '../shell/LinkPhones';
 
 // The Brave app streams the real Brave browser installed natively on the Linux
 // host. alfad installs it on first launch, runs it on a virtual display and
@@ -40,6 +43,9 @@ export function Browser() {
     };
   }, [begin]);
 
+  const t = useT();
+  const hasPhone = useLink((s) => s.phones.length > 0);
+  const [toPhone, setToPhone] = useState(false);
   const reload = () => setNonce((n) => n + 1);
   const openTab = () => window.open(BRAVE_URL, '_blank', 'noopener');
 
@@ -59,6 +65,16 @@ export function Browser() {
         <button type="button" title="Open in a new tab" aria-label="Open in new tab" onClick={openTab} disabled={!status.ready}>
           <Icon name="external" size={15} />
         </button>
+        {hasPhone && (
+          <button type="button" className={toPhone ? 'active' : ''} title={t('link.sendLinkHint')} aria-label={t('link.sendLink')} aria-expanded={toPhone} onClick={() => setToPhone((v) => !v)}>
+            <Icon name="phone" size={15} />
+          </button>
+        )}
+        {toPhone && (
+          <div className="browser-to-phone">
+            <SendLinkForm onDone={() => setToPhone(false)} />
+          </div>
+        )}
       </div>
 
       <div className="browser-view">

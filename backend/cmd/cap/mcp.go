@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -36,8 +37,12 @@ type bridge struct {
 }
 
 func cmdMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) > 0 && args[0] == "pair" {
+		return cmdMCPPair(args[1:], stdout, stderr)
+	}
 	b := &bridge{url: os.Getenv("NOCAP_MCP_URL"), token: os.Getenv("NOCAP_MCP_TOKEN"), out: stdout}
 	tokenFile := ""
+	insecure := false
 	for i := 0; i < len(args); i++ {
 		next := func() string {
 			if i+1 < len(args) {
@@ -55,19 +60,30 @@ func cmdMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 			tokenFile = next()
 		case strings.HasPrefix(a, "--token-file="):
 			tokenFile = strings.TrimPrefix(a, "--token-file=")
+		case a == "--insecure":
+			insecure = true
 		default:
-			return fmt.Errorf("unknown option %q; usage: cap mcp [--url URL] [--token-file FILE]", a)
+			return fmt.Errorf("unknown option %q; usage: cap mcp [--url URL] [--token-file FILE] [--insecure] | cap mcp pair --url URL --code CODE", a)
 		}
+	}
+	saved := tokenFile == "" && b.token == ""
+	if saved {
+		tokenFile = savedPath("mcp-token") // from cap mcp pair
 	}
 	if tokenFile != "" {
 		raw, err := os.ReadFile(tokenFile)
-		if err != nil {
+		if err != nil && !saved {
 			return fmt.Errorf("reading the token file: %w", err)
 		}
 		b.token = strings.TrimSpace(string(raw))
 	}
 	if b.token == "" {
-		return errors.New("no agent token: set NOCAP_MCP_TOKEN (make one in NoCapOS → Settings → AI Agents)")
+		return errors.New("no agent token: set NOCAP_MCP_TOKEN, or pair with `cap mcp pair` (make one in NoCapOS → Settings → AI Agents)")
+	}
+	if b.url == "" && saved {
+		if raw, err := os.ReadFile(savedPath("mcp-url")); err == nil {
+			b.url = strings.TrimSpace(string(raw))
+		}
 	}
 	if b.url == "" {
 		b.url = defaultMCPURL
@@ -76,17 +92,126 @@ func cmdMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("bad NoCap MCP address %q", b.url)
 	}
-	b.client = mcpClient(u)
+	b.client = mcpClient(u, insecure)
 	fmt.Fprintln(stderr, "cap mcp: forwarding to", b.url)
 	return b.serve(stdin)
 }
 
-// mcpClient trusts NoCapOS's own self-signed certificate only on loopback
-// (the traffic never leaves this machine); anywhere else TLS is checked.
-func mcpClient(u *url.URL) *http.Client {
+// savedPath is where cap mcp pair keeps the token and address ("" if
+// there's no config folder).
+func savedPath(name string) string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "nocap", name)
+}
+
+// cmdMCPPair swaps a pairing code from Settings → AI Agents for this
+// agent's token and saves it (readable only by you) for cap mcp.
+func cmdMCPPair(args []string, stdout, stderr io.Writer) error {
+	var base, code string
+	insecure := false
+	for i := 0; i < len(args); i++ {
+		next := func() string {
+			if i+1 < len(args) {
+				i++
+				return args[i]
+			}
+			return ""
+		}
+		switch a := args[i]; {
+		case a == "--url":
+			base = next()
+		case strings.HasPrefix(a, "--url="):
+			base = strings.TrimPrefix(a, "--url=")
+		case a == "--code":
+			code = next()
+		case strings.HasPrefix(a, "--code="):
+			code = strings.TrimPrefix(a, "--code=")
+		case a == "--insecure":
+			insecure = true
+		default:
+			return fmt.Errorf("unknown option %q; usage: cap mcp pair --url https://your-server --code ABCD-EFGH [--insecure]", a)
+		}
+	}
+	if base == "" || code == "" {
+		return errors.New("usage: cap mcp pair --url https://your-server --code ABCD-EFGH [--insecure]")
+	}
+	u, err := url.Parse(strings.TrimRight(base, "/"))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("bad NoCapOS address %q", base)
+	}
+	u.Path = pairPath(u.Path)
+	body, _ := json.Marshal(map[string]string{"code": code})
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := mcpClient(u, insecure).Do(req)
+	if err != nil {
+		return fmt.Errorf("can't reach NoCapOS at %s: %w", u.Host, err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var out struct {
+		Token string `json:"token"`
+		Name  string `json:"name"`
+		URL   string `json:"url"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(raw, &out)
+	if resp.StatusCode != http.StatusOK || out.Token == "" {
+		if out.Error.Message != "" {
+			return errors.New(out.Error.Message)
+		}
+		return fmt.Errorf("NoCapOS answered HTTP %d", resp.StatusCode)
+	}
+	tokPath, urlPath := savedPath("mcp-token"), savedPath("mcp-url")
+	if tokPath == "" {
+		fmt.Fprintln(stdout, out.Token)
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(tokPath), 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(tokPath, []byte(out.Token+"\n"), 0o600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(urlPath, []byte(out.URL+"\n"), 0o600); err != nil {
+		return err
+	}
+	fmt.Fprintf(stderr, "Paired as %q. Token saved to %s; `cap mcp` now connects to %s.\n", out.Name, tokPath, out.URL)
+	if insecure && !isLoopback(u) {
+		fmt.Fprintln(stderr, "This server's certificate wasn't checked: run `cap mcp --insecure` to connect the same way.")
+	}
+	return nil
+}
+
+func isLoopback(u *url.URL) bool {
+	ip := net.ParseIP(u.Hostname())
+	return u.Hostname() == "localhost" || ip != nil && ip.IsLoopback()
+}
+
+// pairPath turns what someone pasted (the server, its /mcp address or its
+// /mcp/pair address) into the pairing address.
+func pairPath(p string) string {
+	p = strings.TrimRight(p, "/")
+	p = strings.TrimSuffix(p, "/mcp/pair")
+	p = strings.TrimSuffix(p, "/mcp")
+	return strings.TrimRight(p, "/") + "/mcp/pair"
+}
+
+// mcpClient trusts NoCapOS's own self-signed certificate on loopback (the
+// traffic never leaves this machine), or anywhere when asked to with
+// --insecure; otherwise TLS is checked.
+func mcpClient(u *url.URL, insecure bool) *http.Client {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	if ip := net.ParseIP(u.Hostname()); u.Scheme == "https" && (u.Hostname() == "localhost" || ip != nil && ip.IsLoopback()) {
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // loopback only
+	if u.Scheme == "https" && (insecure || isLoopback(u)) {
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // loopback, or the person asked for it
 	}
 	// No overall timeout: an action can wait minutes for approval.
 	return &http.Client{Transport: tr}
