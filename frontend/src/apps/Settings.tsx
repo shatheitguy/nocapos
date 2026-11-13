@@ -284,7 +284,7 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
     case 'access':
       return isAdmin ? <HostAccessPage /> : null;
     case 'storage':
-      return <StoragePage />;
+      return <StoragePage isAdmin={isAdmin} />;
     case 'datetime':
       return <DateTime />;
     case 'language':
@@ -495,6 +495,15 @@ function About({ isAdmin }: { isAdmin: boolean }) {
       <button type="button" className="ghost small align-start" onClick={copy}>
         <Icon name="copy" size={13} /> {t('sp.copyDetails')}
       </button>
+      {isAdmin && (
+        <Group title={t('set.setup')}>
+          <Row label={t('set.setupRow')} hint={t('set.setup.desc')}>
+            <button type="button" className="ghost small" onClick={() => usePrefs.getState().set({ welcomeDone: false, welcomeStep: 0 })}>
+              {t('set.setupRun')}
+            </button>
+          </Row>
+        </Group>
+      )}
     </div>
   );
 }
@@ -564,7 +573,7 @@ function HostnameEdit({ name }: { name: string }) {
 
 // ---------------- Storage ----------------
 
-function StoragePage() {
+function StoragePage({ isAdmin }: { isAdmin: boolean }) {
   const latest = useSystem((s) => s.latest);
   const disks = latest?.disks ?? [];
   const total = storageTotals(latest);
@@ -597,6 +606,15 @@ function StoragePage() {
           </Row>
         )}
       </Group>
+      {isAdmin && (
+        <Group title={t('set.storageApp')}>
+          <Row label={t('set.storageRow')} hint={t('set.storageApp.desc')}>
+            <button type="button" className="ghost small" onClick={() => openApp('storage')}>
+              {t('set.storageOpen')}
+            </button>
+          </Row>
+        </Group>
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@
   "setup.passwordPh": "Password (10+ characters)",
   "setup.againPh": "Password again",
   "setup.tokenPh": "Setup token",
-  "setup.tokenWhy": "You're not on the server's home network, so prove it's yours: grab the one-time setup token from the server's screen (the console login shows it) or its log (journalctl -u nocapos).",
+  "setup.tokenWhy": "You're not on the server's home network, so prove it's yours: grab the one-time setup token from the server's own screen.",
   "setup.tokenMissing": "Pop in the setup token first — it's on the server's screen or in its log.",
   "setup.nameRule": "Names are 3–32 letters, digits, dots, dashes or underscores, starting with a letter or digit.",
   "setup.passwordShort": "Too short — use at least 10 characters.",
