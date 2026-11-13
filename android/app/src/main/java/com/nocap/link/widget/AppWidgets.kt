@@ -143,8 +143,13 @@ object AppWidgets {
             val v = RemoteViews(ctx.packageName, R.layout.widget_weather)
             if (r == null) {
                 v.setTextViewText(R.id.w_temp, "--°")
-                v.setTextViewText(R.id.w_place, place?.name ?: t("Pick a place in NoCap OS", "Set a place in NoCap OS"))
-                v.setTextViewText(R.id.w_desc, t("Widgets → Weather", "Settings → Widgets"))
+                if (!Opt.weatherOn.v) {
+                    v.setTextViewText(R.id.w_place, t("Weather is off", "Weather is off"))
+                    v.setTextViewText(R.id.w_desc, t("Turn it on in NoCap OS", "Enable it in NoCap OS"))
+                } else {
+                    v.setTextViewText(R.id.w_place, place?.name ?: t("Pick a place in NoCap OS", "Set a place in NoCap OS"))
+                    v.setTextViewText(R.id.w_desc, t("Widgets → Weather", "Settings → Widgets"))
+                }
                 v.setTextViewText(R.id.w_hilo, "")
             } else {
                 v.setImageViewBitmap(R.id.w_icon, Weather.bitmap(144, Weather.kind(r.code, r.isDay), 0xFFFF2A2A.toInt()))

@@ -72,7 +72,13 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk nocap-os.apk
           cp app/build/outputs/bundle/release/app-release.aab nocap-os.aab
           rm -rf app/build/signing
-          ls -la nocap-os.apk nocap-os.aab
+          # The in-app updater reads this to compare versions and check the download.
+          code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts | head -1)
+          name=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts | head -1)
+          sha=$(sha256sum nocap-os.apk | cut -d' ' -f1)
+          printf '{"versionCode":%s,"versionName":"%s","sha256":"%s"}\n' "$code" "$name" "$sha" > nocap-os.json
+          cat nocap-os.json
+          ls -la nocap-os.apk nocap-os.aab nocap-os.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -89,6 +95,7 @@ jobs:
           path: |
             android/nocap-os.apk
             android/nocap-os.aab
+            android/nocap-os.json
           if-no-files-found: error
 
       - name: Attach to the NoCapOS release
@@ -101,5 +108,5 @@ jobs:
           else
             tag="v$(cat VERSION)"
           fi
-          echo "Uploading nocap-os.apk and nocap-os.aab to $tag"
-          gh release upload "$tag" android/nocap-os.apk android/nocap-os.aab --clobber --repo "${{ github.repository }}"
+          echo "Uploading nocap-os.apk, nocap-os.aab and nocap-os.json to $tag"
+          gh release upload "$tag" android/nocap-os.apk android/nocap-os.aab android/nocap-os.json --clobber --repo "${{ github.repository }}"

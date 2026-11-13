@@ -21,16 +21,19 @@ type Device struct {
 	LastSeenAt time.Time // zero = never
 	RevokedAt  time.Time // zero = active
 	LastIP     string    // the address it last called from
+	Model      string    // e.g. "Google Pixel 8", as the device reports it
+	OSVersion  string    // e.g. "Android 15"
+	Caps       string    // NoCap Link features it has on, comma-separated
 }
 
-const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at, d.last_ip`
+const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at, d.last_ip, d.model, d.os_version, d.caps`
 
 func scanDevice(row scanner) (*Device, error) {
 	var (
 		d                      Device
 		created, seen, revoked int64
 	)
-	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked, &d.LastIP); err != nil {
+	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked, &d.LastIP, &d.Model, &d.OSVersion, &d.Caps); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -49,9 +52,9 @@ func (s *Store) CreateDevice(ctx context.Context, d *Device, tokenHash string) e
 		seen = d.LastSeenAt.Unix()
 	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO devices (id, user_id, name, platform, token_hash, app_version, battery, created_at, last_seen_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		d.ID, d.UserID, d.Name, d.Platform, tokenHash, d.AppVersion, d.Battery, d.CreatedAt.Unix(), seen)
+		`INSERT INTO devices (id, user_id, name, platform, token_hash, app_version, battery, created_at, last_seen_at, model, os_version, caps)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		d.ID, d.UserID, d.Name, d.Platform, tokenHash, d.AppVersion, d.Battery, d.CreatedAt.Unix(), seen, d.Model, d.OSVersion, d.Caps)
 	if isUniqueViolation(err) {
 		return ErrConflict
 	}

@@ -83,6 +83,7 @@ func (s *Store) ForgetUser(ctx context.Context, username string) error {
 		`DELETE FROM user_access WHERE username = ?`,
 		`DELETE FROM share_permissions WHERE username = ?`,
 		`DELETE FROM app_access WHERE username = ?`,
+		`DELETE FROM user_group_members WHERE username = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, username); err != nil {
 			return err
