@@ -25,7 +25,7 @@
 
 /* ---------- reply ---------- */
 .link-actions { display: flex; gap: 6px; margin-top: 6px; }
-.link-actions .nb-btn, .link-reply .nb-btn, .link-decline, .link-ring, .link-handoff .nb-btn {
+.link-actions .nb-btn, .link-reply .nb-btn, .link-decline, .link-ring, .link-carry .nb-btn {
   flex: none; height: 26px; font-size: 12.5px; padding: 0 10px; gap: 5px;
 }
 .nb-btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
@@ -67,8 +67,8 @@
 .link-sendlink input { flex: none; }
 .link-sub { font-size: 11.5px; color: var(--mac-dim, var(--muted)); padding: 4px 6px 0; }
 .nc.mac .link-sub { color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
-.link-handoff { align-items: center; }
-.link-handoff > svg { flex: none; opacity: 0.8; }
+.link-carry { align-items: center; }
+.link-carry > svg { flex: none; opacity: 0.8; }
 
 /* ---------- tray battery ---------- */
 .link-tray { display: inline-flex; align-items: center; gap: 3px; }

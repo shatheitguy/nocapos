@@ -12,8 +12,8 @@ import (
 )
 
 type phonesResp struct {
-	Phones   []phoneJSON   `json:"phones"`
-	Handoffs []linkHandoff `json:"handoffs"`
+	Phones  []phoneJSON `json:"phones"`
+	Carries []linkCarry `json:"carries"`
 }
 
 type eventsWithActions struct {
@@ -257,7 +257,7 @@ func TestOpenOnNoCap(t *testing.T) {
 	}
 	select {
 	case e := <-ch:
-		if e.Type != "open" || e.Handoff == nil || e.Handoff.URL != "https://example.org/page" || e.Handoff.DeviceName != "Pixel 9" {
+		if e.Type != "open" || e.Carry == nil || e.Carry.URL != "https://example.org/page" || e.Carry.DeviceName != "Pixel 9" {
 			t.Fatalf("event: %+v", e)
 		}
 	case <-time.After(2 * time.Second):
@@ -265,8 +265,8 @@ func TestOpenOnNoCap(t *testing.T) {
 	}
 	var out phonesResp
 	rec := webCall(w, "alex", w.s.phonesList, "GET", "/api/v1/phones", "", nil)
-	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || len(out.Handoffs) != 1 || out.Handoffs[0].Title != "A page" {
-		t.Fatalf("handoffs: %s", rec.Body)
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || len(out.Carries) != 1 || out.Carries[0].Title != "A page" {
+		t.Fatalf("carries: %s", rec.Body)
 	}
 	rec = webCall(w, "sam", w.s.phonesList, "GET", "/api/v1/phones", "", nil)
 	if strings.Contains(rec.Body.String(), "example.org") {
