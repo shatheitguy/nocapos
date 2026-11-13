@@ -197,11 +197,6 @@
 :root[data-compact] .ce-grid { grid-template-columns: 1fr !important; }
 :root[data-compact] .sf-cap-input { width: 100%; }
 
-/* Photos: chip row without a scrollbar */
-:root[data-compact] .pg-side { scrollbar-width: none; }
-:root[data-compact] .pg-side::-webkit-scrollbar { display: none; }
-:root[data-compact] .pg-nav { min-height: 40px; }
-
 /* Settings */
 :root[data-compact] .set-back { min-width: 40px; min-height: 40px; }
 :root[data-compact] .set2.compact .set2-cat { min-height: 44px; }
