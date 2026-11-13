@@ -63,9 +63,12 @@ Usage:
   cap web on|off|status
                       Let other devices open NoCapOS (on), keep it to this
                       machine's own screen (off), or show which it is
-  cap mcp             NoCap MCP over stdio, for AI agents on this machine
+  cap mcp             NoCap MCP over stdio, for AI agents (local, or paired)
                       (needs NOCAP_MCP_TOKEN from Settings → AI Agents;
                       NOCAP_MCP_URL or --url if NoCapOS isn't on 127.0.0.1:8780)
+  cap mcp pair --url URL --code CODE
+                      Trade a pairing code from Settings → AI Agents for this
+                      agent's token (saved for cap mcp; --insecure skips TLS checks)
   cap version         Print the cap version
 
 cap update and cap web on/off need root: sudo cap update, sudo cap web on
