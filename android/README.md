@@ -102,6 +102,22 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 
 - **Link with NoCap Link** — scan the QR from *Settings → Linked Devices → Link a
   device*, tap a `nocap://pair` link, or type the address + 6-digit code.
+- **Find NoCap servers** (link screen and first-run setup) — lists servers on
+  this network (mDNS `_nocap._tcp`: name, address, version, set up or brand
+  new) and, if you allow *Nearby devices* (Android 12+; location on 11 and
+  older, never read), servers close by over Bluetooth LE (`sync/Finder.kt`:
+  the NoCap service UUID `6e6f6361-7001-4e0c-a9b1-0d15c0f3b2xx`, last byte
+  `01` = new, `00` = set up). Bluetooth only finds a server; a server heard
+  only over Bluetooth says to connect it to the network first. Tapping a set-up
+  server opens the link form with its address filled in (the 6-digit code is
+  still needed, and the NoCap ID and certificate are checked).
+- **Set up a new server from the phone** (`sync/NewServerScreen.kt`) — for a
+  server whose TXT/`/pair/info` says `setup=new`: check and pin its
+  certificate (trust on first use), create the administrator
+  (`POST /api/v1/auth/setup`, no token from the home network), link this phone
+  as their first device in the same session (`POST /api/v1/devices/link-self`),
+  then voice and look (saved as the desktop's prefs), name and time zone.
+  The network is kept as is, or changed in the full setup on the desktop.
 - **Open my NoCap desktop** — your server's web desktop, full screen, signed
   in with a one-time ticket.
 - **Files** — browse your locations and open a file on the phone.
@@ -125,7 +141,7 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - **Nearby or Remote**: at home the phone talks to the server directly;
   away it uses the remote address. The server announces itself on the home
   network as `_nocap._tcp` over mDNS (through Avahi; TXT `nocap_id`,
-  `scheme`) and lists its addresses at `GET /api/v1/device/addresses`
+  `scheme`, `version`, `setup=new|done`) and lists its addresses at `GET /api/v1/device/addresses`
   (home-network addresses it found, plus a remote address and extra home
   addresses an administrator saves in Settings → Devices). On Wi-Fi or
   Ethernet the phone tries what mDNS found, then the listed home addresses,
@@ -250,6 +266,7 @@ The guide, in order (steps that don't apply to the phone are left out):
 | No battery limits | Keeps NoCap Link, sign-in alerts and clipboard sync alive |
 | Install unknown apps | In-app updates (only NoCap OS signed with the same key) |
 | Camera | Scanning the pairing QR code |
+| Nearby devices (Android 12+; on 13+ also nearby Wi-Fi devices) / location (11 and older) | Finding NoCap servers nearby over Bluetooth and on the local network; only NoCap servers are looked for, and the location is never read (`neverForLocation`) |
 | Calls & messages | Phone calls (`ANSWER_PHONE_CALLS`), so NoCap OS can decline a call; also asked when you turn on *Calls on NoCap OS*. No SMS permission: replies go through the messaging app's own notification |
 | Weather | Turns weather on and asks for *approximate* location |
 | Calendar | The calendar widget |

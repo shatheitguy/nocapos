@@ -109,6 +109,7 @@ func (s *Server) authSetup(w http.ResponseWriter, r *http.Request) {
 		s.audit(r, sess.User.ID, "auth.setup", sess.User.Username, true, how)
 		s.Log.Info("administrator account created", "username", sess.User.Username, "how", how)
 		s.signedIn(r, sess, nil)
+		s.discovery.bump() // tell the network: set up now
 		s.writeSession(w, r, http.StatusCreated, sess)
 	case errors.Is(err, auth.ErrSetupDone):
 		writeError(w, http.StatusConflict, "setup_done", err.Error())
