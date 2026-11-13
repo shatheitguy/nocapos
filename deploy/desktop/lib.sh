@@ -41,7 +41,11 @@ desktop_family() {
 # means the first of them the distribution has (newer apps first, the
 # older ones they replaced after). A line starting with "?" is optional:
 # the desktop works without it. Only what the desktop needs: no games,
-# office suite, mail, maps or other extras.
+# office suite, mail, maps or other extras. Installs skip "recommended"
+# packages, so everything the screen needs to light up is listed: the
+# Mesa drivers (with llvmpipe, the software renderer for VMs and boards
+# without a GPU driver), Xorg (GDM's fallback when Wayland can't run on a
+# GPU) and logind's PAM module.
 desktop_packages() {
   case "$1" in
     debian | ubuntu)
@@ -82,8 +86,15 @@ dbus-user-session
 ?guacd
 ?libguac-client-rdp0|libguac-client-rdp
 ?libguac-client-vnc0|libguac-client-vnc
-?xserver-xorg-core
-?xserver-xorg-input-libinput
+xserver-xorg-core
+xserver-xorg-input-libinput|xserver-xorg-input-all
+?xserver-xorg-video-fbdev
+libgl1-mesa-dri
+libegl-mesa0
+libgbm1
+libpam-systemd
+?firmware-amd-graphics
+?firmware-misc-nonfree
 ?wayvnc
 x11vnc
 ?systemd-zram-generator|zram-tools
@@ -121,6 +132,11 @@ wireplumber
 ?guacd
 ?libguac-client-rdp
 ?libguac-client-vnc
+xorg-x11-server-Xorg
+?xorg-x11-drv-libinput
+mesa-dri-drivers
+mesa-libEGL
+mesa-libgbm
 ?wayvnc
 x11vnc
 ?zram-generator
@@ -154,6 +170,9 @@ flatpak
 gnome-remote-desktop
 pipewire
 wireplumber
+xorg-server
+?xf86-input-libinput
+mesa
 ?wayvnc
 x11vnc
 ?zram-generator
@@ -734,6 +753,62 @@ render_gdm_css() {
 .unlock-dialog .login-dialog-button.default-button { background-color: #e5383b; color: #ffffff; }
 .login-dialog-prompt-entry:focus { border-color: #e5383b; }
 EOF
+}
+
+# render_gdm_profile: the sign-in screen's dconf profile. stdin is the
+# distribution's own (/usr/share/dconf/profile/gdm; empty when there's
+# none); it's kept as it is, with NoCapOS's system database (system-db:gdm)
+# added before its file-db, so the distribution's greeter defaults still
+# apply (Debian keeps them in /var/lib/gdm3, not where upstream does).
+render_gdm_profile() {
+  awk '
+    { sub(/\r$/, "") }
+    $0 == "" { next }
+    { lines[++n] = $0; if ($0 == "system-db:gdm") has = 1 }
+    END {
+      if (n == 0) { print "user-db:user"; print "system-db:gdm"; print "file-db:/usr/share/gdm/greeter-dconf-defaults"; exit }
+      for (i = 1; i <= n; i++) {
+        if (!has && !done && lines[i] ~ /^file-db:/) { print "system-db:gdm"; done = 1 }
+        print lines[i]
+      }
+      if (!has && !done) print "system-db:gdm"
+    }
+  '
+}
+
+# LEGACY_GDM_PROFILE: what earlier versions wrote to /etc/dconf/profile/gdm
+# whatever the distribution (its file-db doesn't exist on Debian, so the
+# sign-in screen lost the distribution's greeter defaults).
+LEGACY_GDM_PROFILE='user-db:user
+system-db:gdm
+file-db:/usr/share/gdm/greeter-dconf-defaults'
+
+# PI_KMS_OVERLAY: the Raspberry Pi's KMS graphics driver. GNOME Shell needs
+# KMS; without it the screen only has the firmware's framebuffer.
+PI_KMS_OVERLAY=dtoverlay=vc4-kms-v3d
+
+# pi_kms_missing: a Raspberry Pi config.txt on stdin turns on no KMS
+# graphics driver (vc4-kms-v3d or vc4-fkms-v3d, any variant).
+pi_kms_missing() {
+  awk '
+    { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s) }
+    s ~ /^dtoverlay=vc4-(f)?kms-v3d/ { found = 1 }
+    END { exit found }
+  '
+}
+
+# config_txt_append LINE: a config.txt on stdin with LINE added under a
+# final [all] section (config_txt_with checks the key; dtoverlay= lines
+# repeat, so this one doesn't).
+config_txt_append() {
+  awk -v want="$1" '
+    { lines[++n] = $0; s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); if (s ~ /^\[/) last = s }
+    END {
+      for (i = 1; i <= n; i++) print lines[i]
+      if (last != "" && last != "[all]") print "[all]"
+      print want
+    }
+  '
 }
 
 # ---------------------------------------------------------------- the session

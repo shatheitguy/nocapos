@@ -21,7 +21,12 @@ dm="$(sed -n 's/^DM_UNIT=//p' "$conf" 2>/dev/null)"
 if [ -f "$BK/display-manager" ]; then
   prev="$(cat "$BK/display-manager")"
   target="$(cat "$BK/default-target" 2>/dev/null || echo multi-user.target)"
-  if [ -n "$dm" ] && [ "$prev" != "$dm" ]; then systemctl disable "$dm" >/dev/null 2>&1 || true; fi
+  if [ -n "$dm" ] && [ "$prev" != "$dm" ]; then
+    systemctl disable "$dm" >/dev/null 2>&1 || true
+    # GDM's link (Debian's gdm3 has no [Install], so install.sh made it).
+    link=/etc/systemd/system/display-manager.service
+    if [ -L "$link" ] && [ "$(basename "$(readlink -f "$link")")" = "$dm" ]; then rm -f "$link"; fi
+  fi
   case "$prev" in
     none | '') ;;
     *) systemctl enable --force "$prev" >/dev/null 2>&1 || true ;;
@@ -126,6 +131,12 @@ if [ -f "$BK/pretty-hostname" ] && has hostnamectl; then
   hostnamectl set-hostname --pretty "$(cat "$BK/pretty-hostname")" >/dev/null 2>&1 || true
 fi
 rm -rf "$DATA/desktop-remote"
+# Repair fallbacks (Xorg, software rendering) alfad applied.
+rm -f "$DATA/desktop-fallback"
+if [ -f /etc/environment ] && grep -qs 'NoCap Desktop software rendering' /etc/environment; then
+  grep -v -e 'NoCap Desktop software rendering' -e '^LIBGL_ALWAYS_SOFTWARE=1$' /etc/environment >/etc/environment.nocap.tmp && cat /etc/environment.nocap.tmp >/etc/environment
+  rm -f /etc/environment.nocap.tmp
+fi
 rm -f "$conf" /etc/nocapos/desktop-mode
 rm -rf "$BK"
 exit 0
