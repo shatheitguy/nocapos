@@ -39,6 +39,9 @@ type pairingState struct {
 	// NoCap desktop" (user ID + the device that asked).
 	linksOnce sync.Once
 	links     *auth.TicketStore
+	// addMu: counting someone's devices and linking a new one happen
+	// together, so two phones at once can't both squeeze past the limit.
+	addMu sync.Mutex
 }
 
 // linkTicketTTL: how long a web sign-in ticket from a device lasts.
@@ -138,6 +141,8 @@ type claimRequest struct {
 	Code       string `json:"code"`
 	DeviceName string `json:"device_name"`
 	Platform   string `json:"platform"`
+	Model      string `json:"model"`      // optional
+	OSVersion  string `json:"os_version"` // optional
 }
 
 type claimResponse struct {
@@ -166,7 +171,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	req.Code = strings.TrimSpace(req.Code)
 	req.DeviceName = strings.TrimSpace(req.DeviceName)
 	if !sixDigits.MatchString(req.Code) {
-		writeError(w, http.StatusBadRequest, "validation", "The code is 6 digits. Check Settings → Devices on your NoCapOS and try again.")
+		writeError(w, http.StatusBadRequest, "validation", "The code is 6 digits. Check Settings → Linked Devices on your NoCapOS and try again.")
 		return
 	}
 	if !devices.ValidName(req.DeviceName) {
@@ -175,6 +180,11 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	if !devices.ValidPlatform(req.Platform) {
 		writeError(w, http.StatusBadRequest, "validation", "platform must be android, ios or other")
+		return
+	}
+	req.Model, req.OSVersion = strings.TrimSpace(req.Model), strings.TrimSpace(req.OSVersion)
+	if !devices.ValidDetail(req.Model) || !devices.ValidDetail(req.OSVersion) {
+		writeError(w, http.StatusBadRequest, "validation", "model and os_version must be up to 64 printable characters")
 		return
 	}
 	nocapID, err := s.nocapID()
@@ -192,7 +202,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, devices.ErrExpired):
 		s.audit(r, "", "devices.claim", truncate(req.DeviceName, 64), false, "expired or used code")
-		writeError(w, http.StatusBadRequest, "code_expired", "That code's expired. Grab a fresh one in Settings → Devices.")
+		writeError(w, http.StatusBadRequest, "code_expired", "That code's expired. Grab a fresh one in Settings → Linked Devices.")
 		return
 	case err != nil:
 		s.audit(r, "", "devices.claim", truncate(req.DeviceName, 64), false, "wrong code")
@@ -207,7 +217,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, store.ErrNotFound) || errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrFilesOnly) {
 		s.audit(r, userID, "devices.claim", truncate(req.DeviceName, 64), false, "account can't sign in")
-		writeError(w, http.StatusBadRequest, "code_expired", "That code's no longer valid. Grab a fresh one in Settings → Devices.")
+		writeError(w, http.StatusBadRequest, "code_expired", "That code's no longer valid. Grab a fresh one in Settings → Linked Devices.")
 		return
 	}
 	if err != nil {
@@ -219,10 +229,14 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	d := &store.Device{
 		ID: store.NewID(), UserID: u.ID, Name: req.DeviceName, Platform: req.Platform,
-		Battery: -1, CreatedAt: now, LastSeenAt: now,
+		Battery: -1, CreatedAt: now, LastSeenAt: now, Model: req.Model, OSVersion: req.OSVersion,
 	}
-	if err := s.Store.CreateDevice(r.Context(), d, hash); err != nil {
+	if full, err := s.linkDevice(r, u, d, hash); err != nil {
 		s.internalError(w, r, err)
+		return
+	} else if full != nil {
+		s.audit(r, u.ID, "devices.claim", d.Name, false, "device limit reached")
+		writeDeviceLimit(w, *full)
 		return
 	}
 	s.audit(r, u.ID, "devices.claim", d.Name, true, d.Platform)
@@ -249,6 +263,16 @@ func (s *Server) devicesPairCode(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
+	// No code when there's no room for another device anyway.
+	q, err := s.deviceQuota(r.Context(), u.ID)
+	if err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	if q.Full() {
+		writeDeviceLimit(w, q)
+		return
+	}
 	code, exp := s.pairCodes().Issue(u.ID)
 	s.audit(r, u.ID, "devices.pair_code", u.Username, true, "")
 	pairURL := "nocap://pair?server=" + url.QueryEscape(requestOrigin(r)) + "&code=" + code + "&id=" + url.QueryEscape(id)
@@ -263,21 +287,36 @@ type deviceJSON struct {
 	LastSeenAt *time.Time `json:"last_seen_at"`
 	AppVersion string     `json:"app_version"`
 	Battery    *int       `json:"battery"`
+	Online     bool       `json:"online"`
+	Model      string     `json:"model"`
+	OSVersion  string     `json:"os_version"`
+	LastIP     string     `json:"last_ip"`
+	Caps       []string   `json:"capabilities"`
 	Username   string     `json:"username,omitempty"`
+	UserID     string     `json:"user_id,omitempty"`
 }
 
+// onlineWithin: a device that called this recently counts as online. The
+// app's live sync calls every half minute or so, and "last seen" is
+// written at most once every seenEvery.
+const onlineWithin = 3 * time.Minute
+
 func toDeviceJSON(d store.Device, withUser bool) deviceJSON {
-	out := deviceJSON{ID: d.ID, Name: d.Name, Platform: d.Platform, CreatedAt: d.CreatedAt, AppVersion: d.AppVersion}
+	out := deviceJSON{
+		ID: d.ID, Name: d.Name, Platform: d.Platform, CreatedAt: d.CreatedAt, AppVersion: d.AppVersion,
+		Model: d.Model, OSVersion: d.OSVersion, LastIP: d.LastIP, Caps: devices.CapsList(d.Caps),
+	}
 	if !d.LastSeenAt.IsZero() {
 		t := d.LastSeenAt
 		out.LastSeenAt = &t
+		out.Online = time.Since(t) < onlineWithin
 	}
 	if d.Battery >= 0 {
 		b := d.Battery
 		out.Battery = &b
 	}
 	if withUser {
-		out.Username = d.Username
+		out.Username, out.UserID = d.Username, d.UserID
 	}
 	return out
 }
@@ -338,7 +377,7 @@ func (s *Server) device(h http.HandlerFunc) http.Handler {
 		ctx := r.Context()
 		d, err := s.Store.DeviceByTokenHash(ctx, devices.HashToken(tok))
 		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "invalid_token", "This device isn't linked anymore. Link it again from Settings → Devices.")
+			writeError(w, http.StatusUnauthorized, "invalid_token", "This device isn't linked anymore. Link it again from Settings → Linked Devices.")
 			return
 		}
 		if err != nil {
@@ -449,6 +488,11 @@ func (s *Server) deviceApps(w http.ResponseWriter, r *http.Request) {
 type heartbeatRequest struct {
 	Battery    *int    `json:"battery"`
 	AppVersion *string `json:"app_version"`
+	Model      *string `json:"model"`
+	OSVersion  *string `json:"os_version"`
+	// Capabilities: which NoCap Link features are on (notifications,
+	// clipboard, files); left out = unchanged.
+	Capabilities map[string]bool `json:"capabilities"`
 }
 
 func (s *Server) deviceHeartbeat(w http.ResponseWriter, r *http.Request) {
@@ -471,7 +515,27 @@ func (s *Server) deviceHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 		req.AppVersion = &v
 	}
+	for _, p := range []**string{&req.Model, &req.OSVersion} {
+		if *p == nil {
+			continue
+		}
+		v := strings.TrimSpace(**p)
+		if !devices.ValidDetail(v) {
+			writeError(w, http.StatusBadRequest, "validation", "model and os_version must be up to 64 printable characters")
+			return
+		}
+		*p = &v
+	}
+	var caps *string
+	if req.Capabilities != nil {
+		c := devices.CapsString(req.Capabilities)
+		caps = &c
+	}
 	if err := s.Store.TouchDevice(r.Context(), d.ID, time.Now(), req.Battery, req.AppVersion); err != nil {
+		s.internalError(w, r, err)
+		return
+	}
+	if err := s.Store.SetDeviceDetails(r.Context(), d.ID, req.Model, req.OSVersion, caps); err != nil {
 		s.internalError(w, r, err)
 		return
 	}

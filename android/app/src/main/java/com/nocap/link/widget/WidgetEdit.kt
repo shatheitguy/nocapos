@@ -268,6 +268,11 @@ private fun WeatherOptions(a: MainActivity, item: NoCapItem, put: (Array<out Pai
         }
     }
     val src = item.opt("src", "shared")
+    com.nocap.link.settings.Toggle(
+        t("Weather from Open-Meteo", "Weather (Open-Meteo)"),
+        t("Off = no weather requests at all.", "When off, no weather requests are made."),
+        Opt.weatherOn.v,
+    ) { Opt.weatherOn.set(it) }
     Label(t("Where", "Location"))
     Chips(
         listOf(
