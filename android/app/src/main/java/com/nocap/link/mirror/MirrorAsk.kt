@@ -89,7 +89,7 @@ object MirrorAsk {
         io.execute {
             runCatching {
                 val body = JSONObject().put("state", state).apply { if (!ask.isNullOrBlank()) put("ask", ask) }.toString()
-                val req = Request.Builder().url(link.server + "/api/v1/device/mirror/state")
+                val req = Request.Builder().url(com.nocap.link.net.Endpoint.server(link) + "/api/v1/device/mirror/state")
                     .header("Authorization", "Device ${link.token}")
                     .post(body.toRequestBody("application/json".toMediaType()))
                     .build()

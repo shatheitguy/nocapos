@@ -96,6 +96,7 @@ fun Hub(a: MainActivity) {
         }
         Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ServerCard(a)
+            LinkStatusCard(a)
             val online = a.server is ServerState.Online
             if (online) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -114,6 +115,7 @@ fun Hub(a: MainActivity) {
                     }
                 }
                 FilesBrowser(a)
+                WifiShareCard(a)
                 Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(14.dp)) {
                     Toggle(
                         t("Server tea on this phone", "Server notifications"),
@@ -207,7 +209,7 @@ private fun ServerCard(a: MainActivity) {
             ServerState.Unlinked -> {
                 Header(link?.serverName ?: "NoCapOS", t("Unlinked", "Unlinked"), NoCap.Bad)
                 Spacer(Modifier.height(10.dp))
-                Text(t("Your server doesn't know this phone anymore (it got unlinked in Settings → The Squad). Link it again to keep vibing.", "Your server no longer recognizes this phone (it was unlinked in Settings → Devices). Link it again."), style = MaterialTheme.typography.bodyMedium)
+                Text(t("Your server doesn't know this phone anymore (it got unlinked in Settings → Your Squad). Link it again to keep vibing.", "Your server no longer recognizes this phone (it was unlinked in Settings → Linked Devices). Link it again."), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
                 RedButton(t("Link again", "Link again"), { a.forget(); a.layer = Layer.NONE; a.screen = Screen.LinkForm(server = link?.server ?: "") }, Modifier.fillMaxWidth())
             }

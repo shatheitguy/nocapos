@@ -32,7 +32,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -68,6 +71,8 @@ object Permissions {
         /** null = doesn't apply on this Android version. */
         val granted: (Context) -> Boolean?,
         val grant: (MainActivity) -> Unit,
+        /** Android 13+ blocks it for apps installed from a file ("restricted settings"). */
+        val restricted: Boolean = false,
     )
 
     private fun runtime(ctx: Context, p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
@@ -135,6 +140,7 @@ object Permissions {
             { t("Notification dots, the now-playing widget, and sending the apps you pick to NoCap OS. Only to your own server.", "Notification dots, now playing, and forwarding chosen apps' notifications to your own server.") },
             { DotsService.allowed(it) },
             { a -> DotsService.openSettings(a) },
+            restricted = true,
         ),
         Perm(
             "location", Kind.OPTIONAL,
@@ -160,9 +166,36 @@ object Permissions {
         Perm(
             "lock", Kind.OPTIONAL,
             { if (Build.VERSION.SDK_INT >= 28) t("Lock helper (accessibility)", "Lock helper (accessibility service)") else t("Lock helper (device admin)", "Lock helper (device administrator)") },
-            { t("Lock the screen with a gesture, like double-tap. It can only lock: it reads nothing on screen.", "Locks the screen from a home-screen gesture. It only locks; it doesn't read the screen.") },
+            { t("Lock the screen with a gesture, like double-tap. While you mirror this phone to NoCap OS, it also does your taps and typing. Nothing else.", "Locks the screen from a home-screen gesture, and performs your taps and typing while you mirror this phone to NoCap OS. Nothing else.") },
             { Phone.canLock(it) },
             { a -> open(a, Phone.lockSetupIntent(a)) },
+            restricted = true,
+        ),
+        Perm(
+            "admin", Kind.OPTIONAL,
+            { t("Device admin (lock backup)", "Device administrator (lock fallback)") },
+            {
+                t(
+                    "A second way to lock the screen, for phones where the accessibility one keeps switching off. Only \"lock the screen\": no wiping, no passwords.",
+                    "A fallback way to lock the screen if the accessibility service is turned off. Its only policy is \"lock the screen\".",
+                )
+            },
+            // Below Android 9 the lock helper row above already is the device admin.
+            { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Phone.adminActive(it) else null },
+            { a -> open(a, Phone.adminIntent(a)) },
+            restricted = true,
+        ),
+        Perm(
+            "installs", Kind.OPTIONAL,
+            { t("Install updates (unknown apps)", "Install unknown apps") },
+            {
+                t(
+                    "Lets NoCap OS install its own updates from Settings → About → Updates. It only ever installs NoCap OS, signed with the same key.",
+                    "Lets NoCap OS install its own updates (Settings → About → Updates). It only installs NoCap OS builds signed with the same key.",
+                )
+            },
+            { it.packageManager.canRequestPackageInstalls() },
+            { a -> open(a, com.nocap.link.update.Updater.unknownAppsIntent(a)) },
         ),
     )
 
@@ -173,6 +206,9 @@ object Permissions {
 @Composable
 fun PermissionCard(a: MainActivity, p: Permissions.Perm, tick: Int) {
     val on = remember(tick, p.id) { runCatching { p.granted(a) }.getOrNull() }
+    val help = remember(tick, p.id, on) { if (p.restricted) runCatching { Restricted.help(a, on) }.getOrDefault(Restricted.Help.NONE) else Restricted.Help.NONE }
+    // Restricted ones: try first (that's what makes Android's ⋮ menu item appear), then guide.
+    val go = { if (p.restricted) Restricted.markTried(a); p.grant(a) }
     GlassCard(Modifier.fillMaxWidth()) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -184,11 +220,14 @@ fun PermissionCard(a: MainActivity, p: Permissions.Perm, tick: Int) {
                 }
             }
             Text(p.why(), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted)
-            if (on == false) {
+            if (on == false && help != Restricted.Help.UNBLOCK) {
+                RestrictedHelp(a, help, go)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RedButton(t("Allow", "Allow"), { p.grant(a) })
+                    RedButton(t("Allow", "Allow"), go)
                 }
+            } else if (on == false) {
+                RestrictedHelp(a, help, go)
             } else if (on == true) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -231,6 +270,62 @@ fun PermissionsScreen(a: MainActivity) {
                     )
                 }
                 item { GhostButton(t("All app permissions in Android", "Open Android app settings"), { Permissions.appSettings(a) }, Modifier.fillMaxWidth()) }
+                item { DeviceOwnerCard(a) }
+            }
+        }
+    }
+}
+
+/**
+ * Advanced: device owner. Full control of the phone needs a freshly
+ * factory-reset phone and a one-time USB command. Explained only; the app
+ * never does this by itself.
+ */
+@Composable
+fun DeviceOwnerCard(a: MainActivity) {
+    var open by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var tick by remember { mutableStateOf(0) }
+    val owner = remember(a.resumeTick, tick) { Phone.isDeviceOwner(a) }
+    val cmd = "adb shell dpm set-device-owner ${a.packageName}/${Phone.ADMIN_RECEIVER}"
+    GlassCard(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column {
+            Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Label(t("Advanced", "Advanced"))
+                    Text(t("Device owner (full control)", "Device owner mode"), style = MaterialTheme.typography.titleMedium)
+                }
+                if (owner) Chip(t("On", "Active"), NoCap.Ok) else Text(if (open) "−" else "+", style = MaterialTheme.typography.titleLarge, color = NoCap.Muted)
+            }
+            if (open || owner) {
+                Text(
+                    t(
+                        "Not needed for anything in NoCap OS today. Device owner is the deepest level of control Android gives an app, and Android only allows it on a phone that was just factory reset, with no accounts added yet. It's set once over USB from a computer:",
+                        "Not required by any current NoCap OS feature. Device owner is Android's highest level of app control. Android only allows it on a freshly factory-reset phone with no accounts added, and it is set once over USB from a computer:",
+                    ),
+                    Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall,
+                )
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(
+                        cmd,
+                        Modifier.fillMaxWidth().padding(top = 8.dp).background(NoCap.Field, androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).padding(10.dp),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace),
+                    )
+                }
+                Text(
+                    t(
+                        "1. Factory reset, skip adding accounts. 2. Turn on USB debugging. 3. Install NoCap OS. 4. Run the command above. The receiver is ${Phone.ADMIN_RECEIVER} (from the app's manifest). NoCap OS never runs this itself.",
+                        "Steps: 1. Factory reset and skip account setup. 2. Enable USB debugging. 3. Install NoCap OS. 4. Run the command above. The receiver is ${Phone.ADMIN_RECEIVER}, as declared in the app's manifest. NoCap OS never does this automatically.",
+                    ),
+                    Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted,
+                )
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GhostButton(t("Copy command", "Copy command"), {
+                        val cm = a.getSystemService(android.content.ClipboardManager::class.java)
+                        cm?.setPrimaryClip(android.content.ClipData.newPlainText("adb", cmd))
+                        a.toast = t("Copied.", "Copied to clipboard.")
+                    }, Modifier.weight(1f))
+                    if (owner) GhostButton(t("Release it", "Remove device owner"), { Phone.releaseDeviceOwner(a); tick++ }, Modifier.weight(1f))
+                }
             }
         }
     }

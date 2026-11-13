@@ -297,12 +297,17 @@ func (d *Desktop) SyncSessionEnv(ctx context.Context, envFile string) {
 }
 
 // WatchSession keeps up with the screen's session every couple of seconds
-// until ctx ends: desktop.env (SyncSessionEnv) and the browser window's
-// screen server (FollowScreen).
+// until ctx ends: desktop.env (SyncSessionEnv), the browser window's
+// screen server (FollowScreen) and, every few checks, NoCap Desktop itself
+// (Ensure: the boot link, a stopped or crashed sign-in screen).
 func (d *Desktop) WatchSession(ctx context.Context, envFile string) {
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
-	for {
+	for n := 0; ; n++ {
+		// Every 10 seconds: is NoCap Desktop really on the screen?
+		if n%5 == 0 {
+			d.Ensure(ctx)
+		}
 		d.SyncSessionEnv(ctx, envFile)
 		d.FollowScreen(ctx)
 		select {

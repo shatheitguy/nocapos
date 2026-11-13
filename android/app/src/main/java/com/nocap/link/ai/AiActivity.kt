@@ -17,15 +17,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Modifier
@@ -109,9 +111,43 @@ class AiActivity : ComponentActivity() {
         Prefs.init(this)
         // A broken keystore or a bad saved link shows the "link first" screen instead of crashing.
         api = runCatching { Vault.get(this).link?.let { NoCapApi(it) } }.getOrNull()
-        intent.getStringExtra(EXTRA_PROMPT)?.let { input = it }
+        val prompt = intent.getStringExtra(EXTRA_PROMPT)
+        // Reopened: the chat you had open, as you left it (then refreshed from the server).
+        val restored = prompt == null && Kept.current != null
+        if (restored) {
+            current = Kept.current
+            messages.addAll(Kept.messages)
+            input = Kept.input
+        }
+        prompt?.let { input = it }
         setContent { NoCapTheme { Screen() } }
-        if (api != null) loadList(pickLatest = intent.getStringExtra(EXTRA_PROMPT) == null)
+        if (api != null) {
+            loadList(pickLatest = prompt == null && !restored)
+            if (restored) Kept.current?.let { refresh(it) }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Already open (singleTop): a new prompt just lands in the input box.
+        intent.getStringExtra(EXTRA_PROMPT)?.let { input = it }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Kept.current = current
+        Kept.input = input
+        Kept.messages = messages.filter { it.content.isNotEmpty() }.toList()
+    }
+
+    /** Reloads the open chat without blanking it first (no flash on reopen). */
+    private fun refresh(id: String) {
+        val api = api ?: return
+        val mine = shown
+        lifecycleScope.launch {
+            val list = runCatching { withContext(Dispatchers.IO) { api.conversation(id) } }.getOrNull() ?: return@launch
+            if (mine == shown && current == id && !thinking) { messages.clear(); messages.addAll(list) }
+        }
     }
 
     private fun fail(e: Exception) {
@@ -227,7 +263,8 @@ class AiActivity : ComponentActivity() {
     private fun Screen() {
         BackHandler(showList) { showList = false }
         Wallpaper {
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
+            // Clear of status/nav bars, cutouts and the keyboard, so nothing sits under them.
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { showList = !showList }) { Icon(Icons.Filled.List, t("Chats", "Conversations"), tint = NoCap.Text) }
                     Column(Modifier.weight(1f)) {
@@ -261,7 +298,13 @@ class AiActivity : ComponentActivity() {
     @Composable
     private fun Chat() {
         val state = rememberLazyListState()
-        LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) { if (messages.isNotEmpty()) state.scrollToItem(messages.lastIndex) }
+        val keyboard = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+        // Follow the reply to its last line, but only while you're already at the bottom.
+        LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length, keyboard) {
+            if (messages.isEmpty()) return@LaunchedEffect
+            val seen = state.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            if (seen < 0 || seen >= messages.lastIndex - 2) state.scrollToItem(messages.lastIndex, Int.MAX_VALUE)
+        }
         if (messages.isEmpty()) {
             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
                 Text(t("What's good?", "How can I help?"), style = MaterialTheme.typography.displaySmall)
@@ -344,6 +387,13 @@ class AiActivity : ComponentActivity() {
             drawArc(NoCap.Text, 0f, 180f, false, topLeft = androidx.compose.ui.geometry.Offset(w * 0.2f, h * 0.2f), size = androidx.compose.ui.geometry.Size(w * 0.6f, h * 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.08f))
             drawLine(NoCap.Text, androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.75f), androidx.compose.ui.geometry.Offset(w * 0.5f, h * 0.95f), strokeWidth = w * 0.08f)
         }
+    }
+
+    /** What survives closing the AI sheet, for this app session. */
+    private object Kept {
+        var current: String? = null
+        var input: String = ""
+        var messages: List<ChatMessage> = emptyList()
     }
 
     companion object {

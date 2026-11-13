@@ -74,6 +74,7 @@ type Manager struct {
 	refreshing bool
 	alerts     []Alert
 	subs       map[chan []Alert]struct{}
+	ext        extState
 }
 
 type smartEntry struct {
@@ -203,12 +204,14 @@ func (m *Manager) needZFS(ctx context.Context) error {
 	return nil
 }
 
-// Install installs "zfs" or "smart".
+var installable = map[string]bool{"zfs": true, "smart": true, "hdparm": true, "flex": true}
+
+// Install installs "zfs", "smart", "hdparm" or "flex" (the flexible array's tools).
 func (m *Manager) Install(ctx context.Context, tool string) error {
 	if err := m.ready(); err != nil {
 		return err
 	}
-	if tool != "zfs" && tool != "smart" {
+	if !installable[tool] {
 		return bad("unknown tool %q", tool)
 	}
 	return m.be.Install(ctx, tool)
@@ -1247,15 +1250,28 @@ func (m *Manager) restoreLocations(ctx context.Context) {
 // ---- settings ----
 
 type Settings struct {
-	AutoScrub bool `json:"auto_scrub"`
+	AutoScrub  bool   `json:"auto_scrub"`
+	ScrubEvery string `json:"scrub_every,omitempty"` // weekly | monthly | quarterly
 }
 
 func (m *Manager) Settings(ctx context.Context) (Settings, error) {
 	v, err := m.st.Setting(ctx, keyAutoScrub)
-	return Settings{AutoScrub: v != "0"}, err
+	every, _ := m.st.Setting(ctx, keyScrubEvery)
+	if _, ok := scrubDays[every]; !ok {
+		every = "monthly"
+	}
+	return Settings{AutoScrub: v != "0", ScrubEvery: every}, err
 }
 
 func (m *Manager) SetSettings(ctx context.Context, s Settings) error {
+	if s.ScrubEvery != "" {
+		if _, ok := scrubDays[s.ScrubEvery]; !ok {
+			return bad("scrubs run weekly, monthly or quarterly")
+		}
+		if err := m.st.SetSetting(ctx, keyScrubEvery, s.ScrubEvery); err != nil {
+			return err
+		}
+	}
 	v := "1"
 	if !s.AutoScrub {
 		v = "0"
@@ -1357,6 +1373,7 @@ func (m *Manager) healthCheck(ctx context.Context) {
 		}
 	}
 	m.setAlerts(computeAlerts(sc.pools, sc.disks))
+	m.recordScans(ctx, sc.pools)
 	m.autoScrub(ctx, sc.pools, time.Now())
 	m.restoreLocations(ctx)
 }
@@ -1366,6 +1383,7 @@ func (m *Manager) autoScrub(ctx context.Context, pools []Pool, now time.Time) {
 	if s, err := m.Settings(ctx); err != nil || !s.AutoScrub {
 		return
 	}
+	scrubEvery := m.scrubInterval(ctx)
 	for _, p := range pools {
 		if p.Health != "ONLINE" || p.Scan.State == "scanning" || p.Scan.State == "paused" {
 			continue
@@ -1394,6 +1412,7 @@ func (m *Manager) Run(ctx context.Context) {
 		return
 	}
 	m.restoreLocations(ctx)
+	go m.runExtras(ctx)
 	first := 30 * time.Second
 	if m.demo {
 		first = 3 * time.Second

@@ -21,6 +21,7 @@ import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
 import { AccountPanel } from './AccountPanel';
 import { NotifyBell } from './Notifications';
+import { PhoneTray } from './LinkPhones';
 import { useLink } from '../state/link';
 
 type Menu = { x: number; y: number; appId?: string };
@@ -247,6 +248,7 @@ export function Shelf({ user, onLauncher, onLock, showTray = true }: { user: Use
       {showTray && (
         <div className="tray">
           <TransfersButton className="tray-btn" />
+          <PhoneTray className="tray-btn" />
           {(isAdmin || hasPhone) && <NotifyBell className="tray-btn" />}
           <button
             ref={trayRef}
