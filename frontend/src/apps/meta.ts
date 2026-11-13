@@ -152,6 +152,16 @@ export const APPS: Record<string, AppMeta> = {
     adminOnly: true,
     hidden: true,
   },
+  shield: {
+    id: 'shield',
+    title: 'Shield',
+    icon: 'shield',
+    tile: ['#e8232b', '#7a0f12'],
+    size: { w: 1000, h: 720 },
+    description: 'Firewall and DNS ad blocker: lock the doors, block the junk',
+    single: true,
+    adminOnly: true,
+  },
   settings: {
     id: 'settings',
     title: 'Settings',
