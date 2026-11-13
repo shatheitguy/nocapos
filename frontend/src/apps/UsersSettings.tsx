@@ -7,7 +7,6 @@ import { getUser } from '../api/client';
 import { logOutClean } from '../lib/signOut';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
-import { useWM } from '../state/windows';
 import { Row, Section } from './Personalize';
 import { ManagePeople } from './UsersPeople';
 
@@ -57,10 +56,6 @@ function PhotoPicker({ username }: { username: string }) {
 export function YourAccount() {
   const user = getUser();
   if (!user) return null;
-  const closeOthers = () => {
-    const wm = useWM.getState();
-    for (const w of wm.windows) if (w.appId !== 'settings') wm.close(w.id);
-  };
   return (
     <>
       <Section title="Your account">
@@ -73,11 +68,6 @@ export function YourAccount() {
             </span>
           </span>
         </div>
-        <Row label={tr('sp.closeOthers')} hint={tr('sp.closeOthersHint')}>
-          <button type="button" className="ghost small" onClick={closeOthers}>
-            Close windows
-          </button>
-        </Row>
         <Row label="Log out" hint="Closes all your windows and ends your session on the server right away">
           <button type="button" className="ghost small danger" onClick={() => void logOutClean()}>
             <Icon name="logout" size={13} /> Log out

@@ -27,8 +27,6 @@
   "sp.sysPkgNone": "Nothing to patch right now. No cap.",
   "sp.photoUpdated": "New pic, who dis? Photo updated",
   "sp.photoUpdatedBody": "It shows on this device’s login screen too.",
-  "sp.closeOthers": "Close other windows",
-  "sp.closeOthersHint": "Clean slate: closes every window except Settings",
   "sp.passwordSet": "Bet — new password set for {name}",
   "vm.settingsSaved": "Bet — settings saved",
   "pkg.repairTitle": "Your packages need a repair",

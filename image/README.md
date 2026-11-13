@@ -50,7 +50,8 @@ rebuilds NoCapOS's version after every dpkg run
   (`amd64/config/hooks/normal/9000-nocapos-boot-menu.hook.binary`).
 - Installer: NoCapOS banner in debian-installer, hostname `nocap`.
 - Console: NoCapOS banner on the login screen with the addresses to open, and
-  the first-run setup token until the first admin account exists.
+  the first-run setup token until the first admin account exists (only needed
+  when setting up from outside the local network).
 - Artwork is drawn from `frontend/public/brand` by `common/make-art.py`.
 
 **NoCapOS layer.** The build downloads the release bundle
@@ -88,7 +89,8 @@ swap in memory, no file indexing or calendar store, and no animations.
   those set in Raspberry Pi Imager's OS customisation).
 
 Then open `https://<address>/` (shown on the console) or `http://nocap.local`,
-enter the setup token shown on the console, and create the NoCapOS admin.
+and create the NoCapOS admin. From outside the local network, setup also asks
+for the setup token shown on the console.
 
 ### Update flow
 
@@ -184,6 +186,29 @@ xz -dc nocapos-0.8.0-rpi-arm64.img.xz | sudo dd of=/dev/sdX bs=4M status=progres
 Put the card in, connect Ethernet (or Wi-Fi set in Imager), power on. The
 first boot asks for a user, then sets up NoCapOS (a few minutes; longer if
 ZFS is built). Open `http://nocap.local` or the address on the screen.
+
+### Installing on a mirrored system drive (ZFS mirror)
+
+To keep the server running (and starting) when a system disk dies, install
+onto two disks at once. Start "Try NoCapOS", connect to the network, open a
+terminal and run:
+
+```bash
+ls -l /dev/disk/by-id/          # find the two disks
+sudo /usr/lib/nocapos/image/install-zfs-mirror.sh /dev/disk/by-id/ata-DISK1 /dev/disk/by-id/ata-DISK2
+```
+
+Both disks get the same layout (BIOS boot, EFI, a 1 GiB boot pool member and
+the root pool member), the system from the live image, and their own
+bootloader (UEFI entries "nocapos" and "nocapos-mirror" plus fallback copies,
+or GRUB on both disks for BIOS). It asks you to type `ERASE` first and never
+touches the USB stick it runs from. Supported on 64-bit PCs (UEFI or BIOS)
+and 64-bit ARM with UEFI; the Raspberry Pi's firmware starts from one card or
+drive only, so it can't use a mirrored system drive.
+
+An existing ZFS-on-root install can add the second disk later from
+Storage → Boot drive → "Mirror my boot drive"; a system installed on ext4
+can't be converted safely in place, and the app says so.
 
 ## Roadmap
 
