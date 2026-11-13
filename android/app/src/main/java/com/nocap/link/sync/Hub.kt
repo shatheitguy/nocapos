@@ -208,7 +208,7 @@ private fun ServerCard(a: MainActivity) {
             ServerState.Unlinked -> {
                 Header(link?.serverName ?: "NoCapOS", t("Unlinked", "Unlinked"), NoCap.Bad)
                 Spacer(Modifier.height(10.dp))
-                Text(t("Your server doesn't know this phone anymore (it got unlinked in Settings → The Squad). Link it again to keep vibing.", "Your server no longer recognizes this phone (it was unlinked in Settings → Devices). Link it again."), style = MaterialTheme.typography.bodyMedium)
+                Text(t("Your server doesn't know this phone anymore (it got unlinked in Settings → Your Squad). Link it again to keep vibing.", "Your server no longer recognizes this phone (it was unlinked in Settings → Linked Devices). Link it again."), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(16.dp))
                 RedButton(t("Link again", "Link again"), { a.forget(); a.layer = Layer.NONE; a.screen = Screen.LinkForm(server = link?.server ?: "") }, Modifier.fillMaxWidth())
             }

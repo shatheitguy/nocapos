@@ -25,6 +25,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <!-- Timer widget: "ring with the clock app". -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- In-app updates (Settings → About → Updates): installs NoCap OS itself, signed with the same key. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Setup guide: "no battery limits" asks Android directly (you still confirm). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- NoCap Link, always connected: a foreground service holding one
          connection to your own server, started again after a reboot. -->
@@ -65,6 +69,8 @@
     <application
         android:name=".NoCapApp"
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
@@ -113,6 +119,7 @@
         <!-- NoCap AI: chats with your server's AI Assistant. -->
         <activity
             android:name=".ai.AiActivity"
+            android:launchMode="singleTop"
             android:exported="false"
             android:label="@string/ai_label"
             android:taskAffinity="com.nocap.link.ai"
@@ -183,6 +190,11 @@
         <receiver android:name=".widget.SearchAppWidget" android:exported="false" android:label="@string/w_search">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_search" />
+        </receiver>
+
+        <!-- In-app updates: the install result, and "NoCap OS was just updated". -->
+        <receiver android:name=".update.UpdateReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
         </receiver>
 
         <!-- In-app timer finished (when not handed to the clock app). -->
