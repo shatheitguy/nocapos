@@ -300,6 +300,7 @@ fun SettingsScreen(a: MainActivity) {
                 Opt.clipSync.v,
             ) { Opt.clipSync.set(it); Sync.start(a) }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
+            com.nocap.link.sync.LinkSettings(a)
         },
         Sec("link", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
             ServerStatus(a)

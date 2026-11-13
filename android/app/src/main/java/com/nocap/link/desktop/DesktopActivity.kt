@@ -176,7 +176,7 @@ class DesktopActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val url = withContext(Dispatchers.IO) { NoCapApi(link).webSession() }
-                if (NoCapApi.origin(url) != link.server) throw IllegalStateException("The server sent an address that isn't itself.")
+                if (NoCapApi.origin(url) != com.nocap.link.net.Endpoint.server(link)) throw IllegalStateException("The server sent an address that isn't itself.")
                 web.loadUrl(url)
             } catch (e: ServerTooOld) {
                 // An older NoCapOS without phone sign-in: say so, with its version.
@@ -244,7 +244,7 @@ class DesktopActivity : ComponentActivity() {
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             if (!request.isForMainFrame) return false
             val url = request.url.toString()
-            if (NoCapApi.origin(url) == link.server) return false
+            if (NoCapApi.origin(url).let { it == link.server || it == com.nocap.link.net.Endpoint.server(link) }) return false
             // Anything else (server apps on other ports, outside links) opens in a browser.
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, request.url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -262,7 +262,7 @@ class DesktopActivity : ComponentActivity() {
             if (url == null || url == "about:blank") return
             if (!pinOk(view)) return blockPage(view)
             pageOrigin = NoCapApi.origin(url)
-            if (pageOrigin == link.server) view.evaluateJavascript(downloads.hookJs, null)
+            if (pageOrigin == link.server || pageOrigin == com.nocap.link.net.Endpoint.server(link)) view.evaluateJavascript(downloads.hookJs, null)
             if (state is DeskState.Loading) state = DeskState.Ready
         }
 

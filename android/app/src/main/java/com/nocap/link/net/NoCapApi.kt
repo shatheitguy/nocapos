@@ -82,7 +82,7 @@ private val JSON = "application/json".toMediaType()
 /**
  * The NoCapOS device API. Blocking calls: run them off the main thread.
  */
-class NoCapApi(private val server: String, pin: String?, private val token: String? = null) {
+class NoCapApi(val server: String, pin: String?, private val token: String? = null) {
     init {
         require(!server.startsWith("https://") || pin != null) { "https needs a pinned certificate" }
     }
@@ -94,7 +94,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         http.newBuilder().readTimeout(5, TimeUnit.MINUTES).writeTimeout(10, TimeUnit.MINUTES).build()
     }
 
-    constructor(link: Link) : this(link.server, link.pin, link.token)
+    constructor(link: Link) : this(Endpoint.server(link), link.pin, link.token)
 
     fun pairInfo(): PairInfo = info(JSONObject(call("GET", "/api/v1/pair/info")))
 
@@ -320,7 +320,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         val signins: List<SigninAlert> = emptyList(),
     )
 
-    private val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
+    internal val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 
     /** Waits (up to [wait] s) for anything new: server notices, clipboard from the web, dismissals. */
     fun events(after: Long, wait: Int = 25): Events {
@@ -401,7 +401,7 @@ class NoCapApi(private val server: String, pin: String?, private val token: Stri
         return b.build()
     }
 
-    private fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
+    internal fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
         val req = request(method, path, raw ?: body?.toString()?.toRequestBody(JSON))
         return guarded {
             client.newCall(req).execute().use { r ->
