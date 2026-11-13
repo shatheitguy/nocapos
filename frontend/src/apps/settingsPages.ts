@@ -66,6 +66,8 @@ export interface Entry {
   keywords?: string;
   /** The page's options, as dictionary keys of their labels. */
   options?: string[];
+  /** Opens this app instead of a Settings page. */
+  app?: string;
 }
 
 export const ENTRIES: Entry[] = [
@@ -73,6 +75,9 @@ export const ENTRIES: Entry[] = [
     options: ['sn.networking'] },
   { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, icon: 'wifi', keywords: 'wireless wlan ssid hotspot',
     options: ['wifi.savedTitle', 'wifi.share', 'wifi.forget', 'wifi.autoConnect'] },
+  { id: 'shield', cat: 'network', admin: true, app: 'shield', icon: 'shield',
+    keywords: 'firewall ufw ports open exposed block allow deny ssh security ad blocker ads trackers dns blocklist privacy query log',
+    options: ['sh.tab.firewall', 'sh.exp.title', 'sh.ov.dns', 'sh.lists.title', 'sh.logs.queries'] },
   { id: 'ethernet', cat: 'network', admin: true, icon: 'ethernet', keywords: 'ip address dhcp static dns gateway router ipv4 lan cable tcp',
     options: ['sn.tcpip'] },
   { id: 'general', cat: 'general', icon: 'settings' },
@@ -144,6 +149,6 @@ export function matchingOptions(e: Entry, q: string, t: Translate): string[] {
 }
 
 /** Every Settings page, for universal search: names in the current voice, matched in both. */
-export function settingsPages(): { id: string; label: string; icon: IconName; admin?: boolean; keywords: string }[] {
-  return ENTRIES.map((e) => ({ id: e.id, label: tr(`set.${e.id}`), icon: e.icon, admin: e.admin, keywords: searchText(e) }));
+export function settingsPages(): { id: string; label: string; icon: IconName; admin?: boolean; keywords: string; app?: string }[] {
+  return ENTRIES.map((e) => ({ id: e.id, label: tr(`set.${e.id}`), icon: e.icon, admin: e.admin, app: e.app, keywords: searchText(e) }));
 }

@@ -135,7 +135,9 @@ func serve() error {
 		if setupToken == "" {
 			setupToken = randomToken()
 		}
-		log.Warn("first-run setup required: open the web UI and enter this setup token",
+		// From this machine or its local network, setup is just a name and a
+		// password; the token is only asked for from anywhere else.
+		log.Warn("first-run setup required: open NoCapOS from this machine or your local network to create the administrator; from anywhere else, enter this setup token",
 			"setup_token", setupToken)
 	}
 	svc := auth.NewService(st, auth.NewIssuer(secret, cfg.AccessTTL), auth.Options{

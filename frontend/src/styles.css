@@ -2312,6 +2312,36 @@ button.cal-day.picked:not(.today) { box-shadow: inset 0 0 0 1.5px var(--accent);
 .mac-name { font-size: 19px; font-weight: 600; letter-spacing: 0.01em; text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45); margin: 2px 0 4px; }
 .mac-sub { margin: 0 0 4px; text-align: center; font-size: 13px; line-height: 1.45; opacity: 0.85; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5); }
 .mac-login.setup { width: min(100%, 300px); gap: 10px; }
+.mac-login.setup-create { width: min(100%, 320px); animation: setup-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes setup-rise { from { opacity: 0; transform: translateY(16px); } }
+.setup-create-title { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: #fff; text-align: center; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5); }
+.setup-token-why { margin: 2px 0 0; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; line-height: 1.45; color: #fff; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.18); overflow-wrap: anywhere; }
+:root[data-reduce-motion] .mac-login.setup-create { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mac-login.setup-create { animation: none; } }
+
+/* After an address change from the setup wizard, on the new address. */
+.net-confirm {
+  position: fixed;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  z-index: 100010;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  font-size: 13px;
+}
+.net-confirm.kept { border-color: var(--ok); }
+.net-confirm.gone { border-color: var(--warn, #f59e0b); }
 
 .mac-pill {
   position: relative; display: flex; align-items: center; width: 100%; height: 38px; border-radius: 19px; padding: 0 5px 0 16px;

@@ -143,7 +143,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         big: <span className="sl-big-glyph">{<Icon name={p.icon} size={34} />}</span>,
         details: [['Opens', `Settings → ${p.label}`]],
         score: s,
-        run: go(() => openApp('settings', { props: { section: p.id } })),
+        run: go(() => (p.app ? openApp(p.app) : openApp('settings', { props: { section: p.id } }))),
       });
     }
 

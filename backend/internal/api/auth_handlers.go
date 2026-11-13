@@ -72,7 +72,13 @@ func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
 	if s.Auth.SystemAccountsEnabled() {
 		mode = "system"
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"setup_required": required, "accounts": mode})
+	out := map[string]any{"setup_required": required, "accounts": mode}
+	if required {
+		// Whether this browser needs the one-time token (it isn't on this
+		// machine or its local network) — the setup screen asks for it then.
+		out["setup_token_required"] = !s.setupFromLocal(r)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 type setupRequest struct {
@@ -89,17 +95,28 @@ func (s *Server) authSetup(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	sess, err := s.Auth.Setup(r.Context(), strings.TrimSpace(req.SetupToken), req.Username, req.Password, s.meta(r))
+	local := s.setupFromLocal(r)
+	sess, err := s.Auth.Setup(r.Context(), auth.SetupRequest{
+		Username: req.Username, Password: req.Password,
+		Token: strings.TrimSpace(req.SetupToken), Local: local,
+	}, s.meta(r))
 	switch {
 	case err == nil:
-		s.audit(r, sess.User.ID, "auth.setup", sess.User.Username, true, "")
-		s.Log.Info("administrator account created", "username", sess.User.Username)
+		how := "with the setup token"
+		if local {
+			how = "from the local network"
+		}
+		s.audit(r, sess.User.ID, "auth.setup", sess.User.Username, true, how)
+		s.Log.Info("administrator account created", "username", sess.User.Username, "how", how)
 		s.signedIn(r, sess, nil)
 		s.writeSession(w, r, http.StatusCreated, sess)
 	case errors.Is(err, auth.ErrSetupDone):
 		writeError(w, http.StatusConflict, "setup_done", err.Error())
+	case errors.Is(err, auth.ErrSetupTokenNeeded):
+		s.audit(r, "", "auth.setup", truncate(req.Username, 64), false, "outside the local network, no setup token")
+		writeError(w, http.StatusForbidden, "setup_token_required", err.Error())
 	case errors.Is(err, auth.ErrSetupToken):
-		s.audit(r, "", "auth.setup", req.Username, false, "bad setup token")
+		s.audit(r, "", "auth.setup", truncate(req.Username, 64), false, "bad setup token")
 		writeError(w, http.StatusForbidden, "invalid_setup_token", err.Error())
 	case errors.Is(err, auth.ErrInvalidUsername), errors.Is(err, auth.ErrWeakPassword):
 		writeError(w, http.StatusBadRequest, "validation", err.Error())
