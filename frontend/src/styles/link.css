@@ -1,0 +1,89 @@
+/* ============ NoCap Link: phone groups, calls, replies, phone status ============
+   Builds on the Notification Center look in notifications.css (nc-card, nb-btn…). */
+
+/* ---------- app groups inside a phone ---------- */
+.link-app { display: flex; flex-direction: column; gap: 6px; }
+.nc.windows .link-app { gap: 4px; }
+.link-app-head { display: flex; align-items: center; gap: 4px; }
+.link-app-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 2px 6px; height: 24px;
+  background: transparent; color: var(--mac-ink, var(--text)); font-size: 12px; border-radius: 6px; text-align: left;
+}
+.link-app-toggle:hover:not(:disabled) { filter: none; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.link-app-toggle .app-icon { border-radius: 4px !important; }
+.link-app-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.link-count {
+  flex: none; min-width: 18px; height: 16px; padding: 0 5px; border-radius: 8px; box-sizing: border-box;
+  font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+.link-app-head .nb-tool { opacity: 0.7; }
+.link-more {
+  align-self: flex-start; background: transparent; color: var(--mac-dim, var(--muted)); font-size: 11.5px; padding: 0 8px; height: 20px;
+}
+.link-more:hover:not(:disabled) { filter: none; color: var(--mac-ink, var(--text)); }
+
+/* ---------- reply ---------- */
+.link-actions { display: flex; gap: 6px; margin-top: 6px; }
+.link-actions .nb-btn, .link-reply .nb-btn, .link-decline, .link-ring, .link-handoff .nb-btn {
+  flex: none; height: 26px; font-size: 12.5px; padding: 0 10px; gap: 5px;
+}
+.nb-btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.nb-btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
+.link-sent { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ok, #22c55e); }
+.link-reply { display: flex; gap: 6px; margin-top: 6px; }
+.link-reply input, .link-sendlink input {
+  flex: 1; min-width: 0; height: 28px; box-sizing: border-box; font: inherit; font-size: 13px; padding: 0 9px; border-radius: 8px; color: inherit;
+  background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+/* ---------- calls ---------- */
+.link-call { align-items: center; }
+.link-call-state { flex: 1; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ok, #22c55e); }
+.link-call-state.missed { color: var(--bad, #ef4444); }
+.link-caller { white-space: nowrap; }
+.nb-btn.link-decline { color: #fff; background: var(--bad, #ef4444); border-color: transparent; }
+.nb-btn.link-decline:hover:not(:disabled) { background: var(--bad, #ef4444); filter: brightness(1.1); }
+.nc-card.windows.link-call { align-items: center; }
+
+/* ---------- phone status ---------- */
+.link-phone.offline .app-icon { filter: grayscale(1); opacity: 0.6; }
+.nc-card.windows.link-phone { align-items: center; }
+.link-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11.5px; color: var(--mac-dim, var(--muted)); margin-top: 2px; }
+.link-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.link-dot.on { background: var(--ok, #22c55e); box-shadow: 0 0 6px color-mix(in srgb, var(--ok, #22c55e) 60%, transparent); }
+.link-badge {
+  padding: 0 6px; height: 16px; line-height: 16px; border-radius: 8px; font-size: 10.5px; font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--mac-ink, var(--text));
+}
+.link-badge.remote { background: color-mix(in srgb, var(--warn, #f59e0b) 24%, transparent); }
+.link-batt, .link-net { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.link-battery { flex: none; color: var(--mac-ink, var(--text)); }
+.link-battery-fill { fill: currentColor; }
+.link-battery.charging .link-battery-fill { fill: var(--ok, #22c55e); }
+.link-battery.low .link-battery-fill { fill: var(--bad, #ef4444); }
+.nb-btn.link-ring.on { color: #fff; background: var(--warn, #f59e0b); border-color: transparent; }
+.link-sendlink { display: flex; flex-direction: column; gap: 8px; }
+.link-sendlink input { flex: none; }
+.link-sub { font-size: 11.5px; color: var(--mac-dim, var(--muted)); padding: 4px 6px 0; }
+.nc.mac .link-sub { color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
+.link-handoff { align-items: center; }
+.link-handoff > svg { flex: none; opacity: 0.8; }
+
+/* ---------- tray battery ---------- */
+.link-tray { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---------- browser: "Send a link" popover ---------- */
+.browser-bar { position: relative; }
+.browser-to-phone {
+  position: absolute; top: calc(100% + 4px); right: 10px; z-index: 5; width: 320px; padding: 12px; border-radius: 10px;
+  background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
+}
+.browser-to-phone .nb-btn { flex: none; height: 28px; font-size: 13px; }
+
+/* ---------- Settings → Devices: phone addresses ---------- */
+.link-addr-list { overflow-wrap: anywhere; }
+.link-addr-form label { display: flex; flex-direction: column; gap: 4px; }
+.link-addr-form input, .link-addr-form textarea { width: 100%; box-sizing: border-box; }
+.link-addr-form textarea { font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; resize: vertical; }

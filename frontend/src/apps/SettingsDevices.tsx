@@ -9,6 +9,7 @@ import { fmtAgo } from '../lib/format';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
+import { LinkAddressesSettings } from './SettingsLinkAddresses';
 
 // Settings → Devices: link a phone running the NoCap OS app with a 6-digit
 // code (or its QR), see linked devices and unlink them.
@@ -100,6 +101,8 @@ export function DevicesSettings() {
           list.map((d) => <DeviceRow key={d.id} d={d} showOwner={isAdmin} onUnlink={() => void unlink(d)} />)
         )}
       </Group>
+
+      <LinkAddressesSettings />
 
       {linking && (
         <LinkDialog
