@@ -303,9 +303,9 @@ function Steps({ step, names }: { step: number; names: string[] }) {
 
 // ---------------- Create pool wizard ----------------
 
-export function CreatePoolWizard({ disks, onClose, onDone }: { disks: Disk[]; onClose: () => void; onDone: () => void }) {
+export function CreatePoolWizard({ disks, initial, onClose, onDone }: { disks: Disk[]; initial?: string[]; onClose: () => void; onDone: () => void }) {
   const [step, setStep] = useState(0);
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(() => (initial ?? []).filter((n) => disks.some((d) => d.name === n && d.available)));
   const [layout, setLayout] = useState<Layout | null>(null);
   const [touched, setTouched] = useState(false);
   const [name, setName] = useState('');
@@ -638,8 +638,8 @@ export function TypeConfirm({ title, message, word, action, onClose, onConfirm }
 
 // ---------------- Disk details (partitions + SMART) ----------------
 
-export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }: {
-  disk: Disk; onClose: () => void; onFormat: () => void; onChanged: () => void; smartInstalled: boolean;
+export function DiskSheet({ disk, onClose, onFormat, onUsePool, onChanged, smartInstalled }: {
+  disk: Disk; onClose: () => void; onFormat: () => void; onUsePool?: () => void; onChanged: () => void; smartInstalled: boolean;
 }) {
   const [smart, setSmart] = useState<SmartReport | null>(null);
   const [smartErr, setSmartErr] = useState<string | null>(null);
@@ -693,6 +693,11 @@ export function DiskSheet({ disk, onClose, onFormat, onChanged, smartInstalled }
           {disk.available && (
             <button type="button" onClick={onFormat}>
               <Icon name="drive" size={14} /> Use as storage
+            </button>
+          )}
+          {disk.available && onUsePool && (
+            <button type="button" className="ghost" onClick={onUsePool}>
+              <Icon name="layers" size={14} /> {tr('stx.disk.usePool')}
             </button>
           )}
           {storageMount && <FilesToggleDisk disk={disk} onChanged={onChanged} />}

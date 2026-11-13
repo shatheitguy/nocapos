@@ -49,7 +49,7 @@ type Tab = 'overview' | 'boot' | 'pools' | 'disks' | 'snapshots' | 'mounts';
 type View = { tab: Tab } | { tab: 'pool'; pool: string };
 
 type Modal =
-  | { kind: 'create' }
+  | { kind: 'create'; disks?: string[] }
   | { kind: 'disk'; name: string }
   | { kind: 'format'; name: string }
   | { kind: 'add'; pool: string }
@@ -171,12 +171,12 @@ export function Storage({ win }: { win: WinState }) {
         {view.tab === 'overview' && status && (
           <Overview status={status} disks={disks} pools={pools} importable={importable} installing={installing} onInstall={install}
             onOpenPool={(n) => setView({ tab: 'pool', pool: n })} onOpenDisk={(n) => setModal({ kind: 'disk', name: n })}
-            onCreate={() => setModal({ kind: 'create' })} onChanged={reload} />
+            onChanged={reload} />
         )}
         {view.tab === 'boot' && <BootPage onOpenDisk={(n) => setModal({ kind: 'disk', name: n })} onChanged={reload} />}
         {view.tab === 'snapshots' && <SnapshotsPage />}
         {view.tab === 'mounts' && <MountsPage />}
-        {view.tab === 'disks' && <DisksView disks={disks} onOpen={(n) => setModal({ kind: 'disk', name: n })} onCreate={() => setModal({ kind: 'create' })} zfs={!!status?.zfs.installed} />}
+        {view.tab === 'disks' && <DisksView disks={disks} onOpen={(n) => setModal({ kind: 'disk', name: n })} />}
         {view.tab === 'pools' && status && (
           <PoolsView status={status} pools={pools} importable={importable} disks={disks} onOpen={(n) => setView({ tab: 'pool', pool: n })}
             onCreate={() => setModal({ kind: 'create' })} onChanged={reload} installing={installing} onInstall={install} />
@@ -193,10 +193,11 @@ export function Storage({ win }: { win: WinState }) {
           ))}
       </main>
 
-      {modal?.kind === 'create' && <CreatePoolWizard disks={disks} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'create' && <CreatePoolWizard disks={disks} initial={modal.disks} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'disk' && byName.get(modal.name) && (
         <DiskSheet disk={byName.get(modal.name)!} smartInstalled={!!status?.smart.installed} onClose={() => setModal(null)}
-          onFormat={() => setModal({ kind: 'format', name: modal.name })} onChanged={reload} />
+          onFormat={() => setModal({ kind: 'format', name: modal.name })} onChanged={reload}
+          onUsePool={status?.zfs.installed && status.zfs.module ? () => setModal({ kind: 'create', disks: [modal.name] }) : undefined} />
       )}
       {modal?.kind === 'format' && byName.get(modal.name) && <FormatDisk disk={byName.get(modal.name)!} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'add' && pools.find((p) => p.name === modal.pool) && (
@@ -310,9 +311,9 @@ function ToolsCard({ status, installing, onInstall }: { status: StorageStatus; i
   );
 }
 
-function Overview({ status, disks, pools, importable, installing, onInstall, onOpenPool, onOpenDisk, onCreate, onChanged }: {
+function Overview({ status, disks, pools, importable, installing, onInstall, onOpenPool, onOpenDisk, onChanged }: {
   status: StorageStatus; disks: Disk[]; pools: Pool[]; importable: ImportablePool[]; installing: string | null;
-  onInstall: (t: 'zfs' | 'smart') => void; onOpenPool: (n: string) => void; onOpenDisk: (n: string) => void; onCreate: () => void; onChanged: () => void;
+  onInstall: (t: 'zfs' | 'smart') => void; onOpenPool: (n: string) => void; onOpenDisk: (n: string) => void; onChanged: () => void;
 }) {
   const warnings: { key: string; level: 'warn' | 'bad'; title: string; body: string; onClick: () => void }[] = [];
   for (const p of pools) {
@@ -351,11 +352,6 @@ function Overview({ status, disks, pools, importable, installing, onInstall, onO
           <h2 className="st-h">Overview</h2>
           <p className="app-subtitle">{disks.length} disks · {fmtSize(raw)} in total</p>
         </div>
-        {status.zfs.installed && (
-          <button type="button" onClick={onCreate} disabled={!free.length} title={free.length ? '' : 'No free disks'}>
-            <Icon name="plus" size={14} /> Create pool
-          </button>
-        )}
       </header>
 
       <div className="st-chips">
@@ -460,7 +456,7 @@ function ImportCard({ importable, onChanged }: { importable: ImportablePool[]; o
 
 // ---------------- Disks ----------------
 
-function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n: string) => void; onCreate: () => void; zfs: boolean }) {
+function DisksView({ disks, onOpen }: { disks: Disk[]; onOpen: (n: string) => void }) {
   return (
     <div className="st-page">
       <header className="st-page-head">
@@ -468,11 +464,6 @@ function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n
           <h2 className="st-h">Disks</h2>
           <p className="app-subtitle">{disks.filter((d) => d.available).length} of {disks.length} free to use</p>
         </div>
-        {zfs && (
-          <button type="button" onClick={onCreate} disabled={!disks.some((d) => d.available)}>
-            <Icon name="plus" size={14} /> Create pool
-          </button>
-        )}
       </header>
       <div className="st-disk-grid">
         {disks.map((d) => (

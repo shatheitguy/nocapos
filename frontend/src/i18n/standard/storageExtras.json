@@ -6,6 +6,7 @@
   "stx.nav.snapshots": "Snapshots",
   "stx.nav.mounts": "Shares & mounts",
   "stx.cancel": "Cancel",
+  "stx.disk.usePool": "Use in a pool",
   "stx.save": "Save",
   "stx.remove": "Remove",
   "stx.install": "Install",
