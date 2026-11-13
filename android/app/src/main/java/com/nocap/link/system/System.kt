@@ -12,7 +12,10 @@ import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.view.accessibility.AccessibilityEvent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationManagerCompat
 
 /**
@@ -29,11 +32,13 @@ class DotsService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         recount()
+        changes++
         if (sbn != null) runCatching { com.nocap.link.sync.Sync.posted(this, sbn) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         recount()
+        changes++
         if (sbn != null) runCatching { com.nocap.link.sync.Sync.removed(this, sbn) }
     }
 
@@ -52,6 +57,9 @@ class DotsService : NotificationListenerService() {
     companion object {
         /** package → number of notifications, read by the home screen. */
         val counts = mutableStateMapOf<String, Int>()
+
+        /** Bumped on every post/removal, so the control center and lock screen redraw their lists. */
+        var changes by mutableIntStateOf(0)
 
         @SuppressLint("StaticFieldLeak")
         @Volatile var instance: DotsService? = null
