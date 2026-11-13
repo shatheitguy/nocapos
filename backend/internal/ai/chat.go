@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -90,6 +91,55 @@ func (s *Service) SetPinned(ctx context.Context, userID, id string, pinned bool)
 
 func (s *Service) DeleteConversation(ctx context.Context, userID, id string) error {
 	return s.st.DeleteAIConversation(ctx, userID, id)
+}
+
+// SetConversationModel switches the provider and/or model later turns of a
+// conversation use. A nil field is left alone; an empty model means the
+// provider's default.
+func (s *Service) SetConversationModel(ctx context.Context, userID, id string, providerID, model *string) error {
+	c, err := s.st.AIConversationByID(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if providerID != nil {
+		pid := strings.TrimSpace(*providerID)
+		if pid == "" {
+			return fmt.Errorf("%w: provider is required", ErrInvalidInput)
+		}
+		if _, err := s.st.AIProviderByID(ctx, pid); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return fmt.Errorf("%w: unknown provider", ErrInvalidInput)
+			}
+			return err
+		}
+		c.ProviderID = pid
+	}
+	if model != nil {
+		c.Model = truncate(strings.TrimSpace(*model), 200)
+	}
+	c.UpdatedAt = time.Now()
+	return s.st.UpdateAIConversation(ctx, c)
+}
+
+// DeleteMessagesFrom removes a message and everything after it, so a reply can
+// be regenerated or an earlier message edited and sent again.
+func (s *Service) DeleteMessagesFrom(ctx context.Context, userID, id string, fromID int64) error {
+	if fromID <= 0 {
+		return fmt.Errorf("%w: bad message id", ErrInvalidInput)
+	}
+	c, err := s.st.AIConversationByID(ctx, userID, id)
+	if err != nil {
+		return err
+	}
+	if !s.lockConversation(c.ID) {
+		return ErrBusy
+	}
+	defer s.unlockConversation(c.ID)
+	if err := s.st.DeleteAIMessagesFrom(ctx, c.ID, fromID); err != nil {
+		return err
+	}
+	c.UpdatedAt = time.Now()
+	return s.st.UpdateAIConversation(ctx, c)
 }
 
 // ---------- sending ----------
