@@ -47,8 +47,7 @@ func writeLocalOnly(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "local_only", hostaccess.LocalOnlyMessage)
 		return
 	}
-	msg := html.EscapeString("Turn it back on from the server's own screen or run ")
-	page := strings.Replace(localOnlyPage, "%s", "NoCapOS only opens on the server itself right now. "+msg+"<code>sudo cap web on</code>.", 1)
+	page := strings.Replace(localOnlyPage, "%s", html.EscapeString("NoCapOS only opens on the server itself right now. Turn it back on in Settings → General → This Screen & Access on the server's own screen."), 1)
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
 	w.WriteHeader(http.StatusForbidden)
