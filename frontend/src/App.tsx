@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadAvatar } from './lib/avatar';
 import { Logo } from './components/Logo';
-import { getUser, linkSignIn, logout, onSessionChange, refresh, setupRequired } from './api/client';
+import { confirmNetwork, getUser, linkSignIn, logout, onSessionChange, refresh, setupRequired } from './api/client';
+import { useT } from './i18n';
 import type { User } from './api/types';
 import { AuthScreen, type AuthMode } from './shell/AuthScreen';
 import { Desktop } from './shell/Desktop';
@@ -116,6 +117,46 @@ export function App() {
     <>
       {screen}
       <UpdateOverlay />
+      <NetConfirm />
     </>
+  );
+}
+
+/**
+ * The setup wizard changed the server's address and sent this browser to the
+ * new one with #net-confirm=<token>: reaching it proves the new settings work,
+ * so say so to the server (otherwise it puts the old ones back).
+ */
+function NetConfirm() {
+  const t = useT();
+  const [state, setState] = useState<'checking' | 'kept' | 'gone' | null>(() => (/^#net-confirm=[0-9a-f]{32}$/.test(window.location.hash) ? 'checking' : null));
+  useEffect(() => {
+    if (state !== 'checking') return;
+    const token = window.location.hash.slice('#net-confirm='.length);
+    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    let alive = true;
+    void (async () => {
+      for (let i = 0; i < 30 && alive; i++) {
+        const r = await confirmNetwork(token);
+        if (r === 'kept' || r === 'gone') return alive && setState(r);
+        await new Promise((res) => window.setTimeout(res, 1500));
+      }
+      if (alive) setState('gone');
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [state]);
+  useEffect(() => {
+    if (state !== 'kept' && state !== 'gone') return;
+    const id = window.setTimeout(() => setState(null), 9000);
+    return () => window.clearTimeout(id);
+  }, [state]);
+  if (!state) return null;
+  return (
+    <div className={`net-confirm ${state}`} role="status">
+      {state === 'checking' ? <span className="spinner sm" /> : null}
+      {t(state === 'checking' ? 'wiz.netConfirming' : state === 'kept' ? 'wiz.netKept' : 'wiz.netReverted')}
+    </div>
   );
 }

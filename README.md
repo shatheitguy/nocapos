@@ -25,8 +25,8 @@ curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/insta
 ```
 
 The installer picks the build for your CPU, verifies its SHA-256 checksum, installs Docker if it is
-missing (for the App Store), sets NoCapOS up as the `nocapos` systemd service and prints the address and
-a one-time setup token. Open the address, enter the token and create your administrator.
+missing (for the App Store), sets NoCapOS up as the `nocapos` systemd service and prints the address. Open it from a device on your network and create your administrator, like any computer's
+first start. From outside your local network, setup also asks for the one-time token the installer prints.
 
 | Option | |
 |---|---|
