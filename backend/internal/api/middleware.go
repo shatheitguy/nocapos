@@ -144,7 +144,7 @@ func isUserContentPath(p string) bool {
 }
 
 func isAPIPath(p string) bool {
-	return strings.HasPrefix(p, "/api/") || p == "/ws" || p == "/healthz" || p == "/mcp"
+	return strings.HasPrefix(p, "/api/") || p == "/ws" || p == "/healthz" || p == "/mcp" || strings.HasPrefix(p, "/mcp/")
 }
 
 func (s *Server) recoverer(next http.Handler) http.Handler {

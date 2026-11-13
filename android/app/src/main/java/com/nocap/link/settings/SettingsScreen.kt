@@ -198,10 +198,15 @@ fun SettingsScreen(a: MainActivity) {
             }
             Hint(t("Orbitron & Rajdhani fonts under the SIL Open Font License · Weather by Open-Meteo", "Orbitron and Rajdhani fonts: SIL Open Font License. Weather data: Open-Meteo."))
         },
+        Sec("look", t("NoCap phone", "NoCap theme for the phone"), t("Lock wallpaper, phone colors", "Wallpapers and system colors"), "theme whole phone nocap red material you colors lock wallpaper root") {
+            ThemePhoneSettings(a)
+        },
+        Sec("look", t("NoCap lock screen", "NoCap lock screen"), t("Clock, music, notifs over the lock", "Shown over the system lock screen"), "lock screen keyguard clock music notifications wake") {
+            LockScreenSettings(a)
+        },
         Sec("look", t("Theme & display", "Theme and display"), t("Lingo, colors, font, bars, rotation", "Language, colors, font, system bars and rotation"), "theme dark light auto mode accent color colour red picker font typeface language lingo gen z standard wording status bar navigation nav transparent hide hidden fullscreen rotation landscape portrait haptics vibration") {
             Label(t("The Lingo", "Language"))
-            Choice(listOf(t("Gen Z", "Gen Z") to true, t("Standard", "Standard") to false), Prefs.genz) { Prefs.setGenz(it) }
-            Hint(if (Prefs.genz) t("Playful names, with a plain description where it matters.", "") else "Plain, professional wording.")
+            LanguagePicker(a)
             Spacer(Modifier.height(10.dp))
             Label(t("Mode", "Mode"))
             Choice(listOf(t("Dark", "Dark") to ThemeMode.DARK, t("Light", "Light") to ThemeMode.LIGHT, t("Auto", "Automatic") to ThemeMode.AUTO), Opt.theme.v) { Opt.theme.set(it) }
@@ -319,6 +324,9 @@ fun SettingsScreen(a: MainActivity) {
                 Action(t("Lock needs the lock helper — set it up", "Set up the lock helper")) { lockSetup = true }
             }
             Hint(t("Lock uses an accessibility helper that only locks the screen. Off unless you bind it.", "Locking uses an accessibility service that only locks the screen."))
+        },
+        Sec("home", t("Control center", "Control center"), t("Swipe down for toggles and notifs", "Quick toggles and notifications"), "control center swipe down toggles brightness wifi bluetooth flashlight rotation edge overlay any app") {
+            ControlCenterSettings(a)
         },
         Sec("home", t("Widgets", "Widgets"), t("NoCap widgets + every app's", "Weather place and units"), "widget widgets weather celsius fahrenheit place city clock") {
             Action(t("Add widgets", "Add widgets")) { a.layer = Layer.WIDGETS }
