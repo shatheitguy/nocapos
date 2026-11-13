@@ -41,7 +41,7 @@ func TestPiKMS(t *testing.T) {
 		"[pi4]\ndtoverlay=vc4-fkms-v3d\n":                    false,
 		"dtoverlay=vc4-kms-v3d-pi5\n":                        false,
 		"#dtoverlay=vc4-kms-v3d\ndtoverlay=dwc2\n":           true,
-		"":                                                   true,
+		"": true,
 	} {
 		_, err := libErr(t, cfg, "pi_kms_missing")
 		if got := err == nil; got != missing {
