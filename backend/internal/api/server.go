@@ -95,8 +95,9 @@ type Server struct {
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
 	linkOnce         sync.Once
-	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
-	sessions         sessionFeed // sign-in alerts and session list changes, live
+	linkSync         *linkHub     // NoCap Link: phone notifications, clipboard, events
+	sessions         sessionFeed  // sign-in alerts and session list changes, live
+	shield           *shieldState // Shield: firewall (ufw) and DNS blocker
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -134,6 +135,7 @@ func New(ctx context.Context, d Deps) *Server {
 	if d.Removable != nil {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
+	s.shield = newShield(ctx, d.Config.DataDir, d.Log, s.shieldReverted)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }
@@ -451,6 +453,9 @@ func (s *Server) Handler() http.Handler {
 
 	// NoCap MCP for AI agents (/mcp) and Settings → AI Agents.
 	s.agentRoutes(mux)
+
+	// Shield: firewall and DNS ad blocker (admin, audited).
+	s.shieldRoutes(mux)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
