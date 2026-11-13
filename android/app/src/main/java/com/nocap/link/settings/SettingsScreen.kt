@@ -368,6 +368,7 @@ fun SettingsScreen(a: MainActivity) {
                 Opt.clipSync.v,
             ) { Opt.clipSync.set(it); Sync.start(a) }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
+            com.nocap.link.sync.LinkSettings(a)
         },
         Sec("sync", t("Save Point", "Export & restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
             if (linked) {

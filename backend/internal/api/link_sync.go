@@ -45,6 +45,13 @@ type phoneNote struct {
 	Text       string `json:"text"`
 	Icon       string `json:"icon"`
 	Posted     int64  `json:"posted"`
+	// What it is: "" (any app), "message" (a conversation) or "call".
+	Kind       string `json:"kind,omitempty"`
+	CallState  string `json:"call_state,omitempty"` // incoming | ongoing | missed
+	Number     string `json:"number,omitempty"`     // the caller's number, when the phone shares it
+	Sender     string `json:"sender,omitempty"`     // who wrote the message
+	CanReply   bool   `json:"can_reply,omitempty"`  // the phone can answer it from here
+	CanDecline bool   `json:"can_decline,omitempty"`
 
 	at time.Time // when it arrived here
 }
@@ -74,10 +81,13 @@ type linkNotice struct {
 }
 
 type linkUser struct {
-	notes     map[string]*phoneNote // by device id + "\x00" + key
-	clips     []linkClip            // oldest first
-	dismissed []linkDismissal       // oldest first
-	alerts    []signinAlert         // new sign-ins, oldest first
+	notes     map[string]*phoneNote  // by device id + "\x00" + key
+	clips     []linkClip             // oldest first
+	dismissed []linkDismissal        // oldest first
+	alerts    []signinAlert          // new sign-ins, oldest first
+	phones    map[string]*phoneState // live state by device id
+	actions   []phoneAction          // asked of the phones, oldest first
+	carries   []linkCarry            // "Open on NoCap" from the phones, oldest first
 }
 
 // linkHub holds everyone's synced state and the event sequence the
@@ -87,18 +97,25 @@ type linkHub struct {
 	seq     int64
 	wake    chan struct{} // closed (and replaced) on every new event
 	users   map[string]*linkUser
-	notices []linkNotice // oldest first
+	notices []linkNotice         // oldest first
+	polls   map[string]*linkPoll // by device id: who's connected right now
 	now     func() time.Time
+	// changed hears about changes to a person's phones (called without mu
+	// held), so their open desktops can follow at once.
+	changed func(uid string, ev linkEvent)
 }
 
 func newLinkHub() *linkHub {
 	// Start from the clock so a cursor from before a restart is never ahead.
-	return &linkHub{seq: time.Now().UnixMicro(), wake: make(chan struct{}), users: map[string]*linkUser{}, now: time.Now}
+	return &linkHub{seq: time.Now().UnixMicro(), wake: make(chan struct{}), users: map[string]*linkUser{}, polls: map[string]*linkPoll{}, now: time.Now}
 }
 
 // link is the server's hub, made on first use.
 func (s *Server) link() *linkHub {
-	s.linkOnce.Do(func() { s.linkSync = newLinkHub() })
+	s.linkOnce.Do(func() {
+		s.linkSync = newLinkHub()
+		s.linkSync.changed = s.linkFeed.publish
+	})
 	return s.linkSync
 }
 
@@ -114,7 +131,7 @@ func (h *linkHub) bump() int64 {
 func (h *linkHub) user(uid string) *linkUser {
 	u := h.users[uid]
 	if u == nil {
-		u = &linkUser{notes: map[string]*phoneNote{}}
+		u = &linkUser{notes: map[string]*phoneNote{}, phones: map[string]*phoneState{}}
 		h.users[uid] = u
 	}
 	cut := h.now().Add(-linkKeep)
@@ -138,6 +155,16 @@ func (h *linkHub) user(uid string) *linkUser {
 		i++
 	}
 	u.alerts = u.alerts[i:]
+	i = 0
+	for i < len(u.actions) && u.actions[i].At.Before(h.now().Add(-linkActionKeep)) {
+		i++
+	}
+	u.actions = u.actions[i:]
+	i = 0
+	for i < len(u.carries) && u.carries[i].At.Before(h.now().Add(-linkCarryKeep)) {
+		i++
+	}
+	u.carries = u.carries[i:]
 	return u
 }
 
@@ -173,6 +200,7 @@ func (h *linkHub) alerts(uid, exceptDevice string) []signinAlert {
 func noteKey(deviceID, key string) string { return deviceID + "\x00" + key }
 
 func (h *linkHub) putNote(uid string, n phoneNote) {
+	defer h.tell(uid, linkEvent{Type: "changed"})
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	u := h.user(uid)
@@ -195,10 +223,10 @@ func (h *linkHub) putNote(uid string, n phoneNote) {
 // phone hears about it on its next poll.
 func (h *linkHub) dropNote(uid, deviceID, key string, fromWeb bool) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	u := h.user(uid)
 	k := noteKey(deviceID, key)
 	if _, ok := u.notes[k]; !ok {
+		h.mu.Unlock()
 		return
 	}
 	delete(u.notes, k)
@@ -208,6 +236,9 @@ func (h *linkHub) dropNote(uid, deviceID, key string, fromWeb bool) {
 			u.dismissed = u.dismissed[len(u.dismissed)-linkMaxDismissed:]
 		}
 	}
+	h.mu.Unlock()
+	// Every open desktop drops it too (the one that dismissed it already has).
+	h.tell(uid, linkEvent{Type: "changed"})
 }
 
 func (h *linkHub) notes(uid string) []phoneNote {
@@ -229,13 +260,17 @@ func (h *linkHub) notes(uid string) []phoneNote {
 
 func (h *linkHub) addClip(uid string, c linkClip) int64 {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	u := h.user(uid)
 	c.ID = h.bump()
 	c.At = h.now().UTC().Truncate(time.Second)
 	u.clips = append(u.clips, c)
 	if len(u.clips) > linkMaxClips {
 		u.clips = u.clips[len(u.clips)-linkMaxClips:]
+	}
+	h.mu.Unlock()
+	if c.Source == "phone" {
+		// Open desktops get it at once (the phones follow their long-poll).
+		h.tell(uid, linkEvent{Type: "clip", Clip: &c})
 	}
 	return c.ID
 }
@@ -264,6 +299,23 @@ func (h *linkHub) forgetDevice(uid, deviceID string) {
 			delete(u.notes, k)
 		}
 	}
+	delete(u.phones, deviceID)
+	delete(h.polls, deviceID)
+	acts := u.actions[:0]
+	for _, a := range u.actions {
+		if a.DeviceID != deviceID {
+			acts = append(acts, a)
+		}
+	}
+	u.actions = acts
+	offs := u.carries[:0]
+	for _, x := range u.carries {
+		if x.DeviceID != deviceID {
+			offs = append(offs, x)
+		}
+	}
+	u.carries = offs
+	go h.tell(uid, linkEvent{Type: "changed"})
 }
 
 // noticeAdded remembers a new server notification for the long-poll.
@@ -292,15 +344,16 @@ type linkEvents struct {
 	Clipboard []linkClip            `json:"clipboard"`
 	Dismissed []string              `json:"dismissed"`
 	Signins   []signinAlert         `json:"signins"`
+	Actions   []phoneAction         `json:"actions"`
 }
 
 func (e linkEvents) empty() bool {
-	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0 && len(e.Signins) == 0
+	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0 && len(e.Signins) == 0 && len(e.Actions) == 0
 }
 
 // events is what one phone hasn't seen since after. Call with mu held.
 func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEvents {
-	out := linkEvents{Cursor: h.seq, Notices: []notify.Notification{}, Clipboard: []linkClip{}, Dismissed: []string{}, Signins: []signinAlert{}}
+	out := linkEvents{Cursor: h.seq, Notices: []notify.Notification{}, Clipboard: []linkClip{}, Dismissed: []string{}, Signins: []signinAlert{}, Actions: []phoneAction{}}
 	if after <= 0 || after > h.seq {
 		return out // a fresh start (or a cursor from another run): no history dump
 	}
@@ -325,6 +378,11 @@ func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEven
 			out.Signins = append(out.Signins, a)
 		}
 	}
+	for _, a := range u.actions {
+		if a.ID > after && a.DeviceID == deviceID {
+			out.Actions = append(out.Actions, a)
+		}
+	}
 	return out
 }
 
@@ -337,6 +395,10 @@ func (s *Server) linkRoutes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/v1/phone-notifications/{device_id}/{key}", s.authed(s.phoneNotesDismiss))
 	mux.Handle("GET /api/v1/clipboard", s.authed(s.clipboardList))
 	mux.Handle("POST /api/v1/clipboard", s.authed(s.clipboardSend))
+	mux.Handle("GET /api/v1/phones", s.authed(s.phonesList))
+	mux.Handle("POST /api/v1/phones/{device_id}/actions", s.authed(s.phoneActionSend))
+	mux.Handle("GET /api/v1/link/addresses", s.authed(s.linkAddressesGet))
+	mux.Handle("PUT /api/v1/link/addresses", s.admin(s.linkAddressesPut))
 }
 
 // cutRunes trims s to at most n characters.
@@ -358,6 +420,13 @@ func (s *Server) devicePhoneNote(w http.ResponseWriter, r *http.Request) {
 		Text    string `json:"text"`
 		Icon    string `json:"icon"`
 		Posted  int64  `json:"posted"`
+
+		Kind       string `json:"kind"`
+		CallState  string `json:"call_state"`
+		Number     string `json:"number"`
+		Sender     string `json:"sender"`
+		CanReply   bool   `json:"can_reply"`
+		CanDecline bool   `json:"can_decline"`
 	}
 	if !decodeJSONLimit(w, r, &req, 256<<10) {
 		return
@@ -376,11 +445,27 @@ func (s *Server) devicePhoneNote(w http.ResponseWriter, r *http.Request) {
 	if req.Posted <= 0 {
 		req.Posted = time.Now().UnixMilli()
 	}
+	switch req.Kind {
+	case "", "message":
+		req.CallState, req.CanDecline, req.Number = "", false, ""
+	case "call":
+		if req.CallState != "incoming" && req.CallState != "ongoing" && req.CallState != "missed" {
+			writeError(w, http.StatusBadRequest, "validation", "call_state must be incoming, ongoing or missed")
+			return
+		}
+		req.CanReply = false
+		req.CanDecline = req.CanDecline && req.CallState != "missed"
+	default:
+		writeError(w, http.StatusBadRequest, "validation", "kind must be empty, message or call")
+		return
+	}
 	s.link().putNote(u.ID, phoneNote{
 		DeviceID: d.ID, DeviceName: d.Name, Key: req.Key,
 		App: cutRunes(req.App, linkMaxName), Package: cutRunes(req.Package, linkMaxName),
 		Title: cutRunes(req.Title, linkMaxTitle), Text: cutRunes(req.Text, linkMaxText),
 		Icon: icon, Posted: req.Posted,
+		Kind: req.Kind, CallState: req.CallState, Number: cutRunes(req.Number, 40), Sender: cutRunes(req.Sender, linkMaxName),
+		CanReply: req.CanReply, CanDecline: req.CanDecline,
 	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -477,6 +562,7 @@ func (s *Server) deviceEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	admin := u.Role == store.RoleAdmin
 	h := s.link()
+	defer h.connected(u.ID, d.ID, netOf(clientIP(r, s.Config.TrustedProxies)))()
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 	for {

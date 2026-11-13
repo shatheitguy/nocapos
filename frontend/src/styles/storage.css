@@ -260,18 +260,87 @@
 :root[data-ui='glass'] .st-side { background: transparent; }
 :root[data-ui='glass'] .st-backdrop { background: rgba(4, 6, 12, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 
-/* phone width */
-@media (max-width: 640px) {
+/* ---- Sizing: the window, not the screen, decides the layout ----
+   .st-app is a size container, so a narrow Storage window on a big monitor
+   reflows the same way the phone layout does. */
+.st-app { container: st / inline-size; }
+.st-main { overflow-x: hidden; }
+.st-app .urow-desc, .st-app .urow-title { overflow-wrap: anywhere; }
+.st-app .urow-control { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+.st-app .urow-control select { max-width: 100%; min-width: 0; }
+.st-page-head > div:first-child { min-width: 0; flex: 1 1 260px; }
+.st-page-head > :not(:first-child) { flex: none; }
+.st-snap { flex-wrap: wrap; row-gap: 6px; }
+.st-snap-text { flex: 1 1 180px; }
+.st-snap > button { flex: none; }
+.st-cap { flex-wrap: wrap; }
+.st-cap-text { flex: 1 1 160px; }
+.stx-mirror > button { align-self: flex-start; }
+.st-sheet-body { overflow-x: hidden; }
+
+/* Medium windows (about 1024 px and below) */
+@container st (max-width: 980px) {
+  .st-side { width: 184px; }
+  .st-pool-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+}
+
+/* Narrow windows (about 760 px and below): icon rail, one column */
+@container st (max-width: 780px) {
   .st-side { width: 64px; }
   .st-side-head { display: none; }
   .st-nav-label, .st-count, .st-side-label { display: none; }
-  .st-side-pool { justify-content: center; }
+  .st-side button, .st-side-pool { justify-content: center; }
   .st-pool-top { grid-template-columns: 1fr; }
-  .st-disk-grid, .st-pool-cards { grid-template-columns: 1fr; }
   .st-snaps { padding-left: 18px; }
   .st-hide-sm { display: none; }
   .st-vdev { flex-wrap: wrap; }
   .st-vdev-errs { order: 5; }
-  .st-backdrop { padding: 8px; }
-  .st-layouts { grid-template-columns: 1fr 1fr; }
 }
+
+/* Phone width (about 390 px): rows stack their actions, tables become cards */
+@container st (max-width: 560px) {
+  .st-main.app-content { padding: 12px; }
+  .st-disk-grid, .st-pool-cards { grid-template-columns: 1fr; }
+  .st-h { font-size: 19px; }
+  .st-page-head > :not(:first-child) { width: 100%; }
+  .st-page-head > button { justify-content: center; }
+  .st-app .urow { flex-wrap: wrap; padding: 12px 14px; gap: 10px 12px; }
+  .st-app .urow-control { width: 100%; margin-left: 0; justify-content: flex-start; }
+  .st-app button.urow .urow-control { width: auto; margin-left: auto; }
+  .st-snap > button.ghost { flex: 1 1 auto; justify-content: center; }
+  .st-backdrop { padding: 8px; }
+  .st-sheet, .st-sheet.wide { width: 100%; border-radius: 16px; }
+  .st-sheet-head { padding: 14px 14px 10px; }
+  .st-sheet-body { padding: 4px 14px 14px; }
+  .st-sheet-foot { padding: 10px 14px; }
+  .st-sheet-foot > button { flex: 1 1 auto; justify-content: center; }
+  .st-foot-error { flex-basis: 100%; }
+  .st-layouts { grid-template-columns: 1fr; }
+  .st-layout-cap { font-size: 19px; }
+  .st-summary, .st-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .st-cap { justify-content: center; }
+  .st-big { font-size: 21px; }
+  .st-pick { padding: 10px 12px; gap: 10px; }
+  .st-pick .chip { display: none; }
+  .stx-sched input { width: 64px; }
+  .st-table-wrap { overflow: visible; }
+  .st-table thead { display: none; }
+  .st-table, .st-table tbody, .st-table tr, .st-table td { display: block; width: 100%; }
+  .st-table tr { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .st-table tr:last-child { border-bottom: 0; }
+  .st-table td { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
+  .st-table td::before { content: attr(data-label); flex: none; color: var(--muted); text-align: left; font-family: var(--font, inherit); }
+}
+
+/* Storage extras: dry runs, boot mirror, schedules */
+.stx-dry { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.stx-cmds summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.stx-cmds pre { margin: 6px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-3); font-size: 12px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+.stx-list { margin: 6px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.stx-mirror { display: flex; flex-direction: column; gap: 8px; }
+.stx-mirror.good .row-head svg { color: var(--ok); }
+.stx-mirror.bad .row-head svg, .stx-mirror.single .row-head svg { color: var(--warn); }
+.stx-sched { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.stx-sched label { display: flex; flex-direction: column; gap: 2px; }
+.stx-sched input { width: 72px; }
+.stx-every { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
