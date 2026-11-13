@@ -95,6 +95,10 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
   from the *Send clipboard to NoCap* quick-settings tile — Android 10+ only
   lets the app in front read the clipboard, so there's no silent background
   copying.
+- **Share Wi-Fi** (administrators) — pick a Wi-Fi network saved on the
+  server, confirm with your account password, and the phone shows its join
+  QR code and password (drawn on the phone; enterprise networks can't be
+  shared this way).
 - **Unlink** — removes the phone on the server too.
 - **Linked Devices** — the heartbeat tells only your own server the phone's
   battery, app version, model, Android version and which of notifications /
@@ -119,7 +123,9 @@ and feels like the NoCapOS desktop, and links to your NoCapOS server.
 - Device tokens only work on `/api/v1/device/*`: the server's summary, your
   saved look, your files (with your normal permissions), Send to NoCap (your
   home folder only), the layout backup, notifications (administrators), your
-  own AI conversations (no provider settings), and unlinking itself.
+  own AI conversations (no provider settings), the server's saved Wi-Fi
+  names and, after the administrator's account password, a network's
+  password for Share Wi-Fi (administrators; audited), and unlinking itself.
 - "Open my NoCap desktop" calls `POST /api/v1/device/session`, which returns
   a one-time, 60-second ticket; the web desktop trades it for a normal
   session at `POST /api/v1/auth/link`.
