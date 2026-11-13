@@ -714,11 +714,11 @@ export function DiskSheet({ disk, onClose, onFormat, onUsePool, onChanged, smart
             <tbody>
               {disk.partitions.map((p) => (
                 <tr key={p.name}>
-                  <td className="mono">{p.name}</td>
-                  <td>{fmtSize(p.size)}</td>
-                  <td>{p.fstype ?? '–'}</td>
-                  <td>{p.label ?? ''}</td>
-                  <td className="mono">{p.mountpoints.join(', ')}</td>
+                  <td className="mono" data-label="Name">{p.name}</td>
+                  <td data-label="Size">{fmtSize(p.size)}</td>
+                  <td data-label="Type">{p.fstype ?? '–'}</td>
+                  <td data-label="Label">{p.label || '–'}</td>
+                  <td className="mono" data-label="Mounted at">{p.mountpoints.join(', ') || '–'}</td>
                 </tr>
               ))}
             </tbody>
@@ -778,12 +778,12 @@ export function DiskSheet({ disk, onClose, onFormat, onUsePool, onChanged, smart
                 <tbody>
                   {rows.map((a) => (
                     <tr key={a.id} className={a.failing ? 'st-failing' : ''}>
-                      <td>{a.id}</td>
-                      <td>{a.name}</td>
-                      <td>{a.value}</td>
-                      <td>{a.worst}</td>
-                      <td>{a.thresh}</td>
-                      <td className="mono">{a.raw}</td>
+                      <td data-label="ID">{a.id}</td>
+                      <td data-label="Attribute">{a.name}</td>
+                      <td data-label="Value">{a.value}</td>
+                      <td data-label="Worst">{a.worst}</td>
+                      <td data-label="Threshold">{a.thresh}</td>
+                      <td className="mono" data-label="Raw">{a.raw}</td>
                     </tr>
                   ))}
                 </tbody>
