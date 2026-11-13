@@ -14,11 +14,6 @@
   "sp.saveFail": "That didn't save. Try again?",
   "sp.notifyAbout": "Spill the tea about",
   "sp.notifyAboutHint": "What pings you. Applies to every admin; anything you turn off skips the Notification Center too.",
-  "sp.alerts": "Pings",
-  "sp.alertsHint": "How notifications sound",
-  "sp.alertSound": "Play a sound for notifications",
-  "sp.alertSoundOn": "Uses the volume in Sound",
-  "sp.alertSoundOff": "Turn on sound effects in Sound first — then this unlocks",
   "sp.updCheckFail": "Couldn't check for updates right now",
   "sp.updStartFail": "The update didn't start",
   "sp.updChecking": "Checking for the latest drop…",
@@ -179,5 +174,5 @@
   "sp.preparing": "Preparing…",
   "sp.download": "Download",
   "sp.restore": "Restore",
-  "sp.restoreHint": "Stop NoCapOS, replace nocap.db in the data folder with your backup, and start it again. One-click restore is on the way."
+  "sp.restoreHint": "Load a backup you downloaded. It replaces every account and setting, and kicks in after a restart."
 }

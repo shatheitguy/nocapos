@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
+import { tr } from '../i18n';
+import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
 
@@ -229,6 +231,7 @@ function claimLegacy(id: string) {
 }
 
 let serverTimer = 0;
+let syncWarned = false; // one warning until a save works again
 
 /** Whether the signed-in person's prefs have come back from the server (or failed to). */
 export const usePrefsSynced = create<{ synced: boolean }>(() => ({ synced: false }));
@@ -239,7 +242,14 @@ function syncLater() {
   window.clearTimeout(serverTimer);
   serverTimer = window.setTimeout(() => {
     if (!userId) return;
-    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } });
+    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } }).then((r) => {
+      // The change is kept in this browser either way; say once that the server didn't take it.
+      if (r.ok || r.status === 404) syncWarned = false;
+      else if (!syncWarned && r.status !== 401) {
+        syncWarned = true;
+        toast('error', tr('set.syncFail'), tr('set.syncFailBody'));
+      }
+    });
   }, 1500);
 }
 
