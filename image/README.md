@@ -185,6 +185,29 @@ Put the card in, connect Ethernet (or Wi-Fi set in Imager), power on. The
 first boot asks for a user, then sets up NoCapOS (a few minutes; longer if
 ZFS is built). Open `http://nocap.local` or the address on the screen.
 
+### Installing on a mirrored system drive (ZFS mirror)
+
+To keep the server running (and starting) when a system disk dies, install
+onto two disks at once. Start "Try NoCapOS", connect to the network, open a
+terminal and run:
+
+```bash
+ls -l /dev/disk/by-id/          # find the two disks
+sudo /usr/lib/nocapos/image/install-zfs-mirror.sh /dev/disk/by-id/ata-DISK1 /dev/disk/by-id/ata-DISK2
+```
+
+Both disks get the same layout (BIOS boot, EFI, a 1 GiB boot pool member and
+the root pool member), the system from the live image, and their own
+bootloader (UEFI entries "nocapos" and "nocapos-mirror" plus fallback copies,
+or GRUB on both disks for BIOS). It asks you to type `ERASE` first and never
+touches the USB stick it runs from. Supported on 64-bit PCs (UEFI or BIOS)
+and 64-bit ARM with UEFI; the Raspberry Pi's firmware starts from one card or
+drive only, so it can't use a mirrored system drive.
+
+An existing ZFS-on-root install can add the second disk later from
+Storage → Boot drive → "Mirror my boot drive"; a system installed on ext4
+can't be converted safely in place, and the app says so.
+
 ## Roadmap
 
 1. **Secure Boot.** The ISO and installed PCs boot through Debian's signed
