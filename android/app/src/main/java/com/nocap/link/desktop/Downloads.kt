@@ -48,7 +48,7 @@ class DownloadBridge(
         f.readAsDataURL(b)}).catch(function(e){NoCapDownloads.failed(String(e))})})(${JSONObject.quote(url)})
     """.trimIndent()
 
-    private fun trusted() = pageOrigin() == link.server
+    private fun trusted() = pageOrigin() == link.server || pageOrigin() == api.server
 
     @JavascriptInterface
     fun save(name: String, mime: String, base64: String) {

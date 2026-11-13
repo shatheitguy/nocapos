@@ -1,4 +1,4 @@
-import { tr } from '../i18n';
+import { tr, useT } from '../i18n';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import {
@@ -21,6 +21,7 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
+import { BootPage, EncryptedFolders, FlexArrayCard, MountsPage, PoolExtras, ScrubEvery, SnapshotsPage, SpindownCard } from './StorageExtras';
 import {
   AddDisks,
   CreatePoolWizard,
@@ -44,10 +45,11 @@ import {
 // snapshots, and single disks used as storage. Admin only. All the safety
 // checks are repeated by the server; the UI just explains them early.
 
-type View = { tab: 'overview' | 'disks' | 'pools' } | { tab: 'pool'; pool: string };
+type Tab = 'overview' | 'boot' | 'pools' | 'disks' | 'snapshots' | 'mounts';
+type View = { tab: Tab } | { tab: 'pool'; pool: string };
 
 type Modal =
-  | { kind: 'create' }
+  | { kind: 'create'; disks?: string[] }
   | { kind: 'disk'; name: string }
   | { kind: 'format'; name: string }
   | { kind: 'add'; pool: string }
@@ -66,6 +68,7 @@ export function Storage({ win }: { win: WinState }) {
   // Opened from a disk-test notification: show that disk.
   const [modal, setModal] = useState<Modal>(() => (typeof win.props?.disk === 'string' ? { kind: 'disk', name: win.props.disk } : null));
   const [installing, setInstalling] = useState<string | null>(null);
+  const t = useT();
 
   const load = useCallback(async () => {
     const st = await storageApi.status();
@@ -127,10 +130,14 @@ export function Storage({ win }: { win: WinState }) {
   }
   if (status && !status.supported) return <Unsupported reason={status.reason} />;
 
-  const nav: { id: 'overview' | 'disks' | 'pools'; label: string; icon: IconName; count?: number }[] = [
-    { id: 'overview', label: 'Overview', icon: 'database' },
-    { id: 'disks', label: 'Disks', icon: 'hdd', count: disks.length },
-    { id: 'pools', label: 'Pools', icon: 'layers', count: pools.length },
+  const zfsReady = !!status?.zfs.installed && !!status?.zfs.module;
+  const nav: { id: Tab; label: string; icon: IconName; count?: number }[] = [
+    { id: 'overview', label: t('stx.nav.overview'), icon: 'database' },
+    { id: 'boot', label: t('stx.nav.boot'), icon: 'shield' },
+    { id: 'pools', label: t('stx.nav.pools'), icon: 'layers', count: pools.length },
+    { id: 'disks', label: t('stx.nav.disks'), icon: 'hdd', count: disks.length },
+    ...(zfsReady ? [{ id: 'snapshots' as Tab, label: t('stx.nav.snapshots'), icon: 'camera' as IconName }] : []),
+    { id: 'mounts', label: t('stx.nav.mounts'), icon: 'usb' },
   ];
 
   return (
@@ -164,16 +171,19 @@ export function Storage({ win }: { win: WinState }) {
         {view.tab === 'overview' && status && (
           <Overview status={status} disks={disks} pools={pools} importable={importable} installing={installing} onInstall={install}
             onOpenPool={(n) => setView({ tab: 'pool', pool: n })} onOpenDisk={(n) => setModal({ kind: 'disk', name: n })}
-            onCreate={() => setModal({ kind: 'create' })} onChanged={reload} />
+            onChanged={reload} />
         )}
-        {view.tab === 'disks' && <DisksView disks={disks} onOpen={(n) => setModal({ kind: 'disk', name: n })} onCreate={() => setModal({ kind: 'create' })} zfs={!!status?.zfs.installed} />}
+        {view.tab === 'boot' && <BootPage onOpenDisk={(n) => setModal({ kind: 'disk', name: n })} onChanged={reload} />}
+        {view.tab === 'snapshots' && <SnapshotsPage />}
+        {view.tab === 'mounts' && <MountsPage />}
+        {view.tab === 'disks' && <DisksView disks={disks} onOpen={(n) => setModal({ kind: 'disk', name: n })} />}
         {view.tab === 'pools' && status && (
           <PoolsView status={status} pools={pools} importable={importable} disks={disks} onOpen={(n) => setView({ tab: 'pool', pool: n })}
             onCreate={() => setModal({ kind: 'create' })} onChanged={reload} installing={installing} onInstall={install} />
         )}
         {view.tab === 'pool' &&
           (pool ? (
-            <PoolPage key={pool.name} pool={pool} byName={byName} onChanged={reload}
+            <PoolPage key={pool.name} pool={pool} byName={byName} disks={disks} onChanged={reload}
               onAdd={() => setModal({ kind: 'add', pool: pool.name })}
               onReplace={(old) => setModal({ kind: 'replace', pool: pool.name, old })}
               onDestroy={() => setModal({ kind: 'destroy', pool: pool.name })}
@@ -183,10 +193,11 @@ export function Storage({ win }: { win: WinState }) {
           ))}
       </main>
 
-      {modal?.kind === 'create' && <CreatePoolWizard disks={disks} onClose={() => setModal(null)} onDone={reload} />}
+      {modal?.kind === 'create' && <CreatePoolWizard disks={disks} initial={modal.disks} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'disk' && byName.get(modal.name) && (
         <DiskSheet disk={byName.get(modal.name)!} smartInstalled={!!status?.smart.installed} onClose={() => setModal(null)}
-          onFormat={() => setModal({ kind: 'format', name: modal.name })} onChanged={reload} />
+          onFormat={() => setModal({ kind: 'format', name: modal.name })} onChanged={reload}
+          onUsePool={status?.zfs.installed && status.zfs.module ? () => setModal({ kind: 'create', disks: [modal.name] }) : undefined} />
       )}
       {modal?.kind === 'format' && byName.get(modal.name) && <FormatDisk disk={byName.get(modal.name)!} onClose={() => setModal(null)} onDone={reload} />}
       {modal?.kind === 'add' && pools.find((p) => p.name === modal.pool) && (
@@ -300,9 +311,9 @@ function ToolsCard({ status, installing, onInstall }: { status: StorageStatus; i
   );
 }
 
-function Overview({ status, disks, pools, importable, installing, onInstall, onOpenPool, onOpenDisk, onCreate, onChanged }: {
+function Overview({ status, disks, pools, importable, installing, onInstall, onOpenPool, onOpenDisk, onChanged }: {
   status: StorageStatus; disks: Disk[]; pools: Pool[]; importable: ImportablePool[]; installing: string | null;
-  onInstall: (t: 'zfs' | 'smart') => void; onOpenPool: (n: string) => void; onOpenDisk: (n: string) => void; onCreate: () => void; onChanged: () => void;
+  onInstall: (t: 'zfs' | 'smart') => void; onOpenPool: (n: string) => void; onOpenDisk: (n: string) => void; onChanged: () => void;
 }) {
   const warnings: { key: string; level: 'warn' | 'bad'; title: string; body: string; onClick: () => void }[] = [];
   for (const p of pools) {
@@ -341,11 +352,6 @@ function Overview({ status, disks, pools, importable, installing, onInstall, onO
           <h2 className="st-h">Overview</h2>
           <p className="app-subtitle">{disks.length} disks · {fmtSize(raw)} in total</p>
         </div>
-        {status.zfs.installed && (
-          <button type="button" onClick={onCreate} disabled={!free.length} title={free.length ? '' : 'No free disks'}>
-            <Icon name="plus" size={14} /> Create pool
-          </button>
-        )}
       </header>
 
       <div className="st-chips">
@@ -450,7 +456,7 @@ function ImportCard({ importable, onChanged }: { importable: ImportablePool[]; o
 
 // ---------------- Disks ----------------
 
-function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n: string) => void; onCreate: () => void; zfs: boolean }) {
+function DisksView({ disks, onOpen }: { disks: Disk[]; onOpen: (n: string) => void }) {
   return (
     <div className="st-page">
       <header className="st-page-head">
@@ -458,11 +464,6 @@ function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n
           <h2 className="st-h">Disks</h2>
           <p className="app-subtitle">{disks.filter((d) => d.available).length} of {disks.length} free to use</p>
         </div>
-        {zfs && (
-          <button type="button" onClick={onCreate} disabled={!disks.some((d) => d.available)}>
-            <Icon name="plus" size={14} /> Create pool
-          </button>
-        )}
       </header>
       <div className="st-disk-grid">
         {disks.map((d) => (
@@ -482,6 +483,7 @@ function DisksView({ disks, onOpen, onCreate, zfs }: { disks: Disk[]; onOpen: (n
           </button>
         ))}
       </div>
+      <SpindownCard />
     </div>
   );
 }
@@ -554,14 +556,16 @@ function PoolsView({ status, pools, importable, disks, onOpen, onCreate, onChang
               <input type="checkbox" role="switch" checked={auto} onChange={(e) => void setAutoScrub(e.target.checked)} />
             </span>
           </label>
+          {auto && <div className="urow"><ScrubEvery /></div>}
         </div>
       )}
+      {ready && <FlexArrayCard disks={disks} onDone={onChanged} />}
     </div>
   );
 }
 
-function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone }: {
-  pool: Pool; byName: Map<string, Disk>; onChanged: () => void; onAdd: () => void; onReplace: (v: Vdev) => void; onDestroy: () => void; onGone: () => void;
+function PoolPage({ pool, byName, disks, onChanged, onAdd, onReplace, onDestroy, onGone }: {
+  pool: Pool; byName: Map<string, Disk>; disks: Disk[]; onChanged: () => void; onAdd: () => void; onReplace: (v: Vdev) => void; onDestroy: () => void; onGone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const pct = pool.size ? (pool.allocated / pool.size) * 100 : 0;
@@ -669,7 +673,10 @@ function PoolPage({ pool, byName, onChanged, onAdd, onReplace, onDestroy, onGone
         ))}
       </div>
 
+      <PoolExtras pool={pool} disks={disks} onChanged={onChanged} />
+
       <Datasets pool={pool} onChanged={onChanged} />
+      <EncryptedFolders pool={pool.name} onChanged={onChanged} />
     </div>
   );
 }

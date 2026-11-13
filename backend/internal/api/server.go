@@ -97,6 +97,7 @@ type Server struct {
 	linkOnce         sync.Once
 	linkSync         *linkHub     // NoCap Link: phone notifications, clipboard, events
 	sessions         sessionFeed  // sign-in alerts and session list changes, live
+	linkFeed         linkFeed     // the person's phones changed, or handed a link over
 	shield           *shieldState // Shield: firewall (ufw) and DNS blocker
 }
 
@@ -136,6 +137,8 @@ func New(ctx context.Context, d Deps) *Server {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
 	s.shield = newShield(ctx, d.Config.DataDir, d.Log, s.shieldReverted)
+	// NoCap Link: phones find this server nearby (_nocap._tcp).
+	go s.advertiseLink(ctx)
 	s.versionSince() // note when this version first ran (stale update results go by it)
 	return s
 }
@@ -223,6 +226,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
 	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
+	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.
+	mux.Handle("POST /api/v1/system/desktop/repair", s.admin(s.desktopRepair))
+	mux.Handle("GET /api/v1/system/desktop/diagnostics", s.admin(s.desktopDiagnostics))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))
@@ -348,6 +354,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/cloud/imports/{id}/run", s.admin(s.cloudRunImport))
 	mux.Handle("GET /api/v1/cloud/jobs/{job}", s.admin(s.cloudJob))
 	mux.Handle("POST /api/v1/cloud/jobs/{job}/cancel", s.admin(s.cloudCancel))
+	s.cloudMountRoutes(mux)
 
 	mux.Handle("GET /api/v1/netdrives", s.admin(s.netOverview))
 	mux.Handle("POST /api/v1/netdrives", s.admin(s.netAdd))

@@ -21,7 +21,7 @@
   "set.sound.desc": "Sound effects and volume",
   "set.lock": "Lock Screen",
   "set.lock.desc": "Lock screen: auto-lock and screen saver",
-  "set.security": "Password & Sign-in",
+  "set.security": "Password",
   "set.security.desc": "Your password and two-factor sign-in",
   "set.users": "Users & Groups",
   "set.users.desc": "Users & groups: add people and choose who is an administrator",

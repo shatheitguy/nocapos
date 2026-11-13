@@ -123,8 +123,13 @@ type Desktop struct {
 	// SessionWait: how long RemoteView waits for the screen to have a
 	// session (0 = 15 seconds).
 	SessionWait time.Duration
+	// Now, Remove and Symlink: the clock and file changes (real when nil).
+	Now     func() time.Time
+	Remove  func(string) error
+	Symlink func(target, link string) error
 
 	mirror screenMirror
+	hs     healthState
 }
 
 // NewDesktop wires the real machine.
@@ -153,6 +158,8 @@ type DesktopState struct {
 	AutologinSupported bool   `json:"autologin_supported"`
 	// Remote: the screen can be opened in the browser (NoCap Desktop window).
 	Remote bool `json:"remote"`
+	// Health: whether the screen really shows NoCap Desktop (set up only).
+	Health *DesktopHealth `json:"health,omitempty"`
 }
 
 // ErrDesktopUnavailable means NoCap Desktop isn't set up on this server.
@@ -225,7 +232,10 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 	}
 	st.Available = true
 	c := d.conf()
-	if d.systemctl(ctx, "is-enabled", c.DMUnit) == "enabled" {
+	// On: GDM is what graphical.target starts. Debian's gdm3.service has
+	// no [Install] section, so is-enabled says "static" there; the
+	// display-manager.service link is what counts.
+	if d.systemctl(ctx, "is-enabled", c.DMUnit) == "enabled" || d.linkedUnit(ctx) == c.DMUnit {
 		st.Mode = ModeFull
 		st.Active = d.systemctl(ctx, "is-active", c.DMUnit) == "active"
 	}
@@ -244,6 +254,8 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 		}
 	}
 	st.Remote = st.Active && d.remoteSupported(st.Mode)
+	h := d.Health(ctx)
+	st.Health = &h
 	return st
 }
 
@@ -287,7 +299,14 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	if mode != ModeFull {
 		d.StopScreen(ctx)
 	}
-	for _, args := range ModeCommands(mode, d.conf()) {
+	c := d.conf()
+	if mode == ModeFull {
+		// "enable" can't do it on Debian (no [Install] in gdm3.service).
+		if err := d.linkDisplayManager(ctx, c.DMUnit); err != nil {
+			return err
+		}
+	}
+	for _, args := range ModeCommands(mode, c) {
 		out, err := d.Run(ctx, "systemctl", args...)
 		if err != nil && args[0] != "--no-block" {
 			msg := strings.TrimSpace(string(out))
@@ -296,7 +315,11 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 			}
 			return fmt.Errorf("systemctl %s: %s", strings.Join(args, " "), msg)
 		}
+		if mode == ModeOff && args[0] == "disable" {
+			d.unlinkDisplayManager(ctx, c.DMUnit)
+		}
 	}
+	d.resetShellTimer()
 	// Remembered for updates: install.sh turns the desktop on unless the
 	// owner switched it off here ("user-off").
 	saved := mode
