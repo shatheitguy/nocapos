@@ -166,7 +166,7 @@ object Permissions {
         Perm(
             "lock", Kind.OPTIONAL,
             { if (Build.VERSION.SDK_INT >= 28) t("Lock helper (accessibility)", "Lock helper (accessibility service)") else t("Lock helper (device admin)", "Lock helper (device administrator)") },
-            { t("Lock the screen with a gesture, like double-tap. It can only lock: it reads nothing on screen.", "Locks the screen from a home-screen gesture. It only locks; it doesn't read the screen.") },
+            { t("Lock the screen with a gesture, like double-tap. While you mirror this phone to NoCap OS, it also does your taps and typing. Nothing else.", "Locks the screen from a home-screen gesture, and performs your taps and typing while you mirror this phone to NoCap OS. Nothing else.") },
             { Phone.canLock(it) },
             { a -> open(a, Phone.lockSetupIntent(a)) },
             restricted = true,

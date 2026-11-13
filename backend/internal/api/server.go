@@ -98,6 +98,7 @@ type Server struct {
 	linkSync         *linkHub    // NoCap Link: phone notifications, clipboard, events
 	sessions         sessionFeed // sign-in alerts and session list changes, live
 	linkFeed         linkFeed    // the person's phones changed, or handed a link over
+	mirror           mirrorState // phone mirroring: rooms and viewer tickets
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -182,6 +183,7 @@ func (s *Server) Handler() http.Handler {
 	// More for the NoCap OS app: summary, look, Files, Send to NoCap,
 	// home-screen backup, notifications, unlink, NoCap AI.
 	s.deviceRoutes(mux)
+	s.mirrorRoutes(mux)
 	s.linkRoutes(mux) // NoCap Link sync, NoCap OS's side
 	// Where each account is signed in; sign-in alerts; ending sessions.
 	s.sessionRoutes(mux)

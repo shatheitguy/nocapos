@@ -8,7 +8,7 @@
     <string name="ask_hint">Ask NoCap AI anything…</string>
     <string name="ask_widget_desc">Ask NoCap AI, the assistant on your NoCap server</string>
     <string name="lock_service_label">NoCap OS lock</string>
-    <string name="lock_service_desc">Lets NoCap OS lock your screen when you double-tap the home screen. It doesn\'t read anything on your screen and does nothing else.</string>
+    <string name="lock_service_desc">Lets NoCap OS lock your screen when you double-tap the home screen, and lets you tap, swipe and type on this phone from NoCap OS while you mirror its screen (you OK each mirroring session). It only reads the text field you type into and sends nothing anywhere else.</string>
     <string name="lock_admin_label">NoCap OS lock</string>
     <string name="dots_label">NoCap OS (dots, now playing, NoCap Link sync)</string>
     <string name="w_clock">NoCap clock</string>
