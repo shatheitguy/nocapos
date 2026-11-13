@@ -21,6 +21,7 @@ import './themes.css';
 import './glass.css';
 // After the themes: Photos is always dark glass and keeps its own button styles.
 import './styles/photos.css';
+import './styles/media.css';
 import './styles/mobile.css';
 
 createRoot(document.getElementById('root')!).render(

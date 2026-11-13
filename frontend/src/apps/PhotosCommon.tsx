@@ -100,13 +100,27 @@ export function placeholderStyle(p: Photo): CSSProperties {
  * A thumbnail that fades in from a blurred, tinted placeholder once it has
  * loaded (and stays a tidy icon tile if it can't be made).
  */
-export const Thumb = memo(function Thumb({ photo, ticket, size = 's', className = '' }: { photo: Photo; ticket?: string; size?: 's' | 'l'; className?: string }) {
+export const Thumb = memo(function Thumb({
+  photo,
+  ticket,
+  src,
+  size = 's',
+  className = '',
+}: {
+  photo: Photo;
+  ticket?: string;
+  /** A ready link instead of a Photos ticket. */
+  src?: string | null;
+  size?: 's' | 'l';
+  className?: string;
+}) {
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const url = src ?? (ticket ? thumbUrl(photo, ticket, size) : null);
   return (
     <span className={`pg-thumbimg ${state} ${className}`} style={placeholderStyle(photo)}>
-      {ticket && state !== 'failed' ? (
+      {url && state !== 'failed' ? (
         <img
-          src={thumbUrl(photo, ticket, size)}
+          src={url}
           alt=""
           loading="lazy"
           decoding="async"
@@ -115,7 +129,7 @@ export const Thumb = memo(function Thumb({ photo, ticket, size = 's', className 
           onError={() => setState('failed')}
         />
       ) : null}
-      {state === 'failed' || !ticket ? (
+      {state === 'failed' || !url ? (
         <span className="pg-ph">
           <Icon name={photo.video ? 'fileVideo' : 'image'} size={24} />
         </span>
