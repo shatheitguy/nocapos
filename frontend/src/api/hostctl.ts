@@ -144,4 +144,31 @@ export const hostApi = {
   wifiSavedShare: (uuid: string, password: string) =>
     api<WiFiShare>(`/api/v1/system/wifi/saved/${encodeURIComponent(uuid)}/share`, { method: 'POST', body: { password } }),
   powerAction: (action: 'reboot' | 'shutdown') => api<{ status: string }>('/api/v1/system/power', { method: 'POST', body: { action } }),
+  /** IPv4 (and optionally IPv6) at once; kept only once the browser reaches the server again (confirmNetwork), else undone after revert_in. */
+  setIP: (connection: string, ipv4: IPv4Config, ipv6?: IPv6Config) =>
+    api<{ token: string; revert_in: number }>('/api/v1/system/network/ip', { method: 'POST', body: { connection, ipv4, ipv6 } }),
+  timeZone: () => api<TimeZoneState>('/api/v1/system/timezone'),
+  setTimeZone: (zone: string) => api<TimeZoneState>('/api/v1/system/timezone', { method: 'PUT', body: { zone } }),
+  machineSetup: () => api<MachineSetup>('/api/v1/setup/machine'),
+  machineSetupDone: () => api('/api/v1/setup/machine/done', { method: 'POST', body: {} }),
 };
+
+export interface IPv6Config {
+  method: 'auto' | 'manual' | 'disabled';
+  address?: string;
+  gateway?: string;
+  dns: string[];
+}
+
+export interface TimeZoneState {
+  zone: string;
+  supported: boolean;
+  reason?: string;
+}
+
+/** The server-wide part of the first-start setup. */
+export interface MachineSetup {
+  done: boolean;
+  hostname: string;
+  timezone: TimeZoneState;
+}

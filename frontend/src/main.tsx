@@ -19,6 +19,7 @@ import './styles/virtualdesk.css';
 import './styles/notifications.css';
 import './styles/users.css';
 import './styles/shield.css';
+import './styles/phone.css';
 import './themes.css';
 import './glass.css';
 import './styles/mobile.css';

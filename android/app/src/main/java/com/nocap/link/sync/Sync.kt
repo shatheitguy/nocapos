@@ -155,6 +155,7 @@ object Sync {
             try {
                 val (ev, actions) = api.liveEvents(cursor, 25)
                 backoff = 5_000L
+                ev.mirror?.let { com.nocap.link.mirror.MirrorAsk.asked(ctx, it) }
                 LinkService.connected(true)
                 if (cursor != 0L) {
                     handle(ctx, ev)

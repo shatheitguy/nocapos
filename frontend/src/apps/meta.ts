@@ -199,6 +199,14 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Preview and edit files',
     hidden: true,
   },
+  phone: {
+    id: 'phone',
+    title: 'Phone',
+    icon: 'phone',
+    tile: ['#34d399', '#0f766e'],
+    size: { w: 440, h: 860 },
+    description: 'Your linked phone’s live screen: see it, tap it, type on it',
+  },
   logs: {
     id: 'logs',
     title: 'Logs',
