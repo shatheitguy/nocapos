@@ -6,7 +6,7 @@ import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
 import { validWebAddress } from './WebAddress';
 
-// Settings → Devices: the addresses phones use to reach this server — on the
+// Settings → Linked Devices: the addresses phones use to reach this server — on the
 // same network ("Nearby") and over the internet ("Remote"). Everyone sees
 // them; an administrator can set the remote address and extra LAN addresses.
 

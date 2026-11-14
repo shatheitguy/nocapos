@@ -56,3 +56,48 @@ button.phone-pick-item.active { border-color: color-mix(in srgb, var(--accent) 5
 
 .phone-spin { width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid currentColor; border-top-color: transparent; animation: phone-spin 0.8s linear infinite; }
 @keyframes phone-spin { to { transform: rotate(360deg); } }
+
+/* Device Screens: frames per shape */
+.phone-frame.form-phone { border-radius: 30px; }
+.phone-frame.form-phone.landscape { border-radius: 26px; }
+.phone-frame.form-tablet { border-radius: 24px; }
+.phone-frame.form-tablet .phone-screen { border-radius: 10px; }
+.phone-frame.form-computer { border-radius: 12px 12px 6px 6px; position: relative; margin-bottom: 18px; }
+.phone-frame.form-computer .phone-screen { border-radius: 4px; }
+.phone-frame.form-computer::after { content: ''; position: absolute; left: 50%; bottom: -16px; width: 34%; height: 14px; transform: translateX(-50%); border-radius: 0 0 10px 10px; background: linear-gradient(180deg, #2a2f3a, #161a22); }
+.phone-app.full .phone-frame.form-computer::after { display: none; }
+
+/* Device Screens: the device list beside the screen */
+.ds-wrap { height: 100%; min-height: 0; container-type: inline-size; }
+.ds-app { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); height: 100%; min-height: 0; background: var(--surface); color: var(--text); position: relative; }
+.ds-app.phone-app { display: flex; }
+.ds-side { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: auto; padding: 12px 10px; border-right: 1px solid var(--border); background: var(--surface-2); }
+.ds-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px; }
+.ds-side-head b { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.ds-servers-head { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ds-list { display: flex; flex-direction: column; gap: 6px; }
+.ds-item { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 12px; border: 1px solid transparent; cursor: pointer; min-width: 0; }
+.ds-item:hover { background: var(--surface-3); }
+.ds-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+.ds-item.active { background: var(--surface-3); border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.ds-item.ds-server { cursor: default; }
+.ds-item-ico { position: relative; display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 10px; color: #fff; background: linear-gradient(150deg, #34d399, #0f766e); }
+.ds-server .ds-item-ico { background: linear-gradient(150deg, #f87171, #7a0f12); }
+.ds-item-ico .phone-dot { position: absolute; right: -2px; bottom: -2px; box-shadow: 0 0 0 2px var(--surface-2); }
+.ds-item-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.ds-item-text b, .ds-item-text .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-item-more { flex: none; opacity: 0.7; }
+.ds-item:hover .ds-item-more, .ds-item.active .ds-item-more { opacity: 1; }
+.ds-link-new { align-self: stretch; }
+.ds-servers-note { margin: 2px 4px; }
+.ds-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.ds-main > .phone-app { flex: 1; min-height: 0; }
+.ds-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 12px; margin-top: 6px; }
+.ds-progress { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; flex: none; }
+.ds-progress-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-progress-bar { flex: 1; min-width: 60px; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.ds-progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+@container (max-width: 640px) {
+  .ds-app:not(.phone-app) { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .ds-side { max-height: 40%; border-right: none; border-bottom: 1px solid var(--border); }
+}

@@ -24,16 +24,17 @@ type Device struct {
 	Model      string    // e.g. "Google Pixel 8", as the device reports it
 	OSVersion  string    // e.g. "Android 15"
 	Caps       string    // NoCap Link features it has on, comma-separated
+	Form       string    // phone, tablet or computer ("" = not reported)
 }
 
-const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at, d.last_ip, d.model, d.os_version, d.caps`
+const deviceCols = `d.id, d.user_id, COALESCE(u.username, ''), d.name, d.platform, d.app_version, d.battery, d.created_at, d.last_seen_at, d.revoked_at, d.last_ip, d.model, d.os_version, d.caps, d.form`
 
 func scanDevice(row scanner) (*Device, error) {
 	var (
 		d                      Device
 		created, seen, revoked int64
 	)
-	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked, &d.LastIP, &d.Model, &d.OSVersion, &d.Caps); err != nil {
+	if err := row.Scan(&d.ID, &d.UserID, &d.Username, &d.Name, &d.Platform, &d.AppVersion, &d.Battery, &created, &seen, &revoked, &d.LastIP, &d.Model, &d.OSVersion, &d.Caps, &d.Form); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}

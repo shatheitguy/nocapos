@@ -1,18 +1,28 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { mirrorApi, mirrorSocketURL, type MirrorLink, type MirrorPhone } from '../api/mirror';
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { mirrorApi, type MirrorPhone } from '../api/mirror';
+import { devicesApi, type DeviceLimits, type LinkedDevice } from '../api/devices';
+import { upload } from '../api/files';
+import { receivedApi } from '../api/received';
+import { ContextMenu, type MenuItem } from '../components/ContextMenu';
+import { Dialog, type DialogSpec } from '../components/Dialog';
 import { Icon, type IconName } from '../components/Icon';
-import { useT, type T } from '../i18n';
-import { nextDelay } from '../lib/reconnect';
-import { h264Supported, PhoneStream, unrotate, type PhoneMessage } from '../lib/phoneStream';
-import { openApp } from './meta';
+import { tr, useT, type T } from '../i18n';
+import { confirmDialog } from '../state/confirm';
+import { linkApi } from '../state/link';
 import { toast } from '../state/toasts';
+import { openUrlOnPhone, webUrl } from '../shell/linkActions';
+import { openApp } from './meta';
+import { Mirror, type DeviceForm } from './PhoneMirror';
+import { LinkSheet } from './SettingsDevices';
+import { findApi, type FoundServer } from './SettingsFindServers';
 
-// Phone: a linked phone's live screen, in a phone frame. Only your own
-// phones are listed (the server enforces it). Opening one asks the phone to
-// start; the phone asks you there first (NoCap OS, then Android's own
-// screen-sharing prompt), every time. Click = tap, drag = swipe, wheel =
-// scroll, typing types; Back / Home / Recents, volume, rotate the view,
-// screenshot and full screen in the bar below.
+// Device Screens ("Screen Squad"): every device linked to your account, with
+// its type, whether it's online and its battery; pick one to see its live
+// screen in a frame of its shape. Each device has a menu (rename, ring, send
+// a file or a link, open in Linked Devices, unlink), and other NoCap servers
+// on this network can be opened in a new tab. Only your own devices are
+// listed (the server enforces it). The app id stays "phone" so older links
+// and pins keep working.
 
 const PICK_KEY = 'nocap.phone.last';
 
@@ -31,38 +41,309 @@ function savePick(id: string) {
   }
 }
 
+/** The shape to frame a device in (Android phones until they say). */
+export function deviceForm(d: MirrorPhone): DeviceForm {
+  if (d.form === 'tablet' || d.form === 'computer' || d.form === 'phone') return d.form;
+  return d.platform === 'android' || d.platform === 'ios' ? 'phone' : 'computer';
+}
+
+const FORM_ICON: Record<DeviceForm, IconName> = {
+  phone: 'phone',
+  tablet: 'tablet',
+  computer: 'desktop',
+};
+
+/** Why a device can't show its screen here, or "" when it can. Android
+ * apps too old to share it say so themselves once asked. */
+function cantStream(d: MirrorPhone): '' | 'platform' {
+  return d.platform === 'android' ? '' : 'platform';
+}
+
+function ago(t: T, iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return t('phone.ago.now');
+  if (s < 3600) return t('phone.ago.min', { n: Math.floor(s / 60) });
+  if (s < 86400) return t('phone.ago.hour', { n: Math.floor(s / 3600) });
+  return t('phone.ago.day', { n: Math.floor(s / 86400) });
+}
+
+const isOnline = (d: MirrorPhone) => !!(d.online || d.mirror?.online);
+
+/** "Online" / "Last seen 3 min ago", plus the battery. */
+function statusLine(t: T, d: MirrorPhone): string {
+  const seen = isOnline(d) ? t('ds.online') : d.last_seen_at ? t('phone.lastSeen', { ago: ago(t, d.last_seen_at) }) : t('phone.neverSeen');
+  return d.battery != null ? `${seen} · ${t('phone.battery', { n: d.battery })}` : seen;
+}
+
+interface Sending {
+  device: string;
+  name: string;
+  loaded: number;
+  total: number;
+}
+
 export function Phone() {
   const t = useT();
-  const [phones, setPhones] = useState<MirrorPhone[] | null>(null);
+  const [devices, setDevices] = useState<MirrorPhone[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    d: MirrorPhone;
+  } | null>(null);
+  const [dialog, setDialog] = useState<DialogSpec | null>(null);
+  const [sending, setSending] = useState<Sending | null>(null);
+  const [linking, setLinking] = useState<{
+    list: LinkedDevice[];
+    limits: DeviceLimits | null;
+  } | null>(null);
+  const [servers, setServers] = useState<{
+    available: boolean;
+    list: FoundServer[];
+  } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const sendTo = useRef<MirrorPhone | null>(null);
 
   const load = useCallback(() => {
     setError(null);
     void mirrorApi.phones().then((r) => {
-      if (!r.ok) return setError(r.error ?? t('phone.loadError'));
+      if (!r.ok) return setError(r.error ?? tr('phone.loadError'));
       const list = r.data ?? [];
-      setPhones(list);
+      setDevices(list);
       setPicked((cur) => {
         if (cur && list.some((p) => p.id === cur)) return cur;
         const last = loadPick();
         if (last && list.some((p) => p.id === last)) return last;
-        return list.length === 1 ? list[0].id : null;
+        return list.find(isOnline)?.id ?? list[0]?.id ?? null;
       });
     });
-  }, [t]);
-  useEffect(load, [load]);
+  }, []);
+  useEffect(() => {
+    load();
+    // Keep online and battery fresh while it's open.
+    const id = window.setInterval(load, 30_000);
+    return () => window.clearInterval(id);
+  }, [load]);
 
   const choose = (id: string) => {
     savePick(id);
     setPicked(id);
-    setPicking(false);
   };
 
-  if (error && !phones) {
+  // ---------- per-device actions ----------
+
+  const rename = (d: MirrorPhone) =>
+    setDialog({
+      kind: 'prompt',
+      title: tr('ds.renameTitle', { name: d.name }),
+      label: tr('ds.renameLabel'),
+      initial: d.name,
+      confirm: tr('ld.save'),
+      onSubmit: (name) => {
+        void devicesApi.rename(d.id, name).then((r) => {
+          if (!r.ok) return toast('error', tr('ld.renameFail'), r.error);
+          toast('success', tr('ld.renamed', { name: r.data.name }));
+          load();
+        });
+      },
+    });
+
+  const ring = async (d: MirrorPhone) => {
+    const r = await linkApi.action(d.id, { kind: 'ring' });
+    if (!r.ok) return toast('error', tr('link.ringFailed', { device: d.name }), r.error);
+    toast('success', tr('link.ringing', { device: d.name }));
+  };
+
+  const sendLink = (d: MirrorPhone) =>
+    setDialog({
+      kind: 'prompt',
+      title: tr('ds.sendLinkTitle', { name: d.name }),
+      label: tr('link.urlPlaceholder'),
+      confirm: tr('ds.send'),
+      onSubmit: (url) => {
+        if (!webUrl(url)) return toast('error', tr('link.badUrl'));
+        void openUrlOnPhone(
+          {
+            id: d.id,
+            name: d.name,
+            platform: d.platform,
+            online: isOnline(d),
+            route: '',
+          },
+          url,
+        );
+      },
+    });
+
+  const pickFile = (d: MirrorPhone) => {
+    sendTo.current = d;
+    fileRef.current?.click();
+  };
+
+  // Upload to <Received>/<device>/Sent here, then ask the device to fetch it.
+  const sendFiles = async (d: MirrorPhone, list: File[]) => {
+    if (!list.length || sending) return;
+    const box = await receivedApi.outbox(d.id);
+    if (!box.ok) return toast('error', tr('ds.sendFailed', { name: d.name }), box.error);
+    const total = list.reduce((n, f) => n + f.size, 0);
+    setSending({
+      device: d.name,
+      name: list.length === 1 ? list[0].name : tr('ds.nFiles', { n: list.length }),
+      loaded: 0,
+      total,
+    });
+    const up = await upload(box.data.root, box.data.path, list, (p) => setSending((s) => s && { ...s, loaded: p.loaded, total: p.total }));
+    setSending(null);
+    if (!up.ok) return toast('error', tr('ds.sendFailed', { name: d.name }), up.error);
+    let ok = 0;
+    for (const path of up.data.paths ?? []) {
+      const r = await linkApi.action(d.id, {
+        kind: 'file',
+        root: box.data.root,
+        path,
+        open: false,
+      });
+      if (r.ok) ok++;
+    }
+    if (ok) toast('success', tr('ds.sent', { n: ok, name: d.name }));
+    else toast('error', tr('ds.sendFailed', { name: d.name }));
+  };
+
+  const unlink = async (d: MirrorPhone) => {
+    const ok = await confirmDialog({
+      title: tr('ld.unlinkTitle', { name: d.name }),
+      message: tr('ld.unlinkMsg'),
+      confirmLabel: tr('ld.unlink'),
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await devicesApi.unlink(d.id);
+    if (!r.ok && r.status !== 404) return toast('error', tr('ld.unlinkFail'), r.error);
+    toast('success', tr('ld.unlinked', { name: d.name }));
+    load();
+  };
+
+  const openSettings = () => openApp('settings', { props: { section: 'devices' } });
+
+  const startLinking = async () => {
+    const [l, lim] = await Promise.all([devicesApi.list(), devicesApi.limits()]);
+    if (!l.ok) return toast('error', tr('ld.loadFail'), l.error);
+    setLinking({ list: l.data ?? [], limits: lim.ok ? lim.data : null });
+  };
+
+  const lookForServers = async () => {
+    setLooking(true);
+    const r = await findApi.discover();
+    setLooking(false);
+    if (!r.ok) return toast('error', tr('find.failed'), r.error);
+    setServers({ available: r.data.available, list: r.data.servers ?? [] });
+  };
+
+  const menuItems = (d: MirrorPhone): MenuItem[] => [
+    { label: tr('ds.menu.rename'), icon: 'edit', onClick: () => rename(d) },
+    {
+      label: tr('ds.menu.ring'),
+      icon: 'bell',
+      disabled: d.platform !== 'android',
+      onClick: () => void ring(d),
+    },
+    {
+      label: tr('ds.menu.sendFile'),
+      icon: 'upload',
+      disabled: !!sending,
+      onClick: () => pickFile(d),
+    },
+    {
+      label: tr('ds.menu.sendLink'),
+      icon: 'globe',
+      onClick: () => sendLink(d),
+    },
+    {
+      label: tr('ds.menu.settings'),
+      icon: 'settings',
+      divider: true,
+      onClick: openSettings,
+    },
+    {
+      label: tr('ds.menu.unlink'),
+      icon: 'trash',
+      danger: true,
+      divider: true,
+      onClick: () => void unlink(d),
+    },
+  ];
+
+  const openMenu = (e: MouseEvent, d: MirrorPhone) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({
+      x: e.type === 'contextmenu' ? e.clientX : r.left,
+      y: e.type === 'contextmenu' ? e.clientY : r.bottom + 4,
+      d,
+    });
+  };
+
+  const menuButton = (d: MirrorPhone) => (
+    <button type="button" className="phone-tool ds-more" title={t('ds.menu.title')} aria-label={t('ds.menu.title')} aria-haspopup="menu" onClick={(e) => openMenu(e, d)}>
+      <Icon name="more" size={17} />
+    </button>
+  );
+
+  // ---------- views ----------
+
+  const overlays = (
+    <>
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => {
+          const list = Array.from(e.target.files ?? []);
+          e.target.value = '';
+          if (sendTo.current) void sendFiles(sendTo.current, list);
+        }}
+      />
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.d)} onClose={() => setMenu(null)} />}
+      {dialog && <Dialog spec={dialog} onClose={() => setDialog(null)} />}
+      {linking && (
+        <LinkSheet
+          known={new Set(linking.list.map((d) => d.id))}
+          mine={linking.list}
+          used={linking.limits?.used ?? linking.list.length}
+          limit={linking.limits?.limit ?? 0}
+          onUnlink={async (d) => {
+            const ok = await confirmDialog({
+              title: tr('ld.unlinkTitle', { name: d.name }),
+              message: tr('ld.unlinkMsg'),
+              confirmLabel: tr('ld.unlink'),
+              danger: true,
+            });
+            if (!ok) return false;
+            const r = await devicesApi.unlink(d.id);
+            if (!r.ok && r.status !== 404) {
+              toast('error', tr('ld.unlinkFail'), r.error);
+              return false;
+            }
+            load();
+            return true;
+          }}
+          onChanged={load}
+          onClose={() => {
+            setLinking(null);
+            load();
+          }}
+        />
+      )}
+    </>
+  );
+
+  if (error && !devices) {
     return (
-      <div className="phone-app">
+      <div className="phone-app ds-app">
         <div className="phone-empty">
           <Icon name="alert" size={30} />
           <b>{t('phone.loadError')}</b>
@@ -74,580 +355,201 @@ export function Phone() {
       </div>
     );
   }
-  if (!phones) {
+  if (!devices) {
     return (
-      <div className="phone-app">
+      <div className="phone-app ds-app">
         <div className="phone-empty">
           <span className="phone-spin" />
-          <span className="muted">{t('phone.loading')}</span>
+          <span className="muted">{t('ds.loading')}</span>
         </div>
       </div>
     );
   }
-  if (phones.length === 0) {
+  if (devices.length === 0) {
     return (
-      <div className="phone-app">
+      <div className="phone-app ds-app">
         <div className="phone-empty">
           <span className="phone-empty-ico">
-            <Icon name="phone" size={30} />
+            <Icon name="devices" size={30} />
           </span>
-          <b>{t('phone.none.title')}</b>
-          <p className="muted small">{t('phone.none.body')}</p>
-          <div className="row phone-empty-actions">
-            <button type="button" onClick={() => openApp('settings', { props: { section: 'devices' } })}>
-              {t('phone.none.open')}
+          <b>{t('ds.none.title')}</b>
+          <p className="muted small">{t('ds.none.body', { page: t('set.devices') })}</p>
+          <div className="ds-actions">
+            <button type="button" onClick={() => void startLinking()}>
+              <Icon name="plus" size={14} /> {t('ds.linkNew')}
+            </button>
+            <button type="button" className="neutral" onClick={openSettings}>
+              {t('ds.openPage', { page: t('set.devices') })}
             </button>
             <button type="button" className="neutral" onClick={load}>
               {t('phone.retry')}
             </button>
           </div>
         </div>
+        {overlays}
       </div>
     );
   }
-  const phone = phones.find((p) => p.id === picked);
-  if (!phone || picking) {
-    return (
-      <div className="phone-app">
-        <div className="phone-pick">
-          <h3 className="no-margin">{t('phone.pick.title')}</h3>
-          <p className="muted small no-margin">{t('phone.pick.body')}</p>
-          <div className="phone-pick-list">
-            {phones.map((p) => (
-              <button key={p.id} type="button" className={`phone-pick-item${p.id === picked ? ' active' : ''}`} onClick={() => choose(p.id)}>
-                <span className="phone-pick-ico">
-                  <Icon name={p.platform === 'android' ? 'android' : 'phone'} size={20} />
-                </span>
-                <span className="phone-pick-text">
-                  <b>{p.name}</b>
-                  <span className="muted small">
-                    {p.mirror?.online ? t('phone.st.live') : p.last_seen_at ? t('phone.lastSeen', { ago: ago(t, p.last_seen_at) }) : t('phone.neverSeen')}
-                    {p.battery != null ? ` · ${t('phone.battery', { n: p.battery })}` : ''}
-                  </span>
-                </span>
-                {p.mirror?.online && <span className="phone-dot live" />}
-              </button>
-            ))}
-          </div>
-          {phone && (
-            <button type="button" className="neutral small" onClick={() => setPicking(false)}>
-              {t('phone.pick.cancel')}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return <Mirror key={phone.id} phone={phone} many={phones.length > 1} onSwitch={() => setPicking(true)} onGone={load} />;
-}
 
-function ago(t: T, iso: string): string {
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return t('phone.ago.now');
-  if (s < 3600) return t('phone.ago.min', { n: Math.floor(s / 60) });
-  if (s < 86400) return t('phone.ago.hour', { n: Math.floor(s / 3600) });
-  return t('phone.ago.day', { n: Math.floor(s / 86400) });
-}
-
-type Conn = 'connecting' | 'open' | 'reconnecting' | 'gone';
-
-interface Live {
-  online: boolean;
-  state: string;
-  control: boolean;
-  link: MirrorLink;
-}
-
-const SPECIAL: Record<string, string> = {
-  Enter: 'Enter',
-  Backspace: 'Backspace',
-  Delete: 'Delete',
-  Tab: 'Tab',
-  ArrowLeft: 'ArrowLeft',
-  ArrowRight: 'ArrowRight',
-  ArrowUp: 'ArrowUp',
-  ArrowDown: 'ArrowDown',
-};
-
-function Mirror({ phone, many, onSwitch, onGone }: { phone: MirrorPhone; many: boolean; onSwitch: () => void; onGone: () => void }) {
-  const t = useT();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const screenRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<PhoneStream | null>(null);
-  const [conn, setConn] = useState<Conn>('connecting');
-  const [live, setLive] = useState<Live>({
-    online: !!phone.mirror?.online,
-    state: phone.mirror?.state ?? '',
-    control: phone.mirror?.control ?? true,
-    link: phone.mirror?.link ?? '',
-  });
-  const [pic, setPic] = useState<{ w: number; h: number } | null>(null);
-  const [jpeg, setJpeg] = useState(false);
-  const [rot, setRot] = useState(0);
-  const [stage, setStage] = useState({ w: 0, h: 0 });
-  const [latency, setLatency] = useState<number | null>(null);
-  const [full, setFull] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const rotRef = useRef(0);
-  rotRef.current = rot;
-
-  const send = useCallback((m: Record<string, unknown>) => streamRef.current?.send(m), []);
-
-  // Connect (and reconnect with a fresh ticket, backing off) while open.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    let stopped = false;
-    let delay = 1000;
-    let timer = 0;
-    let pinger = 0;
-    let everOpen = false;
-
-    const connect = async () => {
-      if (stopped) return;
-      const wantJpeg = !(await h264Supported());
-      if (stopped) return;
-      setJpeg(wantJpeg);
-      const r = await mirrorApi.ticket(phone.id, wantJpeg);
-      if (stopped) return;
-      if (!r.ok) {
-        if (r.status === 404 || r.status === 403) {
-          setConn('gone');
-          return;
-        }
-        setConn(everOpen ? 'reconnecting' : 'connecting');
-        delay = nextDelay(delay);
-        timer = window.setTimeout(() => void connect(), delay);
-        return;
-      }
-      const s = new PhoneStream(mirrorSocketURL(r.data.ticket), canvas, {
-        onOpen: () => {
-          everOpen = true;
-          delay = 1000;
-          setConn('open');
-          window.clearInterval(pinger);
-          pinger = window.setInterval(() => s.send({ t: 'ping', id: Date.now() }), 10_000);
-          s.send({ t: 'ping', id: Date.now() });
-        },
-        onMessage: (m) => onMessage(m),
-        onPicture: (w, h) => setPic({ w, h }),
-        onClose: () => {
-          window.clearInterval(pinger);
-          if (streamRef.current === s) streamRef.current = null;
-          if (stopped) return;
-          setConn('reconnecting');
-          setLatency(null);
-          delay = nextDelay(delay);
-          timer = window.setTimeout(() => void connect(), delay);
-        },
-      });
-      streamRef.current = s;
-    };
-
-    const onMessage = (m: PhoneMessage) => {
-      switch (m.t) {
-        case 'hello':
-          setLive({
-            online: !!m.online,
-            state: String(m.state ?? ''),
-            control: m.control !== false,
-            link: (m.link as MirrorLink) ?? '',
-          });
-          break;
-        case 'phone':
-          setLive((l) => ({ ...l, online: !!m.online, link: m.link != null ? (m.link as MirrorLink) : l.link, ...(m.online ? {} : { state: '' }) }));
-          if (!m.online) setPic(null);
-          break;
-        case 'state':
-          setLive((l) => ({ ...l, state: String(m.state ?? '') }));
-          break;
-        case 'meta':
-          if (typeof m.control === 'boolean') setLive((l) => ({ ...l, control: m.control as boolean }));
-          break;
-        case 'pong':
-          if (typeof m.id === 'number') setLatency(Math.max(0, Date.now() - m.id));
-          break;
-      }
-    };
-
-    setConn('connecting');
-    void connect();
-    return () => {
-      stopped = true;
-      window.clearTimeout(timer);
-      window.clearInterval(pinger);
-      streamRef.current?.close();
-      streamRef.current = null;
-    };
-  }, [phone.id, attempt]);
-
-  // Fit the frame into the window.
-  useLayoutEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setStage({ w: el.clientWidth, h: el.clientHeight }));
-    ro.observe(el);
-    setStage({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const f = () => setFull(document.fullscreenElement === rootRef.current);
-    document.addEventListener('fullscreenchange', f);
-    return () => document.removeEventListener('fullscreenchange', f);
-  }, []);
-
-  // ---------- input ----------
-
-  /** A pointer position as a point on the phone's picture (0..1). */
-  const point = useCallback((clientX: number, clientY: number): [number, number] => {
-    const r = screenRef.current?.getBoundingClientRect();
-    if (!r || !r.width || !r.height) return [0.5, 0.5];
-    return unrotate((clientX - r.left) / r.width, (clientY - r.top) / r.height, rotRef.current);
-  }, []);
-
-  const press = useRef<{ x: number; y: number; cx: number; cy: number; at: number; moved: boolean; done: boolean; id: number } | null>(null);
-  const longTimer = useRef(0);
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    screenRef.current?.focus({ preventScroll: true });
-    if (e.button !== 0) return;
-    e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const [x, y] = point(e.clientX, e.clientY);
-    press.current = { x, y, cx: e.clientX, cy: e.clientY, at: performance.now(), moved: false, done: false, id: e.pointerId };
-    window.clearTimeout(longTimer.current);
-    longTimer.current = window.setTimeout(() => {
-      const p = press.current;
-      if (p && !p.moved && !p.done) {
-        p.done = true;
-        send({ t: 'long', x: p.x, y: p.y });
-      }
-    }, 500);
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    const p = press.current;
-    if (!p || p.id !== e.pointerId) return;
-    if (Math.hypot(e.clientX - p.cx, e.clientY - p.cy) >= 8) p.moved = true;
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    const p = press.current;
-    if (!p || p.id !== e.pointerId) return;
-    press.current = null;
-    window.clearTimeout(longTimer.current);
-    if (p.done) return;
-    const dt = performance.now() - p.at;
-    const [x2, y2] = point(e.clientX, e.clientY);
-    if (!p.moved) send({ t: 'tap', x: p.x, y: p.y });
-    else send({ t: 'swipe', x1: p.x, y1: p.y, x2, y2, ms: Math.round(Math.min(3000, Math.max(50, dt))) });
-  };
-  const onPointerCancel = () => {
-    press.current = null;
-    window.clearTimeout(longTimer.current);
-  };
-
-  // Wheel: summed up and sent every 50 ms (non-passive, so the window doesn't scroll).
-  useEffect(() => {
-    const el = screenRef.current;
-    if (!el) return;
-    let dx = 0;
-    let dy = 0;
-    let at: [number, number] = [0.5, 0.5];
-    let timer = 0;
-    const flush = () => {
-      timer = 0;
-      if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
-      // The view may be rotated: turn the scroll with it.
-      let sx = dx;
-      let sy = dy;
-      switch (rotRef.current % 4) {
-        case 1:
-          [sx, sy] = [sy, -sx];
-          break;
-        case 2:
-          [sx, sy] = [-sx, -sy];
-          break;
-        case 3:
-          [sx, sy] = [-sy, sx];
-          break;
-      }
-      streamRef.current?.send({ t: 'scroll', x: at[0], y: at[1], dx: round2(sx), dy: round2(sy) });
-      dx = 0;
-      dy = 0;
-    };
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const unit = e.deltaMode === 1 ? 1 / 3 : e.deltaMode === 2 ? 10 : 1 / 100;
-      dx += e.deltaX * unit;
-      dy += e.deltaY * unit;
-      at = point(e.clientX, e.clientY);
-      if (!timer) timer = window.setTimeout(flush, 50);
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      el.removeEventListener('wheel', onWheel);
-      window.clearTimeout(timer);
-    };
-  }, [point]);
-
-  // Typing: printable keys are batched into one "text" message.
-  const typed = useRef('');
-  const typeTimer = useRef(0);
-  const flushText = useCallback(() => {
-    typeTimer.current = 0;
-    const s = typed.current;
-    typed.current = '';
-    if (s) send({ t: 'text', s });
-  }, [send]);
-  const sendText = (s: string) => {
-    flushText();
-    // Keep each message well under the 8 KB limit.
-    for (let i = 0; i < s.length; i += 1000) send({ t: 'text', s: s.slice(i, i + 1000) });
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return; // shortcuts and paste stay the browser's
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      flushText();
-      return send({ t: 'global', a: 'back' });
-    }
-    const k = SPECIAL[e.key];
-    if (k) {
-      e.preventDefault();
-      flushText();
-      return send({ t: 'key', k });
-    }
-    if (e.key.length === 1 || [...e.key].length === 1) {
-      e.preventDefault();
-      typed.current += e.key;
-      if (typed.current.length >= 500) return flushText();
-      if (!typeTimer.current) typeTimer.current = window.setTimeout(flushText, 40);
-    }
-  };
-  const onPaste = (e: React.ClipboardEvent) => {
-    const s = e.clipboardData.getData('text');
-    if (!s) return;
-    e.preventDefault();
-    sendText(s);
-  };
-  useEffect(() => () => window.clearTimeout(typeTimer.current), []);
-
-  // ---------- buttons ----------
-
-  const global = (a: string) => send({ t: 'global', a });
-  const vol = (d: number) => send({ t: 'vol', d });
-
-  const screenshot = () => {
-    const c = canvasRef.current;
-    if (!c || !pic) return toast('info', t('phone.shot.none'));
-    c.toBlob((blob) => {
-      if (!blob) return toast('error', t('phone.shot.failed'));
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      a.href = url;
-      a.download = `${phone.name.replace(/[\\/:*?"<>|]+/g, '_') || 'phone'}-screenshot-${stamp}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      toast('success', t('phone.shot.saved'));
-    }, 'image/png');
-  };
-
-  const fullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    else void rootRef.current?.requestFullscreen?.().catch(() => undefined);
-  };
-
-  const askAgain = async () => {
-    const r = await mirrorApi.ask(phone.id);
-    if (r.ok) {
-      setLive((l) => ({ ...l, state: '' }));
-      toast('success', t('phone.asked'));
-    } else if (r.status === 404) setConn('gone');
-    else toast('error', t('phone.askFailed'), r.error);
-  };
-
-  // ---------- layout ----------
-
-  const pw = pic?.w ?? 1080;
-  const ph = pic?.h ?? 2340;
-  const sideways = rot % 2 === 1;
-  const aspect = sideways ? ph / pw : pw / ph; // shown width / height
-  const bezel = 12;
-  const availW = Math.max(0, stage.w - bezel * 2 - 8);
-  const availH = Math.max(0, stage.h - bezel * 2 - 8);
-  let vw = availW;
-  let vh = availW / aspect;
-  if (vh > availH) {
-    vh = availH;
-    vw = availH * aspect;
-  }
-  const canvasStyle: React.CSSProperties = {
-    width: sideways ? vh : vw,
-    height: sideways ? vw : vh,
-    transform: `translate(-50%, -50%) rotate(${rot * 90}deg)`,
-  };
-
-  // What to say over the screen, if anything.
-  let overlay: { icon: IconName | 'spin'; title: string; body?: string; ask?: boolean } | null = null;
-  if (conn === 'gone') overlay = { icon: 'alert', title: t('phone.st.gone'), body: t('phone.st.goneBody') };
-  else if (conn === 'connecting') overlay = { icon: 'spin', title: t('phone.st.connecting') };
-  else if (conn === 'reconnecting') overlay = { icon: 'spin', title: t('phone.st.reconnecting') };
-  else if (live.state === 'denied') overlay = { icon: 'lock', title: t('phone.st.denied'), body: t('phone.st.deniedBody'), ask: true };
-  else if (live.state === 'unsupported') overlay = { icon: 'alert', title: t('phone.st.unsupported'), body: t('phone.st.unsupportedBody') };
-  else if (live.state === 'asking') overlay = { icon: 'phone', title: t('phone.st.asking'), body: t('phone.st.askingBody') };
-  else if (!live.online) overlay = { icon: 'phone', title: t('phone.st.waiting'), body: t('phone.st.waitingBody'), ask: true };
-  else if (live.state === 'paused') overlay = { icon: 'pause', title: t('phone.st.paused') };
-  else if (live.state === 'stopping') overlay = { icon: 'spin', title: t('phone.st.stopping') };
-  else if (!pic) overlay = { icon: 'spin', title: t('phone.st.starting') };
-
-  const streaming = conn === 'open' && live.online && !overlay;
-  const stateText =
-    conn === 'gone'
-      ? t('phone.st.gone')
-      : conn !== 'open'
-        ? t(conn === 'connecting' ? 'phone.st.connecting' : 'phone.st.reconnecting')
-        : streaming
-          ? t('phone.st.live')
-          : live.state === 'asking'
-            ? t('phone.st.asking')
-            : live.state === 'denied'
-              ? t('phone.st.denied')
-              : live.online
-                ? t('phone.st.starting')
-                : t('phone.st.waiting');
-
-  const tools: { icon: IconName; label: string; run: () => void; on?: boolean }[] = [
-    { icon: 'chevronLeft', label: t('phone.btn.back'), run: () => global('back') },
-    { icon: 'home', label: t('phone.btn.home'), run: () => global('home') },
-    { icon: 'layers', label: t('phone.btn.recents'), run: () => global('recents') },
-  ];
-  const extras: { icon: IconName; label: string; run: () => void; on?: boolean }[] = [
-    { icon: 'minimize', label: t('phone.btn.volDown'), run: () => vol(-1) },
-    { icon: 'plus', label: t('phone.btn.volUp'), run: () => vol(1) },
-    { icon: 'restart', label: t('phone.btn.rotate'), run: () => setRot((r) => (r + 1) % 4), on: rot !== 0 },
-    { icon: 'camera', label: t('phone.btn.screenshot'), run: screenshot },
-    { icon: full ? 'restore' : 'maximize', label: full ? t('phone.btn.exitFullscreen') : t('phone.btn.fullscreen'), run: fullscreen, on: full },
-  ];
+  const device = devices.find((p) => p.id === picked) ?? null;
+  const why = device ? cantStream(device) : '';
 
   return (
-    <div className={`phone-app${full ? ' full' : ''}`} ref={rootRef}>
+    <div className="ds-wrap">
+      <div className="ds-app">
+        <aside className="ds-side" aria-label={t('ds.listLabel')}>
+          <div className="ds-side-head">
+            <b>{t('ds.yours')}</b>
+            <button type="button" className="icon-btn neutral" title={t('phone.retry')} aria-label={t('phone.retry')} onClick={load}>
+              <Icon name="restart" size={14} />
+            </button>
+          </div>
+          <div className="ds-list" role="listbox" aria-label={t('ds.listLabel')}>
+            {devices.map((d) => {
+              const form = deviceForm(d);
+              return (
+                <div
+                  key={d.id}
+                  role="option"
+                  aria-selected={d.id === picked}
+                  tabIndex={0}
+                  className={`ds-item${d.id === picked ? ' active' : ''}`}
+                  onClick={() => choose(d.id)}
+                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), choose(d.id))}
+                  onContextMenu={(e) => openMenu(e, d)}
+                >
+                  <span className="ds-item-ico">
+                    <Icon name={FORM_ICON[form]} size={18} />
+                    <span className={`phone-dot${isOnline(d) ? ' live' : ''}`} />
+                  </span>
+                  <span className="ds-item-text">
+                    <b title={d.name}>{d.name}</b>
+                    <span className="muted small">
+                      {t(`ds.form.${form}`)}
+                      {d.model ? ` · ${d.model}` : ''}
+                    </span>
+                    <span className="muted small">{statusLine(t, d)}</span>
+                  </span>
+                  <button type="button" className="icon-btn neutral ds-item-more" title={t('ds.menu.title')} aria-label={t('ds.menu.title')} aria-haspopup="menu" onClick={(e) => openMenu(e, d)}>
+                    <Icon name="more" size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button type="button" className="small ds-link-new" onClick={() => void startLinking()}>
+            <Icon name="plus" size={14} /> {t('ds.linkNew')}
+          </button>
+
+          <div className="ds-side-head ds-servers-head">
+            <b>{t('ds.servers')}</b>
+            <button type="button" className="small neutral" onClick={() => void lookForServers()} disabled={looking}>
+              {looking ? t('ds.looking') : t('ds.look')}
+            </button>
+          </div>
+          {servers &&
+            (!servers.available ? (
+              <p className="muted small ds-servers-note">{t('ds.serversOff')}</p>
+            ) : servers.list.length === 0 ? (
+              <p className="muted small ds-servers-note">{t('ds.serversNone')}</p>
+            ) : (
+              <div className="ds-list">
+                {servers.list.map((s) => (
+                  <ServerRow key={s.nocap_id || s.url} s={s} />
+                ))}
+                <p className="muted small ds-servers-note">{t('ds.serversHint')}</p>
+              </div>
+            ))}
+        </aside>
+
+        <section className="ds-main">
+          {sending && (
+            <div className="ds-progress" role="progressbar" aria-valuemin={0} aria-valuemax={sending.total || 1} aria-valuenow={sending.loaded}>
+              <Icon name="upload" size={14} />
+              <span className="ds-progress-text">
+                {t('ds.sending', {
+                  name: sending.name,
+                  device: sending.device,
+                })}
+              </span>
+              <span className="ds-progress-bar">
+                <span
+                  style={{
+                    width: `${sending.total ? Math.round((sending.loaded / sending.total) * 100) : 0}%`,
+                  }}
+                />
+              </span>
+              <span className="muted small">{sending.total ? Math.round((sending.loaded / sending.total) * 100) : 0}%</span>
+            </div>
+          )}
+          {!device ? (
+            <div className="phone-empty">
+              <span className="phone-empty-ico">
+                <Icon name="devices" size={30} />
+              </span>
+              <b>{t('ds.pick')}</b>
+            </div>
+          ) : why ? (
+            <Needs d={device} why={why} menu={menuButton(device)} onSettings={openSettings} />
+          ) : (
+            <Mirror key={device.id} phone={device} form={deviceForm(device)} menu={menuButton(device)} onGone={load} />
+          )}
+        </section>
+        {overlays}
+      </div>
+    </div>
+  );
+}
+
+/** A device that can't show its screen here: what it would take. */
+function Needs({ d, why, menu, onSettings }: { d: MirrorPhone; why: 'platform'; menu: React.ReactNode; onSettings: () => void }) {
+  const t = useT();
+  const form = deviceForm(d);
+  return (
+    <div className="phone-app">
       <div className="phone-top">
-        <span className={`phone-dot${streaming ? ' live' : conn === 'gone' || live.state === 'denied' ? ' bad' : ''}`} />
+        <span className={`phone-dot${isOnline(d) ? ' live' : ''}`} />
         <span className="phone-top-text">
-          <b title={phone.name}>{phone.name}</b>
-          <span className="muted small">
-            {stateText}
-            {streaming && latency != null ? ` · ${t('phone.latency', { ms: latency })}` : ''}
-          </span>
+          <b title={d.name}>{d.name}</b>
+          <span className="muted small">{statusLine(t, d)}</span>
         </span>
         <span className="spacer" />
-        {live.link && (
-          <span className={`phone-badge ${live.link}`} title={t(live.link === 'nearby' ? 'phone.link.nearbyHint' : 'phone.link.remoteHint')}>
-            <Icon name={live.link === 'nearby' ? 'wifi' : 'globe'} size={12} />
-            {t(live.link === 'nearby' ? 'phone.link.nearby' : 'phone.link.remote')}
-          </span>
-        )}
-        {jpeg && (
-          <span className="phone-badge" title={t('phone.jpegHint')}>
-            {t('phone.jpeg')}
-          </span>
-        )}
-        {many && (
-          <button type="button" className="icon-btn neutral" title={t('phone.pick.switch')} aria-label={t('phone.pick.switch')} onClick={onSwitch}>
-            <Icon name="swap" size={15} />
+        {menu}
+      </div>
+      <div className="phone-empty">
+        <span className="phone-empty-ico">
+          <Icon name={FORM_ICON[form]} size={30} />
+        </span>
+        <b>{why === 'platform' && t('ds.needs.platformTitle')}</b>
+        <p className="muted small">{t('ds.needs.platformBody')}</p>
+        <div className="ds-actions">
+          <button type="button" className="neutral" onClick={onSettings}>
+            {t('ds.openPage', { page: t('set.devices') })}
           </button>
-        )}
-      </div>
-
-      {streaming && !live.control && (
-        <div className="phone-note">
-          <Icon name="info" size={14} />
-          <span>{t('phone.controlOff')}</span>
-        </div>
-      )}
-
-      <div className="phone-stage" ref={stageRef}>
-        <div className="phone-frame" style={{ padding: bezel }}>
-          <div
-            ref={screenRef}
-            className="phone-screen"
-            style={{ width: vw, height: vh }}
-            tabIndex={0}
-            role="application"
-            aria-label={t('phone.screenLabel')}
-            title={streaming ? t('phone.hint') : undefined}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              global('back');
-            }}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-          >
-            <canvas ref={canvasRef} className={`phone-canvas${pic ? '' : ' empty'}`} style={canvasStyle} />
-            {overlay && (
-              <div className="phone-overlay" onPointerDown={(e) => e.stopPropagation()}>
-                {overlay.icon === 'spin' ? <span className="phone-spin" /> : <Icon name={overlay.icon} size={28} />}
-                <b>{overlay.title}</b>
-                {overlay.body && <p className="small">{overlay.body}</p>}
-                {overlay.ask && (
-                  <button type="button" className="small" onClick={() => void askAgain()}>
-                    {t('phone.askAgain')}
-                  </button>
-                )}
-                {conn === 'gone' && (
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => {
-                      onGone();
-                      setAttempt((a) => a + 1);
-                    }}
-                  >
-                    {t('phone.retry')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="phone-bar" role="toolbar" aria-label={t('phone.toolbar')}>
-        <div className="phone-bar-group">
-          {tools.map((b) => (
-            <button key={b.label} type="button" className="phone-tool" title={b.label} aria-label={b.label} onClick={b.run} disabled={!streaming}>
-              <Icon name={b.icon} size={17} />
-            </button>
-          ))}
-        </div>
-        <div className="phone-bar-group">
-          {extras.map((b) => (
-            <button
-              key={b.label}
-              type="button"
-              className={`phone-tool${b.on ? ' on' : ''}`}
-              title={b.label}
-              aria-label={b.label}
-              onClick={b.run}
-              disabled={(b.icon === 'minimize' || b.icon === 'plus' || b.icon === 'camera') && !streaming}
-            >
-              <Icon name={b.icon} size={17} />
-            </button>
-          ))}
         </div>
       </div>
     </div>
   );
 }
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+/** Another NoCap server on this network: opens its own page in a new tab. */
+function ServerRow({ s }: { s: FoundServer }) {
+  const t = useT();
+  const url = /^https?:\/\//i.test(s.url) ? s.url : '';
+  return (
+    <div className="ds-item ds-server">
+      <span className="ds-item-ico">
+        <Icon name="monitor" size={18} />
+      </span>
+      <span className="ds-item-text">
+        <b title={s.name || s.hostname}>{s.name || s.hostname}</b>
+        <span className="muted small">{s.setup === 'new' ? t('ds.serverNew') : (s.addresses[0] ?? s.hostname)}</span>
+      </span>
+      {url && (
+        <button type="button" className="small neutral" title={t('ds.serverOpenHint')} onClick={() => window.open(url, '_blank', 'noopener')}>
+          {t('ds.serverOpen')}
+        </button>
+      )}
+    </div>
+  );
+}

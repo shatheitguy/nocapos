@@ -12,6 +12,8 @@
 .files.fx .sidebar button.fs-item { gap: 10px; width: 100%; font-size: 13.5px; padding: 7px 10px; min-height: 34px; }
 .fs-item .fs-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .fs-item > svg { flex: none; opacity: 0.9; }
+.fs-badge { flex: none; min-width: 20px; height: 18px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; background: var(--accent); line-height: 1; }
+.files.fx .sidebar button.fs-received > svg { color: var(--ok); }
 .files.fx .sidebar button.fs-item.drop { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .files.fx .sidebar button.fs-item.missing { opacity: 0.45; }
 .files.fx .sidebar button.fs-hint { color: var(--muted); font-weight: 500; }

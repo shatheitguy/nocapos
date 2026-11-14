@@ -136,21 +136,21 @@ func TestDeviceSend(t *testing.T) {
 		t.Fatal("no home path")
 	}
 
-	// Files land in <home>/NoCap Link, keeping both on a repeat.
+	// Files land in <home>/Drops/<device>, keeping both on a repeat.
 	var paths []string
 	for i := 0; i < 2; i++ {
 		rec := devDo(w.s, w.s.deviceSend, multipartSend(t, map[string]string{`C:\phone\pic.jpg`: "jpeg"}), tok)
 		var res sendResult
 		_ = json.Unmarshal(rec.Body.Bytes(), &res)
-		if rec.Code != http.StatusCreated || res.Root != spaces.HomeRootID("alex") || res.Folder != "/NoCap Link" || len(res.Paths) != 1 {
+		if rec.Code != http.StatusCreated || res.Root != spaces.HomeRootID("alex") || res.Folder != "/Drops/Pixel 9" || len(res.Paths) != 1 {
 			t.Fatalf("send file: %d %s", rec.Code, rec.Body)
 		}
 		paths = append(paths, res.Paths[0])
 	}
-	if paths[0] != "/NoCap Link/pic.jpg" || paths[1] == paths[0] || !strings.HasPrefix(paths[1], "/NoCap Link/pic") {
+	if paths[0] != "/Drops/Pixel 9/pic.jpg" || paths[1] == paths[0] || !strings.HasPrefix(paths[1], "/Drops/Pixel 9/pic") {
 		t.Fatalf("paths: %v", paths)
 	}
-	if b, err := os.ReadFile(filepath.Join(home, "NoCap Link", "pic.jpg")); err != nil || string(b) != "jpeg" {
+	if b, err := os.ReadFile(filepath.Join(home, "Drops", "Pixel 9", "pic.jpg")); err != nil || string(b) != "jpeg" {
 		t.Fatalf("saved file: %q %v", b, err)
 	}
 
@@ -160,7 +160,7 @@ func TestDeviceSend(t *testing.T) {
 		rec := asDevice(w.s, w.s.deviceSend, "POST", "/api/v1/device/send", tok, body)
 		var res sendResult
 		_ = json.Unmarshal(rec.Body.Bytes(), &res)
-		if rec.Code != http.StatusCreated || len(res.Paths) != 1 || !strings.HasPrefix(res.Paths[0], "/NoCap Link/Shopping  list ") || !strings.HasSuffix(res.Paths[0], ".txt") {
+		if rec.Code != http.StatusCreated || len(res.Paths) != 1 || !strings.HasPrefix(res.Paths[0], "/Drops/Pixel 9/Shopping  list ") || !strings.HasSuffix(res.Paths[0], ".txt") {
 			t.Fatalf("send text: %d %s", rec.Code, rec.Body)
 		}
 		b, err := os.ReadFile(filepath.Join(home, filepath.FromSlash(strings.TrimPrefix(res.Paths[0], "/"))))
@@ -168,14 +168,14 @@ func TestDeviceSend(t *testing.T) {
 			t.Fatalf("saved text: %q %v", b, err)
 		}
 	}
-	ents, _ := os.ReadDir(filepath.Join(home, "NoCap Link"))
+	ents, _ := os.ReadDir(filepath.Join(home, "Drops", "Pixel 9"))
 	if len(ents) != 4 {
 		t.Fatalf("want 4 files (kept both), got %d", len(ents))
 	}
 
 	// No title: named after the device.
 	rec := asDevice(w.s, w.s.deviceSend, "POST", "/api/v1/device/send", tok, `{"text":"hi"}`)
-	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), "/NoCap Link/From Pixel 9 ") {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), "/Drops/Pixel 9/From Pixel 9 ") {
 		t.Fatalf("untitled: %d %s", rec.Code, rec.Body)
 	}
 	// Validation.
