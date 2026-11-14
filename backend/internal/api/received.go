@@ -202,7 +202,9 @@ func (s *Server) receivedUnread(root, folder string, seen time.Time) int {
 				}
 				continue
 			}
-			if e.ModTime.After(seen) {
+			// seen is stored in milliseconds: compare at that precision, or a
+			// file written in the same millisecond still counts as new.
+			if e.ModTime.Truncate(time.Millisecond).After(seen) {
 				n++
 			}
 		}
