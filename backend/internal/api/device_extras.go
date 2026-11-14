@@ -10,7 +10,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -221,14 +220,11 @@ func (s *Server) devicePrefs(w http.ResponseWriter, r *http.Request) {
 
 // ---------- Send to NoCap ----------
 
-// sendFolder is where things sent from a phone land, at the top of its
-// owner's home.
-const sendFolder = "NoCap Link"
-
 const maxSendText = 1_000_000
 
-// sendHome is the owner's home location id, or "" when they have none.
-func (s *Server) sendHome(r *http.Request) string {
+// sendHome is the owner's home location id, or "" when they have none (or
+// may not write folder in it).
+func (s *Server) sendHome(r *http.Request, folder string) string {
 	if s.Spaces == nil {
 		return ""
 	}
@@ -251,7 +247,7 @@ func (s *Server) sendHome(r *http.Request) string {
 			return ""
 		}
 	}
-	if !s.access(r, id, sendFolder).CanWrite() {
+	if !s.access(r, id, folder).CanWrite() {
 		return ""
 	}
 	return id
@@ -293,14 +289,10 @@ type sendTextRequest struct {
 }
 
 // deviceSend saves files or text shared from the phone into
-// <home>/NoCap Link (keeping both on a name clash).
+// <home>/<Received>/<device> (keeping both on a name clash), and tells the
+// person's desktops.
 func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 	d, u := deviceFrom(r.Context()), userFrom(r.Context())
-	root := s.sendHome(r)
-	if root == "" {
-		writeError(w, http.StatusServiceUnavailable, "no_home", "Your account doesn't have a home folder on this server.")
-		return
-	}
 	mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if mt != "multipart/form-data" && mt != "application/json" {
 		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type", "send multipart/form-data files or JSON text")
@@ -317,9 +309,17 @@ func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := s.Files.Mkdir(root, ".", sendFolder); err == nil {
-		s.ownFiles(root, sendFolder)
-	} else if !errors.Is(err, fs.ErrExist) {
+	root, folder, err := s.receivedRoot(r)
+	if errors.Is(err, errNoHome) {
+		writeError(w, http.StatusServiceUnavailable, "no_home", "Your account doesn't have a home folder on this server.")
+		return
+	}
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	dir, err := s.receivedDeviceFolder(root, folder, d.Name, false)
+	if err != nil {
 		s.fileError(w, r, err)
 		return
 	}
@@ -327,7 +327,7 @@ func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 	saved := []string{}
 	if mt == "application/json" {
 		name := sendName(text.Title, d.Name, time.Now())
-		rel, err := s.Files.UploadWith(root, sendFolder, name, strings.NewReader(text.Text), files.ConflictRename)
+		rel, err := s.Files.UploadWith(root, dir, name, strings.NewReader(text.Text), files.ConflictRename)
 		if err != nil {
 			s.audit(r, u.ID, "devices.send", d.Name, false, "text")
 			s.fileError(w, r, err)
@@ -352,7 +352,7 @@ func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			if err != nil {
-				s.auditSend(r, u.ID, d.Name, saved, false)
+				s.auditSend(r, u.ID, d.Name, dir, saved, false)
 				if tooBig(err) {
 					writeError(w, http.StatusRequestEntityTooLarge, "too_large", "That's bigger than this server takes in one go.")
 					return
@@ -365,11 +365,13 @@ func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 				part.Close()
 				continue
 			}
-			name = path.Base(strings.ReplaceAll(name, `\`, "/"))
-			rel, err := s.Files.UploadWith(root, sendFolder, name, part, files.ConflictRename)
+			if name = cleanFileName(name); name == "" {
+				name = "file"
+			}
+			rel, err := s.Files.UploadWith(root, dir, name, part, files.ConflictRename)
 			part.Close()
 			if err != nil {
-				s.auditSend(r, u.ID, d.Name, saved, false)
+				s.auditSend(r, u.ID, d.Name, dir, saved, false)
 				if tooBig(err) {
 					writeError(w, http.StatusRequestEntityTooLarge, "too_large", "That's bigger than this server takes in one go.")
 					return
@@ -385,15 +387,19 @@ func (s *Server) deviceSend(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.auditSend(r, u.ID, d.Name, saved, true)
+	s.auditSend(r, u.ID, d.Name, dir, saved, true)
 	if s.FileIndex != nil {
 		s.FileIndex.Touch()
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"root": root, "folder": "/" + sendFolder, "paths": saved})
+	s.link().tell(u.ID, linkEvent{Type: "received", Received: &linkReceived{
+		DeviceID: d.ID, DeviceName: d.Name, Root: root, Folder: display(dir), Paths: saved,
+		At: time.Now().UTC().Format(time.RFC3339),
+	}})
+	writeJSON(w, http.StatusCreated, map[string]any{"root": root, "folder": display(dir), "paths": saved})
 }
 
-func (s *Server) auditSend(r *http.Request, userID, deviceName string, saved []string, ok bool) {
-	s.audit(r, userID, "devices.send", deviceName, ok, fmt.Sprintf("%d item(s) to %s", len(saved), "/"+sendFolder))
+func (s *Server) auditSend(r *http.Request, userID, deviceName, dir string, saved []string, ok bool) {
+	s.audit(r, userID, "devices.send", deviceName, ok, fmt.Sprintf("%d item(s) to %s", len(saved), display(dir)))
 }
 
 // ---------- home-screen backup ----------

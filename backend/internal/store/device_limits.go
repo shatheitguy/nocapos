@@ -8,12 +8,12 @@ import (
 
 // SetDeviceDetails records what a device says about itself; nil leaves a
 // field as it is.
-func (s *Store) SetDeviceDetails(ctx context.Context, id string, model, osVersion, caps *string) error {
+func (s *Store) SetDeviceDetails(ctx context.Context, id string, model, osVersion, caps, form *string) error {
 	q, args := `UPDATE devices SET id = id`, []any{}
 	for _, f := range []struct {
 		col string
 		v   *string
-	}{{"model", model}, {"os_version", osVersion}, {"caps", caps}} {
+	}{{"model", model}, {"os_version", osVersion}, {"caps", caps}, {"form", form}} {
 		if f.v != nil {
 			q += `, ` + f.col + ` = ?`
 			args = append(args, *f.v)

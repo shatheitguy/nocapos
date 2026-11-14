@@ -113,7 +113,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
     // Apps
     const apps = visibleApps(isAdmin);
     for (const a of apps) {
-      const s = needle ? match(needle, a.title, a.description) : recents.includes(a.id) ? 50 - recents.indexOf(a.id) : 0;
+      const s = needle ? match(needle, a.title, a.description, a.keywords ?? '') : recents.includes(a.id) ? 50 - recents.indexOf(a.id) : 0;
       if (!s) continue;
       out.push({
         key: `app:${a.id}`,

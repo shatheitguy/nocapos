@@ -1,26 +1,27 @@
 #!/bin/sh
 # live-build binary hook (runs in binary/, after the boot menus and splash
-# were generated, before the ISO is made): NoCapOS names, colours and art
-# for the ISO's boot menus (GRUB for UEFI, syslinux for BIOS).
+# were generated, before the ISO is made): NoCapOS's own boot menus, with
+# NoCapOS's colours and art, for BIOS (syslinux) and UEFI (GRUB):
+#   Try or Install NoCapOS                    live NoCap Desktop + graphical installer
+#   Install NoCapOS (text mode, for servers)  debian-installer with NoCapOS's preseed
+#   Try or Install NoCapOS (safe graphics)    the live session with nomodeset
+#   Memory test                               when memtest86+ is on the medium
 set -e
 ART=../config/nocapos-art
 VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' ../chroot/usr/lib/nocapos/image/image-release)"
+LIVE_APPEND="$(cat "$ART/boot-append-live")"
+DI_APPEND="$(cat "$ART/boot-append-install")"
 
-brand_names() {
-  sed -i \
-    -e 's/Live system/Try NoCapOS/g' \
-    -e 's/Start installer with speech synthesis/Install NoCapOS with speech synthesis/g' \
-    -e 's/Start installer/Install NoCapOS/g' \
-    -e 's/Graphical install/Install NoCapOS (graphical)/g' \
-    -e 's/Debian GNU\/Linux/NoCapOS/g' \
-    -e 's/Debian/NoCapOS/g' \
-    -e 's/menu title Boot menu/menu title NoCapOS/' \
-    "$@"
-}
+kernel="$(find live -maxdepth 1 -name 'vmlinuz-*' | sort | tail -1)"
+initrd="$(find live -maxdepth 1 -name 'initrd.img-*' | sort | tail -1)"
+[ -n "$kernel" ] && [ -n "$initrd" ] || { echo "boot menu: no live kernel/initrd in binary/live" >&2; exit 1; }
+kernel="/$kernel"
+initrd="/$initrd"
+di_kernel=""
+if [ -f install/vmlinuz ] && [ -f install/initrd.gz ]; then di_kernel=/install/vmlinuz; fi
 
-# UEFI (and BIOS when GRUB is the BIOS loader): GRUB.
+# ---------------------------------------------------------------- UEFI: GRUB
 if [ -d boot/grub ]; then
-  for f in boot/grub/*.cfg; do if [ -f "$f" ]; then brand_names "$f"; fi; done
   cp "$ART/grub-live-splash.png" boot/grub/splash.png
   mkdir -p boot/grub/live-theme
   cat >boot/grub/live-theme/theme.txt <<'THEME'
@@ -56,17 +57,95 @@ terminal-font: "Unifont Regular 16"
   show_text = false
 }
 THEME
+  # No start-up beep.
+  if [ -f boot/grub/config.cfg ]; then sed -i '/^insmod play$/d; /^play /d' boot/grub/config.cfg; fi
+  {
+    echo "# NoCapOS $VERSION boot menu (UEFI and BIOS through GRUB)."
+    echo "source /boot/grub/config.cfg"
+    echo "set timeout=30"
+    echo
+    echo "menuentry \"Try or Install NoCapOS\" --hotkey=t {"
+    echo "	linux	$kernel $LIVE_APPEND"
+    echo "	initrd	$initrd"
+    echo "}"
+    if [ -n "$di_kernel" ]; then
+      echo "menuentry \"Install NoCapOS (text mode, for servers)\" --hotkey=i {"
+      echo "	linux	$di_kernel $DI_APPEND"
+      echo "	initrd	/install/initrd.gz"
+      echo "}"
+    fi
+    echo "menuentry \"Try or Install NoCapOS (safe graphics)\" --hotkey=s {"
+    echo "	linux	$kernel $LIVE_APPEND nomodeset"
+    echo "	initrd	$initrd"
+    echo "}"
+    if [ -f live/memtest.bin ]; then
+      echo "if [ \"\${grub_platform}\" = \"pc\" ]; then"
+      echo "	menuentry \"Memory test\" --hotkey=m {"
+      echo "		linux /live/memtest.bin"
+      echo "	}"
+      echo "fi"
+    fi
+    if [ -f live/memtest.efi ]; then
+      echo "if [ \"\${grub_platform}\" = \"efi\" ]; then"
+      echo "	menuentry \"Memory test\" --hotkey=m {"
+      echo "		linux /live/memtest.efi"
+      echo "	}"
+      echo "fi"
+    fi
+    echo "if [ \"\${grub_platform}\" = \"efi\" ]; then"
+    echo "	menuentry \"UEFI firmware settings\" --hotkey=f {"
+    echo "		fwsetup"
+    echo "	}"
+    echo "fi"
+  } >boot/grub/grub.cfg
 fi
 
-# BIOS: syslinux.
+# ---------------------------------------------------------------- BIOS: syslinux
 if [ -d isolinux ]; then
-  for f in isolinux/*.cfg; do if [ -f "$f" ]; then brand_names "$f"; fi; done
   cp "$ART/isolinux-splash.png" isolinux/splash.png
   if [ -f isolinux/stdmenu.cfg ]; then
     sed -i -e 's/#76a1d0ff/#ffe5383b/g' -e 's/^menu vshift .*/menu vshift 13/' isolinux/stdmenu.cfg
   fi
+  {
+    echo "menu hshift 0"
+    echo "menu width 82"
+    echo "menu title NoCapOS $VERSION"
+    echo "include stdmenu.cfg"
+    echo
+    echo "label live"
+    echo "	menu label ^Try or Install NoCapOS"
+    echo "	menu default"
+    echo "	linux $kernel"
+    echo "	initrd $initrd"
+    echo "	append $LIVE_APPEND"
+    if [ -n "$di_kernel" ]; then
+      echo
+      echo "label install"
+      echo "	menu label ^Install NoCapOS (text mode, for servers)"
+      echo "	linux $di_kernel"
+      echo "	initrd /install/initrd.gz"
+      echo "	append $DI_APPEND"
+    fi
+    echo
+    echo "label safe"
+    echo "	menu label Try or Install NoCapOS (^safe graphics)"
+    echo "	linux $kernel"
+    echo "	initrd $initrd"
+    echo "	append $LIVE_APPEND nomodeset"
+    if [ -f live/memtest.bin ]; then
+      echo
+      echo "label memtest"
+      echo "	menu label ^Memory test"
+      echo "	linux /live/memtest.bin"
+    fi
+    echo
+    echo "menu clear"
+  } >isolinux/menu.cfg
+  # Starts the first entry by itself after 30 seconds.
+  if [ -f isolinux/isolinux.cfg ]; then sed -i 's/^timeout .*/timeout 300/' isolinux/isolinux.cfg; fi
 fi
 
 if [ -d .disk ]; then
   echo "NoCapOS ${VERSION} amd64" >.disk/info
 fi
+echo "boot menus: NoCapOS $VERSION ($kernel${di_kernel:+, text installer}$( [ -f live/memtest.bin ] && echo ', memory test'))"

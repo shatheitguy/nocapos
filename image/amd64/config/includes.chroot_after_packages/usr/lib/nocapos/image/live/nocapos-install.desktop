@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install NoCapOS
+GenericName=NoCapOS installer
+Comment=Install NoCapOS on this computer
+Exec=/usr/lib/nocapos/image/live/nocapos-install
+Icon=nocapos
+Terminal=false
+Categories=System;
+Keywords=install;installer;nocapos;
+StartupNotify=true
+StartupWMClass=calamares

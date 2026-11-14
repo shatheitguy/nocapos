@@ -319,6 +319,8 @@
 .nb.windows.link-banner { padding: 12px 14px; }
 .link-banner .nb-body { -webkit-line-clamp: 2; }
 .link-banner-copy { flex: none !important; height: 30px; font-size: 13px; }
+.link-banner-btns { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.link-banner-btns .nb-btn { flex: none !important; height: 28px; font-size: 12.5px; white-space: nowrap; }
 .nb.windows .link-banner-x { position: absolute; top: 4px; right: 4px; width: 24px; height: 22px; }
 
 /* Sign-in alerts: a security heads-up with "Not you? Sign it out". */
