@@ -147,5 +147,20 @@
   "link.copyFailed": "The browser blocked copying",
   "link.copy": "Copy",
   "link.pasteFrom": "Paste from {device}",
-  "link.sentFromHere": "Sent from NoCap OS"
+  "link.sentFromHere": "Sent from NoCap OS",
+  "link.clipPicture": "Picture ({size} KB)",
+  "link.pictureCopyFailed": "This browser can't copy that picture. Paste it on your phone or on NoCap Desktop instead.",
+  "link.clipHint": "Copy on one of your devices and paste on another, with no need to send anything. Only you can see it.",
+  "link.clipHere": "Use the shared clipboard in this browser",
+  "link.clipHereHint": "Text copied on your phone is placed on this computer's clipboard and pasted with Ctrl+V; text you copy in NoCap OS is sent to your phones.",
+  "link.clipDesktop": "Include NoCap Desktop",
+  "link.clipDesktopHint": "The desktop on this server's screen shares its clipboard as well.",
+  "link.clipHistory": "Keep a short history",
+  "link.clipHistoryHint": "Off: only the last copied item is kept, in memory only. On: the last 10 items.",
+  "link.clipPhones": "Phones",
+  "link.clipPhonesHint": "Each phone has its own switch and list of excluded apps in the NoCap OS app. Content marked as sensitive is never shared. Limits: 1 MB of text, 10 MB per picture.",
+  "link.clipClear": "Clear clipboard",
+  "link.clipCleared": "Clipboard cleared",
+  "link.clipClearFailed": "Couldn't clear the clipboard",
+  "link.clipSaveFailed": "Couldn't save the clipboard setting"
 }
