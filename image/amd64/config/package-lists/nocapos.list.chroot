@@ -1,6 +1,6 @@
-# NoCapOS image: what the NoCapOS layer needs from Debian. The bigger host
-# packages (virtual machines, Samba, media, ZFS, Docker) come with the
-# first-boot run of the installer, the same as a one-line install.
+# NoCapOS image: what the NoCapOS layer needs from Debian. The host
+# packages (virtual machines, Samba, media, ZFS, Docker) are added by
+# host-packages.sh during the build, so the first boot downloads nothing.
 ca-certificates
 curl
 sudo
