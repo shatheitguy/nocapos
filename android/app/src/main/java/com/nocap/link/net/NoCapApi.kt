@@ -363,7 +363,33 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
     /** Puts text on your NoCap OS shared clipboard. */
     fun postClip(text: String): Long = JSONObject(call("POST", "/api/v1/device/clipboard", JSONObject().put("text", text))).optLong("id")
 
-    data class Clip(val id: Long, val text: String, val from: String)
+    /** Puts a PNG or JPEG picture on your shared clipboard. */
+    fun postClipImage(data: ByteArray, mime: String): Long =
+        JSONObject(call("POST", "/api/v1/device/clipboard", raw = data.toRequestBody(mime.toMediaType()))).optLong("id")
+
+    /** A picture on your shared clipboard (null if it's gone or bigger than [max] bytes). */
+    fun clipImage(id: Long, max: Int): ByteArray? = guarded {
+        http.newCall(request("GET", "/api/v1/device/clipboard/$id/data", null)).execute().use { r ->
+            val body = r.body
+            if (!r.isSuccessful || body == null || body.contentLength() > max) return@use null
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            body.byteStream().use { input ->
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    if (out.size() > max) return@use null
+                }
+            }
+            out.toByteArray()
+        }
+    }
+
+    /** One shared-clipboard item: text, or a picture ([kind] "image", [mime] image/png or image/jpeg). */
+    data class Clip(val id: Long, val text: String, val from: String, val kind: String = "text", val mime: String = "") {
+        val isImage get() = kind == "image"
+    }
     data class Events(
         val cursor: Long, val notices: List<ServerNotice>, val clips: List<Clip>, val dismissed: List<String>,
         val signins: List<SigninAlert> = emptyList(),
@@ -382,7 +408,7 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
         return Events(
             o.optLong("cursor"),
             (0 until na.length()).map { notice(na.getJSONObject(it)) },
-            (0 until ca.length()).map { val c = ca.getJSONObject(it); Clip(c.optLong("id"), c.optString("text"), c.optString("from")) },
+            (0 until ca.length()).map { clip(ca.getJSONObject(it)) },
             (0 until da.length()).map { da.getString(it) },
             alerts(o.optJSONArray("signins")),
             o.optJSONObject("mirror")?.optString("id")?.takeIf { it.isNotBlank() },
@@ -433,6 +459,8 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
             g?.optString("title")?.takeIf { s -> s.isNotBlank() }, g?.optString("body")?.takeIf { s -> s.isNotBlank() },
         )
     }
+
+    internal fun clip(c: JSONObject) = Clip(c.optLong("id"), c.optString("text"), c.optString("from"), c.optString("kind").ifBlank { "text" }, c.optString("mime"))
 
     /** Raw bytes from this server (app icons), or null. */
     fun bytes(url: String): ByteArray? {

@@ -56,8 +56,8 @@ fun NoCapApi.openOnNoCap(url: String? = null, title: String? = null, root: Strin
 }
 
 /** The long-poll, with actions too. */
-fun NoCapApi.liveEvents(after: Long, wait: Int = 25): Pair<NoCapApi.Events, List<PhoneAction>> {
-    val text = call("GET", "/api/v1/device/events?after=$after&wait=$wait", client = poll)
+fun NoCapApi.liveEvents(after: Long, wait: Int = 25, images: Boolean = false): Pair<NoCapApi.Events, List<PhoneAction>> {
+    val text = call("GET", "/api/v1/device/events?after=$after&wait=$wait" + (if (images) "&images=1" else ""), client = poll)
     return parseEvents(text)
 }
 
@@ -89,7 +89,10 @@ fun parseEvents(text: String): Pair<NoCapApi.Events, List<PhoneAction>> {
     }
     val ev = NoCapApi.Events(
         o.optLong("cursor"), notices,
-        (0 until ca.length()).map { val c = ca.getJSONObject(it); NoCapApi.Clip(c.optLong("id"), c.optString("text"), c.optString("from")) },
+        (0 until ca.length()).map {
+            val c = ca.getJSONObject(it)
+            NoCapApi.Clip(c.optLong("id"), c.optString("text"), c.optString("from"), c.optString("kind").ifBlank { "text" }, c.optString("mime"))
+        },
         (0 until da.length()).map { da.getString(it) },
         signins,
     )
