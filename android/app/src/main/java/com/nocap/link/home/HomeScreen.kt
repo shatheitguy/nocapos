@@ -149,9 +149,10 @@ class HomeUi {
 fun HomeScreen(a: MainActivity) {
     val ui = remember { HomeUi() }
     val layout = Home.layout
-    val library = Opt.drawer.v == DrawerStyle.HOME_PAGES
-    val pageCount = layout.pages.size + if (library) 1 else 0
-    val pager = rememberPagerState { Home.layout.pages.size + if (Opt.drawer.v == DrawerStyle.HOME_PAGES) 1 else 0 }
+    // "All apps on home pages": the pages are the drawer, so there's no extra drawer page (or dock button).
+    val library = false
+    val pageCount = layout.pages.size
+    val pager = rememberPagerState { Home.layout.pages.size }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val density = LocalDensity.current
@@ -180,7 +181,6 @@ fun HomeScreen(a: MainActivity) {
             runGesture(a, Gesture.HOME, ::firstPage)
         }
     }
-    LaunchedEffect(a.libraryTick) { if (a.libraryTick > 0 && library) pager.animateScrollToPage(pageCount - 1) }
 
     // Flip pages while dragging near an edge.
     val edge = ui.drag?.let { d ->
@@ -196,9 +196,15 @@ fun HomeScreen(a: MainActivity) {
     LaunchedEffect(edge) {
         while (edge != 0) {
             delay(650)
+            val pages = Home.layout.pages
             val target = pager.currentPage + edge
-            if (target < 0 || target >= Home.layout.pages.size + 1) break
-            if (target >= Home.layout.pages.size) Home.addPage()
+            if (target < 0) break
+            if (target >= pages.size) {
+                // At most one spare page: only add one when the last page has something besides what's being dragged.
+                val dragged = ui.drag?.item?.id
+                if (pages.last().items.none { it.id != dragged }) break
+                Home.addPage()
+            }
             pager.animateScrollToPage(target)
         }
     }
@@ -284,7 +290,7 @@ fun HomeScreen(a: MainActivity) {
         ui.drag = d.copy(pos = pos, moved = moved)
     }
 
-    fun drop(pos: Offset) {
+    fun dropAt(pos: Offset) {
         val d = ui.drag ?: return
         ui.drag = null
         if (!d.moved) return
@@ -333,6 +339,13 @@ fun HomeScreen(a: MainActivity) {
                     }
                 }
             }
+        }
+    }
+
+    fun drop(pos: Offset) {
+        try { dropAt(pos) } finally {
+            // Pages added while dragging past the edge and left empty go away again.
+            Home.trimEmptyTail(keep = pager.currentPage + 1)
         }
     }
 
@@ -734,7 +747,8 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
     val style = Opt.dockStyle.v
     val buttons = Opt.dockButtons.v
     // The app drawer button can be hidden on its own; the drawer still opens with its gesture.
-    val roster = Opt.dockDrawerButton.v
+    // With every app on the home pages there is no separate drawer, so no button for one.
+    val roster = Opt.dockDrawerButton.v && Opt.drawer.v != DrawerStyle.HOME_PAGES
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = if (style == DockStyle.FLOATING) 20.dp else 12.dp), contentAlignment = Alignment.Center) {
         // Fit everything on one row, however narrow the screen.
         val slots = apps.size.coerceAtLeast(1) + (if (buttons) 1 else 0) + (if (roster) 1 else 0)

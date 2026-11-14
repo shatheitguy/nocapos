@@ -35,8 +35,7 @@ import org.json.JSONObject
  * screen-capture prompt) before anything is shared.
  */
 object MirrorAsk {
-    private const val CHANNEL = "nocap_mirror_ask"
-    const val NOTIF = 4200
+    const val NOTIF = com.nocap.link.sync.Requests.MIRROR_ID
     private val io = Executors.newSingleThreadExecutor()
     @Volatile private var lastAsk: String? = null
 
@@ -51,36 +50,21 @@ object MirrorAsk {
         if (MirrorService.running) return // already streaming: the viewer just joins
         if (!Opt.mirrorAsks.v) { postState(app, "denied", id); return }
         val link = runCatching { Vault.get(app).link }.getOrNull() ?: return
-        val open = Intent(app, MirrorConsentActivity::class.java).putExtra(MirrorConsentActivity.ASK, id)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        notify(app, link, id, open)
-        // Works when NoCap OS is in front (Android blocks it from the background; the notification covers that).
-        runCatching { app.startActivity(open) }
+        // Heads-up with Accept / Decline (full screen when locked). When NoCap OS
+        // is in front, the ask opens right away as well.
+        val shown = com.nocap.link.sync.Requests.mirror(app, serverName(link), id)
+        if (inFront() || !shown) {
+            val open = Intent(app, MirrorConsentActivity::class.java).putExtra(MirrorConsentActivity.ASK, id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            runCatching { app.startActivity(open) }
+        }
+        if (!shown) com.nocap.link.system.CrashLog.warn("mirror ask", IllegalStateException("request notification not shown (notifications off?)"))
     }
 
-    private fun notify(ctx: Context, link: Link, id: String, open: Intent) {
-        if (!Notices.allowed(ctx)) return
-        ctx.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-            NotificationChannel(CHANNEL, t("Screen mirroring asks", "Screen mirroring requests"), NotificationManager.IMPORTANCE_HIGH).apply {
-                description = t("When NoCap OS asks to show this phone's screen", "When NoCap OS asks to mirror this phone's screen")
-            },
-        )
-        val pi = PendingIntent.getActivity(ctx, NOTIF, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_nocap)
-            .setContentTitle(t("${serverName(link)} wants to mirror your screen", "${serverName(link)} wants to mirror your screen"))
-            .setContentText(t("Tap to say yes or nah.", "Tap to accept or decline."))
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pi)
-            .setAutoCancel(true)
-            .setTimeoutAfter(120_000)
-            .build()
-        try {
-            NotificationManagerCompat.from(ctx).notify(NOTIF, n)
-        } catch (_: SecurityException) {
-            // Permission was pulled in the meantime.
-        }
+    private fun inFront(): Boolean {
+        val info = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(info)
+        return info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
     }
 
     /** Tells the server where an ask stands: asking, denied, unsupported or stopped. */
@@ -112,9 +96,20 @@ class MirrorConsentActivity : Activity() {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
         ask = intent.getStringExtra(ASK)
+        decided = savedInstanceState?.getBoolean(DECIDED) ?: false
         NotificationManagerCompat.from(this).cancel(MirrorAsk.NOTIF)
+        // Over the lock screen, like an incoming call.
+        if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         if (MirrorService.running || runCatching { Vault.get(this).link }.getOrNull() == null) { decided = true; finish(); return }
+        if (savedInstanceState != null) return // rotated: the choice (or Android's prompt) is already on its way
         MirrorAsk.postState(this, "asking", ask)
+        // "Accept" on the notification: straight to Android's own prompt.
+        if (intent.getBooleanExtra(ACCEPTED, false)) accept()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(DECIDED, decided)
     }
 
     override fun onResume() {
@@ -150,6 +145,20 @@ class MirrorConsentActivity : Activity() {
 
     private fun accept() {
         decided = true
+        // Locked: unlock first (Android asks for the PIN), then the capture prompt.
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26 && km?.isKeyguardLocked == true) {
+            km.requestDismissKeyguard(this, object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { capture() }
+                override fun onDismissCancelled() { MirrorAsk.postState(this@MirrorConsentActivity, "denied", ask); finish() }
+                override fun onDismissError() { capture() }
+            })
+            return
+        }
+        capture()
+    }
+
+    private fun capture() {
         val mpm = getSystemService(MediaProjectionManager::class.java)
         if (mpm == null) { MirrorAsk.postState(this, "unsupported", ask); finish(); return }
         val i = if (Build.VERSION.SDK_INT >= 34) {
@@ -199,6 +208,9 @@ class MirrorConsentActivity : Activity() {
 
     companion object {
         const val ASK = "ask"
+        /** Accepted on the notification already: skip the in-app question. */
+        const val ACCEPTED = "accepted"
+        private const val DECIDED = "decided"
         private const val REQ = 42
     }
 }
