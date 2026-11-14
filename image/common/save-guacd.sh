@@ -44,10 +44,39 @@ else
   exit 1
 fi
 
-# The archive must be loadable as name:tag and built for ARCH.
+# The archive must be loadable as name:tag and built for ARCH. skopeo
+# writes the full name (docker.io/guacamole/guacd:tag); the archive gets
+# the short name docker save uses, the one alfad asks Docker for.
 python3 - "$tar" "$named" "$ARCH" <<'PY'
-import json, sys, tarfile
+import io, json, os, sys, tarfile
 path, named, arch = sys.argv[1:]
+
+def short(tag):
+    for p in ("docker.io/library/", "docker.io/"):
+        if tag.startswith(p):
+            return tag[len(p):]
+    return tag
+
+with tarfile.open(path) as t:
+    manifest = json.load(t.extractfile("manifest.json"))
+tags = [tag for m in manifest for tag in (m.get("RepoTags") or [])]
+if named not in tags:
+    if named not in [short(x) for x in tags]:
+        sys.exit(f"save-guacd: archive tags are {tags}, expected {named}")
+    for m in manifest:
+        m["RepoTags"] = [short(x) for x in (m.get("RepoTags") or [])]
+    data = json.dumps(manifest).encode()
+    with tarfile.open(path) as src, tarfile.open(path + ".new", "w", format=tarfile.PAX_FORMAT) as dst:
+        for m in src.getmembers():
+            if m.name == "repositories":
+                continue  # optional; its full name would disagree with RepoTags
+            if m.name == "manifest.json":
+                m.size = len(data)
+                dst.addfile(m, io.BytesIO(data))
+            else:
+                dst.addfile(m, src.extractfile(m) if m.isfile() else None)
+    os.replace(path + ".new", path)
+
 with tarfile.open(path) as t:
     manifest = json.load(t.extractfile("manifest.json"))
     tags = [tag for m in manifest for tag in (m.get("RepoTags") or [])]
