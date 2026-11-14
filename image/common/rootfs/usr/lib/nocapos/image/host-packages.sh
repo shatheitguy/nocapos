@@ -69,7 +69,10 @@ while IFS= read -r line; do
 done <<<"$table"
 
 # Docker from Debian (the App Store), the firewall (Shield), drive pools.
+# (Debian 13 ships the docker command in docker-cli, only recommended by
+# docker.io, and these installs skip recommends.)
 add docker.io ufw mergerfs snapraid
+if avail docker-cli; then add docker-cli; fi
 if avail docker-compose; then add docker-compose; fi
 
 # ZFS: the kernel headers of every kernel flavour in the image, so DKMS
