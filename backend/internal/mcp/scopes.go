@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -148,6 +149,22 @@ type Scopes struct {
 	Levels  map[string]string `json:"levels"`
 	Folders []string          `json:"folders"` // "location:/path"; empty = every location its owner can open
 	Auto    []string          `json:"auto"`    // capabilities whose actions run without asking
+}
+
+// MarshalJSON always sends lists and a map, never null, so clients can
+// iterate them without checks.
+func (s Scopes) MarshalJSON() ([]byte, error) {
+	type plain Scopes
+	if s.Levels == nil {
+		s.Levels = map[string]string{}
+	}
+	if s.Folders == nil {
+		s.Folders = []string{}
+	}
+	if s.Auto == nil {
+		s.Auto = []string{}
+	}
+	return json.Marshal(plain(s))
 }
 
 // Level is the agent's level for a capability ("off" when unset or unknown).
