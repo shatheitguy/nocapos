@@ -105,6 +105,9 @@ func TestReceivedFolder(t *testing.T) {
 	}
 
 	// A phone sends a file: it lands in Received/<device> and counts as new.
+	// (File times come from the kernel's coarse clock and "seen" is kept in
+	// milliseconds: leave a gap so the order is unambiguous.)
+	time.Sleep(20 * time.Millisecond)
 	tok := linkDevice(t, w.s, alex)
 	feed, stop := w.s.linkFeed.subscribe(alex.ID)
 	defer stop()
@@ -131,6 +134,7 @@ func TestReceivedFolder(t *testing.T) {
 		}
 	}
 	// Seen: nothing new.
+	time.Sleep(20 * time.Millisecond)
 	if rec := recvCall(w.s, w.s.receivedSeen, alex, "POST", "/api/v1/received/seen", "", nil); rec.Code != http.StatusOK {
 		t.Fatalf("seen: %d", rec.Code)
 	}
