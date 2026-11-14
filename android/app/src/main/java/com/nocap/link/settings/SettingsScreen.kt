@@ -445,6 +445,7 @@ fun SettingsScreen(a: MainActivity) {
             )
             Action(t("Open permissions", "Manage permissions")) { a.layer = Layer.PERMISSIONS }
             Action(t("Setup guide", "Setup guide")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.GUIDE) }
+            Action(t("Run setup again", "Run setup again")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.WELCOME) }
             Spacer(Modifier.height(6.dp))
             Label(t("Lock helper", "Lock helper"))
             val canLock = remember(tick) { Phone.canLock(a) }

@@ -487,7 +487,7 @@ class MainActivity : ComponentActivity() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
         Sync.start(this) // requests from NoCap OS start arriving now, not after the next restart
-        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.NOCAP)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
     }
@@ -502,7 +502,7 @@ class MainActivity : ComponentActivity() {
 
     /** Done setting up a new server from the phone. */
     fun phoneSetupFinished() {
-        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.NOCAP)
         toast = t("Your NoCap server is set up and linked. W.", "Your NoCap server is set up and linked.")
     }
 
