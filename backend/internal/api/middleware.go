@@ -242,6 +242,20 @@ func clientIP(r *http.Request, trusted []netip.Prefix) string {
 	return peer.String()
 }
 
+// tcpPeer is the connection's own remote address, whatever any proxy
+// header says ("" when it can't be read).
+func tcpPeer(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	a, err := netip.ParseAddr(host)
+	if err != nil {
+		return ""
+	}
+	return a.Unmap().WithZone("").String()
+}
+
 func inPrefixes(a netip.Addr, ps []netip.Prefix) bool {
 	for _, p := range ps {
 		if p.Contains(a) {

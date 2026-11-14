@@ -56,11 +56,21 @@ func setupPeer(r *http.Request, trusted []netip.Prefix) (addr netip.Addr, ok boo
 		return netip.Addr{}, false
 	}
 	peer = peer.Unmap()
+	xff := r.Header.Values("X-Forwarded-For")
 	if !inPrefixes(peer, trusted) {
+		// A browser talking to us directly sends no proxy headers. With
+		// them, the peer is a proxy we weren't told about (a tunnel or a
+		// reverse proxy on the local network) forwarding someone whose
+		// address we can't trust: fail closed.
+		if len(xff) > 0 || forwardedVia(r) {
+			return netip.Addr{}, false
+		}
 		return peer, true
 	}
-	xff := r.Header.Values("X-Forwarded-For")
 	if len(xff) == 0 {
+		if forwardedVia(r) {
+			return netip.Addr{}, false // a proxy that names the client some other way
+		}
 		return peer, true // the proxy is the client (e.g. a local tool)
 	}
 	parts := strings.Split(xff[len(xff)-1], ",")
@@ -73,6 +83,21 @@ func setupPeer(r *http.Request, trusted []netip.Prefix) (addr netip.Addr, ok boo
 		return netip.Addr{}, false // a proxy we trust sent something odd: fail closed
 	}
 	return a.Unmap(), true
+}
+
+// proxyHeaders are what proxies and tunnels use, besides X-Forwarded-For,
+// to say who the real client is.
+var proxyHeaders = []string{"Forwarded", "X-Real-Ip", "X-Client-Ip", "True-Client-Ip", "Cf-Connecting-Ip", "X-Original-Forwarded-For", "Via"}
+
+// forwardedVia reports whether r came through a proxy that named the
+// client some way other than X-Forwarded-For.
+func forwardedVia(r *http.Request) bool {
+	for _, h := range proxyHeaders {
+		if r.Header.Get(h) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // setupFromLocal reports whether this setup request may skip the token.
