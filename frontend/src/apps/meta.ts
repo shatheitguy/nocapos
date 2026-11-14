@@ -2,6 +2,7 @@
 import type { IconName } from '../components/Icon';
 import { useRecents } from '../state/recents';
 import { useWM } from '../state/windows';
+import { tr } from '../i18n';
 
 export interface AppMeta {
   id: string;
@@ -18,6 +19,8 @@ export interface AppMeta {
   hidden?: boolean;
   /** The maker's own icon, shown as it is (like installed apps). */
   logo?: string;
+  /** More words search finds it by (old names, both voices). */
+  keywords?: string;
 }
 
 export const APPS: Record<string, AppMeta> = {
@@ -226,13 +229,18 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Play the songs in a folder',
     hidden: true,
   },
+  // The id stays "phone" so older links, pins and desktop icons keep working.
   phone: {
     id: 'phone',
-    title: 'Phone',
-    icon: 'phone',
+    // "Device Screens" / "Screen Squad", in the voice in use.
+    get title() {
+      return tr('ds.appTitle');
+    },
+    icon: 'devices',
     tile: ['#34d399', '#0f766e'],
-    size: { w: 440, h: 860 },
-    description: 'Your linked phone’s live screen: see it, tap it, type on it',
+    size: { w: 980, h: 760 },
+    description: 'Every linked device’s live screen: see it, tap it, type on it',
+    keywords: 'phone tablet mirror screen squad linked screens devices cast remote control android',
   },
   logs: {
     id: 'logs',

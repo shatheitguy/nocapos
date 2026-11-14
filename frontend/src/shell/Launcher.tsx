@@ -70,7 +70,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const all = useMemo(() => visibleApps(isAdmin), [isAdmin]);
   const needle = q.trim().toLowerCase();
   // Searching lists every matching app, folders or not; otherwise folders come first.
-  const matches = needle ? all.filter((a) => a.title.toLowerCase().includes(needle) || a.description.toLowerCase().includes(needle)) : [];
+  const matches = needle ? all.filter((a) => a.title.toLowerCase().includes(needle) || a.description.toLowerCase().includes(needle) || (a.keywords ?? '').toLowerCase().includes(needle)) : [];
   const shownFolders = needle ? [] : folders.filter((f) => f.apps.some((id) => all.some((a) => a.id === id)));
   const inFolder = new Set(folders.flatMap((f) => f.apps));
   const apps = needle ? matches : all.filter((a) => !inFolder.has(a.id));

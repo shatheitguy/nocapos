@@ -199,6 +199,7 @@ func (s *Server) Handler() http.Handler {
 	// home-screen backup, notifications, unlink, NoCap AI.
 	s.deviceRoutes(mux)
 	s.mirrorRoutes(mux)
+	s.receivedRoutes(mux)
 	s.linkRoutes(mux) // NoCap Link sync, NoCap OS's side
 	// Where each account is signed in; sign-in alerts; ending sessions.
 	s.sessionRoutes(mux)
