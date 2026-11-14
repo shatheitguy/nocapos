@@ -37,6 +37,8 @@ func main() {
 		err = cmdMCP(os.Args[2:], os.Stdin, os.Stdout, os.Stderr)
 	case "web":
 		err = cmdWeb(os.Stdout, hostaccess.DataDir(envFile), os.Args[2:])
+	case "clipboard":
+		err = cmdClipboard(os.Args[2:])
 	case "desktop":
 		err = cmdDesktop(context.Background(), os.Stdout, hostaccess.NewDesktop(true, hostaccess.DataDir(envFile)), os.Geteuid() == 0, os.Args[2:])
 	case "version", "-v", "--version":
@@ -69,6 +71,9 @@ Usage:
                       NoCap Desktop on this machine's screen: check it, repair
                       a black screen, print the diagnostics bundle, or go back
                       from a fallback (Xorg, software rendering) to the normal setup
+  cap clipboard agent
+                      NoCap Desktop's clipboard agent (runs on its own in the
+                      desktop session): shares the clipboard with your phones
   cap mcp             NoCap MCP over stdio, for AI agents (local, or paired)
                       (needs NOCAP_MCP_TOKEN from Settings → AI Agents;
                       NOCAP_MCP_URL or --url if NoCapOS isn't on 127.0.0.1:8780)

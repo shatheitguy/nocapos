@@ -16,6 +16,7 @@ import {
   type Clip,
   type PhoneNote,
 } from '../state/link';
+import { copyPicture, MAX_CLIP_TEXT } from '../state/clipSync';
 import { carryLabel, openCarry } from './linkActions';
 import { closeReceivedBanner, showInFiles, useReceived } from '../state/received';
 import { openApp } from '../apps/meta';
@@ -41,6 +42,21 @@ function NoteIcon({ n, size }: { n: PhoneNote; size: number }) {
 async function copy(text: string) {
   if (await copyText(text)) toast('success', tr('link.copied'));
   else toast('error', tr('link.copyFailed'));
+}
+
+const isPicture = (c: Clip) => c.kind === 'image';
+
+/** Copies a clip here: its text, or its picture (browsers take PNG only). */
+async function copyClip(c: Clip) {
+  if (!isPicture(c)) return copy(c.text);
+  if (await copyPicture(c)) toast('success', tr('link.copied'));
+  else toast('error', tr('link.pictureCopyFailed'));
+}
+
+/** What a clip shows: its text, or "Picture (120 KB)". */
+function clipLabel(t: ReturnType<typeof useT>, c: Clip) {
+  if (!isPicture(c)) return c.text;
+  return t('link.clipPicture', { size: Math.max(1, Math.round((c.size ?? 0) / 1024)) });
 }
 
 const noteId = (n: PhoneNote) => n.device_id + '\u0000' + n.key;
@@ -299,7 +315,7 @@ export function PhoneSection({ look }: { look: Look }) {
 function ClipRow({ c, look }: { c: Clip; look: Look }) {
   const t = useT();
   const now = useClock(30_000);
-  const from = c.source === 'phone' ? t('link.from', { device: c.from }) : t('link.sentFromHere');
+  const from = c.source === 'web' ? t('link.sentFromHere') : t('link.from', { device: c.from });
   return (
     <div className={`nc-card ${look} lvl-info link-card link-clip`}>
       <div className="nb-text">
@@ -307,9 +323,9 @@ function ClipRow({ c, look }: { c: Clip; look: Look }) {
           <span className="link-from">{from}</span>
           <span className="nb-time">{relTime(c.at, now.getTime())}</span>
         </div>
-        <div className="nb-body link-clip-text">{c.text}</div>
+        <div className="nb-body link-clip-text">{clipLabel(t, c)}</div>
       </div>
-      <button type="button" className="nb-tool link-copy" title={t('link.copy')} aria-label={t('link.copy')} onClick={() => void copy(c.text)}>
+      <button type="button" className="nb-tool link-copy" title={t('link.copy')} aria-label={t('link.copy')} onClick={() => void copyClip(c)}>
         <Icon name="copy" size={14} />
       </button>
     </div>
@@ -363,7 +379,7 @@ export function ClipboardSection({ look }: { look: Look }) {
           <textarea
             autoFocus
             rows={3}
-            maxLength={65536}
+            maxLength={MAX_CLIP_TEXT}
             placeholder={t('link.pastePlaceholder')}
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -424,13 +440,13 @@ export function ClipBanner({ look }: { look: Look }) {
       <AppIcon app={{ icon: 'clipboard', tile: CLIP_TILE }} size={look === 'mac' ? 36 : 28} />
       <div className="nb-text">
         <b className="nb-title">{t('link.pasteFrom', { device: clip.from })}</b>
-        <div className="nb-body">{clip.text}</div>
+        <div className="nb-body">{clipLabel(t, clip)}</div>
       </div>
       <button
         type="button"
         className="nb-btn link-banner-copy"
         onClick={() => {
-          void copy(clip.text);
+          void copyClip(clip);
           closeClip();
         }}
       >
