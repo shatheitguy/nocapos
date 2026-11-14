@@ -91,5 +91,21 @@
   "ld.codeFail": "Couldn’t make a code. Run it back?",
   "ld.fullTitle": "Squad’s full: {used} of {limit}",
   "ld.fullMsg": "Kick a device you don’t use anymore to make room, then add the new one.",
-  "ld.continue": "Continue"
+  "ld.continue": "Continue",
+  "recv.title": "Drops",
+  "recv.hint": "Whatever your devices send lands here, one folder per device. Stuff you send to a device is kept in its Sent folder.",
+  "recv.folderLabel": "Folder name",
+  "recv.folderHint": "In your home: {path}",
+  "recv.noHome": "Your account doesn’t have a home folder on this server, so drops can’t land here.",
+  "recv.badName": "Keep it under 64 characters, no / \\ : * ? \" < > | and don’t start with a dot.",
+  "recv.saved": "Drops now land in {name}",
+  "recv.saveFailed": "Couldn’t rename the folder",
+  "recv.taken": "There’s already a folder with that name in your home.",
+  "recv.openLabel": "Open the folder",
+  "recv.showInFiles": "Show in Files",
+  "recv.unread": "{n} new",
+  "recv.allSeen": "All caught up",
+  "recv.sideHint": "Files your devices sent you",
+  "recv.gotOne": "{device} dropped a file",
+  "recv.gotMany": "{device} dropped {n} files"
 }

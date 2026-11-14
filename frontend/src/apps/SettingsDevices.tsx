@@ -10,6 +10,7 @@ import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
 import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
+import { ReceivedSettings } from './SettingsReceived';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
 // of your limit, a card per device (model, app, battery, address, NoCap Link
@@ -171,6 +172,7 @@ export function DevicesSettings() {
       {isAdmin && limits?.users && (
         <AdminView limits={limits} list={list ?? []} meId={me?.id ?? ''} onChanged={load} onUnlink={(d) => void unlink(d)} onRename={rename} />
       )}
+      <ReceivedSettings />
       <LinkAddressesSettings />
 
       {linking && (
@@ -523,7 +525,7 @@ type Phase =
   | { kind: 'code'; pc: PairCode; qr: string }
   | { kind: 'linked'; name: string };
 
-function LinkSheet({
+export function LinkSheet({
   known,
   mine,
   used,

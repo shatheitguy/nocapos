@@ -335,6 +335,7 @@ type deviceJSON struct {
 	OSVersion  string     `json:"os_version"`
 	LastIP     string     `json:"last_ip"`
 	Caps       []string   `json:"capabilities"`
+	Form       string     `json:"form"`
 	Username   string     `json:"username,omitempty"`
 	UserID     string     `json:"user_id,omitempty"`
 }
@@ -347,7 +348,7 @@ const onlineWithin = 3 * time.Minute
 func toDeviceJSON(d store.Device, withUser bool) deviceJSON {
 	out := deviceJSON{
 		ID: d.ID, Name: d.Name, Platform: d.Platform, CreatedAt: d.CreatedAt, AppVersion: d.AppVersion,
-		Model: d.Model, OSVersion: d.OSVersion, LastIP: d.LastIP, Caps: devices.CapsList(d.Caps),
+		Model: d.Model, OSVersion: d.OSVersion, LastIP: d.LastIP, Caps: devices.CapsList(d.Caps), Form: d.Form,
 	}
 	if !d.LastSeenAt.IsZero() {
 		t := d.LastSeenAt
@@ -537,7 +538,12 @@ type heartbeatRequest struct {
 	// Capabilities: which NoCap Link features are on (notifications,
 	// clipboard, files); left out = unchanged.
 	Capabilities map[string]bool `json:"capabilities"`
+	// Form: phone, tablet or computer; left out = unchanged.
+	Form *string `json:"form"`
 }
+
+// deviceForms are the shapes a device may say it is.
+var deviceForms = map[string]bool{"phone": true, "tablet": true, "computer": true}
 
 func (s *Server) deviceHeartbeat(w http.ResponseWriter, r *http.Request) {
 	d := deviceFrom(r.Context())
@@ -570,6 +576,10 @@ func (s *Server) deviceHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 		*p = &v
 	}
+	if req.Form != nil && !deviceForms[*req.Form] {
+		writeError(w, http.StatusBadRequest, "validation", "form must be phone, tablet or computer")
+		return
+	}
 	var caps *string
 	if req.Capabilities != nil {
 		c := devices.CapsString(req.Capabilities)
@@ -579,7 +589,7 @@ func (s *Server) deviceHeartbeat(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	if err := s.Store.SetDeviceDetails(r.Context(), d.ID, req.Model, req.OSVersion, caps); err != nil {
+	if err := s.Store.SetDeviceDetails(r.Context(), d.ID, req.Model, req.OSVersion, caps, req.Form); err != nil {
 		s.internalError(w, r, err)
 		return
 	}

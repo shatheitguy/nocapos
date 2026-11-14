@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"alfaos/alfad/internal/devices"
 	"alfaos/alfad/internal/mirror"
 	"alfaos/alfad/internal/store"
 )
@@ -61,13 +62,20 @@ func (s *Server) mirrorRoutes(mux *http.ServeMux) {
 }
 
 type mirrorDeviceJSON struct {
-	ID         string        `json:"id"`
-	Name       string        `json:"name"`
-	Platform   string        `json:"platform"`
-	LastSeenAt *time.Time    `json:"last_seen_at"`
-	Battery    *int          `json:"battery"`
-	AppVersion string        `json:"app_version"`
-	Mirror     mirror.Status `json:"mirror"`
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Platform   string     `json:"platform"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
+	Battery    *int       `json:"battery"`
+	AppVersion string     `json:"app_version"`
+	Model      string     `json:"model"`
+	OSVersion  string     `json:"os_version"`
+	// Form: phone, tablet or computer ("" = not reported yet).
+	Form string `json:"form"`
+	// Caps: the NoCap Link features it has on ("screen": it can share its screen).
+	Caps   []string      `json:"capabilities"`
+	Online bool          `json:"online"`
+	Mirror mirror.Status `json:"mirror"`
 }
 
 // ownPhone is the caller's own linked device id, or nil after answering 404.
@@ -104,10 +112,17 @@ func (s *Server) mirrorDevices(w http.ResponseWriter, r *http.Request) {
 		if !mirrorOwns(u, &d) {
 			continue
 		}
-		j := mirrorDeviceJSON{ID: d.ID, Name: d.Name, Platform: d.Platform, AppVersion: d.AppVersion, Mirror: s.mirrorHub().Status(d.ID)}
+		j := mirrorDeviceJSON{
+			ID: d.ID, Name: d.Name, Platform: d.Platform, AppVersion: d.AppVersion, Model: d.Model, OSVersion: d.OSVersion,
+			Form: d.Form, Caps: devices.CapsList(d.Caps), Mirror: s.mirrorHub().Status(d.ID),
+		}
 		if !d.LastSeenAt.IsZero() {
 			t := d.LastSeenAt.UTC()
 			j.LastSeenAt = &t
+			j.Online = time.Since(t) < onlineWithin
+		}
+		if j.Mirror.Online {
+			j.Online = true
 		}
 		if d.Battery >= 0 {
 			b := d.Battery
