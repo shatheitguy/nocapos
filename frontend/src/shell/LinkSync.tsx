@@ -18,6 +18,8 @@ import {
 } from '../state/link';
 import { copyPicture, MAX_CLIP_TEXT } from '../state/clipSync';
 import { carryLabel, openCarry } from './linkActions';
+import { closeReceivedBanner, showInFiles, useReceived } from '../state/received';
+import { openApp } from '../apps/meta';
 import '../styles/link.css';
 
 // NoCap Link in the Notification Center: the phones' notifications (grouped
@@ -481,6 +483,50 @@ export function CarryBanner({ look }: { look: Look }) {
       >
         {t('link.open')}
       </button>
+    </div>
+  );
+}
+
+const RECEIVED_TILE: [string, string] = ['#34d399', '#0f766e'];
+const fileName = (p: string) => p.split('/').filter(Boolean).pop() ?? p;
+
+/** "<n> files from <device>": files a device just sent, with Show in Files and Open. */
+export function ReceivedBanner({ look }: { look: Look }) {
+  const t = useT();
+  const e = useReceived((s) => s.banner);
+  const hover = useBannerTimer(!!e, CARRY_BANNER_MS, closeReceivedBanner);
+  if (!e || !e.paths.length) return null;
+  const one = e.paths.length === 1;
+  const show = () => {
+    showInFiles(e.root, e.folder);
+    useReceived.getState().markSeen();
+    closeReceivedBanner();
+  };
+  const open = () => {
+    const p = e.paths[0];
+    openApp('viewer', { title: fileName(p), props: { root: e.root, path: p }, key: `viewer:${e.root}:${p}` });
+    closeReceivedBanner();
+  };
+  return (
+    <div className={`nb ${look} lvl-info link-banner`} role="status" {...hover}>
+      <button type="button" className={look === 'mac' ? 'nb-x' : 'nb-tool link-banner-x'} aria-label={t('nc.clear')} title={t('nc.clear')} onClick={closeReceivedBanner}>
+        <Icon name="close" size={look === 'mac' ? 9 : 12} />
+      </button>
+      <AppIcon app={{ icon: 'download', tile: RECEIVED_TILE }} size={look === 'mac' ? 36 : 28} />
+      <div className="nb-text">
+        <b className="nb-title">{one ? t('recv.gotOne', { device: e.device_name }) : t('recv.gotMany', { n: e.paths.length, device: e.device_name })}</b>
+        <div className="nb-body">{one ? fileName(e.paths[0]) : e.folder}</div>
+      </div>
+      <div className="link-banner-btns">
+        <button type="button" className="nb-btn" onClick={show}>
+          {t('recv.showInFiles')}
+        </button>
+        {one && (
+          <button type="button" className="nb-btn link-banner-copy" onClick={open}>
+            {t('link.open')}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

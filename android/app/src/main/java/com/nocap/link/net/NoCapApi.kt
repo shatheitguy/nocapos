@@ -81,6 +81,10 @@ internal fun deviceModel(): String {
 }
 
 /** "Android 15". */
+/** "tablet" on a large screen (600 dp and up on its short side), else "phone". */
+internal fun deviceForm(): String =
+    if (android.content.res.Resources.getSystem().configuration.smallestScreenWidthDp >= 600) "tablet" else "phone"
+
 internal fun osVersion(): String = "Android ${android.os.Build.VERSION.RELEASE.orEmpty()}".trim().take(64)
 
 /** The server's certificate isn't the pinned one anymore. */
@@ -170,7 +174,11 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
         if (battery != null) body.put("battery", battery)
         val full = JSONObject(body.toString()).put("model", deviceModel()).put("os_version", osVersion())
         if (caps != null) full.put("capabilities", JSONObject(caps))
-        olderServerRetry({ call("POST", "/api/v1/device/heartbeat", full) }) { call("POST", "/api/v1/device/heartbeat", body) }
+        // Its shape (phone or tablet), so Device Screens frames it right; older servers don't know it.
+        val shaped = JSONObject(full.toString()).put("form", deviceForm())
+        olderServerRetry({ call("POST", "/api/v1/device/heartbeat", shaped) }) {
+            olderServerRetry({ call("POST", "/api/v1/device/heartbeat", full) }) { call("POST", "/api/v1/device/heartbeat", body) }
+        }
     }
 
     /** Runs [first]; when an older server rejects its body as unknown fields, runs [fallback] instead. */

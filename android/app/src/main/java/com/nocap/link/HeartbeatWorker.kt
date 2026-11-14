@@ -36,7 +36,7 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
         try {
             val api = NoCapApi(link)
             Prefs.init(applicationContext)
-            val caps = mapOf("notifications" to Opt.forward.v, "clipboard" to Opt.clipSync.v, "files" to true)
+            val caps = mapOf("notifications" to Opt.forward.v, "clipboard" to Opt.clipSync.v, "files" to true, "screen" to true)
             api.heartbeat(battery(applicationContext), BuildConfig.VERSION_NAME, caps)
             if (vault.unlinked) vault.unlinked = false
             if (Prefs.serverNotices) runCatching { notices(api, link.serverName) }

@@ -1,5 +1,6 @@
 import { tr } from '../i18n';
-import { useState, type DragEvent, type MouseEvent } from 'react';
+import { useEffect, useState, type DragEvent, type MouseEvent } from 'react';
+import { useReceived } from '../state/received';
 import { RECYCLE, baseName, inRecycle, isAppData, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
 import type { NetShare } from '../api/netdrive';
 import { Bar } from '../components/Charts';
@@ -71,6 +72,16 @@ export function FilesSidebar({
 }) {
   const [over, setOver] = useState<string | null>(null);
   const special = current?.special ?? null;
+  const received = useReceived((s) => s.info);
+  useEffect(() => {
+    void useReceived.getState().load();
+  }, []);
+  const recvPath = received?.available && received.root && received.path ? received.path : '';
+  const inReceived = !!recvPath && !special && !!current && current.root === received?.root && (current.path === recvPath || current.path.startsWith(recvPath + '/'));
+  // Looking at it: nothing is new any more.
+  useEffect(() => {
+    if (inReceived && received?.unread) useReceived.getState().markSeen();
+  }, [inReceived, received?.unread]);
   const at = (root: string, path: string) => !special && current?.root === root && current.path === path;
   const inside = (root: string) => !special && current?.root === root && !inRecycle(current.path);
   const locals = roots.filter((r) => !r.id.startsWith('net:'));
@@ -137,6 +148,25 @@ export function FilesSidebar({
           <Icon name="clock" size={17} />
           <span className="fs-name">Recents</span>
         </button>
+        {recvPath && received?.root && (
+          <button
+            type="button"
+            className={`fs-item fs-received ${inReceived ? 'on' : ''}`}
+            title={tr('recv.sideHint')}
+            onClick={() => {
+              onGo(received.root!, recvPath);
+              useReceived.getState().markSeen();
+            }}
+          >
+            <Icon name="download" size={17} />
+            <span className="fs-name">{received.folder}</span>
+            {received.unread > 0 && (
+              <span className="fs-badge" aria-label={tr('recv.unread', { n: received.unread })}>
+                {received.unread > 99 ? '99+' : received.unread}
+              </span>
+            )}
+          </button>
+        )}
         {admin && (
           <button type="button" className={`fs-item ${special === 'appdata' || (!special && current && isAppData(current.root)) ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'appdata')}>
             <Icon name="appData" size={17} />

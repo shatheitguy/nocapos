@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { api, type ApiResult } from '../api/client';
 import { onSocketStatus, subscribe } from '../api/socket';
+import type { ReceivedEvent } from '../api/received';
+import { receivedArrived, useReceived } from './received';
 
 // NoCap Link sync, NoCap OS's side: notifications and status from the
 // person's phones, a shared clipboard, and "Open on NoCap" carries. Live over
@@ -110,7 +112,7 @@ export interface LinkAddresses {
   saved_remote: string;
 }
 
-type LinkEvent = { type: 'changed' } | { type: 'open'; carry: Carry } | { type: 'clip'; clip: Clip };
+type LinkEvent = { type: 'changed' } | { type: 'open'; carry: Carry } | { type: 'clip'; clip: Clip } | { type: 'received'; received: ReceivedEvent };
 
 const enc = encodeURIComponent;
 
@@ -234,6 +236,7 @@ export function watchLink(_username: string): () => void {
   lastClip = 0;
   loaded = false;
   void useLink.getState().load();
+  void useReceived.getState().load();
 
   let reloadTimer: number | undefined;
   const reload = () => {
@@ -244,6 +247,7 @@ export function watchLink(_username: string): () => void {
     const e = d as LinkEvent;
     if (e.type === 'open' && e.carry) carryArrived(e.carry);
     else if (e.type === 'clip' && e.clip) clipArrived(e.clip);
+    else if (e.type === 'received' && e.received) receivedArrived(e.received);
     else reload();
   });
   // A reconnect may have missed events: catch up.
