@@ -197,6 +197,7 @@ func (s *Server) hostnameSet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	s.discovery.bump() // announce the new name
 	writeJSON(w, http.StatusOK, map[string]string{"hostname": name})
 }
 
