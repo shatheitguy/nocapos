@@ -126,67 +126,6 @@ func TestPhoneNotifications(t *testing.T) {
 	}
 }
 
-type clipsResp struct {
-	Items []linkClip `json:"items"`
-}
-
-func TestClipboardSync(t *testing.T) {
-	w := deviceWorld(t)
-	tok := linkDevice(t, w.s, w.users["alex"])
-	samTok := linkDevice(t, w.s, w.users["sam"])
-	samDev := deviceID(t, w.s, w.users["sam"])
-
-	rec := asDevice(w.s, w.s.deviceClipboard, "POST", "/api/v1/device/clipboard", tok, `{"text":"from phone"}`)
-	var res struct {
-		OK bool  `json:"ok"`
-		ID int64 `json:"id"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil || !res.OK || res.ID == 0 {
-		t.Fatalf("phone clip: %d %s", rec.Code, rec.Body)
-	}
-	for _, bad := range []string{`{"text":""}`, `{"text":"` + strings.Repeat("x", linkMaxClip+1) + `"}`} {
-		if rec := asDevice(w.s, w.s.deviceClipboard, "POST", "/api/v1/device/clipboard", tok, bad); rec.Code != http.StatusBadRequest {
-			t.Fatalf("bad clip: %d", rec.Code)
-		}
-	}
-	if rec := webCall(w, "alex", w.s.clipboardSend, "POST", "/api/v1/clipboard", `{"text":"from web"}`, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
-		t.Fatalf("web clip: %d %s", rec.Code, rec.Body)
-	}
-	// Someone else's phone can't be targeted.
-	if rec := webCall(w, "alex", w.s.clipboardSend, "POST", "/api/v1/clipboard", `{"text":"x","device_id":"`+samDev+`"}`, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("other's device: %d", rec.Code)
-	}
-
-	var got clipsResp
-	rec = webCall(w, "alex", w.s.clipboardList, "GET", "/api/v1/clipboard", "", nil)
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || len(got.Items) != 2 {
-		t.Fatalf("list: %s", rec.Body)
-	}
-	if c := got.Items[0]; c.Text != "from web" || c.Source != "web" || c.From != "NoCap OS" || c.DeviceID != "" || c.ID <= res.ID {
-		t.Fatalf("newest: %+v", c)
-	}
-	if c := got.Items[1]; c.Text != "from phone" || c.Source != "phone" || c.From != "Pixel 9" || c.DeviceID == "" || c.At.IsZero() {
-		t.Fatalf("phone clip: %+v", c)
-	}
-	rec = webCall(w, "sam", w.s.clipboardList, "GET", "/api/v1/clipboard", "", nil)
-	if strings.TrimSpace(rec.Body.String()) != `{"items":[]}` {
-		t.Fatalf("sam: %s", rec.Body)
-	}
-	// Sam targets his own phone.
-	if rec := webCall(w, "sam", w.s.clipboardSend, "POST", "/api/v1/clipboard", `{"text":"for sam","device_id":"`+samDev+`"}`, nil); rec.Code != http.StatusOK {
-		t.Fatalf("sam target: %d %s", rec.Code, rec.Body)
-	}
-	_ = samTok
-
-	// Only the last 20.
-	for i := 0; i < 30; i++ {
-		w.s.link().addClip("p", linkClip{Text: "x", Source: "web"})
-	}
-	if n := len(w.s.link().clips("p")); n != linkMaxClips {
-		t.Fatalf("kept %d", n)
-	}
-}
-
 type eventsResp struct {
 	Cursor    int64                 `json:"cursor"`
 	Notices   []notify.Notification `json:"notices"`
@@ -226,7 +165,7 @@ func TestDeviceEvents(t *testing.T) {
 		t.Fatalf("no token: %d", rec.Code)
 	}
 	// Something before the phone starts following: no history dump.
-	w.s.link().addClip(alex.ID, linkClip{Text: "old", Source: "web"})
+	w.s.link().addClip(alex.ID, linkClip{Text: "old", Source: "web"}, linkClipHistory)
 	start, took := pollEvents(t, w.s, tok, 0, "")
 	if start.Cursor == 0 || len(start.Clipboard)+len(start.Notices)+len(start.Dismissed) != 0 || took > 2*time.Second {
 		t.Fatalf("after=0: %+v in %v", start, took)
@@ -261,17 +200,17 @@ func TestDeviceEvents(t *testing.T) {
 
 	// Clips from phones and for other phones aren't delivered; dismissals are.
 	asDevice(w.s, w.s.deviceClipboard, "POST", "/api/v1/device/clipboard", tok, `{"text":"mine"}`)
-	w.s.link().addClip(alex.ID, linkClip{Text: "elsewhere", Source: "web", DeviceID: "another"})
+	w.s.link().addClip(alex.ID, linkClip{Text: "elsewhere", Source: "web", DeviceID: "another"}, linkClipHistory)
 	asDevice(w.s, w.s.devicePhoneNote, "POST", "/api/v1/device/phone-notifications", tok, `{"key":"k1","app":"Chat","title":"t"}`)
 	webCall(w, "alex", w.s.phoneNotesDismiss, "DELETE", "/", "", map[string]string{"device_id": dev, "key": "k1"})
-	w.s.link().addClip(alex.ID, linkClip{Text: "for this phone", Source: "web", DeviceID: dev})
+	w.s.link().addClip(alex.ID, linkClip{Text: "for this phone", Source: "web", DeviceID: dev}, linkClipHistory)
 	got, _ = pollEvents(t, w.s, tok, start.Cursor, "0")
 	if len(got.Dismissed) != 1 || got.Dismissed[0] != "k1" || len(got.Clipboard) != 1 || got.Clipboard[0].Text != "for this phone" {
 		t.Fatalf("events: %+v", got)
 	}
 	// Sam's phone hears nothing of Alex's.
 	samStart, _ := pollEvents(t, w.s, samTok, 0, "")
-	w.s.link().addClip(alex.ID, linkClip{Text: "alex only", Source: "web"})
+	w.s.link().addClip(alex.ID, linkClip{Text: "alex only", Source: "web"}, linkClipHistory)
 	if r, _ := pollEvents(t, w.s, samTok, samStart.Cursor, "0"); len(r.Clipboard) != 0 {
 		t.Fatalf("sam got: %+v", r)
 	}

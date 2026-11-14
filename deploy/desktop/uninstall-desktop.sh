@@ -61,6 +61,8 @@ if [ -x "$LIB/nocapos-accent" ]; then
       runuser -u "$u" -- env HOME="$home" "$LIB/nocapos-accent" --remove >/dev/null 2>&1 || true
     done
 fi
+# The desktop clipboard agent.
+rm -f /etc/systemd/user/graphical-session.target.wants/nocapos-clipboard.service /etc/systemd/user/nocapos-clipboard.service
 # The remote screen follower's leftovers.
 systemctl stop nocapos-screen.service >/dev/null 2>&1 || true
 rm -rf /run/nocapos/screen

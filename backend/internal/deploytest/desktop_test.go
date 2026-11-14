@@ -109,9 +109,9 @@ func TestDesktopPackages(t *testing.T) {
 	// distribution's branding packages.
 	banned := regexp.MustCompile(`(^|[|?])(gnome|gnome-core|task-gnome-desktop|ubuntu-desktop|gnome-games|aisleriot|network-manager|NetworkManager|desktop-base|ubuntu-wallpapers|yaru-theme-gtk|libreoffice\S*|evolution|totem|rhythmbox)($|\|)`)
 	required := map[string][]string{
-		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-software", "?gnome-software-plugin-flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "pipewire", "dconf-cli", "libsecret-tools"},
-		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
-		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "pipewire"},
+		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-software", "?gnome-software-plugin-flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire", "dconf-cli", "libsecret-tools"},
+		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire"},
+		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire"},
 	}
 	required["ubuntu"] = required["debian"]
 	for family, want := range required {
@@ -559,5 +559,15 @@ func TestNoCapSession(t *testing.T) {
 	}
 	if got := lib(t, "[User]\nIcon=x\n", "session_file_with", "User"); got != "[User]\nIcon=x\nSession=nocapos\nXSession=nocapos\n" {
 		t.Errorf("session_file_with (none saved):\n%s", got)
+	}
+}
+
+// The desktop clipboard agent: a user service in every graphical session.
+func TestClipboardUnit(t *testing.T) {
+	u := lib(t, "", "render_clipboard_unit", "/usr/local/bin/cap")
+	for _, want := range []string{"\nExecStart=/usr/local/bin/cap clipboard agent\n", "\nPartOf=graphical-session.target\n", "\nWantedBy=graphical-session.target\n", "\nRestart=on-failure\n"} {
+		if !strings.Contains(u, want) {
+			t.Errorf("clipboard unit lacks %q:\n%s", want, u)
+		}
 	}
 }

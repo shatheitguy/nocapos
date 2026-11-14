@@ -573,6 +573,18 @@ EOF
     done
 }
 
+# ---------------------------------------------------------------- the clipboard
+# Copy on the phone, paste on NoCap Desktop (and the other way round): a
+# user service in every graphical session, for every account. Switched on
+# with a link, the same as "systemctl --global enable" (that needs no
+# running systemd, so it works inside the image build too).
+desk_clipboard() {
+  local cap=/usr/local/bin/cap
+  mkdir -p /etc/systemd/user/graphical-session.target.wants
+  render_clipboard_unit "$cap" >/etc/systemd/user/nocapos-clipboard.service
+  ln -sf ../nocapos-clipboard.service /etc/systemd/user/graphical-session.target.wants/nocapos-clipboard.service
+}
+
 # install_full_desktop: the whole native desktop, the same on every machine
 # (small and 32-bit ones are tuned, see desk_tune_memory). Returns 1 (after
 # saying why) only when this distribution's packages can't provide it.
@@ -598,6 +610,7 @@ install_full_desktop() {
   desk_settings
   desk_tune_memory
   desk_accent
+  desk_clipboard
   desk_units
   desk_hide_updaters
   desk_identity

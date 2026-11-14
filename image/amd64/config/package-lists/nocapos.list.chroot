@@ -18,6 +18,9 @@ locales
 console-setup
 keyboard-configuration
 network-manager
+# NoCap Desktop clipboard agent (cap clipboard agent): Wayland and X11 clipboards.
+wl-clipboard
+xclip
 firmware-linux-free
 rsync
 cryptsetup

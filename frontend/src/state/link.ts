@@ -33,13 +33,28 @@ export interface PhoneNote {
 
 export interface Clip {
   id: number;
+  /** "text", or "image" (a PNG or JPEG picture; text is then empty). Older servers leave it out. */
+  kind?: 'text' | 'image';
   text: string;
+  /** A picture's type and size in bytes. */
+  mime?: string;
+  size?: number;
   from: string;
-  source: 'phone' | 'web';
+  source: 'phone' | 'web' | 'desktop';
   /** The phone it came from (source "phone") or is for ("web"; "" = all). */
   device_id: string;
   at: string;
 }
+
+export interface ClipSettings {
+  /** Keep a short history; off keeps only the last item. */
+  history: boolean;
+  /** NoCap Desktop's own clipboard (this machine's screen) joins in. */
+  desktop: boolean;
+}
+
+/** Whether a clip came from another of the person's devices (a phone or NoCap Desktop). */
+export const fromElsewhere = (c: Clip) => c.source === 'phone' || c.source === 'desktop';
 
 /** How the phone reaches this server: on the same network or over the internet. */
 export type Route = 'local' | 'remote' | '';
@@ -107,6 +122,9 @@ export const linkApi = {
   clips: () => api<{ items: Clip[] }>('/api/v1/clipboard'),
   send: (text: string, device_id?: string) =>
     api<{ ok: boolean; id: number }>('/api/v1/clipboard', { method: 'POST', body: device_id ? { text, device_id } : { text } }),
+  clearClips: () => api<{ ok: boolean }>('/api/v1/clipboard', { method: 'DELETE' }),
+  clipSettings: () => api<ClipSettings>('/api/v1/clipboard/settings'),
+  saveClipSettings: (c: Partial<ClipSettings>) => api<ClipSettings>('/api/v1/clipboard/settings', { method: 'PUT', body: c }),
   phones: () => api<{ phones: Phone[]; carries: Carry[] }>('/api/v1/phones'),
   action: (deviceId: string, a: PhoneAction) =>
     api<{ ok: boolean; id: string | number }>(`/api/v1/phones/${enc(deviceId)}/actions`, { method: 'POST', body: a }),
@@ -167,10 +185,13 @@ export const useLink = create<LinkStore>((set, get) => ({
     if (!c.ok) return;
     const items = c.data.items ?? [];
     set({ clips: items });
-    const fresh = items.filter((x) => x.id > lastClip && x.source === 'phone');
+    const fresh = items.filter((x) => x.id > lastClip && fromElsewhere(x));
     if (items.length) lastClip = Math.max(lastClip, ...items.map((x) => x.id));
     // Only clips that arrive while we're watching pop up, not the backlog.
-    if (loaded && fresh.length) set({ clipBanner: fresh[0] });
+    if (loaded && fresh.length) {
+      set({ clipBanner: fresh[0] });
+      clipHandler?.(fresh[0]);
+    }
     loaded = true;
   },
   loadPhones: async () => {
@@ -189,12 +210,20 @@ export const useLink = create<LinkStore>((set, get) => ({
 /** Phone notifications that came in since the center was last opened. */
 export const useLinkUnseen = () => useLink((s) => s.notes.filter((n) => n.posted > s.seenAt).length);
 
+let clipHandler: ((c: Clip) => void) | null = null;
+
+/** Called with every clip that arrives live from another device (see clipSync.ts). */
+export function onClipArrived(fn: ((c: Clip) => void) | null) {
+  clipHandler = fn;
+}
+
 function clipArrived(c: Clip) {
   const s = useLink.getState();
   if (s.clips.some((x) => x.id === c.id)) return;
-  const fresh = c.id > lastClip && c.source === 'phone';
+  const fresh = c.id > lastClip && fromElsewhere(c);
   lastClip = Math.max(lastClip, c.id);
-  useLink.setState({ clips: [c, ...s.clips], ...(fresh ? { clipBanner: c } : {}) });
+  useLink.setState({ clips: [c, ...s.clips].slice(0, 20), ...(fresh ? { clipBanner: c } : {}) });
+  if (fresh) clipHandler?.(c);
 }
 
 function carryArrived(h: Carry) {
