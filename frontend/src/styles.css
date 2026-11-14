@@ -521,7 +521,12 @@ button.widget:active { transform: none; }
 .launcher-track { display: flex; height: 100%; transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: transform; }
 .launcher-track.dragging { transition: none; }
 .launcher-page { flex: 0 0 100%; height: 100%; gap: 4px; align-content: stretch; align-items: center; justify-items: stretch; }
-.launcher-page > .launcher-app, .launcher-page > .store-tile { max-height: 100%; }
+.launcher-page > .lp-cell, .lp-cell > .launcher-app, .lp-cell > .store-tile { max-height: 100%; }
+/* One cell per icon, keyed so icons glide when they are rearranged. */
+.launcher-grid > .lp-cell { display: flex; min-width: 0; min-height: 0; }
+.lp-cell > * { flex: 1 1 auto; min-width: 0; }
+/* The dragged icon's spot while the others make room for it. */
+.lp-cell.lifted, .folder-grid .launcher-app.lifted { opacity: 0.3; }
 .launcher-results { align-content: start; }
 .launcher-dots { flex: none; display: flex; justify-content: center; gap: 4px; }
 .launcher-dots button { width: 22px; height: 22px; padding: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; }

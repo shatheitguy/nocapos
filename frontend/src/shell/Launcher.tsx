@@ -7,7 +7,9 @@ import { AppIcon } from '../components/AppTile';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { FolderIcon } from '../components/FolderIcon';
 import { Icon } from '../components/Icon';
-import { dropHint, pressApp, useAppDrag } from '../state/appDrag';
+import { dropHint, pressApp, recheckDrag, setGridSlots, TOUCH_HOLD, useAppDrag } from '../state/appDrag';
+import { arrange, cellAt, preview, slotAt } from '../lib/launcherOrder';
+import { useFlip } from '../lib/flip';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { folderKey, ungroup, useFolders, type AppFolder } from '../state/folders';
 import { FolderView } from './FolderView';
@@ -26,8 +28,6 @@ const noWiggle = () => {};
 
 /** How long a dragged icon rests at the page edge before the page turns. */
 const EDGE_MS = 600;
-/** Touch: a finger has to rest this long on an icon before it lifts (a quick move swipes pages). */
-const TOUCH_HOLD = 350;
 
 type Entry =
   | { kind: 'folder'; folder: AppFolder }
@@ -78,12 +78,27 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   // Installed Linux apps join Launchpad by themselves (never the desktop).
   const nativeApps = useNativeApps((s) => s.apps).filter((a) => !needle || `${a.name} ${a.id}`.toLowerCase().includes(needle));
 
-  const entries: Entry[] = [
+  const natural: Entry[] = [
     ...shownFolders.map((folder) => ({ kind: 'folder' as const, folder })),
     ...apps.map((app) => ({ kind: 'app' as const, app })),
     ...storeApps.map((app) => ({ kind: 'store' as const, app })),
     ...nativeApps.map((app) => ({ kind: 'native' as const, app })),
   ];
+
+  // The owner's order: saved keys first, new apps at the end, removed ones gone.
+  const order = useFolders((s) => s.order);
+  // While an icon is dragged in the grid (or out of a folder), the others make room for it.
+  const dragKey = useAppDrag((s) => (s.drag && (s.drag.source === 'launchpad' || s.drag.source === 'folder') ? s.drag.appId : null));
+  const fromFolder = useAppDrag((s) => !!s.drag?.folderId);
+  const slot = useAppDrag((s) => (s.slot?.where === 'grid' ? s.slot.before : undefined));
+  const byKey = new Map(natural.map((en) => [entryKey(en), en] as const));
+  const baseKeys = arrange(order, [...byKey.keys()]);
+  if (dragKey && fromFolder && !byKey.has(dragKey) && !needle) {
+    const app = all.find((a) => a.id === dragKey);
+    if (app) byKey.set(dragKey, { kind: 'app', app });
+  }
+  const shownKeys = needle || !dragKey ? baseKeys : preview(baseKeys, dragKey, slot);
+  const entries: Entry[] = shownKeys.map((k) => byKey.get(k)!).filter(Boolean);
 
   // Fixed pages sized to the screen; a new page only when the last one is full.
   const perPage = grid.cols * grid.rows;
@@ -97,6 +112,29 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const nav = useRef({ current, last });
   nav.current = { current, last };
   const go = (p: number) => setPage(clamp(p, 0, nav.current.last));
+
+  // Dragging icons between others: the slot under the pointer, from the grid's cells.
+  const layout = useRef({ shownKeys, baseKeys, grid, current, needle });
+  layout.current = { shownKeys, baseKeys, grid, current, needle };
+  useEffect(() => {
+    setGridSlots({
+      slot: (x, y, dragged) => {
+        const { shownKeys: shown, grid: g, current: at, needle: searching } = layout.current;
+        const box = pagesRef.current?.getBoundingClientRect();
+        if (searching || !box) return undefined;
+        const cell = cellAt(x, y, box, g.cols, g.rows, at);
+        return cell ? slotAt(shown, dragged, cell.index, cell.after) : undefined;
+      },
+      keys: () => [...layout.current.baseKeys],
+    });
+    return () => setGridSlots(null);
+  }, []);
+
+  // Icons glide to their new places while one is dragged, and as it lands.
+  const track = useRef<HTMLDivElement>(null);
+  const settledAt = useRef(0);
+  if (dragKey) settledAt.current = Date.now() + 400;
+  useFlip(track, !!dragKey || Date.now() < settledAt.current);
 
   useLayoutEffect(() => {
     const el = pagesRef.current;
@@ -166,6 +204,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         edge.timer = window.setTimeout(() => {
           edge.dir = 0; // the next move at the edge waits again
           go(nav.current.current + dir);
+          window.setTimeout(recheckDrag, 350); // the icons under the pointer are the new page's now
         }, EDGE_MS);
     });
     return () => {
@@ -190,6 +229,12 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
   const onSwipeMove = (e: RPointerEvent<HTMLDivElement>) => {
     const s = swipe.current;
     if (!s || s.id !== e.pointerId) return;
+    if (s.on && useAppDrag.getState().drag) {
+      // A held icon lifted after all: it is a drag, not a swipe.
+      swipe.current = null;
+      setDx(0);
+      return;
+    }
     const mx = e.clientX - s.x;
     const my = e.clientY - s.y;
     if (!s.on) {
@@ -312,7 +357,17 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
     setMenu({ x: e.clientX, y: e.clientY, items });
   };
 
+  // Each icon sits in a cell keyed by its order key, so it can glide when the order changes.
   const tile = (en: Entry, i: number) => {
+    const key = entryKey(en);
+    return (
+      <div key={key} className={`lp-cell ${key === dragKey ? 'lifted' : ''}`} data-key={key}>
+        {tileBody(en, i)}
+      </div>
+    );
+  };
+
+  const tileBody = (en: Entry, i: number) => {
     if (en.kind === 'folder') {
       const f = en.folder;
       return (
@@ -324,7 +379,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
           data-folder={f.id}
           data-scope="launchpad"
           title={tr('lp.folderTitle')}
-          onPointerDown={(e) => pressApp(e, folderKey(f.id), 'launchpad', { touchHold: TOUCH_HOLD })}
+          onPointerDown={(e) => pressApp(e, folderKey(f.id), 'launchpad', { touchHold: TOUCH_HOLD, onStart: () => setMenu(null) })}
           onClick={() => setOpenFolder(f.id)}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -358,7 +413,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         data-app={a.id}
         data-scope="launchpad"
         title={tr('lp.appTitle')}
-        onPointerDown={(e) => pressApp(e, a.id, 'launchpad', { touchHold: TOUCH_HOLD })}
+        onPointerDown={(e) => pressApp(e, a.id, 'launchpad', { touchHold: TOUCH_HOLD, onStart: () => setMenu(null) })}
         onClick={(e) => launch(a.id, e.shiftKey)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -417,12 +472,13 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         >
           {needle ? (
             // Search results from every page, together.
-            <div className="launcher-grid launcher-results">
+            <div className="launcher-grid launcher-results" data-no-drag>
               {entries.map(tile)}
               {!entries.length && <p className="muted">No apps match “{q}”.</p>}
             </div>
           ) : (
             <div
+              ref={track}
               className={`launcher-track ${dx ? 'dragging' : ''}`}
               style={{ transform: `translateX(calc(${-current * 100}% + ${dx}px))` }}
             >
@@ -459,7 +515,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         <p className="launcher-tip muted small">
           {jiggle
             ? 'Tap ✕ to uninstall an app · Esc or click anywhere to finish'
-            : 'Tip: drop an app onto another to make a folder, or drag it to the Dock or Desktop · click and hold an installed app to remove it'}
+            : tr('lp.tip')}
         </p>
       </div>
       {openFolder && (
