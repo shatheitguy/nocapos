@@ -85,7 +85,7 @@ fun LinkSettings(a: MainActivity) {
             Action(t("Don't put NoCap to sleep", "Allow background connection")) { LinkService.askUnrestricted(a); tick++ }
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Text(t("Right now", "Status"), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         LinkRouteChip()
     }

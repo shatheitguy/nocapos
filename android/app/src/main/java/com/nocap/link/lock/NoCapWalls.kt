@@ -28,7 +28,7 @@ import kotlinx.coroutines.withContext
  * Material You colors (picked from the wallpaper) come out NoCap red.
  */
 object NoCapWalls {
-    const val RED = 0xFFFF2A2A.toInt()
+    const val RED = 0xFFE8232B.toInt()
     private const val DEEP = 0xFF8A0E14.toInt()
 
     /** How strongly the picture is washed in red (chosen so every built-in wallpaper reads as red; see tests). */

@@ -59,7 +59,7 @@
             android:layout_height="wrap_content"
             android:fontFamily="@font/rajdhani_semibold"
             android:maxLines="1"
-            android:textColor="#FFFF2A2A"
+            android:textColor="#FFE8232B"
             android:textSize="13sp" />
     </LinearLayout>
 </LinearLayout>
