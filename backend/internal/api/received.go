@@ -202,7 +202,9 @@ func (s *Server) receivedUnread(root, folder string, seen time.Time) int {
 				}
 				continue
 			}
-			if e.ModTime.After(seen) {
+			// "seen" is stored to the millisecond, so compare at that precision:
+			// a file written in the same millisecond was already seen.
+			if e.ModTime.UnixMilli() > seen.UnixMilli() {
 				n++
 			}
 		}
