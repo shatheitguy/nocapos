@@ -196,6 +196,23 @@ const ICONS: Record<string, Draw> = {
       <path d="m30 22 13 6.5-5.6 1.6 3.4 5.6-3 1.7-3.4-5.6-4.1 4Z" fill="#fff" />
     </>
   ),
+  // Device Screens: a tablet behind, a phone in front, both live.
+  phone: (g) => (
+    <>
+      <defs>
+        {lin(g('tab'), '#6ee7b7', '#0f766e')}
+        {lin(g('ph'), '#a7f3d0', '#10b981')}
+      </defs>
+      <rect x="8" y="12" width="36" height="28" rx="4" fill="#0f172a" />
+      <rect x="10.5" y="14.5" width="31" height="23" rx="2.5" fill={url(g('tab'))} />
+      <rect x="34" y="20" width="21" height="34" rx="4.5" fill="#0f172a" />
+      <rect x="36.5" y="22.5" width="16" height="29" rx="3" fill={url(g('ph'))} />
+      {gloss('M36.5 25.5a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3V30h-16Z')}
+      <path d="M41 33l5 3.2-5 3.2Z" fill="#fff" />
+      <rect x="15" y="20" width="12" height="3" rx="1.5" fill="#fff" opacity=".8" />
+      <rect x="15" y="26" width="16" height="3" rx="1.5" fill="#fff" opacity=".55" />
+    </>
+  ),
   virtualdesk: (g) => (
     <>
       <defs>
@@ -279,6 +296,7 @@ const SHAPES: Record<string, () => ReactNode> = {
   logs: () => (<>{bg('#111827')}{[16, 25, 34, 43].map((y, i) => <rect key={y} x="14" y={y} width={[36, 26, 32, 18][i]} height="5" rx="2.5" fill={['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][i]} />)}</>),
 };
 SHAPES.vmscreen = SHAPES.virtualdesk;
+SHAPES.phone = () => (<>{bg('#0f766e')}<rect x="10" y="14" width="32" height="24" rx="4" fill="#5eead4" opacity=".7" /><rect x="34" y="20" width="19" height="31" rx="4" fill="#ccfbf1" /><rect x="40" y="46" width="7" height="2" rx="1" fill="#0f766e" /></>);
 SHAPES.shield = () => (<>{bg('#9b1015')}<path d="M32 12l17 6v11c0 11-7 19-17 23-10-4-17-12-17-23V18Z" fill="#ff5a5f" /><path d="m25 32 5 5 10-11" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></>);
 SHAPES.nocapdesktop = () => (<>{bg('#7a0f12')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#e5383b" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#fecaca" /></>);
 

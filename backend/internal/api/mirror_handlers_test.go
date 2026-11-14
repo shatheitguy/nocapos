@@ -139,3 +139,39 @@ func TestMirrorLink(t *testing.T) {
 		}
 	}
 }
+
+// Device Screens: a device's shape, features, battery and online state are
+// listed for its owner; a shape it can't be is refused.
+func TestMirrorDeviceShape(t *testing.T) {
+	w := newAuthWorld(t)
+	w.s.Config.DataDir = t.TempDir()
+	alex := w.users["alex"]
+	tab := linkPhone(t, w, alex, "Alex's tablet")
+
+	if rec := asDevice(w.s, w.s.deviceHeartbeat, "POST", "/api/v1/device/heartbeat", tab.Token, `{"form":"toaster"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad form: %d %s", rec.Code, rec.Body)
+	}
+	if rec := asDevice(w.s, w.s.deviceHeartbeat, "POST", "/api/v1/device/heartbeat", tab.Token,
+		`{"battery":64,"model":"Pixel Tablet","form":"tablet","capabilities":{"files":true,"screen":true}}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("heartbeat: %d %s", rec.Code, rec.Body)
+	}
+	// Left out: unchanged.
+	if rec := asDevice(w.s, w.s.deviceHeartbeat, "POST", "/api/v1/device/heartbeat", tab.Token, `{"battery":63}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("heartbeat 2: %d %s", rec.Code, rec.Body)
+	}
+	rec := w.do(t, w.s.mirrorDevices, alex, "GET", "/api/v1/mirror/phones", nil)
+	var list []mirrorDeviceJSON
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if rec.Code != http.StatusOK || len(list) != 1 {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	d := list[0]
+	if d.Form != "tablet" || d.Model != "Pixel Tablet" || !d.Online || d.Battery == nil || *d.Battery != 63 || strings.Join(d.Caps, ",") != "files,screen" {
+		t.Fatalf("device: %+v", d)
+	}
+	// Nobody else sees it.
+	rec = w.do(t, w.s.mirrorDevices, w.users["boss"], "GET", "/api/v1/mirror/phones", nil)
+	if strings.Contains(rec.Body.String(), tab.DeviceID) {
+		t.Fatalf("boss sees alex's tablet: %s", rec.Body)
+	}
+}

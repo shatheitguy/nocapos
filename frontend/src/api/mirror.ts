@@ -24,6 +24,15 @@ export interface MirrorPhone {
   last_seen_at: string | null;
   battery: number | null;
   app_version: string;
+  /** e.g. "Google Pixel 8" ("" until the device says). */
+  model?: string;
+  os_version?: string;
+  /** phone, tablet or computer ("" until the device says). */
+  form?: '' | 'phone' | 'tablet' | 'computer';
+  /** NoCap Link features it has on; "screen" = it can share its screen. */
+  capabilities?: string[];
+  /** Called this server in the last few minutes. */
+  online?: boolean;
   mirror: MirrorStatus;
 }
 

@@ -81,9 +81,10 @@ type linkCarry struct {
 
 // linkEvent goes out on the link.phone topic.
 type linkEvent struct {
-	Type  string     `json:"type"` // changed | open | clip
-	Carry *linkCarry `json:"carry,omitempty"`
-	Clip  *linkClip  `json:"clip,omitempty"`
+	Type     string        `json:"type"` // changed | open | clip | received
+	Carry    *linkCarry    `json:"carry,omitempty"`
+	Clip     *linkClip     `json:"clip,omitempty"`
+	Received *linkReceived `json:"received,omitempty"`
 }
 
 // tell passes ev to uid's desktops. It doesn't take mu.
@@ -305,7 +306,7 @@ func (s *Server) deviceOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Root == "" && req.Path != "" {
-		req.Root = s.sendHome(r) // a file it just sent: its NoCap Link folder is in the home
+		req.Root = s.sendHome(r, s.receivedName(r.Context(), u)) // a file it just sent: its Received folder is in the home
 	}
 	x := linkCarry{DeviceID: d.ID, DeviceName: d.Name, Title: cutRunes(strings.TrimSpace(req.Title), linkMaxTitle)}
 	if req.Root != "" || req.Path != "" {

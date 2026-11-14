@@ -91,5 +91,21 @@
   "ld.codeFail": "Couldn’t make a code. Try again?",
   "ld.fullTitle": "You’ve linked {used} of {limit}",
   "ld.fullMsg": "Unlink a device you don’t use anymore to make room, then link the new one.",
-  "ld.continue": "Continue"
+  "ld.continue": "Continue",
+  "recv.title": "Received files",
+  "recv.hint": "Files your devices send are saved here, in one folder per device. Files you send to a device are kept in its Sent folder.",
+  "recv.folderLabel": "Folder name",
+  "recv.folderHint": "In your home folder: {path}",
+  "recv.noHome": "Your account doesn’t have a home folder on this server, so received files can’t be saved.",
+  "recv.badName": "Use up to 64 characters, without / \\ : * ? \" < > |, not starting with a dot.",
+  "recv.saved": "Received files are now saved in {name}",
+  "recv.saveFailed": "Couldn’t rename the folder",
+  "recv.taken": "A folder with that name already exists in your home folder.",
+  "recv.openLabel": "Open the folder",
+  "recv.showInFiles": "Show in Files",
+  "recv.unread": "{n} new",
+  "recv.allSeen": "No new files",
+  "recv.sideHint": "Files your devices sent you",
+  "recv.gotOne": "File received from {device}",
+  "recv.gotMany": "{n} files received from {device}"
 }

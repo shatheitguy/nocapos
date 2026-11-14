@@ -134,7 +134,7 @@ func ValidDetail(v string) bool {
 
 // Caps are the NoCap Link features a device can report as on, in the
 // order they're shown.
-var Caps = []string{"notifications", "clipboard", "files"}
+var Caps = []string{"notifications", "clipboard", "files", "screen"}
 
 // CapsString turns the features a device reports into what's stored
 // ("notifications,files"); unknown ones are dropped.
