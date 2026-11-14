@@ -1,7 +1,7 @@
 name: OS images
 
 # Builds the NoCapOS OS images from a published NoCapOS release:
-#   nocapos-<version>-amd64.iso          PC: live + installer ISO (Debian base, live-build)
+#   nocapos-<version>-amd64.iso          PC: live NoCap Desktop + graphical and text installers (Debian base, live-build)
 #   nocapos-<version>-rpi-arm64.img.xz   Raspberry Pi: SD card image (pi-gen, arm64)
 # Each run uploads them as workflow artifacts. On a published release (or a
 # manual run with "attach" ticked) they're also attached to release v<version>.
@@ -88,7 +88,7 @@ jobs:
             -e NOCAP_WORK=/build/work -e VERSION \
             -w /src docker.io/library/debian:trixie \
             bash -c 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
-                       live-build debootstrap curl ca-certificates cpio python3 python3-pil fonts-dejavu-core \
+                       live-build debootstrap curl ca-certificates cpio python3 python3-pil python3-yaml fonts-dejavu-core \
                      && bash image/amd64/build.sh "$VERSION" /src/out'
           sudo chown -R "$(id -u):$(id -g)" out
           ls -lh out
