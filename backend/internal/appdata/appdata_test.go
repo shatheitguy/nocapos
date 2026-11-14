@@ -41,6 +41,7 @@ func TestCheck(t *testing.T) {
 		{bind, false},
 		{vol, true},
 		{mkdir(t, data, "apps", "x"), false}, // inside NoCapOS's data folder, not holding it
+		{mkdir(t, data, "stacks", "media", "config"), false},
 	}
 	for _, c := range ok {
 		if _, err := Check(c.src, c.volume, protected, vols); err != nil {
@@ -54,12 +55,15 @@ func TestCheck(t *testing.T) {
 		{"", false},
 		{"relative/path", false},
 		{filepath.Join(base, "missing"), false},
-		{file, false},               // a single file
-		{bind, true},                // a "volume" outside Docker's volumes folder
-		{volumes, true},             // the volumes folder itself
-		{base, false},               // holds NoCapOS's data
-		{data, false},               // is NoCapOS's data
-		{filepath.Dir(base), false}, // holds it too
+		{file, false},                            // a single file
+		{bind, true},                             // a "volume" outside Docker's volumes folder
+		{volumes, true},                          // the volumes folder itself
+		{base, false},                            // holds NoCapOS's data
+		{data, false},                            // is NoCapOS's data
+		{filepath.Dir(base), false},              // holds it too
+		{mkdir(t, data, "secrets"), false},       // NoCapOS's own keys
+		{filepath.Join(data, "stacks"), false},   // every app's folder at once
+		{mkdir(t, data, "tls", "nested"), false}, // anything else inside its data
 		{bind + string(filepath.Separator) + ".." + string(filepath.Separator) + "..", false}, // .. leads to base
 	}
 	for _, c := range bad {

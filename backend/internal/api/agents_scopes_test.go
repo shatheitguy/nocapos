@@ -343,7 +343,7 @@ func TestAgentsStopAll(t *testing.T) {
 	at, _ := makeAgentToken(t, w, alex, store.AgentScopeAct)
 
 	// A waiting action is denied by Stop all agents.
-	res := asyncRPC(t, w.s, at, callTool("run_command", map[string]any{"command": "id"}))
+	res := asyncRPC(t, w.s, at, callTool("write_file", map[string]any{"root": "home", "path": "/a.txt", "content": "x"}))
 	for i := 0; i < 300 && len(w.s.agentBroker().Pending(alex.ID)) == 0; i++ {
 		time.Sleep(5 * time.Millisecond)
 	}
