@@ -7,92 +7,84 @@
 [![CI](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml/badge.svg)](https://github.com/shatheitguy/nocapos/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Freedom to do more.** NoCapOS turns any Linux server into a personal cloud with a full windowed
-desktop in your browser. It installs on top of your existing Linux (Debian, Ubuntu, Raspberry Pi OS,
-Fedora, Arch), manages the machine as root, and runs apps in Docker:
-files, photos, backups, RAID storage, virtual machines, network sharing and one-click apps, all in a frosted-glass desktop.
+**Freedom to do more.** NoCapOS is a full Linux operating system built on Debian 13. The machine's
+own screen runs a native NoCap Desktop, and any browser on your network gets the same OS as a web
+desktop. Storage, security, virtual machines, apps, file sharing, backups and AI agents are built in,
+and the NoCap OS phone app keeps your phone and your server connected.
 
 🌐 **Website:** https://shatheitguy.github.io/nocapos/
 
-![The NoCapOS home screen](docs/screenshots/desktop.jpg)
+![The NoCapOS desktop](docs/screenshots/desktop.jpg)
 
-## Install
+## Download
 
-On Debian, Ubuntu, Raspberry Pi OS, Fedora or Arch (amd64, arm64, armv7):
+| | |
+|---|---|
+| **PC installer (x86)** | `nocapos-<version>-amd64.iso` from [the latest release](https://github.com/shatheitguy/nocapos/releases/latest). Write it to a USB stick and boot: it starts the NoCap Desktop with an **Install NoCapOS** app. A text-mode installer is included for servers without a screen. |
+| **Raspberry Pi image** | `nocapos-<version>-rpi-arm64.img.xz` from [the latest release](https://github.com/shatheitguy/nocapos/releases/latest). Flash it to an SD card or SSD for a Raspberry Pi 4 or 5. |
+| **Phone app** | [`nocap-os.apk`](https://github.com/shatheitguy/nocapos/releases/latest/download/nocap-os.apk) |
+
+Every download has a SHA-256 checksum next to it in the release. Kernel and security updates come
+straight from Debian.
+
+### Install on an existing system
+
+Already running Debian, Ubuntu or Raspberry Pi OS (amd64, arm64, armv7)? Install NoCapOS on top:
 
 ```bash
 curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash
 ```
 
 The installer picks the build for your CPU, verifies its SHA-256 checksum, installs Docker if it is
-missing (for the App Store), sets NoCapOS up as the `nocapos` systemd service and prints the address. Open it from a device on your network and create your administrator, like any computer's
-first start. From outside your local network, setup also asks for the one-time token the installer prints.
+missing (for the App Store) and sets NoCapOS up as the `nocapos` systemd service.
 
 | Option | |
 |---|---|
 | `--storage DIR` | folder for NoCap Drive (default `/srv/nocapos`) |
 | `--port N` | HTTPS port (default 443) |
 | `--no-docker` / `--install-docker` | skip / don't ask about installing Docker |
-| `--docker` | run NoCapOS itself in Docker (apps only — no control of the server) |
 | `--uninstall [--purge]` | remove NoCapOS; your files are never deleted |
 
-Settings live in `/etc/nocapos/nocapos.env`; manage the service with `systemctl status|restart nocapos`.
+### First start
 
-**Uninstall** (your files are never deleted):
+Open the address shown on the screen from a device on your network (or use the NoCap Desktop) and
+create your administrator. A short setup follows: voice, theme, name, network, time zone and updates;
+skip anything and change it later in Settings. From outside your local network, setup also asks for a
+one-time token.
 
-```
-curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/uninstall.sh | sudo bash
-```
+### Updating
 
-Add `-s -- --purge` to also delete accounts, settings and keys, and `--remove-apps` to remove App Store
-apps with their data. It also removes NoCapOS's Samba shares, network-drive mounts and the Samba
-accounts it made (with `--purge`, also the login-less file-sharing accounts it created; real Linux
-users are never deleted). Piping from curl runs the download unchecked: to verify it first, download
-`nocapos-linux-<arch>.tar.gz` and `SHA256SUMS`, run `sha256sum -c SHA256SUMS --ignore-missing`,
-extract it and run `sudo bash install.sh --uninstall`.
-Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash nocapos-*/install.sh`.
+Updates are done from **Settings → Glow Up**: NoCapOS and the system packages, in one go. Accounts,
+settings and files are kept.
 
 ## What you get
 
-- **A desktop in the browser** — a frosted *Glass* look with 10 wallpapers and a Transparency slider, glossy
-  app icons (Objects, Glass tiles or Shapes), a menu bar that sits on the wallpaper with your profile photo
-  and account menu, a home screen with your installed apps, dock, Launchpad, windows, widgets and a lock
-  screen. Classic and *Cyber-Deck* themes too.
-- **Everyone gets their own space** — each person has a private Home (their own Linux home on a Linux
-  install), sees only the shared folders and apps you allow, and keeps their own look. People can be
-  *Desktop* users or *File sharing only*.
-- **App Store** — one-click self-hosted apps (Jellyfin, Nextcloud, Open WebUI + Ollama, Vaultwarden,
-  Syncthing, Gitea, code-server, n8n, …) with their own icons, updates ("Update all") and release notes.
-  Click and hold an installed app to wiggle and remove it.
-- **Files** — Home, Recents, Favorites, shared folders, network devices and external drives; quick look,
-  compress and extract (zip, tar), Trash, and a *System* view where core OS folders are protected.
-- **Photos** — a timeline by years, months and days, albums, favorites, a viewer with camera details and
-  Recently Deleted.
-- **Backups & Rewind** — encrypted, scheduled backups (restic) to a drive, SFTP or S3/B2, and bring back
-  any file from any day.
-- **Storage** — disk health (SMART), ZFS pools (mirror, RAIDZ1/2/3), datasets, snapshots and scrubs, or
-  use a single disk as storage. Erasing always needs a typed confirmation.
-- **Shared folders & network drives** — create shared folders in Files and give each person Read/Write, Read
-  only or No access; they connect over SMB or WebDAV with their own user name and password. Connect SMB/NFS
-  shares from other devices too.
-- **People and their spaces** — everyone gets a private home (their own Linux home on a native install),
-  shared folders with Read & write / Read only / No access per person, and a choice of which apps each
-  person sees. People can be desktop users or file-sharing-only (SMB/WebDAV with their own password).
-  Everything is checked on the server, and each person's desktop look stays their own.
-- **Cloud Imports** — bring files in from Google Drive, Dropbox, OneDrive and more (rclone).
-- **Virtual Desk** — run Windows, Linux and Android virtual machines (KVM): a four-step New VM wizard,
-  live usage, snapshots, and the machine's screen in its own window.
-- **Docker** — edit any container (ports, folders, macvlan/ipvlan networks with fixed IPs, environment,
-  limits), create networks and run Compose stacks.
-- **Your server, managed** — sign in with the machine's Linux accounts, users and roles, Wi-Fi (saved
-  networks, WPA Enterprise sign-in, share with a QR code) and network (DHCP/static with automatic rollback), software update check,
-  restart and shut down.
-- **Notifications** — updates, app updates, app errors, storage and backups, as macOS-style banners with
-  the menu-bar desktop or Windows-style toasts with the taskbar.
-- **Terminal, Monitor, Remote Desktop, Brave, Scripts and an AI Assistant** (local Ollama or cloud).
-- **NoCap MCP** — AI agents like Hermes Agent or Claude Code can use your server through MCP (`cap mcp`
-  or Streamable HTTP at `/mcp`) with a per-agent token from Settings → AI Agents. Reading is instant;
-  editing files, running commands, controlling apps, VMs or the screen waits for your approval. Off by default.
+- **A full Linux OS** on Debian 13, for PCs and Raspberry Pi, with the same behaviour on amd64, arm64
+  and armv7.
+- **NoCap Desktop** on the physical screen, and the **web OS** from any browser: windows, dock, widgets,
+  Files, Photos, Terminal, Settings, and a private space for each person.
+- **Storage** — ZFS pools (mirror, RAIDZ1/2), snapshots with schedules, rollback and clones, encrypted
+  folders, scrubs, disk health, cache drives and a mirrored boot drive. Erasing always needs a typed
+  confirmation.
+- **Shield** — a firewall with presets, a "what's exposed" view and anti-lockout, plus a DNS ad and
+  tracker blocker for the whole network.
+- **Virtual machines** — Virtual Desk with a step-by-step wizard, live usage, snapshots and each
+  machine's screen in its own window.
+- **App Store** — one-click self-hosted apps in Docker with updates and per-person access; edit
+  containers, networks and Compose stacks.
+- **File sharing** — Samba and WebDAV shared folders with Read & write / Read only / No access per
+  person, guest shares, network drives and cloud folders.
+- **Backups** — encrypted, scheduled backups to a drive, SFTP or S3-compatible storage, Rewind to any
+  day, and export & restore of NoCapOS itself.
+- **NoCap Link and the NoCap OS phone app** — always connected (nearby or remote), phone notifications
+  and calls on the server, seamless clipboard both ways, send files and links (they land in your
+  Received folder), Find my phone, Device Screens (see and control your phone's screen, asked every
+  time), and finding and setting up NoCap servers from the phone.
+- **AI Agents** — agents use the server over MCP (`cap mcp` or Streamable HTTP at `/mcp`) with a
+  per-agent token and enforced permissions; anything that changes something waits for your approval.
+  Off by default.
+- **Two voices** — Gen Z (default) or Standard wording everywhere, in the phone app too.
+- **Privacy** — NoCapOS and the phone app collect no data. Crash reports are sent only if you choose to.
 - **Security** — argon2id passwords, two-factor sign-in, rotating sessions, an audit log of every admin
   action and a strict Content-Security-Policy.
 
@@ -100,19 +92,9 @@ Already downloaded a bundle? `tar -xzf nocapos-linux-arm64.tar.gz && sudo bash n
 
 | | |
 |---|---|
-| ![Launchpad](docs/screenshots/launchpad.jpg) **Launchpad** — glossy icons for NoCapOS apps, real icons for installed apps | ![Files](docs/screenshots/files.jpg) **Files** — favorites, recents, network devices and quick look |
-| ![Photos](docs/screenshots/photos.jpg) **Photos** — timeline, On this day, albums and favorites | ![App Store](docs/screenshots/app-store.jpg) **App Store** — featured apps, categories and updates |
-| ![Settings](docs/screenshots/settings.jpg) **Settings** — Network, General, Personalization, Security and more | ![Storage](docs/screenshots/storage.jpg) **Storage** — disk health and ZFS pools (sample data) |
-| ![Virtual Desk](docs/screenshots/virtual-desk.jpg) **Virtual Desk** — virtual machines with live usage (sample data) | ![New VM](docs/screenshots/virtual-desk-new.jpg) **New VM** — pick the system, ISO, resources and network |
-| ![File Sharing](docs/screenshots/file-sharing.jpg) **File Sharing** — shared folders and who may use them, in Files | ![Lock screen](docs/screenshots/login.jpg) **Lock screen** — your photo over the wallpaper |
-| ![Cyber-Deck](docs/screenshots/cyber-deck.jpg) **Cyber-Deck** — an optional sci-fi theme | |
-
-## Updating
-
-Run the installer again — it upgrades in place and keeps your accounts, settings and files. If the new
-version doesn't start, the installer puts the previous version and its database back automatically. Every push
-to `main` is built by GitHub Actions and published under [Releases](../../releases), so `releases/latest`
-always has the newest build.
+| ![First run](docs/screenshots/setup.jpg) **First run** — create your account, then a quick setup | ![Settings](docs/screenshots/settings.jpg) **Settings** — everything in one place, updates included |
+| ![Storage](docs/screenshots/storage.jpg) **Storage** — pools, disks, snapshots and the boot drive (sample data) | ![Linked devices](docs/screenshots/linked-devices.jpg) **Linked devices** — who's linked and each person's limit |
+| ![AI Agents](docs/screenshots/ai-agents.jpg) **AI Agents** — MCP access with per-agent permissions | ![Link a phone](docs/screenshots/link-phone.jpg) **Link a phone** — scan the QR code or type the code |
 
 ## Build from source
 
@@ -145,7 +127,7 @@ backend/            alfad — Go daemon, single static binary with the UI embedd
   internal/storage    disks, SMART and ZFS pools
   internal/netdrive   SMB/NFS mounts and SMB/WebDAV sharing
   internal/spaces     homes, shared-folder permissions, per-person app access
-  internal/cloudimport rclone cloud imports
+  internal/cloudimport rclone cloud folders
   internal/stacks     Docker Compose stacks
   internal/hostctl    network, Wi-Fi, power
   internal/docker     minimal Docker Engine API client
