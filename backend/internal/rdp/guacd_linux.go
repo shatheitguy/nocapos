@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // installGuacd installs the native RDP engine where the distro packages it
@@ -23,6 +24,33 @@ elif command -v apt-get >/dev/null; then
   as_root apt-get install -y -q guacd libguac-client-rdp0 libguac-client-vnc0 || as_root apt-get install -y -q guacd libguac-client-rdp0 || as_root apt-get install -y -q guacd
 else exit 4; fi
 command -v guacd >/dev/null`
+
+// preloadUnit loads the container images bundled in the OS images
+// (/usr/lib/nocapos/images) into Docker on the first boot.
+const preloadUnit = "nocapos-images.service"
+
+// waitPreload waits (up to two minutes) while preloadUnit is still loading
+// the bundled images, so guacd comes from the image instead of a download.
+// It reports whether it waited.
+func (g *Guacd) waitPreload(ctx context.Context) bool {
+	active := func() bool {
+		out, _ := exec.CommandContext(ctx, "systemctl", "is-active", preloadUnit).Output()
+		return strings.TrimSpace(string(out)) == "activating"
+	}
+	if !active() {
+		return false
+	}
+	g.set(PhasePreparing, "Unpacking the remote desktop engine…")
+	deadline := time.Now().Add(2 * time.Minute)
+	for active() && time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return true
+}
 
 func (g *Guacd) native(ctx context.Context) (string, error) {
 	if _, err := exec.LookPath("guacd"); err != nil {

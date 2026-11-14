@@ -4,6 +4,7 @@
 #
 #   /usr/lib/nocapos/bundle/        the release bundle (alfad, cap, install.sh, ...)
 #   /usr/lib/nocapos/image/         image scripts (layer.sh runs once in the chroot)
+#   /usr/lib/nocapos/images/        container images loaded on the first boot (guacd)
 #   /usr/share/plymouth/themes/nocapos/   boot splash (deploy/plymouth)
 #   /usr/share/grub/themes/nocapos/       GRUB theme (amd64, when art is given)
 #   /etc/...                        systemd units, apt settings, GRUB defaults
@@ -89,6 +90,14 @@ if [ -n "$ART" ] && [ "$PLATFORM" = pc ]; then
 else
   rm -f "$DEST/etc/default/grub.d/nocapos.cfg"
 fi
+
+# The remote desktop engine (guacd) as a container image: Debian 13 doesn't
+# package guacd, so alfad runs it in Docker. The exact image alfad uses
+# (backend/internal/rdp/guacd.ref, pinned by digest) goes into the image for
+# this architecture; nocapos-images.service loads it on the first boot, so
+# remote desktop and screen viewing work offline.
+bash "$HERE/save-guacd.sh" "$ROOT/backend/internal/rdp/guacd.ref" "$ARCH" \
+  "$DEST/usr/lib/nocapos/images/guacd-$ARCH.tar.zst"
 
 cat >"$DEST/usr/lib/nocapos/image/image-release" <<EOF
 # Written when this NoCapOS image was built.

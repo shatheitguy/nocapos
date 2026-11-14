@@ -119,6 +119,42 @@ n=0
 for m in /lib/modules/*/updates/dkms/zfs.ko*; do [ -e "$m" ] && n=$((n + 1)); done
 if [ "$n" -gt 0 ]; then ok "zfs.ko present for $n kernel(s)"; else bad "no zfs.ko in /lib/modules/*/updates/dkms"; fi
 
+section "Bundled container images"
+# The remote desktop engine (guacd) ships as a docker-load archive and is
+# loaded on the first boot (nocapos-images.service), which then deletes it.
+arch="$(dpkg --print-architecture)"
+gz="/usr/lib/nocapos/images/guacd-$arch.tar.zst"
+if [ -f "$gz" ]; then
+  if zstd -q -t "$gz" 2>/dev/null; then ok "guacd archive intact: $(basename "$gz") ($(($(stat -c %s "$gz") / 1048576)) MiB)"; else bad "guacd archive corrupt: $gz"; fi
+  entries="$(zstd -dc "$gz" 2>/dev/null | tar -t 2>/dev/null)"
+  if printf '%s\n' "$entries" | grep -qx manifest.json; then
+    ok "guacd archive lists $(printf '%s\n' "$entries" | grep -c .) entries"
+    manifest="$(zstd -dc "$gz" | tar -xO manifest.json 2>/dev/null)"
+    tag="$(printf '%s' "$manifest" | grep -oE '"RepoTags": *\[ *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')"
+    config="$(printf '%s' "$manifest" | grep -oE '"Config": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')"
+    case "$tag" in guacamole/guacd:*) ok "guacd archive tag: $tag" ;; *) bad "guacd archive tag: '${tag:-none}'" ;; esac
+    if [ -n "$config" ] && zstd -dc "$gz" | tar -xO "$config" 2>/dev/null | grep -Eq "\"architecture\": *\"$arch\""; then
+      ok "guacd archive is for $arch"
+    else
+      bad "guacd archive isn't for $arch"
+    fi
+  else
+    bad "guacd archive has no manifest.json"
+  fi
+  if systemctl is-enabled --quiet nocapos-images.service 2>/dev/null; then ok "nocapos-images.service on"; else bad "nocapos-images.service not enabled"; fi
+  # Where a Docker daemon runs (an installed machine; not the build chroot),
+  # check that it loads.
+  if docker info >/dev/null 2>&1; then
+    if out="$(zstd -dc "$gz" | docker load 2>&1)"; then ok "docker load: $(printf '%s' "$out" | tail -1)"; else bad "docker load: $(printf '%s' "$out" | tail -2)"; fi
+  else
+    echo "  (no Docker daemon here; docker load not tried)"
+  fi
+elif [ -n "$(docker images -q 'guacamole/guacd' 2>/dev/null)" ]; then
+  ok "guacd image loaded into Docker"
+else
+  bad "no guacd archive ($gz) and no guacd image in Docker"
+fi
+
 section "NoCap Desktop"
 dm="$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)"
 case "$dm" in gdm3.service | gdm.service) ok "sign-in screen at boot: $dm" ;; *) bad "no GDM display-manager link (got '${dm:-none}')" ;; esac

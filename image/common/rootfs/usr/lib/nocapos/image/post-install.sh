@@ -55,7 +55,7 @@ if command -v dconf >/dev/null 2>&1; then dconf update >/dev/null 2>&1 || true; 
 
 # ---------------------------------------------------------------- NoCapOS
 rm -f /var/lib/nocapos/.image-firstboot-done
-systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.service >/dev/null 2>&1 || true
+systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.service nocapos-images.service >/dev/null 2>&1 || true
 "$IMG/os-release-sync" || true
 # The first account (made by the installer, in the sudo group) is a NoCapOS
 # administrator: NoCapOS signs in with the machine's Linux accounts.

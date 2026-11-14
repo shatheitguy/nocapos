@@ -6,7 +6,8 @@
 #   image/rpi/build.sh VERSION [OUT_DIR]
 #
 # Needs Docker (pi-gen's build-docker.sh; your user in the docker group, or
-# run as root) and git. Fastest on an arm64 Linux
+# run as root), git and zstd (skopeo too if you have it; it fetches the
+# preloaded guacd image without Docker). Fastest on an arm64 Linux
 # machine; on x86_64 register qemu-user-static's binfmt handlers first
 # (Debian/Ubuntu: apt install qemu-user-static binfmt-support).
 # Output: OUT_DIR/nocapos-VERSION-rpi-arm64.img.xz (default OUT_DIR: ./out)
