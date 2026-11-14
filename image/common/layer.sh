@@ -51,7 +51,7 @@ NOCAP_FIRSTBOOT_ARGS="--desktop"
 EOF
 fi
 install -m 0644 "$BUNDLE/nocapos.service" /etc/systemd/system/nocapos.service
-systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.service
+systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.service nocapos-images.service
 
 # ---------------------------------------------------------------- identity
 "$IMG/os-release-sync" --divert

@@ -72,6 +72,8 @@ done <<<"$table"
 # (Debian 13 ships the docker command in docker-cli, only recommended by
 # docker.io, and these installs skip recommends.)
 add docker.io ufw mergerfs snapraid
+# zstd: unpacks the bundled container images on the first boot (nocapos-images.service).
+add zstd
 if avail docker-cli; then add docker-cli; fi
 if avail docker-compose; then add docker-compose; fi
 
