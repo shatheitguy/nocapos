@@ -3,14 +3,16 @@ import { createPortal } from 'react-dom';
 import { APPS, canMultiWindow, openApp } from '../apps/meta';
 import { AppIcon } from '../components/AppTile';
 import { ContextMenu } from '../components/ContextMenu';
-import { pressApp, useAppDrag } from '../state/appDrag';
+import { pressApp, TOUCH_HOLD, useAppDrag } from '../state/appDrag';
+import { useFlip } from '../lib/flip';
+import { preview } from '../lib/launcherOrder';
 import { takeOut, useFolders } from '../state/folders';
 import { appMenuItems } from './Shelf';
 
 /**
  * An open folder: its name (click to rename) and the apps inside. Click an app
- * to open it; drag one out of the box to take it out of the folder, or onto the
- * Dock or Desktop.
+ * to open it; drag it between the others to move it, or out of the box to take
+ * it out of the folder, or onto the Dock or Desktop.
  */
 export function FolderView({
   folderId,
@@ -34,6 +36,11 @@ export function FolderView({
   const [name, setName] = useState(folder?.name ?? '');
   const [menu, setMenu] = useState<{ x: number; y: number; appId: string } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // An app dragged inside its folder: the others make room for it.
+  const dragged = useAppDrag((s) => (s.drag?.folderId === folderId ? s.drag.appId : null));
+  const slot = useAppDrag((s) => (s.drag?.folderId === folderId && s.slot?.where === 'folder' ? s.slot.before : undefined));
+  useFlip(gridRef, !!dragged);
 
   // The folder dissolved (its last-but-one app was taken out).
   useEffect(() => {
@@ -63,7 +70,8 @@ export function FolderView({
   }, [onClose, menu]);
 
   if (!folder) return null;
-  const apps = folder.apps.filter((id) => APPS[id] && !APPS[id].hidden && (isAdmin || !APPS[id].adminOnly));
+  const shown = folder.apps.filter((id) => APPS[id] && !APPS[id].hidden && (isAdmin || !APPS[id].adminOnly));
+  const apps = dragged && shown.includes(dragged) ? preview(shown, dragged, slot) : shown;
 
   const launch = (id: string, newWindow: boolean) => {
     openApp(id, { newWindow: newWindow && canMultiWindow(id) });
@@ -107,14 +115,15 @@ export function FolderView({
             if (e.key === 'Enter') e.currentTarget.blur();
           }}
         />
-        <div className="folder-grid">
+        <div className="folder-grid" ref={gridRef}>
           {apps.map((id) => (
             <button
               key={id}
               type="button"
-              className="launcher-app"
-              title="Drag out to take it out of the folder"
-              onPointerDown={(e) => pressApp(e, id, 'folder', { folderId })}
+              className={`launcher-app ${id === dragged ? 'lifted' : ''}`}
+              data-key={id}
+              title="Drag to move it · drag out to take it out of the folder"
+              onPointerDown={(e) => pressApp(e, id, 'folder', { folderId, touchHold: TOUCH_HOLD, onStart: () => setMenu(null) })}
               onClick={(e) => launch(id, e.shiftKey)}
               onContextMenu={(e) => {
                 e.preventDefault();

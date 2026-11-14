@@ -8,7 +8,8 @@ import { fmtTime, useTimePrefs } from '../lib/time';
 import { usePrefs } from '../state/prefs';
 import { useStoreApps } from '../state/storeApps';
 import { useLink, useLinkUnseen } from '../state/link';
-import { ClipBanner, ClipboardSection, CarryBanner, PhoneSection } from './LinkSync';
+import { ClipBanner, ClipboardSection, CarryBanner, PhoneSection, ReceivedBanner } from './LinkSync';
+import { useReceived } from '../state/received';
 import { PhonesSection } from './LinkPhones';
 import { SigninBanners, SigninSection } from './Signins';
 import { useSignins } from '../state/signins';
@@ -162,8 +163,9 @@ function Banner({ n, look }: { n: Notice; look: Look }) {
 function Banners({ look }: { look: Look }) {
   const banners = useNotifications((s) => s.banners);
   const clip = useLink((s) => !!s.clipBanner || !!s.carryBanner);
+  const received = useReceived((s) => !!s.banner);
   const signins = useSignins((s) => s.banners.length);
-  if (!banners.length && !clip && !signins) return null;
+  if (!banners.length && !clip && !signins && !received) return null;
   return (
     <div className={`nb-stack ${look}`} aria-live="polite">
       <SigninBanners look={look} />
@@ -172,6 +174,7 @@ function Banners({ look }: { look: Look }) {
       ))}
       <ClipBanner look={look} />
       <CarryBanner look={look} />
+      <ReceivedBanner look={look} />
     </div>
   );
 }
