@@ -3,6 +3,7 @@
 // "folder:<id>" icons. Saved per user in this browser.
 import { create } from 'zustand';
 import { useDesktopIcons } from './desktopIcons';
+import { moveBefore, replaceKey } from '../lib/launcherOrder';
 
 export interface AppFolder {
   id: string;
@@ -18,6 +19,11 @@ export const folderIdOf = (k: string) => k.slice(FOLDER_PREFIX.length);
 interface FolderStore {
   userId: string | null;
   folders: AppFolder[];
+  /** The roster's icon order (app ids and folder keys); apps not in it go at the end. */
+  order: string[];
+  setOrder: (order: string[]) => void;
+  /** Move an app inside a folder, in front of `before` (null: the end). */
+  moveIn: (id: string, appId: string, before: string | null) => void;
   restore: (userId: string) => void;
   _reset: () => void;
   /** New folder holding these apps; returns its id. */
@@ -31,6 +37,7 @@ interface FolderStore {
 }
 
 const keyFor = (u: string) => `alfa.folders.${u}`;
+const orderKeyFor = (u: string) => `alfa.launcherOrder.${u}`;
 const newId = () => Math.random().toString(36).slice(2, 10);
 
 /** A sensible default name from what's inside: a category only when every app fits it. */
@@ -57,17 +64,33 @@ export const useFolders = create<FolderStore>((set, get) => {
   return {
     userId: null,
     folders: [],
-    restore: (userId) => {
-      let folders: AppFolder[] = [];
+    order: [],
+    setOrder: (order) => {
+      set({ order });
+      const { userId } = get();
+      if (!userId) return;
       try {
-        const v = JSON.parse(localStorage.getItem(keyFor(userId)) ?? '[]');
-        if (Array.isArray(v)) folders = v.filter((f) => f && typeof f.id === 'string' && Array.isArray(f.apps));
+        localStorage.setItem(orderKeyFor(userId), JSON.stringify(order));
       } catch {
         /* ignore */
       }
-      set({ userId, folders });
     },
-    _reset: () => set({ userId: null, folders: [] }),
+    moveIn: (id, appId, before) =>
+      commit(get().folders.map((f) => (f.id === id && f.apps.includes(appId) ? { ...f, apps: moveBefore(f.apps, appId, before) } : f))),
+    restore: (userId) => {
+      let folders: AppFolder[] = [];
+      let order: string[] = [];
+      try {
+        const v = JSON.parse(localStorage.getItem(keyFor(userId)) ?? '[]');
+        if (Array.isArray(v)) folders = v.filter((f) => f && typeof f.id === 'string' && Array.isArray(f.apps));
+        const o = JSON.parse(localStorage.getItem(orderKeyFor(userId)) ?? '[]');
+        if (Array.isArray(o)) order = o.filter((k) => typeof k === 'string');
+      } catch {
+        /* ignore */
+      }
+      set({ userId, folders, order });
+    },
+    _reset: () => set({ userId: null, folders: [], order: [] }),
     create: (apps, name = 'Folder') => {
       const id = newId();
       // An app lives in one folder at a time.
@@ -104,16 +127,25 @@ export function takeOut(folderId: string, appId: string) {
   const key = folderKey(folderId);
   const at = desk.icons.find((i) => i.appId === key);
   const left = useFolders.getState().removeApp(folderId, appId);
-  if (!useFolders.getState().byId(folderId) && at) {
-    desk.remove(key);
-    if (left && !desk.has(left)) desk.place(left, at);
+  if (!useFolders.getState().byId(folderId)) {
+    // The app left over takes the folder's place in the roster.
+    const s = useFolders.getState();
+    if (s.order.includes(key)) s.setOrder(replaceKey(s.order, key, left ? [left] : []));
+    if (at) {
+      desk.remove(key);
+      if (left && !desk.has(left)) desk.place(left, at);
+    }
   }
 }
 
-/** Dissolve a folder; its apps go back to Launchpad and its desktop icon is removed. */
+/** Dissolve a folder; its apps go back to Launchpad (in its place) and its desktop icon is removed. */
 export function ungroup(folderId: string) {
-  useFolders.getState().remove(folderId);
-  useDesktopIcons.getState().remove(folderKey(folderId));
+  const s = useFolders.getState();
+  const key = folderKey(folderId);
+  const apps = s.byId(folderId)?.apps ?? [];
+  if (s.order.includes(key)) s.setOrder(replaceKey(s.order, key, apps));
+  s.remove(folderId);
+  useDesktopIcons.getState().remove(key);
 }
 
 /** The folder an app is in, if any. */
