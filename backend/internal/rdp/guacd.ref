@@ -1,0 +1,8 @@
+# The guacd container image NoCapOS uses when the system has no guacd of its
+# own (Debian 13 doesn't package it). One line: name:tag@digest, where the
+# digest is the multi-arch index (amd64 + arm64).
+#
+# Read by alfad (guacd.go, embedded at build time) and by the OS image build
+# (image/common/stage-overlay.sh), which preloads this exact image so remote
+# desktop works offline from the first boot. Change it here only.
+guacamole/guacd:1.6.0@sha256:8974eaa9ba32f713daf311e7cc8cd7e4cdfba1edea39eed75524e78ef4b08f4f

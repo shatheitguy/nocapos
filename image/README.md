@@ -129,6 +129,18 @@ A package the archive doesn't carry is skipped with a note in the build log
 ("not in this image's archive"). Debian 13 has no `guacd`/`libguac-client-*`
 or `wsdd`, so those stay out of the images (NoCapOS's Packages page shows
 them as unavailable, the same as on any Debian 13 install).
+- the remote desktop engine as a container image instead: the
+  `guacamole/guacd` image pinned (tag and digest) in
+  `backend/internal/rdp/guacd.ref`, the same file alfad reads, so the two
+  never drift. `common/save-guacd.sh` fetches it for the image's
+  architecture (skopeo, or docker) and stores it as a docker-load archive,
+  `/usr/lib/nocapos/images/guacd-<arch>.tar.zst` (zstd).
+  On the first boot `nocapos-images.service` (after `docker.service`) loads
+  it into Docker and deletes the archive, so remote desktop and screen
+  viewing work offline. alfad waits for that load if it's still running
+  and only downloads the image when it isn't in Docker (an archive that
+  didn't load stays and is tried again on the next boot). Not run in the
+  ISO's live session. Change the pin in `guacd.ref` only.
 - ZFS: `zfsutils-linux` + `zfs-dkms` from Debian's contrib, with the kernel
   headers of every kernel in the image (`linux-headers-amd64`; on the Pi the
   Raspberry Pi kernel flavours' `linux-headers-rpi-*`). DKMS builds the
@@ -200,7 +212,10 @@ no pinning or holds; only the distribution's package sources; automatic
 security updates on; the NoCapOS branding files are owned by no package and
 os-release is diverted; `zfs version`, `ufw --version`, `virsh --version`,
 `docker --version` (and more) work; `dkms status` shows ZFS built for every
-kernel in the image; GDM and the NoCapOS session are on. The PC build also
+kernel in the image; GDM and the NoCapOS session are on; the guacd archive
+passes `zstd -t`, lists a `manifest.json` tagged `guacamole/guacd:<tag>`
+for the image's architecture and its load service is enabled (where a
+Docker daemon runs, it is also `docker load`ed). The PC build also
 fails when the ISO reaches GitHub's 2 GiB release asset limit.
 
 ### Update flow
@@ -228,6 +243,8 @@ image/
       desktop-packages.sh, desktop-brand.sh   NoCap Desktop, branded and on
       post-install.sh    end of both PC installers (sources, services, clean-up)
       check-image.sh     update / ownership / feature checks (CI)
+      load-images.sh     first boot: docker load the bundled images, then delete them
+    save-guacd.sh      the pinned guacd image as images/guacd-<arch>.tar.zst
     make-art.py        boot menu / installer / GRUB artwork from the brand files
     (GRUB theme: deploy/desktop/grub-theme.txt, shared with install.sh)
     rootfs/            files copied as-is (units, apt settings, scripts)
@@ -257,10 +274,10 @@ privileged container anywhere):
 sudo image/amd64/build.sh 0.8.0 out
 # Anywhere with Docker:
 docker run --rm --privileged -v "$PWD:/src" -w /src debian:trixie \
-  bash -c 'apt-get update && apt-get install -y live-build debootstrap curl cpio python3-pil python3-yaml fonts-dejavu-core && image/amd64/build.sh 0.8.0 /src/out'
+  bash -c 'apt-get update && apt-get install -y live-build debootstrap curl cpio skopeo zstd python3-pil python3-yaml fonts-dejavu-core && image/amd64/build.sh 0.8.0 /src/out'
 ```
 
-Raspberry Pi image (needs Docker, git and about 20 GB free; fastest on an
+Raspberry Pi image (needs Docker, git, zstd and about 20 GB free; fastest on an
 arm64 machine, works on x86_64 through QEMU emulation):
 
 ```bash

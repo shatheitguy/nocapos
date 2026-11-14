@@ -2,11 +2,13 @@ package rdp
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"log/slog"
 	"net"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,10 +17,34 @@ import (
 
 const (
 	guacdPort      = 4822
-	guacdImage     = "guacamole/guacd"
-	guacdTag       = "1.5.5"
 	guacdContainer = "nocap-guacd"
 )
+
+// guacdRef pins the guacd container image (name:tag@digest). The OS image
+// build reads the same file to preload that image, so the two never drift.
+//
+//go:embed guacd.ref
+var guacdRef string
+
+// guacdImage and guacdTag name the pinned image: the one the OS images
+// preload (docker load keeps the tag) and the one pulled otherwise.
+var guacdImage, guacdTag = parseGuacdRef(guacdRef)
+
+// parseGuacdRef reads the first non-comment line of guacd.ref.
+func parseGuacdRef(s string) (image, tag string) {
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line, _, _ = strings.Cut(line, "@")
+		if i := strings.LastIndex(line, ":"); i > 0 && !strings.Contains(line[i:], "/") {
+			return line[:i], line[i+1:]
+		}
+		return line, "latest"
+	}
+	panic("rdp: guacd.ref has no image reference")
+}
 
 type Phase string
 
@@ -161,7 +187,12 @@ func (g *Guacd) container(ctx context.Context) (string, error) {
 		_ = g.dc.RemoveContainer(ctx, id)
 	}
 	ref := guacdImage + ":" + guacdTag
-	if exists, _ := g.dc.ImageExists(ctx, ref); !exists {
+	exists, _ := g.dc.ImageExists(ctx, ref)
+	if !exists && g.waitPreload(ctx) {
+		// The OS image's first boot was still loading its bundled copy.
+		exists, _ = g.dc.ImageExists(ctx, ref)
+	}
+	if !exists {
 		g.set(PhasePreparing, "Downloading the remote desktop engine (guacd)…")
 		if err := g.dc.PullImage(ctx, guacdImage, guacdTag, nil); err != nil {
 			return "", errors.New("could not download guacd: " + err.Error())
