@@ -335,6 +335,15 @@ func serve() error {
 		FileJobs:  files.NewJobs(fsvc),
 	})
 	srv.RunNotifications(ctx)
+	if dir.Mode() == accounts.ModeSystem {
+		// NoCap Desktop's clipboard agent: only when the accounts are this
+		// machine's Linux users, so a Linux account is the same person.
+		go func() {
+			if err := srv.ServeClipSocket(ctx, api.ClipSocketPath); err != nil {
+				log.Warn("desktop clipboard socket not started", "path", api.ClipSocketPath, "err", err)
+			}
+		}()
+	}
 	if drives != nil {
 		go drives.Run(ctx) // after api.New, which subscribes to its changes
 	}

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="open" path="open/" />
+    <!-- The newest picture from the shared clipboard, for pasting in other apps. -->
+    <cache-path name="clip" path="clip/" />
     <!-- Photo-frame widget pictures, opened in the phone's photo viewer. -->
     <files-path name="photos" path="photos/" />
 </paths>

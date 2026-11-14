@@ -213,6 +213,12 @@ object Opt {
     val forward = BoolPref("forward_notifications", false)
     val forwardApps = SetPref("forward_apps")
     val clipSync = BoolPref("clip_sync", false)
+    /** Copies in other apps go to NoCap OS on their own (through the accessibility helper). */
+    val clipAuto = BoolPref("clip_auto", true)
+    /** Pictures on the clipboard too, both ways (up to 10 MB). */
+    val clipImages = BoolPref("clip_images", true)
+    /** Apps whose copies are never shared. */
+    val clipSkipApps = SetPref("clip_skip_apps")
     val liveNotices = BoolPref("live_notices", true)
     /** NoCap OS may ask to mirror this screen (each session still needs an OK). */
     val mirrorAsks = BoolPref("mirror_asks", true)
