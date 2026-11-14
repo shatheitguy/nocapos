@@ -48,6 +48,7 @@ func (s *Server) deviceRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/device/phone-notifications", s.device(s.devicePhoneNote))
 	mux.Handle("DELETE /api/v1/device/phone-notifications/{key}", s.device(s.devicePhoneNoteGone))
 	mux.Handle("POST /api/v1/device/clipboard", s.device(s.deviceClipboard))
+	mux.Handle("GET /api/v1/device/clipboard/{id}/data", s.device(s.deviceClipboardData))
 	mux.Handle("GET /api/v1/device/events", s.device(s.deviceEvents))
 	mux.Handle("POST /api/v1/device/state", s.device(s.deviceState))
 	mux.Handle("GET /api/v1/device/addresses", s.device(s.deviceAddresses))

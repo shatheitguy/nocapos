@@ -60,4 +60,14 @@ class RoutePlanTest {
         // An older server: no actions at all.
         assertTrue(parseEvents("""{"cursor":1}""").second.isEmpty())
     }
+
+    @Test fun parsesClipKinds() {
+        val (ev, _) = parseEvents(
+            """{"cursor":3,"clipboard":[{"id":1,"text":"t","from":"A"},{"id":2,"kind":"image","text":"","mime":"image/png","from":"NoCap Desktop"}]}""",
+        )
+        assertEquals("text", ev.clips[0].kind)
+        assertFalse(ev.clips[0].isImage)
+        assertTrue(ev.clips[1].isImage)
+        assertEquals("image/png", ev.clips[1].mime)
+    }
 }

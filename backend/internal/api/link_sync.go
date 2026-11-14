@@ -22,7 +22,6 @@ import (
 const (
 	linkKeep          = 24 * time.Hour
 	linkMaxPhoneNotes = 100 // per person
-	linkMaxClips      = 20  // per person
 	linkMaxDismissed  = 500 // per person
 	linkMaxNotices    = 200 // server notifications remembered for the long-poll
 	linkMaxAlerts     = 50  // sign-in alerts per person
@@ -31,7 +30,6 @@ const (
 	linkMaxText       = 2000
 	linkMaxName       = 200
 	linkMaxIcon       = 48 << 10 // decoded bytes
-	linkMaxClip       = 64 << 10
 	linkWaitDefault   = 25 * time.Second
 	linkWaitMax       = 30 * time.Second
 )
@@ -55,17 +53,6 @@ type phoneNote struct {
 	CanDecline bool   `json:"can_decline,omitempty"`
 
 	at time.Time // when it arrived here
-}
-
-// linkClip is one clipboard entry. DeviceID is the phone it came from
-// (source "phone") or the phone it's for (source "web"; "" = all of them).
-type linkClip struct {
-	ID       int64     `json:"id"`
-	Text     string    `json:"text"`
-	From     string    `json:"from"`
-	Source   string    `json:"source"` // phone | web
-	DeviceID string    `json:"device_id"`
-	At       time.Time `json:"at"`
 }
 
 type linkDismissal struct {
@@ -259,34 +246,6 @@ func (h *linkHub) notes(uid string) []phoneNote {
 	return out
 }
 
-func (h *linkHub) addClip(uid string, c linkClip) int64 {
-	h.mu.Lock()
-	u := h.user(uid)
-	c.ID = h.bump()
-	c.At = h.now().UTC().Truncate(time.Second)
-	u.clips = append(u.clips, c)
-	if len(u.clips) > linkMaxClips {
-		u.clips = u.clips[len(u.clips)-linkMaxClips:]
-	}
-	h.mu.Unlock()
-	if c.Source == "phone" {
-		// Open desktops get it at once (the phones follow their long-poll).
-		h.tell(uid, linkEvent{Type: "clip", Clip: &c})
-	}
-	return c.ID
-}
-
-func (h *linkHub) clips(uid string) []linkClip {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	u := h.user(uid)
-	out := make([]linkClip, 0, len(u.clips))
-	for i := len(u.clips) - 1; i >= 0; i-- {
-		out = append(out, u.clips[i])
-	}
-	return out
-}
-
 // forgetDevice drops what an unlinked phone left behind.
 func (h *linkHub) forgetDevice(uid, deviceID string) {
 	h.mu.Lock()
@@ -355,7 +314,8 @@ func (e linkEvents) empty() bool {
 }
 
 // events is what one phone hasn't seen since after. Call with mu held.
-func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEvents {
+// Pictures on the clipboard only go to phones that said they take them.
+func (h *linkHub) events(uid, deviceID string, admin, images bool, after int64) linkEvents {
 	out := linkEvents{Cursor: h.seq, Notices: []notify.Notification{}, Clipboard: []linkClip{}, Dismissed: []string{}, Signins: []signinAlert{}, Actions: []phoneAction{}}
 	if after <= 0 || after > h.seq {
 		return out // a fresh start (or a cursor from another run): no history dump
@@ -367,7 +327,7 @@ func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEven
 		}
 	}
 	for _, c := range u.clips {
-		if c.ID > after && c.Source == "web" && (c.DeviceID == "" || c.DeviceID == deviceID) {
+		if c.ID > after && clipForPhone(c, deviceID) && (images || c.Kind != clipImage) {
 			out.Clipboard = append(out.Clipboard, c)
 		}
 	}
@@ -396,8 +356,7 @@ func (h *linkHub) events(uid, deviceID string, admin bool, after int64) linkEven
 func (s *Server) linkRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/phone-notifications", s.authed(s.phoneNotesList))
 	mux.Handle("DELETE /api/v1/phone-notifications/{device_id}/{key}", s.authed(s.phoneNotesDismiss))
-	mux.Handle("GET /api/v1/clipboard", s.authed(s.clipboardList))
-	mux.Handle("POST /api/v1/clipboard", s.authed(s.clipboardSend))
+	s.clipboardRoutes(mux)
 	mux.Handle("GET /api/v1/phones", s.authed(s.phonesList))
 	mux.Handle("POST /api/v1/phones/{device_id}/actions", s.authed(s.phoneActionSend))
 	mux.Handle("GET /api/v1/link/addresses", s.authed(s.linkAddressesGet))
@@ -489,68 +448,6 @@ func (s *Server) phoneNotesDismiss(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// clipText reads {"text": ...} plus whatever else v holds; false when it
-// answered already.
-func clipText(w http.ResponseWriter, r *http.Request, v any, text *string) bool {
-	if !decodeJSONLimit(w, r, v, 8*linkMaxClip) {
-		return false
-	}
-	if *text == "" || len(*text) > linkMaxClip {
-		writeError(w, http.StatusBadRequest, "validation", "Send some text (up to 64 KB).")
-		return false
-	}
-	return true
-}
-
-// deviceClipboard: the phone shares its clipboard.
-func (s *Server) deviceClipboard(w http.ResponseWriter, r *http.Request) {
-	d, u := deviceFrom(r.Context()), userFrom(r.Context())
-	var req struct {
-		Text string `json:"text"`
-	}
-	if !clipText(w, r, &req, &req.Text) {
-		return
-	}
-	id := s.link().addClip(u.ID, linkClip{Text: req.Text, From: d.Name, Source: "phone", DeviceID: d.ID})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
-}
-
-func (s *Server) clipboardList(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"items": s.link().clips(userFrom(r.Context()).ID)})
-}
-
-// clipboardSend: NoCap OS shares text with one of the person's phones, or all.
-func (s *Server) clipboardSend(w http.ResponseWriter, r *http.Request) {
-	u := userFrom(r.Context())
-	var req struct {
-		Text     string `json:"text"`
-		DeviceID string `json:"device_id"`
-	}
-	if !clipText(w, r, &req, &req.Text) {
-		return
-	}
-	if req.DeviceID != "" {
-		list, err := s.Store.ListDevices(r.Context(), u.ID)
-		if err != nil {
-			s.internalError(w, r, err)
-			return
-		}
-		found := false
-		for _, d := range list {
-			if d.ID == req.DeviceID && d.UserID == u.ID {
-				found = true
-				break
-			}
-		}
-		if !found {
-			writeError(w, http.StatusNotFound, "not_found", "no such device")
-			return
-		}
-	}
-	id := s.link().addClip(u.ID, linkClip{Text: req.Text, From: "NoCap OS", Source: "web", DeviceID: req.DeviceID})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
-}
-
 // deviceEvents is the phone's long-poll: it answers as soon as there's
 // something newer than ?after (or after ?wait seconds with nothing).
 func (s *Server) deviceEvents(w http.ResponseWriter, r *http.Request) {
@@ -564,13 +461,14 @@ func (s *Server) deviceEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	admin := u.Role == store.RoleAdmin
+	images := q.Get("images") == "1"
 	h := s.link()
 	defer h.connected(u.ID, d.ID, netOf(clientIP(r, s.Config.TrustedProxies)))()
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 	for {
 		h.mu.Lock()
-		out := h.events(u.ID, d.ID, admin, after)
+		out := h.events(u.ID, d.ID, admin, images, after)
 		out.Mirror = s.mirrorHub().AskSince(d.ID, after)
 		wake := h.wake
 		h.mu.Unlock()

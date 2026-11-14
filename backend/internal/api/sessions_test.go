@@ -288,7 +288,7 @@ func TestDeviceSessionsAndAlerts(t *testing.T) {
 	h.mu.Unlock()
 	second := signInAs(t, w, alex, uaFirefox, "198.51.100.4")
 	h.mu.Lock()
-	ev := h.events(alex.ID, cr.DeviceID, false, cursor)
+	ev := h.events(alex.ID, cr.DeviceID, false, false, cursor)
 	h.mu.Unlock()
 	if len(ev.Signins) != 1 || ev.Signins[0].SessionID != second.sid {
 		t.Fatalf("phone events: %+v", ev.Signins)

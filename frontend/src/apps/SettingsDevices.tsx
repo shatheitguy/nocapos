@@ -10,6 +10,7 @@ import { toast } from '../state/toasts';
 import { Section as Group } from './Personalize';
 import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
+import { ClipboardSettings } from './SettingsClipboard';
 import { ReceivedSettings } from './SettingsReceived';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
@@ -172,6 +173,7 @@ export function DevicesSettings() {
       {isAdmin && limits?.users && (
         <AdminView limits={limits} list={list ?? []} meId={me?.id ?? ''} onChanged={load} onUnlink={(d) => void unlink(d)} onRename={rename} />
       )}
+      <ClipboardSettings />
       <ReceivedSettings />
       <LinkAddressesSettings />
 

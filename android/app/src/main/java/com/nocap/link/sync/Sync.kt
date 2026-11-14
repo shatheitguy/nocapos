@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Notification
 import android.content.ClipboardManager
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -153,7 +154,7 @@ object Sync {
             if (!inService && power != null && !power.isInteractive) { delay(60_000); continue }
             val api = api(ctx) ?: return
             try {
-                val (ev, actions) = api.liveEvents(cursor, 25)
+                val (ev, actions) = api.liveEvents(cursor, 25, images = Opt.clipImages.v)
                 backoff = 5_000L
                 ev.mirror?.let { com.nocap.link.mirror.MirrorAsk.asked(ctx, it) }
                 LinkService.connected(true)
@@ -197,13 +198,7 @@ object Sync {
             ev.notices.maxOfOrNull { it.id }?.let { if (it > last) Prefs.lastNotice = it }
         }
         if (Opt.clipSync.v) {
-            ev.clips.lastOrNull()?.let { c ->
-                withContext(Dispatchers.Main) { setClip(ctx, c.text) }
-                Notices.show(
-                    ctx, 77, t("Clipboard from ${c.from.ifBlank { "NoCap OS" }}", "Clipboard from ${c.from.ifBlank { "NoCap OS" }}"),
-                    t("It's on your clipboard now. Paste away.", "Copied to this phone's clipboard.") + "\n" + c.text.take(140),
-                )
-            }
+            ev.clips.lastOrNull()?.let { c -> receiveClip(ctx, api(ctx), c) }
         }
         if (ev.dismissed.isNotEmpty()) {
             val svc = DotsService.instance
@@ -216,31 +211,120 @@ object Sync {
 
     // ---------- clipboard ----------
 
-    private fun setClip(ctx: Context, text: String) {
-        val cm = ctx.getSystemService(ClipboardManager::class.java) ?: return
-        ourClip = text
-        lastClipHash = text.hashCode()
-        runCatching { cm.setPrimaryClip(ClipData.newPlainText("NoCap OS", text)) }
+    /** Puts a clip from your other devices on this phone's clipboard. */
+    private suspend fun receiveClip(ctx: Context, api: NoCapApi?, c: NoCapApi.Clip) {
+        val from = c.from.ifBlank { "NoCap OS" }
+        if (c.isImage) {
+            if (!Opt.clipImages.v || api == null) return
+            val bytes = runCatching { api.clipImage(c.id, ClipRules.MAX_IMAGE) }.getOrNull() ?: return
+            val mime = ClipRules.imageMime(bytes) ?: return
+            val uri = runCatching { clipFile(ctx, bytes, mime) }.getOrNull() ?: return
+            withContext(Dispatchers.Main) { setClip(ctx, ClipData.newUri(ctx.contentResolver, "NoCap OS", uri), "uri:$uri") }
+            Notices.show(ctx, 77, t("Pic from $from", "Picture from $from"), t("It's on your clipboard now. Paste away.", "Copied to this phone's clipboard."))
+            return
+        }
+        if (c.text.isEmpty()) return
+        withContext(Dispatchers.Main) { setClip(ctx, ClipData.newPlainText("NoCap OS", c.text), c.text) }
+        // Android 13+ shows its own "copied" note; older phones get ours.
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            Notices.show(
+                ctx, 77, t("Clipboard from $from", "Clipboard from $from"),
+                t("It's on your clipboard now. Paste away.", "Copied to this phone's clipboard.") + "\n" + c.text.take(140),
+            )
+        }
     }
+
+    /** A picture for the clipboard, shared through the app's file provider (only the newest is kept). */
+    private fun clipFile(ctx: Context, bytes: ByteArray, mime: String): android.net.Uri {
+        val dir = java.io.File(ctx.cacheDir, "clip").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val f = java.io.File(dir, "clip-" + System.currentTimeMillis() + if (mime == "image/png") ".png" else ".jpg")
+        f.writeBytes(bytes)
+        return androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+    }
+
+    private fun setClip(ctx: Context, clip: ClipData, mark: String) {
+        val cm = ctx.getSystemService(ClipboardManager::class.java) ?: return
+        ourClip = mark
+        lastClipHash = mark.hashCode()
+        runCatching { cm.setPrimaryClip(clip) }
+    }
+
+    /**
+     * Whether the app that copied marked it sensitive (a password manager, a
+     * one-time code): ClipDescription.EXTRA_IS_SENSITIVE, spelled out because
+     * older Android versions don't name it, though apps set it all the same.
+     */
+    private fun sensitive(d: ClipDescription): Boolean =
+        runCatching { d.extras?.getBoolean("android.content.extra.IS_SENSITIVE", false) == true }.getOrDefault(false)
 
     /**
      * Sends the phone's clipboard to NoCap OS. Android only lets the app in
      * front (with focus) read the clipboard, so this runs when NoCap OS gets
-     * focus, or from the quick-settings tile. [force] sends even if unchanged.
+     * focus, for a moment after a copy in another app (see ClipWatch), or
+     * from the quick-settings tile. [force] sends even if unchanged, and from
+     * excluded apps (you asked). [source] is the app it came from, when
+     * known. Sensitive clips are never sent.
      */
-    fun sendClipboard(ctx: Context, force: Boolean, done: ((Boolean, String) -> Unit)? = null) {
+    fun sendClipboard(ctx: Context, force: Boolean, source: String? = null, done: ((Boolean, String) -> Unit)? = null) {
+        Prefs.init(ctx)
         val cm = ctx.getSystemService(ClipboardManager::class.java)
-        val text = runCatching { cm?.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString() }.getOrNull()?.trim().orEmpty()
-        if (text.isEmpty()) { done?.invoke(false, t("Clipboard's empty.", "The clipboard is empty.")); return }
+        val desc = runCatching { cm?.primaryClipDescription }.getOrNull()
+        val item = runCatching { cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0) }.getOrNull()
+        if (desc == null || item == null) { done?.invoke(false, t("Clipboard's empty.", "The clipboard is empty.")); return }
+        if (sensitive(desc)) { done?.invoke(false, t("That one's private (password vibes), so it stays here.", "Sensitive content isn't shared.")); return }
+        val from = source ?: ClipWatch.app
+        if (!force && from != null && from in Opt.clipSkipApps.v) return
+        val api = api(ctx) ?: run { done?.invoke(false, t("Link your NoCap server first.", "Link a NoCap server first.")); return }
+        val uri = item.uri
+        if (uri != null && desc.hasMimeType("image/*")) {
+            if (!Opt.clipImages.v) { done?.invoke(false, t("Pics are off in Settings.", "Sharing pictures is turned off.")); return }
+            val mark = "uri:$uri"
+            if (!force && (mark.hashCode() == lastClipHash || mark == ourClip)) return
+            lastClipHash = mark.hashCode()
+            scope.launch {
+                val ok = runCatching {
+                    val (bytes, mime) = readPicture(ctx, uri) ?: error("not a picture")
+                    api.postClipImage(bytes, mime)
+                }.isSuccess
+                withContext(Dispatchers.Main) {
+                    done?.invoke(ok, if (ok) t("Pic sent to NoCap OS.", "Picture sent to NoCap OS.") else t("Couldn't send that pic (10 MB max).", "Couldn't send the picture (up to 10 MB)."))
+                }
+            }
+            return
+        }
+        val text = runCatching { item.coerceToText(ctx)?.toString() }.getOrNull().orEmpty()
+        if (text.isBlank()) { done?.invoke(false, t("Clipboard's empty.", "The clipboard is empty.")); return }
+        if (!ClipRules.textFits(text)) { done?.invoke(false, t("Too long to send (1 MB max).", "The text is too long to send (up to 1 MB).")); return }
         if (!force && (text.hashCode() == lastClipHash || text == ourClip)) return
         lastClipHash = text.hashCode()
-        val api = api(ctx) ?: run { done?.invoke(false, t("Link your NoCap server first.", "Link a NoCap server first.")); return }
         scope.launch {
-            val ok = runCatching { api.postClip(text.take(60_000)) }.isSuccess
+            val ok = runCatching { api.postClip(text) }.isSuccess
             withContext(Dispatchers.Main) {
                 done?.invoke(ok, if (ok) t("Clipboard sent to NoCap OS.", "Clipboard sent to NoCap OS.") else t("Couldn't reach your server.", "Couldn't reach your server."))
             }
         }
+    }
+
+    /** A copied picture as PNG or JPEG bytes (other types become PNG), at most 10 MB. */
+    private fun readPicture(ctx: Context, uri: android.net.Uri): Pair<ByteArray, String>? {
+        val raw = ctx.contentResolver.openInputStream(uri)?.use { input ->
+            val out = ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                out.write(buf, 0, n)
+                if (out.size() > ClipRules.MAX_IMAGE) return null
+            }
+            out.toByteArray()
+        } ?: return null
+        ClipRules.imageMime(raw)?.let { return raw to it }
+        val bmp = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.size) ?: return null
+        val out = ByteArrayOutputStream()
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+        bmp.recycle()
+        return out.toByteArray().takeIf { it.size <= ClipRules.MAX_IMAGE }?.let { it to "image/png" }
     }
 }
 
@@ -270,24 +354,48 @@ class ClipTileService : TileService() {
     }
 }
 
-/** A see-through moment in front, so Android lets us read the clipboard; then it's gone. */
+/**
+ * A see-through moment in front, so Android lets us read the clipboard; then
+ * it's gone. From the tile it says what happened; after a copy in another app
+ * ([AUTO]) it can't be touched, has no animation and leaves at once.
+ */
 class ClipActivity : Activity() {
     private var sent = false
+    private val auto get() = intent?.getBooleanExtra(AUTO, false) == true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        if (auto) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+            window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED)
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus || sent) return
         sent = true
+        if (auto) {
+            // Read now (only allowed while we have focus); the upload carries on without us.
+            Sync.sendClipboard(this, force = false, source = intent?.getStringExtra(SOURCE))
+            finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+            return
+        }
         Sync.sendClipboard(this, force = true) { _, msg ->
             Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
             finish()
         }
         // Nothing to send (or no link): sendClipboard answered right away; also make sure we never linger.
         window?.decorView?.postDelayed({ if (!isFinishing) finish() }, 15_000)
+    }
+
+    companion object {
+        const val AUTO = "auto"
+        const val SOURCE = "source"
     }
 }
