@@ -184,6 +184,15 @@ private fun LinkStep(a: MainActivity, next: () -> Unit) {
         }
     }, Modifier.fillMaxWidth())
     Spacer(Modifier.height(8.dp))
+    GhostButton(t("Find NoCap servers nearby", "Find NoCap servers nearby"), { a.screen = Screen.Find }, Modifier.fillMaxWidth())
+    Text(
+        t(
+            "Got a fresh server that's never been set up? Find it here and set it up right from your phone.",
+            "Have a new server that hasn't been set up yet? Find it here and set it up from this phone.",
+        ),
+        Modifier.padding(top = 6.dp, bottom = 2.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted,
+    )
+    Spacer(Modifier.height(8.dp))
     GhostButton(t("Type it in", "Enter address and code"), { a.screen = Screen.LinkForm() }, Modifier.fillMaxWidth())
     Spacer(Modifier.height(8.dp))
     GhostButton(t("Later", "Skip for now"), next, Modifier.fillMaxWidth())

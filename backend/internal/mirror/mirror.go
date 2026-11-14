@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,6 +53,9 @@ const (
 	MaxControl = 8 << 10
 	// MaxFrame is the largest frame a phone may send.
 	MaxFrame = 4 << 20
+	// MaxQueued is how many frame bytes one window may lag behind before it
+	// skips ahead to the next key frame (memory per window stays bounded).
+	MaxQueued = 16 << 20
 	// keyEvery: at most one key frame request per this long.
 	keyEvery = 750 * time.Millisecond
 	// AskTTL: how long a "please start mirroring" stays for the phone.
@@ -69,6 +73,8 @@ var (
 type Out struct {
 	Text bool
 	Data []byte
+	// counted: bytes this message holds of its viewer's MaxQueued budget.
+	counted int
 }
 
 // controls is what a viewer may ask the phone to do.
@@ -254,9 +260,34 @@ type Viewer struct {
 	jpeg bool
 	// skipping: frames are dropped until the next key frame.
 	skipping bool
+	// queued: frame bytes waiting in Out (at most MaxQueued), so a slow
+	// window holds a few seconds of video, not 120 of the largest frames.
+	queued atomic.Int64
 }
 
 func (v *Viewer) stop() { v.once.Do(func() { close(v.Done) }) }
+
+// Sent tells the room o left Out (call it for every message taken).
+func (v *Viewer) Sent(o Out) {
+	if o.counted > 0 {
+		v.queued.Add(-int64(o.counted))
+	}
+}
+
+// push queues frame bytes within the byte budget; false when full.
+func (v *Viewer) push(data []byte) bool {
+	n := int64(len(data))
+	if v.queued.Load()+n > MaxQueued {
+		return false
+	}
+	select {
+	case v.Out <- Out{Data: data, counted: len(data)}:
+		v.queued.Add(n)
+		return true
+	default:
+		return false
+	}
+}
 
 func textMsg(v any) Out {
 	b, _ := json.Marshal(v)
@@ -411,27 +442,25 @@ func (v *Viewer) deliver(typ byte, data, config, meta []byte) bool {
 	case TypeKey:
 		if v.skipping {
 			// Back in step: the decoder gets the latest settings first.
-			if cap(v.Out)-len(v.Out) < 3 {
+			if cap(v.Out)-len(v.Out) < 3 || v.queued.Load()+int64(len(config)+len(data)) > MaxQueued {
 				return false
 			}
 			if meta != nil {
 				v.Out <- Out{Text: true, Data: meta}
 			}
-			if config != nil {
-				v.Out <- Out{Data: config}
+			if config != nil && !v.push(config) {
+				return false
 			}
 			v.skipping = false
 		}
 	case TypeJPEG:
 		v.skipping = false
 	}
-	select {
-	case v.Out <- Out{Data: data}:
+	if v.push(data) {
 		return true
-	default:
-		v.skipping = true
-		return false
 	}
+	v.skipping = true
+	return false
 }
 
 // phoneText handles "meta" and "state" from the phone.

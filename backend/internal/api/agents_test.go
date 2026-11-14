@@ -213,7 +213,7 @@ func TestMCPScopes(t *testing.T) {
 			t.Fatalf("non-admin sees %s", n)
 		}
 	}
-	if !slices.Contains(names, "run_command") || slices.Contains(names, "list_containers") {
+	if !slices.Contains(names, "write_file") || slices.Contains(names, "run_command") || slices.Contains(names, "list_containers") {
 		t.Fatalf("non-admin tools: %v", names)
 	}
 	if r := rpc(t, w.s, alexAct, callTool("list_containers", nil)); r.Error == nil {
@@ -368,7 +368,7 @@ func TestMCPApprovalTimeout(t *testing.T) {
 	w.s.agents.broker = &mcp.Broker{Timeout: 50 * time.Millisecond}
 	_ = w.st.SetSetting(context.Background(), agentsEnabledKey, "1")
 	tok, _ := makeAgentToken(t, w, w.users["alex"], store.AgentScopeAct)
-	r := rpc(t, w.s, tok, callTool("run_command", map[string]any{"command": "id"}))
+	r := rpc(t, w.s, tok, callTool("write_file", map[string]any{"root": "home", "path": "/a.txt", "content": "x"}))
 	if !r.Result.IsError || !strings.Contains(resultText(r), "2 minutes") {
 		t.Fatalf("timeout: %+v", r)
 	}

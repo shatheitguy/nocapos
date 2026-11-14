@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,7 +73,30 @@ func lastLine(s string) string {
 // and the TCP ports it needs (the NoCapOS web port and SSH).
 type Keep struct {
 	Client netip.Addr
-	Ports  []int
+	// Peer is the address the packets actually come from when it differs
+	// from Client (a reverse proxy on another machine): the firewall sees
+	// the proxy, so it must stay reachable too.
+	Peer  netip.Addr
+	Ports []int
+}
+
+// addrs are the distinct valid addresses to keep connected.
+func (k Keep) addrs() []netip.Addr {
+	var out []netip.Addr
+	for _, a := range []netip.Addr{k.Client, k.Peer} {
+		if a = a.Unmap(); a.IsValid() && !slices.Contains(out, a) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// WithPeer is k also keeping the connection's real peer address.
+func (k Keep) WithPeer(peer string) Keep {
+	if a, err := netip.ParseAddr(peer); err == nil {
+		k.Peer = a.Unmap()
+	}
+	return k
 }
 
 // Pending is a risky change that's undone unless it's kept in time.
@@ -297,7 +321,10 @@ func Reachable(defaultIn string, ipv6 bool, rules []Entry, client netip.Addr, po
 		if r.Direction != "in" {
 			continue
 		}
-		blocks := r.Action == "deny" || r.Action == "reject"
+		// limit lets a source through only until it opens six connections in
+		// 30 s, which one browser tab easily does: for staying connected it
+		// counts as blocking, so the admin's own address gets a guard rule.
+		blocks := r.Action == "deny" || r.Action == "reject" || r.Action == "limit"
 		if !appliesFamily(r, is6) {
 			continue
 		}
@@ -332,15 +359,20 @@ func appliesFamily(r Entry, is6 bool) bool {
 	return r.V6 == is6
 }
 
-// lockedOut lists the ports in k that would be cut off.
-func lockedOut(defaultIn string, ipv6 bool, rules []Entry, k Keep) []int {
-	if !k.Client.IsValid() {
-		return nil
-	}
-	var out []int
-	for _, p := range k.Ports {
-		if !Reachable(defaultIn, ipv6, rules, k.Client, p) {
-			out = append(out, p)
+// cutOff is one address and port that a change would cut off.
+type cutOff struct {
+	addr netip.Addr
+	port int
+}
+
+// lockedOut lists the addresses and ports in k that would be cut off.
+func lockedOut(defaultIn string, ipv6 bool, rules []Entry, k Keep) []cutOff {
+	var out []cutOff
+	for _, a := range k.addrs() {
+		for _, p := range k.Ports {
+			if !Reachable(defaultIn, ipv6, rules, a, p) {
+				out = append(out, cutOff{a, p})
+			}
 		}
 	}
 	return out
@@ -357,8 +389,8 @@ func (e *Engine) keepIn(ctx context.Context, st State, defaultIn string, predict
 	if !active {
 		return nil
 	}
-	for _, p := range lockedOut(defaultIn, st.IPv6, predicted, k) {
-		g := guardRule(k.Client, p)
+	for _, c := range lockedOut(defaultIn, st.IPv6, predicted, k) {
+		g := guardRule(c.addr, c.port)
 		args := g.Args()
 		if len(st.Rules) > 0 {
 			args = append([]string{"insert", "1"}, args...)
@@ -492,9 +524,15 @@ func (e *Engine) Undo(ctx context.Context, id string) error {
 	if e.pending == nil || e.pending.ID != id {
 		return ErrNoPending
 	}
-	err := e.restore(ctx, e.snap)
+	// Not the request's context: the browser asking is often the one the
+	// change cut off, and its disconnect must not stop ufw halfway.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	if err := e.restore(rctx, e.snap); err != nil {
+		return err // still pending: the timer tries again when it runs out
+	}
 	e.clearPending()
-	return err
+	return nil
 }
 
 // change runs fn with the current state under the lock; if risky (and the
@@ -674,7 +712,7 @@ func (e *Engine) Add(ctx context.Context, r Rule, at int, k Keep) (State, error)
 	if err != nil {
 		return State{}, err
 	}
-	blocks := r.Action != "allow" && r.Action != "limit"
+	blocks := r.Action != "allow" // limit can cut a busy client off too
 	return e.change(ctx, "add rule", func(st State) bool { return st.Active && blocks }, func(st State) error {
 		if at < 0 || at > len(st.Rules) {
 			at = len(st.Rules)

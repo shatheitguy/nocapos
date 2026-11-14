@@ -21,7 +21,8 @@ import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class PairInfo(val nocapId: String, val name: String, val version: String)
+/** setup: "new" while the server waits for its first administrator, "done" after, "" from older servers. */
+data class PairInfo(val nocapId: String, val name: String, val version: String, val setup: String = "")
 
 data class ServerApp(val id: String, val name: String, val iconUrl: String, val url: String)
 
@@ -443,7 +444,7 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
 
     fun sameServer(url: String): Boolean = url == server || url.startsWith("$server/")
 
-    private fun info(o: JSONObject) = PairInfo(o.optString("nocap_id"), o.optString("name"), o.optString("version"))
+    private fun info(o: JSONObject) = PairInfo(o.optString("nocap_id"), o.optString("name"), o.optString("version"), o.optString("setup"))
 
     private fun request(method: String, path: String, body: RequestBody?): Request {
         val b = Request.Builder().url(server + path).header("Accept", "application/json")
@@ -532,7 +533,7 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
                         }
                     val o = runCatching { JSONObject(text) }.getOrNull()
                         ?: throw IOException("That address answered, but it's not a NoCapOS server.")
-                    val info = PairInfo(o.optString("nocap_id"), o.optString("name"), o.optString("version"))
+                    val info = PairInfo(o.optString("nocap_id"), o.optString("name"), o.optString("version"), o.optString("setup"))
                     if (!info.nocapId.startsWith("NC-")) throw IOException("That address answered, but it's not a NoCapOS server.")
                     val pin = if (origin.startsWith("https://")) trust.seen ?: throw IOException("No certificate from the server.") else null
                     return Probe(origin, info, pin)

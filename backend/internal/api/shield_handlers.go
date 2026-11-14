@@ -106,7 +106,9 @@ func (s *Server) fwKeepFor(r *http.Request) (firewall.Keep, keepInfo) {
 		}
 	}
 	ports = append(ports, info.SSH)
-	k := firewall.KeepFor(info.Client, ports...)
+	// The packet filter sees the TCP peer: behind a reverse proxy on another
+	// machine that's the proxy, not the browser, so keep both.
+	k := firewall.KeepFor(info.Client, ports...).WithPeer(tcpPeer(r))
 	info.Ports = k.Ports
 	if info.Ports == nil {
 		info.Ports = []int{}
