@@ -189,6 +189,8 @@ setup_token() { since_last_start | grep -o '"setup_token":"[^"]*"' | tail -1 | c
 
 ensure_docker() { # $1 = required (1) or optional (0)
   if has docker && docker info >/dev/null 2>&1; then return 0; fi
+  # Installed but not running (the NoCapOS images carry Debian's docker.io).
+  if has dockerd && systemctl enable --now docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then return 0; fi
   local want=0
   case "$INSTALL_DOCKER" in
     yes) want=1 ;;
@@ -251,6 +253,17 @@ pkg_available() { # $1 = manager, $2 = package
     dnf) dnf -q info "$2" >/dev/null 2>&1 ;;
     pacman) pacman -Si "$2" >/dev/null 2>&1 ;;
     zypper) zypper --non-interactive -q info "$2" 2>/dev/null | grep -q '^Name' ;;
+    *) return 1 ;;
+  esac
+}
+
+# pkg_installed MANAGER PACKAGE: already installed (the NoCapOS images carry
+# every host package), so there's nothing to download.
+pkg_installed() {
+  case "$1" in
+    apt) dpkg-query -W -f='${db:Status-Abbrev}' "$2" 2>/dev/null | grep -q '^ii' ;;
+    dnf | zypper) rpm -q "$2" >/dev/null 2>&1 ;;
+    pacman) pacman -Q "$2" >/dev/null 2>&1 ;;
     *) return 1 ;;
   esac
 }
@@ -376,7 +389,7 @@ zfs_headers() {
 }
 
 install_zfs_debian() {
-  if has zfs && [ -e /sys/module/zfs ]; then printf '    zfs: already installed\n'; return 0; fi
+  if has zfs && { [ -e /sys/module/zfs ] || modprobe zfs 2>/dev/null; }; then printf '    zfs: already installed\n'; return 0; fi
   printf '    zfs: building OpenZFS for kernel %s with DKMS (a few minutes; longer on small boards)\n' "$(uname -r)"
   enable_contrib
   pkg_refresh apt || warn "zfs: couldn't refresh the package lists; trying with what's cached"
@@ -407,7 +420,7 @@ install_host_packages() {
     *) warn "No supported package manager: skipping the host packages (NoCapOS offers them later)."; return 0 ;;
   esac
   info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks, media and Linux apps (skip with --minimal)"
-  pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
+  local refreshed=0
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     feature="${line%%|*}"
@@ -419,6 +432,11 @@ install_host_packages() {
     fi
     avail=() skipped=()
     for p in $list; do
+      pkg_installed "$mgr" "$p" && continue # already here (NoCapOS images): no download
+      if [ "$refreshed" -eq 0 ]; then
+        pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
+        refreshed=1
+      fi
       if pkg_available "$mgr" "$p"; then avail+=("$p"); else skipped+=("$p"); fi
     done
     [ "${#skipped[@]}" -eq 0 ] || warn "$feature: not available here, skipped: ${skipped[*]}"

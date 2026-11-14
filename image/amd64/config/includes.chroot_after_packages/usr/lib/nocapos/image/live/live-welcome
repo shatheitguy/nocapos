@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs at sign-in in the ISO's live session: puts "Install NoCapOS" on the
+# desktop and opens the installer once (the first sign-in of this session).
+set -u
+LIVE=/usr/lib/nocapos/image/live
+desk="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+[ -n "$desk" ] && [ "$desk" != "$HOME" ] || desk="$HOME/Desktop"
+mkdir -p "$desk"
+cp -f "$LIVE/nocapos-install.desktop" "$desk/nocapos-install.desktop"
+chmod 0755 "$desk/nocapos-install.desktop"
+# Desktop icons only start launchers marked as trusted.
+gio set "$desk/nocapos-install.desktop" metadata::trusted true >/dev/null 2>&1 || true
+
+seen="${XDG_RUNTIME_DIR:-/tmp}/nocapos-installer-opened"
+[ -e "$seen" ] && exit 0
+: >"$seen"
+sleep 4
+exec "$LIVE/nocapos-install"

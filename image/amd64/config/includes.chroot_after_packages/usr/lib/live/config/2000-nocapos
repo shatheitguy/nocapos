@@ -1,0 +1,76 @@
+#!/bin/sh
+# live-config component (runs at every start of the ISO's live session,
+# after the live user and GDM's automatic sign-in are set up): the
+# "Install NoCapOS" launcher in the dock, on the desktop and opened once on
+# the first sign-in. Everything here lives in the live session's memory
+# only; the installers copy the image itself, never these changes.
+set -u
+LIVE=/usr/lib/nocapos/image/live
+
+user=nocap
+for p in $(cat /proc/cmdline); do
+  case "$p" in live-config.username=* | username=*) user="${p#*username=}" ;; esac
+done
+
+# The launcher (the dock and the app grid read it from here).
+install -m 0644 "$LIVE/nocapos-install.desktop" /usr/share/applications/nocapos-install.desktop
+# Debian's own launcher for the same installer stays out of sight.
+mkdir -p /usr/local/share/applications
+if [ -f /usr/share/applications/calamares-install-debian.desktop ]; then
+  sed -e '/^NoDisplay=/d' -e 's/^\[Desktop Entry\]$/[Desktop Entry]\nNoDisplay=true/' \
+    /usr/share/applications/calamares-install-debian.desktop >/usr/local/share/applications/calamares-install-debian.desktop
+fi
+
+# First in the dock, and desktop icons on (for the launcher on the desktop).
+favs="$(sed -n 's/^favorite-apps=//p' /etc/dconf/db/local.d/00-nocapos 2>/dev/null | head -1)"
+case "$favs" in
+  "[]" | "") favs="['nocapos-install.desktop']" ;;
+  *) favs="['nocapos-install.desktop', ${favs#\[}" ;;
+esac
+exts="$(sed -n 's/^enabled-extensions=//p' /etc/dconf/db/local.d/00-nocapos 2>/dev/null | head -1)"
+if [ -d /usr/share/gnome-shell/extensions/ding@rastersoft.com ]; then
+  case "$exts" in
+    "[]" | "") exts="['ding@rastersoft.com']" ;;
+    *) exts="${exts%\]}, 'ding@rastersoft.com']" ;;
+  esac
+fi
+mkdir -p /etc/dconf/db/local.d
+{
+  echo "# NoCapOS live session (written at boot, never installed)."
+  echo "[org/gnome/shell]"
+  echo "favorite-apps=$favs"
+  if [ -n "$exts" ]; then echo "enabled-extensions=$exts"; fi
+  echo
+  echo "[org/gnome/shell/extensions/ding]"
+  echo "show-home=false"
+  echo "show-trash=false"
+  echo "show-volumes=false"
+  echo "icon-size='standard'"
+  echo
+  echo "[org/gnome/desktop/screensaver]"
+  echo "lock-enabled=false"
+  echo
+  echo "[org/gnome/desktop/session]"
+  echo "idle-delay=uint32 0"
+} >/etc/dconf/db/local.d/50-nocapos-live
+dconf update >/dev/null 2>&1 || true
+
+# The launcher on the desktop, and the installer opened once, at sign-in.
+mkdir -p /etc/xdg/autostart
+cat >/etc/xdg/autostart/nocapos-live-welcome.desktop <<EOF
+[Desktop Entry]
+Type=Application
+Name=Install NoCapOS
+Exec=$LIVE/live-welcome
+NoDisplay=true
+X-GNOME-Autostart-Phase=Application
+X-GNOME-AutoRestart=false
+EOF
+
+# GDM signs the live user in straight away (live-config's gdm3 component);
+# say so to the user's session too.
+if id "$user" >/dev/null 2>&1; then
+  mkdir -p /var/lib/AccountsService/users
+  printf '[User]\nSession=nocapos\nSystemAccount=false\n' >"/var/lib/AccountsService/users/$user"
+fi
+exit 0

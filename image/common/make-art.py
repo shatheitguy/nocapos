@@ -9,6 +9,8 @@ Writes, all on the brand's near-black:
   grub-background.png       1280x720  GRUB menu of installed systems
   installer-banner.png      800x75    debian-installer banner (light theme)
   installer-banner-dark.png 800x75    debian-installer banner (dark theme)
+  calamares-welcome.png     720x300   graphical installer's welcome page
+  calamares-logo.png        256x256   graphical installer's logo and window icon
 Needs Pillow (Debian: python3-pil) and fonts-dejavu-core.
 """
 import os
@@ -68,6 +70,11 @@ def main():
     splash(lockup, (1280, 720), 0.52, 0.08).save(os.path.join(out, "grub-background.png"))
     banner(mark, False).save(os.path.join(out, "installer-banner.png"))
     banner(mark, True).save(os.path.join(out, "installer-banner-dark.png"))
+    welcome = Image.new("RGBA", (720, 300), (0, 0, 0, 0))
+    art = fit(lockup, 640, 220)
+    welcome.alpha_composite(art, ((720 - art.width) // 2, (300 - art.height) // 2))
+    welcome.save(os.path.join(out, "calamares-welcome.png"))
+    fit(mark, 256, 256).save(os.path.join(out, "calamares-logo.png"))
     print("artwork written to", out)
 
 

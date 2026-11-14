@@ -1,0 +1,40 @@
+# NoCapOS look for the graphical installer. build.sh fills in the version
+# and copies the logo and welcome art (drawn by image/common/make-art.py).
+---
+componentName: nocapos
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+windowExpanding: normal
+windowSize: 960px,640px
+windowPlacement: center
+sidebar: widget
+navigation: widget
+
+strings:
+  productName: NoCapOS
+  shortProductName: NoCapOS
+  version: "@VERSION@"
+  shortVersion: "@SHORT_VERSION@"
+  versionedName: "NoCapOS @VERSION@"
+  shortVersionedName: "NoCapOS @SHORT_VERSION@"
+  bootloaderEntryName: NoCapOS
+  productUrl: https://github.com/shatheitguy/nocapos
+  supportUrl: https://github.com/shatheitguy/nocapos/issues
+  knownIssuesUrl: https://github.com/shatheitguy/nocapos/issues
+  releaseNotesUrl: https://github.com/shatheitguy/nocapos/releases
+  donateUrl: https://github.com/shatheitguy/nocapos
+
+images:
+  productLogo: "logo.png"
+  productIcon: "logo.png"
+  productWelcome: "welcome.png"
+
+slideshow: "show.qml"
+slideshowAPI: 2
+
+style:
+  SidebarBackground: "#050508"
+  SidebarText: "#c9c9d1"
+  SidebarTextCurrent: "#ffffff"
+  SidebarBackgroundCurrent: "#e5383b"
