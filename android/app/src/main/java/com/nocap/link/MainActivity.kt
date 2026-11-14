@@ -324,7 +324,9 @@ class MainActivity : ComponentActivity() {
         reloadApps()
         refresh()
         com.nocap.link.widget.Media.start(this)
-        Sync.start(this)
+        // Leaves a running connection alone: restarting it on every resume dropped requests.
+        Sync.ensure(this)
+        askNotificationsOnce()
         liveJob?.cancel()
         liveJob = lifecycleScope.launch {
             while (isActive) {
@@ -356,6 +358,19 @@ class MainActivity : ComponentActivity() {
         if (!Home.loaded) return
         val keep = Home.layout.pages.flatMap { p -> p.items.filterIsInstance<NoCapItem>().flatMap { it.opt("photos").split('|') } }.filter { it.isNotBlank() }.toSet()
         lifecycleScope.launch(Dispatchers.IO) { com.nocap.link.widget.Photos.prune(this@MainActivity, keep) }
+    }
+
+    /**
+     * Requests from NoCap OS (mirror my screen, ring, open) are notifications:
+     * once linked, Android 13+ has to allow them, so ask once (setup asks too).
+     */
+    private fun askNotificationsOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33 || Opt.notifAsked.v || screen is Screen.Setup) return
+        if (runCatching { vault.link }.getOrNull() == null) return
+        Opt.notifAsked.set(true)
+        askPermission(android.Manifest.permission.POST_NOTIFICATIONS) { ok ->
+            if (!ok) toast = t("Notifications are off, so NoCap OS asks can't reach you. Settings → Your Squad fixes it.", "Notifications are off, so requests from NoCap OS can't appear. Turn them on in Settings → Linked Devices.")
+        }
     }
 
     fun askPermission(perm: String, done: (Boolean) -> Unit) {
@@ -399,7 +414,8 @@ class MainActivity : ComponentActivity() {
 
     /** The drawer, or (with all apps on home pages) the Stash page (app groups). */
     fun openDrawer() {
-        if (Opt.drawer.v == DrawerStyle.HOME_PAGES) libraryTick++ else layer = Layer.DRAWER
+        // All apps on the home pages: those are the drawer, so "open the drawer" means search.
+        layer = if (Opt.drawer.v == DrawerStyle.HOME_PAGES) Layer.SEARCH else Layer.DRAWER
     }
 
     override fun onPause() {
@@ -470,6 +486,7 @@ class MainActivity : ComponentActivity() {
     private fun linked() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
+        Sync.start(this) // requests from NoCap OS start arriving now, not after the next restart
         screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
@@ -479,6 +496,7 @@ class MainActivity : ComponentActivity() {
     fun linkedFromPhoneSetup() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
+        Sync.start(this)
         refresh()
     }
 

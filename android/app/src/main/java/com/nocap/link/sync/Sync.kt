@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 object Sync {
     private val io = Executors.newSingleThreadExecutor()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + com.nocap.link.system.CrashLog.handler("NoCap Link sync"))
-    private var loop: Job? = null
+    @Volatile private var loop: Job? = null
     /** Last notification content sent per key, so updates that change nothing aren't re-sent. */
     private val sent = HashMap<String, Int>()
     private var lastClipHash = 0
@@ -140,29 +140,79 @@ object Sync {
         loop = scope.launch { listen(app, inService = false) }
     }
 
+    /** Like [start], but leaves a connection that is already up alone (called on every resume). */
+    fun ensure(ctx: Context) {
+        val app = ctx.applicationContext
+        Prefs.init(app)
+        LinkOpt.init(app)
+        if (LinkOpt.alwaysOn.v && LinkService.isRunning) return
+        if (!LinkOpt.alwaysOn.v && loop?.isActive == true) return
+        start(app)
+    }
+
     fun stop() { loop?.cancel(); loop = null }
 
     private fun wantsNotices() = Opt.liveNotices.v && Opt.serverNotices.v
 
-    /** Follows the server until cancelled (or until it's clear it never will work). */
+    /**
+     * Where the long-poll got to. Kept across restarts (network changes,
+     * route switches, the service coming back) so requests sent while the
+     * connection was being re-made still arrive; a cursor older than a few
+     * minutes is dropped so a fresh start doesn't replay old history.
+     */
+    @Volatile private var cursor = 0L
+    @Volatile private var cursorAt = 0L
+    private const val CURSOR_MAX_AGE = 5 * 60_000L
+    /** Action ids already handled (the same answer can come twice around a reconnect). */
+    private val doneActions = LinkedHashSet<Long>()
+
+    private fun savedCursor(): Long {
+        if (cursor == 0L) { cursor = Prefs.linkCursor; cursorAt = Prefs.linkCursorAt }
+        return if (System.currentTimeMillis() - cursorAt in 0..CURSOR_MAX_AGE) cursor else 0L
+    }
+
+    private fun keepCursor(c: Long) {
+        cursor = c
+        cursorAt = System.currentTimeMillis()
+        Prefs.setLinkCursor(c, cursorAt)
+    }
+
+    /**
+     * Follows the server until cancelled, until it's clear it never will
+     * work (unlinked, older server, changed certificate), or after a few
+     * failures in a row so the caller can pick the route again.
+     */
     suspend fun listen(ctx: Context, inService: Boolean) {
-        var cursor = 0L
         var backoff = 5_000L
+        var failures = 0
         val power = ctx.getSystemService(android.os.PowerManager::class.java)
         while (isActiveSafe()) {
             // Screen off: rest (the 15-minute heartbeat still checks for server notices).
             if (!inService && power != null && !power.isInteractive) { delay(60_000); continue }
             val api = api(ctx) ?: return
+            val after = savedCursor()
             try {
-                val (ev, actions) = api.liveEvents(cursor, 25, images = Opt.clipImages.v)
+                val (ev, actions) = api.liveEvents(after, 25, images = Opt.clipImages.v)
                 backoff = 5_000L
-                ev.mirror?.let { com.nocap.link.mirror.MirrorAsk.asked(ctx, it) }
+                failures = 0
                 LinkService.connected(true)
-                if (cursor != 0L) {
-                    handle(ctx, ev)
-                    for (a in actions) runCatching { PhoneActions.handle(ctx, api, a) }
+                val seen = synchronized(doneActions) { doneActions.toSet() }
+                for (step in Requests.plan(ev, actions, after != 0L, seen)) {
+                    when (step) {
+                        is Requests.Step.Mirror -> runCatching { com.nocap.link.mirror.MirrorAsk.asked(ctx, step.ask) }
+                            .onFailure { com.nocap.link.system.CrashLog.warn("mirror ask", it) }
+                        is Requests.Step.Act -> {
+                            synchronized(doneActions) {
+                                doneActions += step.action.id
+                                while (doneActions.size > 200) doneActions.remove(doneActions.first())
+                            }
+                            runCatching { PhoneActions.handle(ctx, api, step.action) }
+                                .onFailure { com.nocap.link.system.CrashLog.warn("action ${step.action.kind}", it) }
+                        }
+                        Requests.Step.Feed -> handle(ctx, ev)
+                    }
                 }
-                cursor = ev.cursor
+                keepCursor(ev.cursor)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: ServerTooOld) {
@@ -176,7 +226,9 @@ object Sync {
                 LinkService.connected(false)
                 // Offline is normal; anything else failing over and over gets a report.
                 if (e !is java.io.IOException) com.nocap.link.system.CrashLog.failure("NoCap Link sync", e)
-                delay(backoff); backoff = (backoff * 2).coerceAtMost(300_000L)
+                // The route may be gone (left home, Wi-Fi changed): let the service pick again.
+                if (inService && ++failures >= 3) return
+                delay(backoff); backoff = (backoff * 2).coerceAtMost(if (inService) 60_000L else 300_000L)
             }
         }
     }
