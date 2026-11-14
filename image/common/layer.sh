@@ -108,10 +108,16 @@ if command -v update-initramfs >/dev/null 2>&1 && ls /boot/initrd.img-* >/dev/nu
   update-initramfs -u -k all || echo "warning: update-initramfs failed; the splash shows later in the boot" >&2
 fi
 
-# ---------------------------------------------------------------- NoCap Desktop
-# The images come with the full desktop: its packages now, the NoCapOS look
-# and the switch-on on the first boot (install.sh --desktop).
-"$IMG/desktop-packages.sh" || echo "warning: the desktop packages didn't install; the first boot installs them" >&2
+# ---------------------------------------------------------------- packages
+# Everything NoCapOS uses is in the image, so nothing is downloaded on the
+# first boot or the first use of a feature: the host packages (virtual
+# machines, sharing, Docker, firewall, ZFS built with DKMS, media, backups,
+# Linux apps) and the full NoCap Desktop, already in NoCapOS's look and
+# switched on. The first boot's install.sh --desktop then only updates.
+"$IMG/host-packages.sh"
+"$IMG/desktop-packages.sh"
+"$IMG/desktop-brand.sh"
+apt-get clean
 
 # ---------------------------------------------------------------- updates
 # Security updates install themselves (52nocapos-unattended-upgrades); the

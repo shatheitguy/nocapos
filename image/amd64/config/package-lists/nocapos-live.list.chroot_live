@@ -1,0 +1,5 @@
+# Live session only: the graphical installer (Debian's Calamares and its
+# Debian helpers; NoCapOS's settings and look in /etc/calamares). Both
+# installers remove these from the installed system.
+calamares
+calamares-settings-debian
