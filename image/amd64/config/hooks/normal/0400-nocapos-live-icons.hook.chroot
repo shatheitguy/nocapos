@@ -1,0 +1,11 @@
+#!/bin/sh
+# live-build chroot hook: desktop icons for the live session only (the
+# "Install NoCapOS" launcher on the desktop). Switched on at boot by
+# /usr/lib/live/config/2000-nocapos; both installers remove the package.
+set -e
+apt-get update -q >/dev/null
+if apt-cache show gnome-shell-extension-desktop-icons-ng >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gnome-shell-extension-desktop-icons-ng
+else
+  echo "desktop icons extension not in the archive; the launcher stays in the dock only"
+fi
