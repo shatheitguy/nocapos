@@ -49,6 +49,7 @@ export interface PlanRequest {
   disks: string[];
   old?: string;
   compression?: string;
+  mountpoint?: string;
 }
 
 export interface PoolPlan {

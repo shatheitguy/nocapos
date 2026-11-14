@@ -62,7 +62,8 @@ export function AgentApprovals() {
         <p>{a.summary}</p>
         {a.risk && a.risk !== 'none' && <span className={`agent-risk ${a.risk}`}>{tr(`ag.risk.${a.risk}`)}</span>}
         {args && (
-          <details className="agent-args">
+          // Code and commands are shown open: what runs is never hidden.
+          <details className="agent-args" open={a.arguments != null && ('code' in a.arguments || 'command' in a.arguments)}>
             <summary>
               {tr('agent.details')} <code>{a.tool}</code>
             </summary>

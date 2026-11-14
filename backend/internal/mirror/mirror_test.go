@@ -17,6 +17,7 @@ func drain(v *Viewer) []Out {
 		select {
 		case o := <-v.Out:
 			out = append(out, o)
+			v.Sent(o)
 		default:
 			return out
 		}
@@ -113,6 +114,33 @@ func TestSlowViewerSkipsAhead(t *testing.T) {
 	}
 	if fast.skipping {
 		t.Fatal("the fast window must not be held back")
+	}
+}
+
+// A slow window holds at most MaxQueued bytes of frames, however big.
+func TestSlowViewerMemoryIsBounded(t *testing.T) {
+	h := NewHub()
+	r, _ := h.Room("dev1", "alex")
+	p := r.AttachPhone()
+	v, _ := r.AddViewer(false)
+	drain(v)
+	big := frame(TypeKey, make([]byte, 3<<20)...)
+	for range 20 {
+		_ = r.FromPhone(p, false, big)
+	}
+	if q := v.queued.Load(); q > MaxQueued {
+		t.Fatalf("%d bytes queued, budget %d", q, MaxQueued)
+	}
+	if !v.skipping {
+		t.Fatal("over budget, the window should skip ahead")
+	}
+	drain(v)
+	if q := v.queued.Load(); q != 0 {
+		t.Fatalf("%d bytes still counted after the window caught up", q)
+	}
+	_ = r.FromPhone(p, false, big)
+	if got := drain(v); len(got) == 0 {
+		t.Fatal("a caught-up window gets frames again")
 	}
 }
 

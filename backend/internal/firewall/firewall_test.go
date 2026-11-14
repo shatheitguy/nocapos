@@ -275,7 +275,7 @@ func TestReachable(t *testing.T) {
 		{"default deny", "deny", nil, false},
 		{"default allow", "allow", nil, true},
 		{"allowed port", "deny", entries(t, Rule{Action: "allow", Port: "8443", Proto: "tcp"}), true},
-		{"limit counts as allow", "deny", entries(t, Rule{Action: "limit", Port: "8443", Proto: "tcp"}), true},
+		{"limit counts against us", "deny", entries(t, Rule{Action: "limit", Port: "8443", Proto: "tcp"}), false},
 		{"udp only", "deny", entries(t, Rule{Action: "allow", Port: "8443", Proto: "udp"}), false},
 		{"range", "deny", entries(t, Rule{Action: "allow", Port: "8000:9000", Proto: "tcp"}), true},
 		{"deny first", "deny", entries(t, Rule{Action: "deny", From: "192.168.1.0/24"}, Rule{Action: "allow", Port: "8443", Proto: "tcp"}), false},

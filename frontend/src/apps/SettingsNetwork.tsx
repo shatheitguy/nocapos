@@ -6,6 +6,7 @@ import { setNetwork } from '../lib/hostActions';
 import { missing } from '../lib/settingsKit';
 import { IPv4Editor, IPv4Summary, WifiList } from './NetworkParts';
 import { Section, Toggle } from './Personalize';
+import { FindServersSection } from './SettingsFindServers';
 import { SavedNetworks } from './WifiSaved';
 
 // Settings → Network: an overview of connections, then Wi-Fi and one page
@@ -120,6 +121,8 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
           </span>
         </div>
       </div>
+
+      <FindServersSection />
     </div>
   );
 }

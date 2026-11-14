@@ -19,6 +19,7 @@ import (
 
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/mcp"
+	"alfaos/alfad/internal/store"
 )
 
 // NoCap MCP's tools. Most reuse the same handlers the NoCapOS apps call,
@@ -719,7 +720,7 @@ var agentTools = []agentTool{
 
 	// ---- Power & danger zone ----
 	{
-		Name: "run_command", Title: "Run a command", Cap: mcp.CapTerminal, Need: mcp.On, action: true,
+		Name: "run_command", Title: "Run a command", Cap: mcp.CapTerminal, Need: mcp.On, action: true, admin: true,
 		Description: "Runs a shell command on the server as your own Linux account (never root) and returns its output (up to 64 KB).",
 		Props: []mcp.Prop{
 			{Name: "command", Type: "string", Required: true, Description: "The command line, run with /bin/sh -c."},
@@ -751,10 +752,11 @@ var agentTools = []agentTool{
 		},
 		summary: func(a map[string]any) string {
 			code := mcp.Str(a, "code")
+			lines := strings.Count(code, "\n") + 1
 			if i := strings.IndexByte(code, '\n'); i >= 0 {
 				code = code[:i] + " …"
 			}
-			return fmt.Sprintf("Run %s code (%s): %s", mcp.Str(a, "language"), orDefault(mcp.Str(a, "where"), mcp.Sandbox), code)
+			return fmt.Sprintf("Run %s code (%s, %d lines): %s", mcp.Str(a, "language"), orDefault(mcp.Str(a, "where"), mcp.Sandbox), lines, code)
 		},
 		run: func(c *toolCall) mcp.Result {
 			lang, code := c.str("language"), mcp.Str(c.args, "code")
@@ -785,6 +787,8 @@ var agentTools = []agentTool{
 	},
 }
 
+var errAgentHostAdminOnly = errors.New("only administrators can let an agent run commands on the server")
+
 func runResult(res mcp.RunResult, err error) mcp.Result {
 	if err != nil {
 		return mcp.Errorf("%v", err)
@@ -805,6 +809,12 @@ func orDefault(s, def string) string {
 // owner's own one when NoCapOS runs as root, NoCapOS's own (unprivileged)
 // one otherwise. Never root.
 func (s *Server) agentAccount(b *agentBackend) (mcp.Account, error) {
+	// A command on the host is a terminal, and the terminal is for
+	// administrators only; on a non-root install it would also run as the
+	// account that owns NoCapOS's own data.
+	if b == nil || b.u == nil || b.u.Role != store.RoleAdmin {
+		return mcp.Account{}, errAgentHostAdminOnly
+	}
 	if runtime.GOOS != "linux" {
 		return mcp.Account{}, mcp.ErrRunUnsupported
 	}

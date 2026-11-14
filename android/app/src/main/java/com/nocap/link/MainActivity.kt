@@ -86,6 +86,10 @@ sealed interface Screen {
     data class Setup(val step: SetupStep = SetupStep.WELCOME) : Screen
     data class LinkForm(val server: String = "", val code: String = "", val id: String = "", val auto: Boolean = false) : Screen
     data object Scan : Screen
+    /** Find NoCap servers on this network and nearby over Bluetooth. */
+    data object Find : Screen
+    /** Set up a brand-new server from the phone. */
+    data class NewServer(val server: String, val id: String = "", val name: String = "") : Screen
 }
 
 /** How the linked server is doing. */
@@ -265,8 +269,13 @@ class MainActivity : ComponentActivity() {
                     is Screen.Setup -> SetupScreen(this, s.step)
                     is Screen.LinkForm -> {
                         BackHandler { screen = afterLinkForm() }
-                        LinkScreen(s, onScan = { screen = Screen.Scan }, onCancel = { screen = afterLinkForm() }, onLinked = { linked() })
+                        LinkScreen(s, onScan = { screen = Screen.Scan }, onFind = { screen = Screen.Find }, onCancel = { screen = afterLinkForm() }, onLinked = { linked() })
                     }
+                    Screen.Find -> {
+                        BackHandler { screen = afterLinkForm() }
+                        com.nocap.link.sync.FindScreen(this, onBack = { screen = afterLinkForm() })
+                    }
+                    is Screen.NewServer -> com.nocap.link.sync.NewServerScreen(this, s, onBack = { screen = Screen.Find })
                     Screen.Scan -> {
                         BackHandler { screen = Screen.LinkForm() }
                         ScanScreen(onResult = { uri -> if (!handle(Intent(Intent.ACTION_VIEW, uri))) toast = t("That QR isn't a NoCap Link code.", "That QR code isn't a NoCap Link code.") }, onCancel = { screen = Screen.LinkForm() })
@@ -464,6 +473,19 @@ class MainActivity : ComponentActivity() {
         screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
+    }
+
+    /** Setting up a new server linked this phone; the setup screen carries on. */
+    fun linkedFromPhoneSetup() {
+        HeartbeatWorker.schedule(this)
+        HeartbeatWorker.now(this)
+        refresh()
+    }
+
+    /** Done setting up a new server from the phone. */
+    fun phoneSetupFinished() {
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
+        toast = t("Your NoCap server is set up and linked. W.", "Your NoCap server is set up and linked.")
     }
 
     val link: Link? get() = vault.link
