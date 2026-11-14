@@ -52,11 +52,13 @@ import com.nocap.link.data.ThemeMode
 import com.nocap.link.R
 
 /**
- * NoCapOS desktop colors: near-black, dark glass, brand red. The accent and
+ * NoCapOS web desktop colors (its glass theme in the dark, the classic theme
+ * in the light): near-black, frosted glass, NoCap red. The accent and
  * light/dark come from Settings, so these are read as Compose state.
  */
 object NoCap {
-    const val BRAND = 0xFFFF2A2A
+    /** NoCap red, the web OS accent (--accent). */
+    const val BRAND = 0xFFE8232B
 
     /** Set by [NoCapTheme] from Settings (dark, light or follow the phone). */
     var light by mutableStateOf(false)
@@ -64,24 +66,24 @@ object NoCap {
 
     val Red: Color get() = parseAccent(Opt.accent.v)
     val RedDeep: Color get() = lerp(Red, Color.Black, 0.35f)
-    val Bg: Color get() = if (light) Color(0xFFF2F3F6) else Color(0xFF07080B)
+    val Bg: Color get() = if (light) Color(0xFFECEEF1) else Color(0xFF050608)
     val Bg2: Color get() = if (light) Color(0xFFFBEFF0) else Color(0xFF12060A)
-    val Glass: Color get() = if (light) Color(0xB8FFFFFF) else Color(0x9914161C)
-    val GlassStrong: Color get() = if (light) Color(0xEBFFFFFF) else Color(0xD9101217)
-    val GlassEdge: Color get() = if (light) Color(0x1F000000) else Color(0x26FFFFFF)
-    val Text: Color get() = if (light) Color(0xFF15171C) else Color(0xFFECEEF2)
-    val Muted: Color get() = if (light) Color(0xFF5D6270) else Color(0xFF959AA5)
+    val Glass: Color get() = if (light) Color(0x9EFFFFFF) else Color(0x94161719)
+    val GlassStrong: Color get() = if (light) Color(0xF2FFFFFF) else Color(0xF01A1B21)
+    val GlassEdge: Color get() = if (light) Color(0x1A191C24) else Color(0x1FFFFFFF)
+    val Text: Color get() = if (light) Color(0xFF1A1C22) else Color(0xF0FFFFFF)
+    val Muted: Color get() = if (light) Color(0xFF6A6F7A) else Color(0x8CFFFFFF)
     /** Full-screen layers (drawer, settings, search). */
-    val Sheet: Color get() = if (light) Color(0xF5F2F3F6) else Color(0xF207080B)
+    val Sheet: Color get() = if (light) Color(0xF5ECEEF1) else Color(0xF2121318)
     /** Inputs, chips, segmented controls. */
     val Field: Color get() = if (light) Color(0x14000000) else Color(0x22FFFFFF)
-    val Card: Color get() = if (light) Color(0xE6FFFFFF) else Color(0xCC15171C)
+    val Card: Color get() = if (light) Color(0xF2FFFFFF) else Color(0x14FFFFFF)
     val Ok = Color(0xFF2BD47A)
     val Warn = Color(0xFFFFB020)
     val Bad = Color(0xFFFF4D4D)
 
     val presets = listOf(
-        0xFFFF2A2A, 0xFFFF7A1A, 0xFFFFC21A, 0xFF39E58C, 0xFF1AD1FF, 0xFF3D7BFF, 0xFF9B5CFF, 0xFFFF3DA8,
+        0xFFE8232B, 0xFFFF7A1A, 0xFFFFC21A, 0xFF39E58C, 0xFF1AD1FF, 0xFF3D7BFF, 0xFF9B5CFF, 0xFFFF3DA8,
     )
 
     fun parseAccent(s: String): Color = runCatching { Color(android.graphics.Color.parseColor(s)) }.getOrDefault(Color(BRAND))

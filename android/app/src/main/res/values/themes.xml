@@ -5,7 +5,7 @@
 
     <style name="Theme.NoCap" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/nocap_bg</item>
-        <item name="android:colorAccent">#FFFF2A2A</item>
+        <item name="android:colorAccent">#FFE8232B</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
@@ -52,7 +52,7 @@
         <item name="android:background">@drawable/widget_chip</item>
         <item name="android:fontFamily">@font/orbitron_bold</item>
         <item name="android:gravity">center</item>
-        <item name="android:textColor">#FFFF2A2A</item>
+        <item name="android:textColor">#FFE8232B</item>
         <item name="android:textSize">12sp</item>
     </style>
 
