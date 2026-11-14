@@ -123,8 +123,12 @@ the image (`host-packages.sh`), all from Debian's own archive:
   the remote desktop engine (guacd), mDNS, smartmontools, FFmpeg, restic,
   rclone, Flatpak and the Linux-apps streaming pieces
 - Docker (Debian's `docker.io`, plus `docker-compose`), `ufw` (Shield),
-  `mergerfs` and `snapraid` (skipped with a note in the build log if the
-  archive doesn't have them)
+  `mergerfs` and `snapraid`
+
+A package the archive doesn't carry is skipped with a note in the build log
+("not in this image's archive"). Debian 13 has no `guacd`/`libguac-client-*`
+or `wsdd`, so those stay out of the images (NoCapOS's Packages page shows
+them as unavailable, the same as on any Debian 13 install).
 - ZFS: `zfsutils-linux` + `zfs-dkms` from Debian's contrib, with the kernel
   headers of every kernel in the image (`linux-headers-amd64`; on the Pi the
   Raspberry Pi kernel flavours' `linux-headers-rpi-*`). DKMS builds the
