@@ -244,6 +244,9 @@ func TestCreatePoolRefusesUnavailableDisks(t *testing.T) {
 	wantStatus(t, err, http.StatusBadRequest, "reserved")
 	_, err = m.CreatePool(ctx, CreatePoolRequest{Name: "x", Layout: "stripe", Disks: []string{"sdg"}, Confirm: "ERASE", Mountpoint: "/etc"}, nil)
 	wantStatus(t, err, http.StatusBadRequest, "mountpoint")
+	// The dry run's "single" layout means the same on the real run.
+	_, err = m.CreatePool(ctx, CreatePoolRequest{Name: "media", Layout: "single", Disks: []string{"sdg", "sdh"}, Confirm: "ERASE"}, nil)
+	wantStatus(t, err, http.StatusBadRequest, "exactly one disk")
 	if len(fr.called("zpool create")) != 0 {
 		t.Fatal("zpool create ran for a refused request")
 	}

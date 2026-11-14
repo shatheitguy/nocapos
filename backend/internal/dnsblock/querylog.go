@@ -116,9 +116,14 @@ func (l *queryLog) run(ctx context.Context) {
 	}
 }
 
+// maxLogRows caps the log whatever the retention: a busy network (or a
+// flood) never fills the disk.
+var maxLogRows = 2_000_000
+
 func (l *queryLog) pruneOld() {
 	_, _, keep := l.settings()
 	_, _ = l.db.Exec(`DELETE FROM queries WHERE t < ?`, time.Now().Add(-keep).UnixMilli())
+	_, _ = l.db.Exec(`DELETE FROM queries WHERE t < (SELECT t FROM queries ORDER BY t DESC LIMIT 1 OFFSET ?)`, maxLogRows-1)
 }
 
 // Clear deletes the whole log.

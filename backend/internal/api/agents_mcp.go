@@ -520,6 +520,11 @@ func agentMayUse(t *agentTool, tok *store.AgentToken, u *store.User, sc mcp.Scop
 	return tok.Tools == nil || slices.Contains(tok.Tools, t.Name)
 }
 
+// stillMayRun re-checks an approved call against the agent as it is now.
+func stillMayRun(t *agentTool, cur *store.AgentToken, u *store.User, now time.Time) bool {
+	return cur != nil && !cur.Paused && !cur.Expired(now) && agentMayUse(t, cur, u, agentScopes(cur))
+}
+
 func (b *agentBackend) Tools() []mcp.Tool {
 	out := []mcp.Tool{}
 	for i := range agentTools {
@@ -624,11 +629,16 @@ func (s *Server) runAgentTool(ctx context.Context, b *agentBackend, t *agentTool
 				s.alwaysAllow(context.WithoutCancel(ctx), b.tok, t.Name)
 			}
 		}
-		// The agent may have been paused or revoked while it waited.
-		if cur, err := s.Store.AgentTokenByID(ctx, b.tok.ID, b.tok.UserID); err != nil || cur.Paused {
-			record("stopped", "paused or revoked while waiting")
-			return mcp.Errorf("This agent was paused or revoked, so it didn't run.")
+		// The agent may have been paused, revoked, expired or narrowed while
+		// it waited: it runs with what it may do now, not what it had then.
+		cur, err := s.Store.AgentTokenByID(ctx, b.tok.ID, b.tok.UserID)
+		if err != nil || !stillMayRun(t, cur, b.u, time.Now()) {
+			record("stopped", "paused, revoked, expired or no longer allowed while waiting")
+			return mcp.Errorf("This agent was paused, revoked or lost this permission, so it didn't run.")
 		}
+		nb := *b // b may be shared by other calls on the same connection
+		nb.tok, nb.sc = cur, agentScopes(cur)
+		b = &nb
 	}
 	res := s.execAgentTool(ctx, b, t, args)
 	switch {
@@ -672,15 +682,29 @@ func (s *Server) alwaysAllow(ctx context.Context, tok *store.AgentToken, tool st
 	tok.AlwaysAllow = cur.AlwaysAllow
 }
 
+var cardShowsWhole = map[string]bool{"code": true, "command": true, "content": true}
+
+// cardWholeMax covers every command (16 KB) and snippet (64 KB) in full;
+// only a very long file's new text is cut, and the summary says how long.
+const cardWholeMax = 64 << 10
+
 // argsForCard keeps long values (file contents) readable on the card and
-// never shows a password.
+// never shows a password. What would actually run (code, a command, a
+// file's new contents) is always shown whole, so nothing can hide past the
+// cut; those are already capped by the tools themselves.
 func argsForCard(args map[string]any) map[string]any {
 	out := make(map[string]any, len(args))
 	for k, v := range args {
 		if strings.Contains(strings.ToLower(k), "password") {
 			v = "••••••"
-		} else if str, ok := v.(string); ok && len(str) > 2000 {
-			v = str[:2000] + fmt.Sprintf("… (%d more characters)", len(str)-2000)
+		} else if str, ok := v.(string); ok {
+			limit := 2000
+			if cardShowsWhole[k] {
+				limit = cardWholeMax
+			}
+			if len(str) > limit {
+				v = str[:limit] + fmt.Sprintf("… (%d more characters)", len(str)-limit)
+			}
 		}
 		out[k] = v
 	}

@@ -57,24 +57,32 @@ func TestSetupPeerIgnoresSpoofedHeaders(t *testing.T) {
 		xff     []string
 		trusted []netip.Prefix
 		local   bool
+		other   map[string]string
 	}{
-		{"public peer claims LAN", "203.0.113.9:5000", []string{"192.168.1.10"}, loopbackProxy, false},
-		{"public peer claims loopback", "203.0.113.9:5000", []string{"127.0.0.1"}, loopbackProxy, false},
-		{"public peer, real IP header ignored", "203.0.113.9:5000", nil, nil, false},
-		{"CGNAT peer", "100.80.1.2:5000", []string{"10.0.0.2"}, loopbackProxy, false},
-		{"LAN peer", "192.168.1.10:5000", nil, loopbackProxy, true},
-		{"LAN peer claims public: the peer decides", "192.168.1.10:5000", []string{"203.0.113.9"}, loopbackProxy, true},
-		{"IPv6 link-local with zone", "[fe80::1%eth0]:5000", nil, loopbackProxy, true},
-		{"IPv6 ULA", "[fd00::5]:5000", nil, nil, true},
-		{"IPv6 public", "[2001:db8::5]:5000", nil, nil, false},
-		{"trusted proxy, public client", "127.0.0.1:5000", []string{"203.0.113.9"}, loopbackProxy, false},
-		{"trusted proxy, client spoofs left-most", "127.0.0.1:5000", []string{"192.168.1.10, 203.0.113.9"}, loopbackProxy, false},
-		{"trusted proxy, spoof in an earlier header", "127.0.0.1:5000", []string{"192.168.1.10", "203.0.113.9"}, loopbackProxy, false},
-		{"trusted proxy, LAN client", "127.0.0.1:5000", []string{"203.0.113.9, 192.168.1.10"}, loopbackProxy, true},
-		{"trusted proxy, garbage: fail closed", "127.0.0.1:5000", []string{"not-an-ip"}, loopbackProxy, false},
-		{"trusted proxy, no header: the proxy host itself", "127.0.0.1:5000", nil, loopbackProxy, true},
-		{"untrusted loopback proxy: header ignored", "127.0.0.1:5000", []string{"203.0.113.9"}, nil, true},
-		{"unparseable peer", "@", nil, loopbackProxy, false},
+		// Proxy headers a browser never sends: a proxy nobody told us about
+		// (a tunnel, another machine's reverse proxy) is in front: fail closed.
+		{"LAN peer with X-Real-IP", "192.168.1.10:5000", nil, loopbackProxy, false, map[string]string{"X-Real-IP": "192.168.1.1"}},
+		{"untrusted loopback tunnel with Forwarded", "127.0.0.1:5000", nil, nil, false, map[string]string{"Forwarded": "for=127.0.0.1"}},
+		{"untrusted loopback tunnel with a CDN header", "[::1]:5000", nil, nil, false, map[string]string{"Cf-Connecting-Ip": "203.0.113.9"}},
+		{"trusted proxy naming the client another way", "127.0.0.1:5000", nil, loopbackProxy, false, map[string]string{"X-Real-IP": "192.168.1.1"}},
+		{"trusted proxy with X-Forwarded-For and X-Real-IP", "127.0.0.1:5000", []string{"192.168.1.10"}, loopbackProxy, true, map[string]string{"X-Real-IP": "192.168.1.10"}},
+		{"public peer claims LAN", "203.0.113.9:5000", []string{"192.168.1.10"}, loopbackProxy, false, nil},
+		{"public peer claims loopback", "203.0.113.9:5000", []string{"127.0.0.1"}, loopbackProxy, false, nil},
+		{"public peer, real IP header ignored", "203.0.113.9:5000", nil, nil, false, nil},
+		{"CGNAT peer", "100.80.1.2:5000", []string{"10.0.0.2"}, loopbackProxy, false, nil},
+		{"LAN peer", "192.168.1.10:5000", nil, loopbackProxy, true, nil},
+		{"untrusted LAN proxy forwarding a public client", "192.168.1.10:5000", []string{"203.0.113.9"}, loopbackProxy, false, nil},
+		{"IPv6 link-local with zone", "[fe80::1%eth0]:5000", nil, loopbackProxy, true, nil},
+		{"IPv6 ULA", "[fd00::5]:5000", nil, nil, true, nil},
+		{"IPv6 public", "[2001:db8::5]:5000", nil, nil, false, nil},
+		{"trusted proxy, public client", "127.0.0.1:5000", []string{"203.0.113.9"}, loopbackProxy, false, nil},
+		{"trusted proxy, client spoofs left-most", "127.0.0.1:5000", []string{"192.168.1.10, 203.0.113.9"}, loopbackProxy, false, nil},
+		{"trusted proxy, spoof in an earlier header", "127.0.0.1:5000", []string{"192.168.1.10", "203.0.113.9"}, loopbackProxy, false, nil},
+		{"trusted proxy, LAN client", "127.0.0.1:5000", []string{"203.0.113.9, 192.168.1.10"}, loopbackProxy, true, nil},
+		{"trusted proxy, garbage: fail closed", "127.0.0.1:5000", []string{"not-an-ip"}, loopbackProxy, false, nil},
+		{"trusted proxy, no header: the proxy host itself", "127.0.0.1:5000", nil, loopbackProxy, true, nil},
+		{"untrusted loopback proxy: fail closed", "127.0.0.1:5000", []string{"203.0.113.9"}, nil, false, nil},
+		{"unparseable peer", "@", nil, loopbackProxy, false, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -83,8 +91,9 @@ func TestSetupPeerIgnoresSpoofedHeaders(t *testing.T) {
 			for _, v := range c.xff {
 				r.Header.Add("X-Forwarded-For", v)
 			}
-			r.Header.Set("X-Real-IP", "192.168.1.1")   // never read
-			r.Header.Set("Forwarded", "for=127.0.0.1") // never read
+			for k, v := range c.other {
+				r.Header.Set(k, v) // never trusted: only ever makes it stricter
+			}
 			s := &Server{Deps: Deps{Config: &config.Config{TrustedProxies: c.trusted}}}
 			if got := s.setupFromLocal(r); got != c.local {
 				a, ok := setupPeer(r, c.trusted)

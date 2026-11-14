@@ -195,6 +195,10 @@ func bootFrom(bf *BootFacts, sc *scan) *BootDrive {
 		return set("already")
 	case b.Pool.Layout != "mirror" && b.Pool.Layout != "stripe":
 		return set("unknown")
+	case b.Pool.Layout == "stripe" && len(b.Disks) > 1:
+		// Only the first disk would get a twin; the rest would stay single
+		// while the screen said "mirrored".
+		return set("unknown")
 	}
 	b.source = b.Disks[0]
 	b.Mode = "attach"
@@ -322,6 +326,7 @@ type PlanRequest struct {
 	Disks       []string `json:"disks"`
 	Old         string   `json:"old,omitempty"`
 	Compression string   `json:"compression,omitempty"`
+	Mountpoint  string   `json:"mountpoint,omitempty"` // create: as the real run gets it
 }
 
 type PoolPlan struct {
@@ -395,7 +400,11 @@ func (m *Manager) PlanPool(ctx context.Context, req PlanRequest) (*PoolPlan, err
 			return nil, err
 		}
 		pl.Layout, pl.Usable, pl.Tolerance = req.Layout, usable(req.Layout, sizes), layoutTolerance(req.Layout, len(disks))
-		pl.Commands = [][]string{createPoolArgs(req.Name, req.Layout, devs, comp, PoolBase+"/"+req.Name)}
+		mp, err := poolMountpoint(req.Name, req.Mountpoint)
+		if err != nil {
+			return nil, err
+		}
+		pl.Commands = [][]string{createPoolArgs(req.Name, req.Layout, devs, comp, mp)}
 	case "add":
 		p, _, err := m.pool(ctx, req.Pool)
 		if err != nil {

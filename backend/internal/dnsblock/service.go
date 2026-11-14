@@ -79,11 +79,24 @@ type Service struct {
 	systemHooks bool                  // false in tests: never touch the host's resolver
 }
 
+// listRedirect never lets a list fetched over https:// be handed over to
+// plain http:// (where anyone on the way could rewrite it), and stops
+// redirect loops.
+func listRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return errors.New("too many redirects")
+	}
+	if len(via) > 0 && via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return errors.New("redirect from https to http refused")
+	}
+	return nil
+}
+
 // New returns the DNS blocker keeping its files under dir.
 func New(dir string, log *slog.Logger) *Service {
 	return &Service{
 		dir: dir, log: log, res: NewResolver(0), status: map[string]ListStatus{}, sets: map[string]*DomainSet{},
-		http:        &http.Client{Timeout: 3 * time.Minute},
+		http:        &http.Client{Timeout: 3 * time.Minute, CheckRedirect: listRedirect},
 		systemHooks: true,
 	}
 }
@@ -568,6 +581,10 @@ type listeners struct {
 	lns   []net.Listener
 	addrs []string
 	wg    sync.WaitGroup
+
+	mu    sync.Mutex
+	conns map[net.Conn]struct{} // open TCP connections, closed with the listeners
+	shut  bool
 }
 
 func (l *listeners) close() {
@@ -577,7 +594,33 @@ func (l *listeners) close() {
 	for _, ln := range l.lns {
 		ln.Close()
 	}
+	l.mu.Lock()
+	l.shut = true
+	for c := range l.conns {
+		c.Close()
+	}
+	l.mu.Unlock()
 	l.wg.Wait()
+}
+
+// track remembers an accepted connection; false once closing.
+func (l *listeners) track(c net.Conn) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.shut {
+		return false
+	}
+	if l.conns == nil {
+		l.conns = map[net.Conn]struct{}{}
+	}
+	l.conns[c] = struct{}{}
+	return true
+}
+
+func (l *listeners) untrack(c net.Conn) {
+	l.mu.Lock()
+	delete(l.conns, c)
+	l.mu.Unlock()
 }
 
 // listen opens UDP and TCP port on every address ("all"), on each of this
@@ -696,13 +739,19 @@ func lanAddresses() []string {
 // testHosts replaces the addresses listen uses (tests: loopback only).
 var testHosts []string
 
-const maxInflight = 256
+const (
+	maxInflight = 256
+	maxTCPConns = 64 // open TCP connections at once
+	tcpIdle     = 5 * time.Second
+)
 
 func (l *listeners) serve(ctx context.Context, res *Resolver) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	sem := make(chan struct{}, maxInflight)
+	tcpSem := make(chan struct{}, maxTCPConns)
+	clients := newClientFilter()
 	for _, pc := range l.pcs {
 		l.wg.Add(1)
 		go func(pc net.PacketConn) {
@@ -716,6 +765,10 @@ func (l *listeners) serve(ctx context.Context, res *Resolver) {
 					}
 					continue
 				}
+				client := addrOf(from)
+				if !clients.allowed(client) {
+					continue // not from here: no answer at all (no amplification)
+				}
 				msg := append([]byte(nil), buf[:n]...)
 				select {
 				case sem <- struct{}{}:
@@ -724,7 +777,6 @@ func (l *listeners) serve(ctx context.Context, res *Resolver) {
 				}
 				go func() {
 					defer func() { <-sem }()
-					client := addrOf(from)
 					if resp := res.Handle(ctx, msg, client, 512); resp != nil {
 						_, _ = pc.WriteTo(resp, from)
 					}
@@ -744,7 +796,26 @@ func (l *listeners) serve(ctx context.Context, res *Resolver) {
 					}
 					continue
 				}
-				go serveTCP(ctx, c, res)
+				if !clients.allowed(addrOf(c.RemoteAddr())) {
+					c.Close()
+					continue
+				}
+				select {
+				case tcpSem <- struct{}{}:
+				default:
+					c.Close() // too many at once
+					continue
+				}
+				if !l.track(c) {
+					c.Close()
+					<-tcpSem
+					continue
+				}
+				l.wg.Add(1)
+				go func() {
+					defer func() { l.untrack(c); <-tcpSem; l.wg.Done() }()
+					serveTCP(ctx, c, res)
+				}()
 			}
 		}(ln)
 	}
@@ -761,7 +832,7 @@ func serveTCP(ctx context.Context, c net.Conn, res *Resolver) {
 	defer c.Close()
 	client := addrOf(c.RemoteAddr())
 	for i := 0; i < 100; i++ {
-		_ = c.SetDeadline(time.Now().Add(10 * time.Second))
+		_ = c.SetDeadline(time.Now().Add(tcpIdle))
 		var l [2]byte
 		if _, err := io.ReadFull(c, l[:]); err != nil {
 			return

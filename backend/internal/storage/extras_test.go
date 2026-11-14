@@ -222,6 +222,26 @@ func TestBootFrom(t *testing.T) {
 	if armBIOS.Why != "arch" {
 		t.Fatalf("arm without UEFI: %+v", armBIOS)
 	}
+
+	// A boot pool striped over two disks: only one would get a twin, so
+	// it isn't offered (it would then say "mirrored" while half isn't).
+	second := Vdev{Name: "/dev/sdc3", Path: "/dev/sdc3", Type: "disk", Health: "ONLINE", Disk: "sdc"}
+	wide := Pool{Name: "rpool", Health: "ONLINE", Layout: "stripe", Vdevs: []Vdev{leaf, second}}
+	striped := bootFrom(&BootFacts{Source: "rpool/ROOT/debian", FSType: "zfs", EFI: true, Arch: "amd64"}, bootScan("sda", []Pool{wide}))
+	if striped.CanMirror || striped.Why != "unknown" {
+		t.Fatalf("two-disk stripe: %+v", striped)
+	}
+}
+
+func TestSnapLabelDots(t *testing.T) {
+	for _, s := range []string{".", ".."} {
+		if validSnapLabel(s) == nil {
+			t.Errorf("snapshot label %q accepted", s)
+		}
+	}
+	if validSnapLabel("before.upgrade") != nil {
+		t.Error("a dot inside a name is fine")
+	}
 }
 
 func TestSnapPlan(t *testing.T) {

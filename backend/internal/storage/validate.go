@@ -72,7 +72,7 @@ func ValidSnapshotName(full string) error {
 }
 
 func validSnapLabel(snap string) error {
-	if !segmentRe.MatchString(snap) || len(snap) > 64 {
+	if !segmentRe.MatchString(snap) || len(snap) > 64 || snap == "." || snap == ".." {
 		return bad("snapshot names use only letters, numbers and _ . : - (up to 64 characters)")
 	}
 	return nil

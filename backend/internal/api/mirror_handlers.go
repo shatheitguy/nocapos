@@ -257,6 +257,7 @@ func (s *Server) mirrorView(w http.ResponseWriter, r *http.Request) {
 				conn.Close(websocket.StatusGoingAway, "phone unlinked")
 				return
 			case o := <-v.Out:
+				v.Sent(o)
 				typ := websocket.MessageBinary
 				if o.Text {
 					typ = websocket.MessageText

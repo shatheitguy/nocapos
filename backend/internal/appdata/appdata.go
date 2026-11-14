@@ -259,8 +259,25 @@ func Check(src string, volume bool, protected, volumes []string) (string, error)
 		if files.Within(d, p) {
 			return "", errors.New("holds NoCapOS's own files")
 		}
+		// Inside a protected folder only an app's own folder may be opened
+		// (deploys keep their data under stacks/ or apps/); never NoCapOS's
+		// database, keys or program files next to them.
+		if files.Within(p, d) && !inVolumes && !appOwned(p, d) {
+			return "", errors.New("inside NoCapOS's own files")
+		}
 	}
 	return p, nil
+}
+
+// appOwned: p is inside d's stacks/ or apps/ folder (not that folder itself).
+func appOwned(p, d string) bool {
+	for _, sub := range []string{"stacks", "apps"} {
+		dir := filepath.Join(d, sub)
+		if files.Within(p, dir) && !files.Within(dir, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // isTop reports whether p is a filesystem's top ("/", "C:\").

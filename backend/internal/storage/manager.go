@@ -712,6 +712,12 @@ func (m *Manager) CreatePool(ctx context.Context, req CreatePoolRequest, done fu
 	if err := validCompression(req.Compression, false); err != nil {
 		return nil, err
 	}
+	// The same layout names as the dry run ("single" is a one-disk stripe).
+	layout, err := normLayout(req.Layout, len(req.Disks))
+	if err != nil {
+		return nil, err
+	}
+	req.Layout = layout
 	if err := validLayout(req.Layout, len(req.Disks)); err != nil {
 		return nil, err
 	}

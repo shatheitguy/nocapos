@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -103,6 +104,9 @@ func finish(ctx context.Context, cmd *exec.Cmd, maxOut int, stop func()) (RunRes
 // sandboxProps lock a transient systemd unit down: its own throwaway user,
 // no network, no devices, home folders hidden, the system read-only, and
 // memory, process and time limits.
+// sandboxHidden are hidden from sandboxed code ("-": fine if missing).
+var sandboxHidden = []string{"-/mnt", "-/media", "-/run/media", "-/srv"}
+
 func sandboxProps(timeout time.Duration) []string {
 	props := []string{
 		"DynamicUser=yes", "PrivateNetwork=yes", "PrivateTmp=yes", "PrivateDevices=yes", "PrivateUsers=yes",
@@ -112,6 +116,9 @@ func sandboxProps(timeout time.Duration) []string {
 		"RestrictSUIDSGID=yes", "RestrictRealtime=yes", "LockPersonality=yes", "CapabilityBoundingSet=",
 		"RestrictAddressFamilies=AF_UNIX", "MemoryMax=512M", "TasksMax=64", "CPUQuota=100%",
 		"WorkingDirectory=/tmp", "RuntimeMaxSec=" + strconv.Itoa(int(timeout/time.Second)+1),
+		// "No access to your files": storage pools, shares, mounted drives,
+		// cloud folders and app data live outside /home, often world-readable.
+		"InaccessiblePaths=" + strings.Join(sandboxHidden, " "),
 	}
 	out := make([]string, 0, 2*len(props))
 	for _, p := range props {
