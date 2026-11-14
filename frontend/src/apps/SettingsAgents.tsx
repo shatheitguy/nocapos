@@ -35,7 +35,8 @@ function copy(text: string, what: string) {
 }
 
 const emptyScopes = (): Scopes => ({ levels: {}, folders: [], auto: [] });
-const cloneScopes = (s: Scopes): Scopes => ({ levels: { ...s.levels }, folders: [...s.folders], auto: [...s.auto] });
+// The server may send null for an empty list; treat it as empty.
+const cloneScopes = (s: Scopes): Scopes => ({ levels: { ...(s.levels ?? {}) }, folders: [...(s.folders ?? [])], auto: [...(s.auto ?? [])] });
 
 const RISK_RANK: Record<Risk, number> = { none: 0, low: 1, medium: 2, high: 3 };
 
@@ -449,7 +450,7 @@ function ProfileEditor({
   onChange?: (s: Scopes) => void;
 }) {
   const t = useT();
-  const [s, setS] = useState<Scopes>(() => cloneScopes(initial));
+  const [s, setS] = useState<Scopes>(() => cloneScopes(initial ?? emptyScopes()));
   const [folder, setFolder] = useState('');
   const update = (next: Scopes) => {
     setS(next);
