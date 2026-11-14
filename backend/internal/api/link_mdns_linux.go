@@ -9,9 +9,10 @@ import (
 )
 
 // advertiseLink announces this server on the home network as a
-// _nocap._tcp service (through Avahi), so a linked phone finds it nearby
-// without knowing its address. The TXT record carries the NoCap ID and the
-// scheme; the phone still checks the ID and its pinned certificate.
+// _nocap._tcp service (through Avahi), so a phone finds it nearby without
+// knowing its address. The TXT record (linkTXT) carries the NoCap ID, the
+// scheme, the version and the setup state; the phone still checks the ID
+// and its pinned certificate. It starts over when any of that changes.
 func (s *Server) advertiseLink(ctx context.Context) {
 	port, open := listenPort(s.Config.ListenAddr)
 	if !open || port == "" || inContainer() {
@@ -29,15 +30,44 @@ func (s *Server) advertiseLink(ctx context.Context) {
 	if s.Config.TLSEnabled() {
 		scheme = "https"
 	}
-	name := "NoCap " + s.serverName()
 	for ctx.Err() == nil {
-		// Runs until we stop; restarts if Avahi does.
-		cmd := exec.CommandContext(ctx, bin, "-s", name, linkService, port, "nocap_id="+id, "scheme="+scheme)
-		_ = cmd.Run()
+		changed := s.discovery.wait()
+		name := "NoCap " + s.serverName()
+		args := append([]string{"-s", name, linkService, port}, linkTXT(id, scheme, s.Version, s.setupNew(ctx))...)
+		run, stop := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			// Runs until we stop it; restarts if Avahi does.
+			_ = exec.CommandContext(run, bin, args...).Run()
+			close(done)
+		}()
 		select {
 		case <-ctx.Done():
+			stop()
+			<-done
 			return
-		case <-time.After(30 * time.Second):
+		case <-changed:
+			stop()
+			<-done
+		case <-done:
+			stop()
+			select {
+			case <-ctx.Done():
+				return
+			case <-changed:
+			case <-time.After(30 * time.Second):
+			}
 		}
 	}
+}
+
+// browseNoCap lists the NoCap servers Avahi sees (parseNoCapBrowse reads it).
+func browseNoCap(ctx context.Context) (string, bool) {
+	bin, err := exec.LookPath("avahi-browse")
+	if err != nil {
+		return "", false
+	}
+	// -r resolve, -t stop after the first full list, -p parsable, -k no lookups.
+	out, _ := exec.CommandContext(ctx, bin, "-rtpk", linkService).Output()
+	return string(out), true
 }

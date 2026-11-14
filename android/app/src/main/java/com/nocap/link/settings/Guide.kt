@@ -170,6 +170,21 @@ object Guide {
             doLabel = { t("Turn on weather", "Enable weather") },
         )
         list += Item(
+            "nearby", perm("nearby").title, perm("nearby").why,
+            {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    listOf(t("Tap the button and Allow \"Nearby devices\".", "Tap the button and allow \"Nearby devices\"."))
+                } else {
+                    listOf(
+                        t("Tap the button and Allow location (it's only how Android unlocks Bluetooth scans here).", "Tap the button and allow location; on this Android version it's required for Bluetooth scanning."),
+                        t("Scanning also needs location switched on in quick settings while you look.", "Location services must also be on while scanning."),
+                    )
+                }
+            },
+            perm("nearby").granted, perm("nearby").grant,
+            doLabel = { t("Allow", "Allow") },
+        )
+        list += Item(
             "calendar", perm("calendar").title, perm("calendar").why,
             { listOf(t("Tap the button and Allow.", "Tap the button and choose Allow.")) },
             perm("calendar").granted, perm("calendar").grant,
