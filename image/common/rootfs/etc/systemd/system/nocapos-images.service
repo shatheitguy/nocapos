@@ -1,0 +1,20 @@
+# NoCapOS image: loads the container images that came with the image (the
+# remote desktop engine) into Docker, so they're there offline, then deletes
+# the archives. Runs on each boot until every archive has loaded.
+[Unit]
+Description=NoCapOS bundled container images
+After=docker.service docker.socket
+ConditionPathExistsGlob=/usr/lib/nocapos/images/*.tar.zst
+# Not in the live session of the installer ISO.
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/image/load-images.sh
+TimeoutStartSec=15min
+Nice=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
