@@ -97,6 +97,8 @@ libpam-systemd
 ?firmware-misc-nonfree
 ?wayvnc
 x11vnc
+?wl-clipboard
+?xclip
 ?systemd-zram-generator|zram-tools
 EOF
       ;;
@@ -139,6 +141,8 @@ mesa-libEGL
 mesa-libgbm
 ?wayvnc
 x11vnc
+?wl-clipboard
+?xclip
 ?zram-generator
 EOF
       ;;
@@ -175,6 +179,8 @@ xorg-server
 mesa
 ?wayvnc
 x11vnc
+?wl-clipboard
+?xclip
 ?zram-generator
 EOF
       ;;
@@ -304,6 +310,28 @@ EOF
 # render_autostart_hidden: an autostart entry that hides the system one.
 render_autostart_hidden() {
   printf '[Desktop Entry]\n# Hidden by NoCapOS (low-memory profile).\nType=Application\nName=Hidden\nHidden=true\n'
+}
+
+# render_clipboard_unit CAP: the desktop session's clipboard agent, a user
+# service started with every graphical sign-in. It shares this account's
+# clipboard with the person's phones through alfad's local socket (cap
+# clipboard agent picks wl-clipboard or xclip for the session).
+render_clipboard_unit() {
+  cat <<EOF
+# NoCapOS: shares the desktop clipboard with your own phones (written by install.sh).
+[Unit]
+Description=NoCap Desktop clipboard
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=$1 clipboard agent
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target
+EOF
 }
 
 # ---------------------------------------------------------------- the accent
