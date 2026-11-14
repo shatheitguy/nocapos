@@ -195,3 +195,7 @@
 }
 @keyframes ld-rise { from { transform: translateY(40px); opacity: 0; } }
 :root[data-reduce-motion] .ld-sheet { animation: none; }
+
+/* Settings: the Received folder */
+.recv-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+.recv-form input { flex: 1 1 160px; min-width: 0; max-width: 240px; }
