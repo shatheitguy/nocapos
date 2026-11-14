@@ -162,6 +162,7 @@ fun SettingsScreen(a: MainActivity) {
     var bindFor by remember { mutableStateOf<Gesture?>(null) }
     var resetAsk by remember { mutableStateOf(false) }
     var allowList by remember { mutableStateOf(false) }
+    var clipSkip by remember { mutableStateOf(false) }
     var viewCrash by remember { mutableStateOf<String?>(null) }
     var hideDrawerAsk by remember { mutableStateOf(false) }
     val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -364,9 +365,27 @@ fun SettingsScreen(a: MainActivity) {
             if (Opt.forward.v) Action(t("Pick which apps", "Choose apps")) { allowList = true }
             Toggle(
                 t("Shared clipboard", "Clipboard sync"),
-                t("Copy on NoCap OS → it lands here. Copy here → sent when NoCap OS opens, or use the “Send clipboard to NoCap” quick-settings tile (Android only lets apps in front read it).", "Clipboard from NoCap OS is copied here. Phone clipboard is sent when NoCap OS is opened, or from the quick-settings tile (Android only allows the app in front to read it)."),
+                t("Copy on NoCap OS → just paste here. Copy here → just paste on NoCap OS. Private stuff (passwords, codes) never leaves this phone.", "Text copied on NoCap OS is placed on this phone's clipboard, and text copied here is sent to NoCap OS. Content marked as sensitive is never sent."),
                 Opt.clipSync.v,
-            ) { Opt.clipSync.set(it); Sync.start(a) }
+            ) { Opt.clipSync.set(it); Sync.start(a); com.nocap.link.sync.ClipWatch.refresh() }
+            if (Opt.clipSync.v) {
+                val helper = remember(tick) { com.nocap.link.system.MirrorInput.available() }
+                Toggle(
+                    t("Send copies on their own", "Send copies automatically"),
+                    if (helper) t("Copy in any app and it's on NoCap OS a moment later. Waits while you're typing.", "Copies in other apps are sent a moment later, never while the keyboard is open.")
+                    else t("Needs NoCap OS on in Accessibility. Until then copies go when NoCap OS opens, or from the “Send clipboard to NoCap” tile.", "Requires NoCap OS in Accessibility settings. Until then, the clipboard is sent when NoCap OS is opened, or from the “Send clipboard to NoCap” tile."),
+                    Opt.clipAuto.v,
+                ) { on ->
+                    Opt.clipAuto.set(on)
+                    com.nocap.link.sync.ClipWatch.refresh()
+                    if (on && !helper) com.nocap.link.system.MirrorInput.accessibilitySettings(a)
+                }
+                Toggle(t("Pics too", "Include pictures"), t("Up to 10 MB, both ways.", "Pictures up to 10 MB, in both directions."), Opt.clipImages.v) { Opt.clipImages.set(it); Sync.start(a) }
+                Action(
+                    if (Opt.clipSkipApps.v.isEmpty()) t("Apps that never share", "Excluded apps")
+                    else t("Apps that never share (${Opt.clipSkipApps.v.size})", "Excluded apps (${Opt.clipSkipApps.v.size})"),
+                ) { clipSkip = true }
+            }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
             com.nocap.link.sync.LinkSettings(a)
             Toggle(
@@ -469,6 +488,7 @@ fun SettingsScreen(a: MainActivity) {
         }) { bindFor = null }
     }
     if (allowList) ForwardAppsDialog(a) { allowList = false }
+    if (clipSkip) ClipSkipDialog(a) { clipSkip = false }
     if (hideDrawerAsk) {
         AlertDialog(
             onDismissRequest = { hideDrawerAsk = false },
@@ -701,6 +721,39 @@ private fun BindDialog(a: MainActivity, g: Gesture, onPicked: (String) -> Unit, 
                         ) {
                             AppIcon(app, 30.dp)
                             Text(app.label, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text(t("Done", "Done"), color = NoCap.Red) } },
+    )
+}
+
+/** Shared clipboard: apps whose copies never leave this phone. */
+@Composable
+private fun ClipSkipDialog(a: MainActivity, onClose: () -> Unit) {
+    var q by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = NoCap.GlassStrong,
+        title = { Text(t("Never share copies from", "Don't share copies from"), style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column {
+                SearchField(q, { q = it }, t("Find an app", "Search apps"))
+                Spacer(Modifier.height(8.dp))
+                Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                    a.phoneApps.distinctBy { it.pkg }.filter { q.isBlank() || q.trim().lowercase() in it.label.lowercase() }.forEach { app ->
+                        val on = app.pkg in Opt.clipSkipApps.v
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                                Opt.clipSkipApps.set(if (on) Opt.clipSkipApps.v - app.pkg else Opt.clipSkipApps.v + app.pkg)
+                            }.padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppIcon(app, 30.dp)
+                            Text(app.label, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Switch(on, null, colors = SwitchDefaults.colors(checkedTrackColor = NoCap.Red, checkedThumbColor = Color.White))
                         }
                     }
                 }

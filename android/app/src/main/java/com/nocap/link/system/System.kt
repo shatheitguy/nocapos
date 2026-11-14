@@ -73,12 +73,20 @@ class DotsService : NotificationListenerService() {
 }
 
 /**
- * Double-tap to lock, the accessibility way (Android 9+). Opt-in: it does
- * nothing but lock the screen when the home screen asks it to.
+ * Double-tap to lock, the accessibility way (Android 9+). Opt-in: it locks
+ * the screen when the home screen asks it to, lets you control this phone
+ * while you mirror it, and, with the shared clipboard on, notices copies in
+ * other apps so they reach NoCap OS (see ClipWatch).
  */
 class LockService : AccessibilityService() {
-    override fun onServiceConnected() { instance = this }
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onServiceConnected() {
+        instance = this
+        com.nocap.link.sync.ClipWatch.configure(this)
+    }
+    // Only the shared clipboard listens (when it's on): it notices copies in other apps.
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null) runCatching { com.nocap.link.sync.ClipWatch.onEvent(this, event) }
+    }
     override fun onInterrupt() {}
     override fun onDestroy() { if (instance === this) instance = null; super.onDestroy() }
 
