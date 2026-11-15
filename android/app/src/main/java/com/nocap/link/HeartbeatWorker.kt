@@ -76,7 +76,7 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
                 val title = (if (Prefs.genz) n.genzTitle else null) ?: n.title
                 val body = (if (Prefs.genz) n.genzBody else null) ?: n.body
                 Notices.show(
-                    applicationContext, 1000 + (n.id % 10_000).toInt(), title.ifBlank { serverName.ifBlank { "NoCapOS" } }, body.ifBlank { serverName },
+                    applicationContext, 10_000 + (n.id % 5_000).toInt(), title.ifBlank { serverName.ifBlank { "NoCapOS" } }, body.ifBlank { serverName },
                     Intent(applicationContext, MainActivity::class.java).setAction(MainActivity.ACTION_HUB), server = true,
                 )
             }

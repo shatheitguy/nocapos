@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.repeatOnLifecycle
 
 /*
  * The NoCap OS component kit: the same pieces as the NoCapOS web desktop
@@ -288,3 +289,20 @@ fun RowScope.Grow() = Spacer(Modifier.weight(1f))
 /** A small vertical gap. */
 @Composable
 fun Gap(h: Dp = 12.dp) = Spacer(Modifier.height(h))
+
+/**
+ * Runs [block] every [ms] while the screen is visible (started), and stops
+ * while the app is in the background, so widgets don't poll for nothing.
+ */
+@Composable
+fun Every(ms: Long, vararg keys: Any?, block: suspend () -> Unit) {
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.LaunchedEffect(owner, *keys) {
+        owner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+            while (true) {
+                block()
+                kotlinx.coroutines.delay(ms)
+            }
+        }
+    }
+}

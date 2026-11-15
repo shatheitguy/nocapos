@@ -44,7 +44,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.nocap.link.ui.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -306,7 +306,7 @@ fun SettingsScreen(a: MainActivity) {
             Toggle(t("NoCap Link button", "Show NoCap Link button"), null, Opt.dockButtons.v) { Opt.dockButtons.set(it) }
             Toggle(t("Names under dock apps", "Dock labels"), null, Opt.dockLabels.v) { Opt.dockLabels.set(it) }
         },
-        Sec("desktop", t("The Roster", "App drawer"), t("Style, sort, look and hidden apps", "Drawer style, sort, look and hidden apps"), "drawer roster launchpad style paged grid list categories classic home pages library sort columns opacity blur recent hide hidden unhide") {
+        Sec("desktop", t("The Roster", "App drawer"), t("Style, sort, look and hidden apps", "Drawer style, sort, look and hidden apps"), "drawer roster style paged grid list categories classic home pages library sort columns opacity blur recent hide hidden unhide") {
             DrawerStylePicker()
             Spacer(Modifier.height(8.dp))
             SliderRow(t("Columns", "Columns"), Opt.drawerColumns.v.toFloat(), 3f..7f, "${Opt.drawerColumns.v}", steps = 3) { Opt.drawerColumns.set(it.toInt()) }

@@ -65,6 +65,10 @@ class MirrorService : Service() {
     private var projCb: MediaProjection.Callback? = null
     private var display: VirtualDisplay? = null
     private var codec: MediaCodec? = null
+    /** The encoder's input surface (released with the encoder). */
+    private var codecSurface: Surface? = null
+    /** Encoder errors this session: after a couple, pictures instead of video. */
+    private var codecErrors = 0
     private var reader: ImageReader? = null
     private var client: OkHttpClient? = null
     private var ws: WebSocket? = null
@@ -166,6 +170,8 @@ class MirrorService : Service() {
     /** (Re)starts the encoder or the picture reader at the screen's current size. Runs on [h]. */
     private fun startPipeline() {
         val p = projection ?: return
+        // Detach the display first: the old encoder's surface must not be drawn to after it's released.
+        display?.surface = null
         stopEncoder()
         screen = MirrorInput.screenSize(this)
         rot = rotation()
@@ -193,6 +199,7 @@ class MirrorService : Service() {
             }
             codec = c
             surface = c.createInputSurface()
+            codecSurface = surface
             c.start()
         }
         val d = display
@@ -233,7 +240,11 @@ class MirrorService : Service() {
                 override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {}
                 override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
                     com.nocap.link.system.CrashLog.warn("mirror codec", e)
-                    if (codec === this@MirrorService.codec) h.post { startPipeline() }
+                    if (codec === this@MirrorService.codec) h.post {
+                        // A codec that keeps failing: fall back to pictures rather than restart forever.
+                        if (++codecErrors >= 2) jpeg = true
+                        startPipeline()
+                    }
                 }
                 override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
                     if (codec !== this@MirrorService.codec) return
@@ -279,7 +290,15 @@ class MirrorService : Service() {
             val px = plane.pixelStride
             val rowW = plane.rowStride / px
             val bmp = Bitmap.createBitmap(rowW, img.height, Bitmap.Config.ARGB_8888)
-            bmp.copyPixelsFromBuffer(plane.buffer)
+            val buf = plane.buffer.apply { rewind() }
+            if (buf.remaining() >= bmp.byteCount) bmp.copyPixelsFromBuffer(buf)
+            else {
+                // Some phones don't pad the last row: copy into a full-size buffer first.
+                val full = java.nio.ByteBuffer.allocate(bmp.byteCount)
+                full.put(buf)
+                full.rewind()
+                bmp.copyPixelsFromBuffer(full)
+            }
             val crop = if (rowW != img.width) Bitmap.createBitmap(bmp, 0, 0, img.width, img.height) else bmp
             val out = ByteArrayOutputStream(64 * 1024)
             crop.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
@@ -325,6 +344,7 @@ class MirrorService : Service() {
         val c = codec
         codec = null
         if (c != null) { runCatching { c.stop() }; runCatching { c.release() } }
+        codecSurface?.let { sf -> codecSurface = null; runCatching { sf.release() } }
         reader?.let { r -> reader = null; r.setOnImageAvailableListener(null, null); runCatching { r.close() } }
         config = null
     }

@@ -1,5 +1,6 @@
 package com.nocap.link.sync
 
+import androidx.activity.compose.setContent
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationChannel
@@ -58,7 +59,7 @@ object Signins {
         if (newest > last) Prefs.lastSignin = newest
     }
 
-    private fun notifId(a: SigninAlert) = 3000 + (a.id % 10_000).toInt().let { if (it < 0) -it else it }
+    private fun notifId(a: SigninAlert) = 20_000 + (a.id % 5_000).toInt().let { if (it < 0) -it else it }
 
     private fun show(ctx: Context, a: SigninAlert) {
         if (!Notices.allowed(ctx)) return
@@ -138,7 +139,7 @@ object Signins {
 }
 
 /** "Not you? Sign it out": asks once, then ends that session on the server. */
-class SignOutActivity : Activity() {
+class SignOutActivity : androidx.activity.ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
@@ -146,24 +147,27 @@ class SignOutActivity : Activity() {
         val label = intent.getStringExtra(LABEL).orEmpty()
         val notif = intent.getIntExtra(NOTIF, 0)
         if (sid.isBlank()) { finish(); return }
-        AlertDialog.Builder(this)
-            .setTitle(t("Sign it out?", "Sign out this session?"))
-            .setMessage(
-                t(
-                    "$label gets kicked off your NoCap account right now. If it was you, just sign in again.",
-                    "$label will be signed out of your NoCap account right away. If it was you, you can sign in again.",
-                ),
-            )
-            .setPositiveButton(t("Sign it out", "Sign out")) { _, _ ->
-                Signins.end(this, sid) { ok, msg ->
-                    Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
-                    if (ok && notif != 0) NotificationManagerCompat.from(applicationContext).cancel(notif)
-                    finish()
-                }
+        setContent {
+            com.nocap.link.ui.NoCapTheme {
+                com.nocap.link.ui.NcDialog(
+                    t("Sign it out?", "Sign out this session?"),
+                    t(
+                        "$label gets kicked off your NoCap account right now. If it was you, just sign in again.",
+                        "$label will be signed out of your NoCap account right away. If it was you, you can sign in again.",
+                    ),
+                    onDismiss = { finish() },
+                    confirm = t("Sign it out", "Sign out") to {
+                        Signins.end(this, sid) { ok, msg ->
+                            Toast.makeText(applicationContext, msg, Toast.LENGTH_SHORT).show()
+                            if (ok && notif != 0) NotificationManagerCompat.from(applicationContext).cancel(notif)
+                            finish()
+                        }
+                    },
+                    dismiss = t("Nah, it was me", "Cancel") to { finish() },
+                    danger = true,
+                )
             }
-            .setNegativeButton(t("Nah, it was me", "Cancel")) { _, _ -> finish() }
-            .setOnCancelListener { finish() }
-            .show()
+        }
     }
 
     companion object {
