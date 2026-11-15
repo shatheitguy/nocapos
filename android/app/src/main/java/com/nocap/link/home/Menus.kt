@@ -355,7 +355,7 @@ fun WindowFrame(title: @Composable () -> Unit, onClose: (() -> Unit)?, modifier:
 fun CustomizeApp(a: MainActivity, app: PhoneApp) {
     var label by remember(app.key) { mutableStateOf(com.nocap.link.data.Opt.customLabels.v[app.key] ?: app.label) }
     fun close() { a.customizing = null }
-    androidx.compose.material3.AlertDialog(
+    com.nocap.link.ui.AlertDialog(
         onDismissRequest = ::close,
         containerColor = NoCap.GlassStrong,
         title = { Text(t("Make it yours", "Customize app"), style = MaterialTheme.typography.titleMedium) },

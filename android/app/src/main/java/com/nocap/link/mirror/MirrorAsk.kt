@@ -1,5 +1,6 @@
 package com.nocap.link.mirror
 
+import androidx.activity.compose.setContent
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationChannel
@@ -87,10 +88,11 @@ object MirrorAsk {
  * "<server> wants to mirror your screen": the in-app yes/no, then Android's
  * own screen-capture prompt. Asked again for every session.
  */
-class MirrorConsentActivity : Activity() {
+class MirrorConsentActivity : androidx.activity.ComponentActivity() {
     private var ask: String? = null
     private var decided = false
-    private var dialog: AlertDialog? = null
+    /** The NoCap yes/no card is showing. */
+    private val asking = androidx.compose.runtime.mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,6 +103,7 @@ class MirrorConsentActivity : Activity() {
         // Over the lock screen, like an incoming call.
         if (Build.VERSION.SDK_INT >= 27) { setShowWhenLocked(true); setTurnScreenOn(true) }
         if (MirrorService.running || runCatching { Vault.get(this).link }.getOrNull() == null) { decided = true; finish(); return }
+        setContent { com.nocap.link.ui.NoCapTheme { if (asking.value) AskCard() } }
         if (savedInstanceState != null) return // rotated: the choice (or Android's prompt) is already on its way
         MirrorAsk.postState(this, "asking", ask)
         // "Accept" on the notification: straight to Android's own prompt.
@@ -114,10 +117,11 @@ class MirrorConsentActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (!decided && dialog?.isShowing != true) show()
+        if (!decided) asking.value = true
     }
 
-    private fun show() {
+    @androidx.compose.runtime.Composable
+    private fun AskCard() {
         val link = runCatching { Vault.get(this).link }.getOrNull()
         val server = MirrorAsk.serverName(link)
         val who = link?.username?.takeIf { it.isNotBlank() }
@@ -131,20 +135,19 @@ class MirrorConsentActivity : Activity() {
                 "View only: to control this phone from NoCap OS, turn on NoCap OS in Accessibility settings (for sideloaded installs, first choose App info → ⋮ → Allow restricted settings).",
             )
         }
-        val b = AlertDialog.Builder(this)
-            .setTitle(t("$server wants to mirror your screen", "$server wants to mirror your screen"))
-            .setMessage(msg)
-            .setPositiveButton(t("Let it", "Accept")) { _, _ -> accept() }
-            .setNegativeButton(t("Nah", "Decline")) { _, _ -> decline() }
-            .setOnCancelListener { decline() }
-        if (!MirrorInput.available()) {
-            b.setNeutralButton(t("Accessibility", "Accessibility settings")) { _, _ -> MirrorInput.accessibilitySettings(this) }
-        }
-        dialog = b.show()
+        com.nocap.link.ui.NcDialog(
+            t("$server wants to mirror your screen", "$server wants to mirror your screen"),
+            msg,
+            onDismiss = { decline() },
+            confirm = t("Let it", "Accept") to { accept() },
+            dismiss = t("Nah", "Decline") to { decline() },
+            extra = if (MirrorInput.available()) emptyList() else listOf(t("Accessibility", "Accessibility settings") to { MirrorInput.accessibilitySettings(this) }),
+        )
     }
 
     private fun accept() {
         decided = true
+        asking.value = false
         // Locked: unlock first (Android asks for the PIN), then the capture prompt.
         val km = getSystemService(android.app.KeyguardManager::class.java)
         if (Build.VERSION.SDK_INT >= 26 && km?.isKeyguardLocked == true) {
@@ -177,6 +180,7 @@ class MirrorConsentActivity : Activity() {
     private fun decline() {
         if (decided) return
         decided = true
+        asking.value = false
         MirrorAsk.postState(this, "denied", ask)
         finish()
     }
@@ -200,8 +204,6 @@ class MirrorConsentActivity : Activity() {
     }
 
     override fun onDestroy() {
-        dialog?.setOnCancelListener(null)
-        dialog?.dismiss()
         if (!decided && isFinishing) MirrorAsk.postState(this, "denied", ask)
         super.onDestroy()
     }

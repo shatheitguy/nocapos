@@ -243,7 +243,7 @@ object Sync {
                 val title = (if (Prefs.genz) n.genzTitle else null) ?: n.title
                 val body = (if (Prefs.genz) n.genzBody else null) ?: n.body
                 Notices.show(
-                    ctx, 1000 + (n.id % 10_000).toInt(), title.ifBlank { "NoCapOS" }, body,
+                    ctx, 10_000 + (n.id % 5_000).toInt(), title.ifBlank { "NoCapOS" }, body,
                     Intent(ctx, MainActivity::class.java).setAction(MainActivity.ACTION_HUB), server = true,
                 )
             }
@@ -345,7 +345,19 @@ object Sync {
             }
             return
         }
-        val text = runCatching { item.coerceToText(ctx)?.toString() }.getOrNull().orEmpty()
+        // Plain text is right there; anything else (a content link) is read off the main thread.
+        val plain = item.text?.toString()
+        if (plain == null && (item.uri != null || item.intent != null)) {
+            scope.launch {
+                val text = runCatching { item.coerceToText(ctx)?.toString() }.getOrNull().orEmpty()
+                withContext(Dispatchers.Main) { sendText(ctx, api, text, force, done) }
+            }
+            return
+        }
+        sendText(ctx, api, plain.orEmpty(), force, done)
+    }
+
+    private fun sendText(ctx: Context, api: NoCapApi, text: String, force: Boolean, done: ((Boolean, String) -> Unit)?) {
         if (text.isBlank()) { done?.invoke(false, t("Clipboard's empty.", "The clipboard is empty.")); return }
         if (!ClipRules.textFits(text)) { done?.invoke(false, t("Too long to send (1 MB max).", "The text is too long to send (up to 1 MB).")); return }
         if (!force && (text.hashCode() == lastClipHash || text == ourClip)) return

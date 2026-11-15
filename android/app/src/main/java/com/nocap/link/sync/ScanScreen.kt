@@ -127,7 +127,8 @@ private fun CameraScanner(onResult: (Uri) -> Unit, onError: (String) -> Unit) {
                     // decode() always closes the frame.
                     decode(img, reader)?.let { text ->
                         val uri = runCatching { Uri.parse(text) }.getOrNull() ?: return@let
-                        if (uri.scheme == "nocap" && done.compareAndSet(false, true)) {
+                        // Only pairing codes stop the scan; any other code keeps it going.
+                        if (uri.scheme == "nocap" && uri.host == "pair" && done.compareAndSet(false, true)) {
                             ContextCompat.getMainExecutor(ctx).execute { if (!disposed.get()) onResult(uri) }
                         }
                     }
