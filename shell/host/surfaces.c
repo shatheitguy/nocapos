@@ -496,7 +496,6 @@ make_settings(void)
   webkit_settings_set_allow_universal_access_from_file_urls(st, FALSE);
   webkit_settings_set_enable_write_console_messages_to_stdout(st, shell.debug);
   webkit_settings_set_enable_page_cache(st, FALSE);
-  webkit_settings_set_enable_hyperlink_auditing(st, FALSE);
   webkit_settings_set_enable_media_stream(st, FALSE);
   webkit_settings_set_enable_encrypted_media(st, FALSE);
   webkit_settings_set_enable_back_forward_navigation_gestures(st, FALSE);

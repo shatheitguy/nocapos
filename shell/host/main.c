@@ -92,6 +92,8 @@ main(int argc, char **argv)
   const char *mode = NULL, *arg = NULL;
   for (int i = 1; i < argc; i++) {
     const char *a = argv[i];
+    if (a[0] == 0)
+      continue;
     if (strcmp(a, "--greeter") == 0) {
       mode = "greeter";
     } else if ((strcmp(a, "--app") == 0 || strcmp(a, "--toggle") == 0 || strcmp(a, "--show") == 0 ||
@@ -106,6 +108,7 @@ main(int argc, char **argv)
       g_print("nocap-shell %s\n", NOCAP_VERSION);
       return 0;
     } else {
+      g_printerr("nocap-shell: unknown option '%s'\n", a);
       usage();
       return 2;
     }
