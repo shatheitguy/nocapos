@@ -93,7 +93,10 @@ private fun Dp.sp(density: androidx.compose.ui.unit.Density) = with(density) { t
 
 // ---------- clock ----------
 
-val clockFaces = listOf("glow", "digital", "analog", "stacked", "minimal")
+/** New clocks look like the web OS clock widget (light, big digits, the date under them). */
+const val CLOCK_FACE = "minimal"
+
+val clockFaces = listOf("minimal", "glow", "digital", "analog", "stacked")
 
 fun faceName(f: String) = when (f) {
     "glow" -> t("NoCap Glow", "NoCap glow")
@@ -107,7 +110,7 @@ fun faceName(f: String) = when (f) {
 fun ClockWidget(a: MainActivity, item: NoCapItem) {
     val ctx = LocalContext.current
     val density = LocalDensity.current
-    val face = item.opt("face", "glow")
+    val face = item.opt("face", CLOCK_FACE)
     val secs = item.flag("seconds", false) || face == "analog"
     var now by remember { mutableStateOf(Date()) }
     LaunchedEffect(secs) { while (true) { now = Date(); val step = if (secs) 1000L else 60_000L; delay(step - System.currentTimeMillis() % step) } }
@@ -564,7 +567,7 @@ fun PhotoWidget(a: MainActivity, item: NoCapItem) {
     // Scaled down and cached by Photos.load, so rotating frames don't decode full-size pictures again.
     LaunchedEffect(name) { bmp = withContext(Dispatchers.IO) { Photos.load(ctx, name)?.asImageBitmap() } }
     Box(
-        Modifier.fillMaxSize().clip(shape).border(1.dp, NoCap.Red.copy(alpha = if (item.flag("glow", true)) 0.4f else 0f), shape)
+        Modifier.fillMaxSize().clip(shape).border(1.dp, NoCap.Red.copy(alpha = if (item.flag("glow", false)) 0.4f else 0f), shape)
             .clickable {
                 runCatching {
                     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", File(Photos.dir(ctx), name))

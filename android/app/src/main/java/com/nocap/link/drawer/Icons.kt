@@ -228,10 +228,10 @@ fun AppTile(
 
 /** A folder: a glass tile with up to four little icons (grid) or a fanned stack. */
 @Composable
-fun FolderTile(name: String, apps: List<PhoneApp>, size: Dp = Opt.iconSize.v.dp, label: Boolean = Opt.labels.v, onWallpaper: Boolean = true, labelWidth: Dp = size + 26.dp) {
+fun FolderTile(name: String, apps: List<PhoneApp>, size: Dp = Opt.iconSize.v.dp, label: Boolean = Opt.labels.v, onWallpaper: Boolean = true, labelWidth: Dp = size + 26.dp, webLook: Boolean = false) {
     Column(Modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         val shape = iconShape(size, nocapDefault = true) ?: RoundedCornerShape(size * 0.28f)
-        if (Opt.folderStyle.v == FolderStyle.STACK) {
+        if (Opt.folderStyle.v == FolderStyle.STACK && !webLook) {
             Box(Modifier.size(size), contentAlignment = Alignment.Center) {
                 val shown = apps.take(3).reversed()
                 shown.forEachIndexed { i, app ->
@@ -240,10 +240,14 @@ fun FolderTile(name: String, apps: List<PhoneApp>, size: Dp = Opt.iconSize.v.dp,
                 }
             }
         } else {
-            Box(Modifier.size(size).nocapTile(shape, NoCap.Red, NoCap.light).padding(size * 0.12f)) {
+            // The web OS folder icon: a frosted square with up to four little app icons.
+            Box(
+                Modifier.size(size).clip(shape).background(Color.White.copy(alpha = if (NoCap.light) 0.55f else 0.2f))
+                    .border(1.dp, Color.White.copy(alpha = 0.24f), shape).padding(size * 0.12f),
+            ) {
                 val mini = size * 0.34f
                 apps.take(4).forEachIndexed { i, app ->
-                    Box(Modifier.offset(x = (size * 0.4f) * (i % 2), y = (size * 0.4f) * (i / 2))) { Image(app.icon, null, Modifier.size(mini)) }
+                    Box(Modifier.offset(x = (size * 0.42f) * (i % 2), y = (size * 0.42f) * (i / 2))) { AppIcon(app, mini) }
                 }
             }
         }
