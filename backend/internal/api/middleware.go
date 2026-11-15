@@ -178,7 +178,7 @@ func (s *Server) requestLogger(next http.Handler) http.Handler {
 		}
 		dur := time.Since(start)
 		level := slog.LevelInfo
-		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && rec.status < 400 && dur <= slowRequest {
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead || r.URL.Path == "/dns-query") && rec.status < 400 && dur <= slowRequest {
 			level = slog.LevelDebug
 		}
 		s.Log.Log(r.Context(), level, "http",

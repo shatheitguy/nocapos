@@ -151,10 +151,11 @@ private fun cats() = listOf(
     Cat("notifications", t("Yap Control", "Notifications"), t("Server tea here, phone notifs there", "Server notifications and forwarding"), "bell", Color(0xFFFF3B30)),
     Cat("lock", t("Lock In", "Lock Screen"), t("The NoCap layer over your lock screen", "The NoCap lock screen layer"), "lock", Color(0xFF48484A)),
     Cat("privacy", t("Privacy", "Privacy & Permissions"), t("What NoCap OS can use, and why", "Permissions and what each is for"), "shield", Color(0xFF30A0FF)),
+    Cat("shield", "Shield", t("Ad blocker and app firewall for this phone", "DNS filter and app firewall"), "shield", Color(0xFFE8232B)),
 )
 
 /** Web-style groups of categories on the Settings home page. */
-private val catGroups = listOf(listOf("devices"), listOf("general", "appearance", "desktop", "gestures"), listOf("notifications", "lock", "privacy"))
+private val catGroups = listOf(listOf("devices"), listOf("general", "appearance", "desktop", "gestures"), listOf("notifications", "lock", "privacy", "shield"))
 
 /** Can the app drawer still be opened without the dock button? */
 private fun drawerReachable(): Boolean =
@@ -436,6 +437,9 @@ fun SettingsScreen(a: MainActivity) {
             Action(t("Load from a file", "Import from a file")) { a.importFromFile() }
             Action(t("Reset settings to default", "Reset all settings"), danger = true) { resetAsk = true }
             Hint(t("Android widgets and custom icons stay put — they belong to this phone.", "Android widgets and custom icons aren't included; they belong to this phone."))
+        },
+        Sec("shield", "Shield", t("Ads, trackers and apps, blocked on this phone", "DNS filter and app firewall"), "shield ad blocker ads trackers dns filter firewall vpn block apps wifi mobile data always-on") {
+            com.nocap.link.shield.ShieldSettingsCard(a, tick)
         },
         Sec("privacy", t("Permissions", "Permissions"), t("What NoCap OS can use, and why", "What each permission is for"), "permissions privacy camera notifications location calendar accessibility device admin notification access do not disturb lock home default launcher battery install unknown setup guide restricted weather collect") {
             val missing = remember(tick) { com.nocap.link.settings.Permissions.missingCore(a) }

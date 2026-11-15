@@ -106,6 +106,7 @@ type Server struct {
 	localAddr        *localAddrState // containers' local addresses (*.nocap.local)
 	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
 	pulls            pullJobs        // image downloads in progress
+	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -494,6 +495,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Shield: firewall and DNS ad blocker (admin, audited).
 	s.shieldRoutes(mux)
+	s.dohRoutes(mux) // and DNS-over-HTTPS for linked phones (/dns-query)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.
