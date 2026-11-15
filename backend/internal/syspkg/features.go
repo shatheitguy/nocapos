@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 )
 
 // Feature is a group of host packages a NoCapOS feature needs. The installer
@@ -12,11 +13,16 @@ import (
 type Feature struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
-	// Bins are the programs that show the feature is installed.
+	// Bins are the programs that show the feature is installed ("a/b":
+	// either one).
 	Bins []string `json:"-"`
-	// Packages per package manager; a manager without an entry can't install it.
+	// Packages per package manager; a manager without an entry can't
+	// install it. "a/b" installs whichever of a and b is available.
 	Packages Names `json:"-"`
 }
+
+// Alternatives splits a "a/b" entry of Bins or Packages.
+func Alternatives(entry string) []string { return strings.Split(entry, "/") }
 
 // Features lists the host packages NoCapOS installs, in install order.
 var Features = []Feature{
@@ -41,8 +47,9 @@ var Features = []Feature{
 	{
 		// WS-Discovery: the server shows up in Windows' Network view while
 		// SMB sharing is on (NoCapOS starts and stops it).
-		ID: "discovery", Title: "Show up in Windows’ Network view (WS-Discovery)", Bins: []string{"wsdd"},
-		Packages: Names{"apt": {"wsdd"}, "dnf": {"wsdd"}, "pacman": {"wsdd"}, "zypper": {"wsdd"}},
+		// "wsdd/wsdd2": whichever of the two this distribution has.
+		ID: "discovery", Title: "Show up in Windows’ Network view (WS-Discovery)", Bins: []string{"wsdd/wsdd2"},
+		Packages: Names{"apt": {"wsdd/wsdd2"}, "dnf": {"wsdd"}, "pacman": {"wsdd"}, "zypper": {"wsdd"}},
 	},
 	{
 		ID: "remote-desktop", Title: "Remote Desktop engine (guacd with RDP and VNC)", Bins: []string{"guacd"},
@@ -85,16 +92,16 @@ var Features = []Feature{
 		Packages: Names{"apt": {"flatpak"}, "dnf": {"flatpak"}, "pacman": {"flatpak"}, "zypper": {"flatpak"}},
 	},
 	{
-		// Linux apps streamed into windows, the Linux Desktop app and
-		// viewing the server's own screen: a virtual display, a window
-		// manager, a panel with an app menu, a file manager, a terminal,
-		// a session bus and the VNC/noVNC stream.
-		ID: "linux-desktop", Title: "Full Linux desktop and app streams", Bins: []string{"Xvfb", "openbox", "x11vnc", "websockify"},
+		// Linux apps streamed into NoCapOS windows (webapps/app-stream.sh):
+		// a virtual display, a window manager that maximizes the app, and
+		// the VNC/noVNC stream. The physical screen is the native NoCap
+		// Desktop (deploy/desktop), which brings its own packages.
+		ID: "app-streams", Title: "Linux app streams (virtual display and VNC)", Bins: []string{"Xvfb", "openbox", "x11vnc", "websockify"},
 		Packages: Names{
-			"apt":    {"xvfb", "x11vnc", "novnc", "websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-x11", "dbus-user-session", "wayvnc"},
-			"dnf":    {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-x11", "wayvnc"},
-			"pacman": {"xorg-server-xvfb", "x11vnc", "novnc", "websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "wayvnc"},
-			"zypper": {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox", "lxpanel", "pcmanfm", "lxterminal", "dbus-1-x11", "wayvnc"},
+			"apt":    {"xvfb", "x11vnc", "novnc", "websockify", "openbox"},
+			"dnf":    {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox"},
+			"pacman": {"xorg-server-xvfb", "x11vnc", "novnc", "websockify", "openbox"},
+			"zypper": {"xorg-x11-server-Xvfb", "x11vnc", "novnc", "python3-websockify", "openbox"},
 		},
 	},
 }
@@ -113,7 +120,14 @@ func FeatureStates() []FeatureState {
 	for _, f := range Features {
 		st := FeatureState{Feature: f, Installed: true}
 		for _, b := range f.Bins {
-			if !hasBin(b) {
+			found := false
+			for _, alt := range Alternatives(b) {
+				if hasBin(alt) {
+					found = true
+					break
+				}
+			}
+			if !found {
 				st.Installed = false
 			}
 		}
