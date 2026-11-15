@@ -116,18 +116,32 @@ fun newId(): String = UUID.randomUUID().toString().take(12)
 object Home {
     var layout by mutableStateOf(Layout(listOf(Page()), emptyList()))
         private set
-    private var file: File? = null
-    var loaded = false
+    @Volatile private var file: File? = null
+
+    /** Compose state: the home screen shows a light placeholder until the saved layout is in. */
+    var loaded by mutableStateOf(false)
         private set
 
-    fun load(ctx: Context, firstRun: () -> Layout) {
-        if (loaded) return
+    /** What's on disk: the saved layout, or null on a first run (or after a corrupt file was set aside). */
+    class Saved(val file: File, val layout: Layout?)
+
+    /**
+     * Reads the saved layout. Disk work: call it off the main thread. A
+     * corrupt file is kept aside (not silently overwritten) and the home
+     * screen starts fresh.
+     */
+    fun readSaved(ctx: Context): Saved {
         val f = File(ctx.filesDir, "home_layout.json")
-        file = f
         val saved = runCatching { if (f.exists()) fromJson(JSONObject(f.readText())) else null }
-        // A corrupt file is kept aside (not silently overwritten) and the home screen starts fresh.
         if (saved.isFailure) runCatching { f.renameTo(File(f.parentFile, f.name + ".bad")) }
-        layout = saved.getOrNull() ?: firstRun().also { save(it) }
+        return Saved(f, saved.getOrNull())
+    }
+
+    /** Puts a layout read by [readSaved] on screen (main thread); [firstRun] builds one when there was none. */
+    fun install(s: Saved, firstRun: () -> Layout) {
+        if (loaded) return
+        file = s.file
+        layout = s.layout ?: firstRun().also { save(it) }
         loaded = true
     }
 

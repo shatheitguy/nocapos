@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.drawable.toBitmap
@@ -68,6 +69,7 @@ import com.nocap.link.home.NoCapItem
 import com.nocap.link.home.NoCapKinds
 import com.nocap.link.home.WidgetItem
 import com.nocap.link.ui.glass
+import com.nocap.link.ui.shellGlass
 import com.nocap.link.ui.Label
 import com.nocap.link.ui.NoCap
 import kotlinx.coroutines.Dispatchers
@@ -243,18 +245,21 @@ fun WidgetPicker(a: com.nocap.link.MainActivity, cellW: Float, cellH: Float, onN
     }
     Column(Modifier.fillMaxSize().background(NoCap.Sheet).statusBarsPadding().navigationBarsPadding().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(t("ADD WIDGETS", "WIDGETS"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, t("Close", "Close"), tint = NoCap.Text) }
+            Column(Modifier.weight(1f)) {
+                Text(t("Widgets", "Widgets"), style = MaterialTheme.typography.titleMedium.copy(fontSize = 22.sp))
+                Text(t("Tap one to drop it on this page.", "Tap a widget to add it to this page."), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted)
+            }
+            com.nocap.link.ui.ShellIconButton("close", t("Close", "Close")) { onClose() }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item { Label(t("NoCap widgets", "NoCap widgets"), color = NoCap.Red) }
+            item { Text(t("NoCap widgets", "NoCap widgets"), style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) }
             items(NoCapKinds.all.chunked(2)) { pair ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     pair.forEach { k -> Box(Modifier.weight(1f)) { NoCapCard(a, k, cellW, cellH) { w, h -> onNoCap(k, w, h) } } }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
-            item { Spacer(Modifier.height(4.dp)); Label(t("App widgets", "App widgets"), color = NoCap.Red) }
+            item { Spacer(Modifier.height(4.dp)); Text(t("App widgets", "App widgets"), style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)) }
             val list = rows
             if (list == null) {
                 item { Text(t("Loading the widget lineup…", "Loading widgets…"), style = MaterialTheme.typography.bodyMedium) }
@@ -268,7 +273,7 @@ fun WidgetPicker(a: com.nocap.link.MainActivity, cellW: Float, cellH: Float, onN
                             Spacer(Modifier.height(8.dp))
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 items(ws) { r ->
-                                    Column(Modifier.width(160.dp).glass(RoundedCornerShape(16.dp)).clickable { onPick(r.info) }.padding(10.dp)) {
+                                    Column(Modifier.width(160.dp).shellGlass(RoundedCornerShape(18.dp), com.nocap.link.ui.GlassLevel.MENU).clickable { onPick(r.info) }.padding(10.dp)) {
                                         Box(Modifier.fillMaxWidth().heightIn(min = 70.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x22FFFFFF)), contentAlignment = Alignment.Center) {
                                             r.preview?.let { Image(it, null, Modifier.size(120.dp, 90.dp), contentScale = ContentScale.Fit) }
                                         }
@@ -297,9 +302,9 @@ fun noCapWidgetName(kind: String) = com.nocap.link.widget.widgetName(kind)
 private fun NoCapCard(a: com.nocap.link.MainActivity, kind: String, cellW: Float, cellH: Float, onAdd: (Int, Int) -> Unit) {
     val (w, h) = NoCapKinds.size(kind).let { (w, h) -> w.coerceAtMost(com.nocap.link.data.Prefs.columns) to h }
     val sample = remember(kind) { NoCapItem("preview-$kind", Cell(0, 0, w, h), kind) }
-    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).clickable { onAdd(w, h) }.padding(10.dp)) {
+    Column(Modifier.fillMaxWidth().shellGlass(RoundedCornerShape(22.dp), com.nocap.link.ui.GlassLevel.MENU).clickable { onAdd(w, h) }.padding(10.dp)) {
         androidx.compose.foundation.layout.BoxWithConstraints(
-            Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x33000000)),
+            Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF0B0C10)),
             contentAlignment = Alignment.Center,
         ) {
             val pw = (cellW * w).dp

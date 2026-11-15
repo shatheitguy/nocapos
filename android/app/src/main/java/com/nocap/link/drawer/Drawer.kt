@@ -1,6 +1,27 @@
 package com.nocap.link.drawer
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.sp
+import com.nocap.link.data.RosterFolder
+import com.nocap.link.data.RosterFolders
+import com.nocap.link.ui.GlassLevel
+import com.nocap.link.ui.NcDialog
+import com.nocap.link.ui.NcIcon
+import com.nocap.link.ui.PillButton
+import com.nocap.link.ui.RosterSearch
+import com.nocap.link.ui.ShellDots
+import com.nocap.link.ui.ShellIconButton
+import com.nocap.link.ui.canBlur
+import com.nocap.link.ui.reducedMotion
+import com.nocap.link.ui.shellGlass
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -94,7 +115,7 @@ fun drawerApps(a: MainActivity): List<PhoneApp> {
 
 fun matches(app: PhoneApp, q: String) = q.isBlank() || q.trim().lowercase().let { s -> s in app.label.lowercase() || s in app.pkg.lowercase() }
 
-/** The app drawer, in the style picked in Settings. */
+/** The app drawer, in the style picked in Settings. The default (the roster) looks like the web OS launcher. */
 @Composable
 fun Drawer(a: MainActivity, ui: HomeUi, page: Int) {
     var q by remember { mutableStateOf("") }
@@ -103,25 +124,29 @@ fun Drawer(a: MainActivity, ui: HomeUi, page: Int) {
     val open: (PhoneApp) -> Unit = { a.launch(it); a.layer = Layer.NONE }
     val menu: (PhoneApp, Rect) -> Unit = { app, r -> ui.menu = Menu(app, null, r, From.DRAWER) }
     val style = Opt.drawer.v
+    val closeOnPull = Modifier.pointerInput(Unit) {
+        // Swipe down from the top closes it.
+        var dy = 0f
+        detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy > 220f) a.layer = Layer.NONE }) { _, d -> dy += d }
+    }
+    if (style == DrawerStyle.PAGED) {
+        Roster(a, ui, all, q, { q = it }, open, closeOnPull)
+        return
+    }
     Column(
         Modifier.fillMaxSize().background(NoCap.Bg.copy(alpha = Opt.drawerOpacity.v / 100f)).statusBarsPadding().navigationBarsPadding().padding(horizontal = 14.dp)
-            .pointerInput(Unit) {
-                // Swipe down from the top closes it.
-                var dy = 0f
-                detectVerticalDragGestures(onDragStart = { dy = 0f }, onDragEnd = { if (dy > 220f) a.layer = Layer.NONE }) { _, d -> dy += d }
-            },
+            .then(closeOnPull),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (style == DrawerStyle.CLASSIC) t("ALL APPS", "ALL APPS") else t("THE ROSTER", "LAUNCHPAD"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            IconButton(onClick = { a.layer = Layer.NONE }) { Icon(Icons.Filled.Close, t("Close", "Close"), tint = NoCap.Text) }
+            Text(if (style == DrawerStyle.CLASSIC) t("ALL APPS", "ALL APPS") else t("THE ROSTER", "APPS"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            ShellIconButton("close", t("Close", "Close")) { a.layer = Layer.NONE }
         }
-        SearchField(q, { q = it }, t("Search the roster (${all.size})", "Search ${all.size} apps"))
+        RosterSearch(q, { q = it }, t("Search the roster (${all.size})", "Search ${all.size} apps"))
         Spacer(Modifier.height(10.dp))
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 style == DrawerStyle.CLASSIC -> ClassicStyle(a, q, open, menu)
                 q.isNotBlank() -> GridStyle(shown, open, menu, recents = emptyList())
-                style == DrawerStyle.PAGED -> PagedStyle(shown, open, menu)
                 style == DrawerStyle.LIST -> ListStyle(shown, open, menu)
                 style == DrawerStyle.CATEGORIES -> CategoryStyle(a, shown, open, menu)
                 else -> GridStyle(shown, open, menu, recents = if (Opt.drawerRecents.v) Usage.recent(LocalContext.current, shown, Opt.drawerColumns.v) else emptyList())
@@ -132,54 +157,231 @@ fun Drawer(a: MainActivity, ui: HomeUi, page: Int) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DrawerTile(app: PhoneApp, open: (PhoneApp) -> Unit, menu: (PhoneApp, Rect) -> Unit, size: Dp = (Opt.iconSize.v - 4).dp, label: Boolean = Opt.labels.v, labelWidth: Dp = size + 22.dp) {
+fun DrawerTile(app: PhoneApp, open: (PhoneApp) -> Unit, menu: (PhoneApp, Rect) -> Unit, size: Dp = (Opt.iconSize.v - 4).dp, label: Boolean = Opt.labels.v, labelWidth: Dp = size + 22.dp, onWallpaper: Boolean = false) {
     var r by remember { mutableStateOf(Rect.Zero) }
     Box(
         Modifier.onGloballyPositioned { r = it.boundsInRoot() }.clip(RoundedCornerShape(14.dp))
             .combinedClickable(onClick = { open(app) }, onLongClick = { menu(app, r) }),
         contentAlignment = Alignment.Center,
-    ) { AppTile(app, size = size, label = label, onWallpaper = false, labelWidth = labelWidth) }
+    ) { AppTile(app, size = size, label = label, onWallpaper = onWallpaper, labelWidth = labelWidth) }
 }
 
 /** Icon size that fits [cols] columns in [width]. */
 private fun fitIcon(width: Dp, cols: Int): Dp = minOf(Opt.iconSize.v.dp - 4.dp, width / cols - 18.dp).coerceAtLeast(34.dp)
 
-/** NoCap Launchpad: a paged grid with page dots. */
+/** Something in the roster grid: a folder or an app. */
+private sealed interface RosterEntry {
+    val key: String
+    data class Folder(val folder: RosterFolder, val apps: List<PhoneApp>) : RosterEntry { override val key get() = "folder:" + folder.id }
+    data class App(val app: PhoneApp) : RosterEntry { override val key get() = app.key }
+}
+
+/**
+ * The roster, like the web OS launcher: a dimmed backdrop over the home
+ * screen, the "Search the roster" pill, pages of icons with dots, folders
+ * first, and the tip line at the bottom. Searching lists every match, folders
+ * or not.
+ */
 @Composable
-private fun PagedStyle(apps: List<PhoneApp>, open: (PhoneApp) -> Unit, menu: (PhoneApp, Rect) -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cols = Opt.drawerColumns.v
-        val icon = fitIcon(maxWidth, cols)
-        val lw = maxWidth / cols - 4.dp
-        val rowH = icon + if (Opt.labels.v) (Opt.labelSize.v + 24).dp else 16.dp
-        val rows = ((maxHeight - 28.dp) / rowH).toInt().coerceAtLeast(1)
-        val per = cols * rows
-        val pages = apps.chunked(per).ifEmpty { listOf(emptyList()) }
-        val pager = rememberPagerState { pages.size }
-        val scope = rememberCoroutineScope()
-        Column {
-            HorizontalPager(pager, Modifier.weight(1f)) { p ->
-                Column {
-                    // getOrElse: the list can shrink (search, uninstall) while the pager still shows an old page.
-                    pages.getOrElse(p) { emptyList() }.chunked(cols).forEach { row ->
-                        Row(Modifier.fillMaxWidth().height(rowH)) {
-                            row.forEach { app -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { DrawerTile(app, open, menu, icon, labelWidth = lw) } }
-                            repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+private fun Roster(
+    a: MainActivity, ui: HomeUi, all: List<PhoneApp>, q: String, setQ: (String) -> Unit,
+    open: (PhoneApp) -> Unit, closeOnPull: Modifier,
+) {
+    val menu: (PhoneApp, Rect) -> Unit = { app, r -> ui.menu = Menu(app, null, r, From.DRAWER) }
+    val folders = remember(Opt.rosterFolders.v) { RosterFolders.all }
+    val byKey = remember(all) { all.associateBy { it.key } }
+    // Apps that are gone (uninstalled or hidden) fall out of their folders.
+    LaunchedEffect(byKey.keys, folders) {
+        if (all.isEmpty()) return@LaunchedEffect
+        val pruned = RosterFolders.prune(folders, byKey.keys)
+        if (pruned != folders) RosterFolders.save(pruned)
+    }
+    val entries: List<RosterEntry> = remember(all, folders) {
+        val inside = RosterFolders.inFolders(folders)
+        folders.mapNotNull { f -> f.keys.mapNotNull { byKey[it] }.takeIf { it.isNotEmpty() }?.let { RosterEntry.Folder(f, it) } } +
+            all.filter { it.key !in inside }.map { RosterEntry.App(it) }
+    }
+    val blurOn = Opt.drawerBlur.v && canBlur()
+    val scrim = Color(0xFF080C18).copy(alpha = (Opt.drawerOpacity.v / 100f) * (if (blurOn) 0.42f else 0.8f))
+    val motion = !reducedMotion()
+    Box(Modifier.fillMaxSize().background(scrim)) {
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding().padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 10.dp).then(closeOnPull),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                RosterSearch(q, setQ, t("Search the roster", "Search apps"), Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(8.dp))
+                ShellIconButton("close", t("Close", "Close"), size = 40.dp, tint = Color.White) { a.layer = Layer.NONE }
+            }
+            Spacer(Modifier.height(18.dp))
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val cols = Opt.drawerColumns.v
+                val icon = fitIcon(maxWidth, cols)
+                val lw = maxWidth / cols - 6.dp
+                if (q.isNotBlank()) {
+                    val hits = all.filter { matches(it, q) }
+                    if (hits.isEmpty()) {
+                        Text(t("Nothing in the roster called “$q”.", "No apps match “$q”."), Modifier.fillMaxWidth().padding(top = 24.dp), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                    } else {
+                        LazyVerticalGrid(GridCells.Fixed(cols), contentPadding = PaddingValues(bottom = 16.dp)) {
+                            items(hits, key = { it.key }) { app -> RosterCell { DrawerTile(app, open, menu, icon, labelWidth = lw, onWallpaper = true) } }
+                        }
+                    }
+                    return@BoxWithConstraints
+                }
+                val rowH = icon + if (Opt.labels.v) (Opt.labelSize.v + 30).dp else 22.dp
+                val rows = (maxHeight / rowH).toInt().coerceIn(2, 7)
+                val pages = entries.chunked(cols * rows).ifEmpty { listOf(emptyList()) }
+                val pager = rememberPagerState { pages.size }
+                val scope = rememberCoroutineScope()
+                Column(Modifier.fillMaxSize()) {
+                    HorizontalPager(pager, Modifier.weight(1f), key = { it }) { p ->
+                        Column(Modifier.fillMaxSize()) {
+                            // getOrElse: the list can shrink (uninstall) while the pager still shows an old page.
+                            pages.getOrElse(p) { emptyList() }.chunked(cols).forEach { row ->
+                                Row(Modifier.fillMaxWidth().height(rowH)) {
+                                    row.forEach { e ->
+                                        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                                            when (e) {
+                                                is RosterEntry.App -> DrawerTile(e.app, open, menu, icon, labelWidth = lw, onWallpaper = true)
+                                                is RosterEntry.Folder -> RosterFolderTile(e, icon, lw) { ui.rosterFolder = e.folder.id }
+                                            }
+                                        }
+                                    }
+                                    repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                        }
+                    }
+                    if (pages.size > 1) {
+                        ShellDots(pages.size, pager.currentPage, Modifier.padding(top = 4.dp)) { i ->
+                            scope.launch { if (motion) pager.animateScrollToPage(i) else pager.scrollToPage(i) }
                         }
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().height(28.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                repeat(pages.size) { i ->
-                    val on = i == pager.currentPage
+            Text(
+                t(
+                    "Tip: hold an app to pin it, put it in a folder or yeet it · swipe down to close",
+                    "Tip: touch and hold an app to pin it, put it in a folder or remove it · swipe down to close",
+                ),
+                Modifier.fillMaxWidth().padding(top = 8.dp, start = 8.dp, end = 8.dp),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = Color.White.copy(alpha = 0.6f), textAlign = TextAlign.Center,
+            )
+        }
+        ui.rosterFolder?.let { id ->
+            val f = folders.firstOrNull { it.id == id }
+            if (f == null) LaunchedEffect(id) { ui.rosterFolder = null } else RosterFolderView(a, ui, f, byKey, open)
+        }
+    }
+}
+
+@Composable
+private fun RosterCell(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentAlignment = Alignment.Center) { content() }
+}
+
+/** A folder in the roster: the web OS folder icon (frosted square, four little icons) and its name. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RosterFolderTile(e: RosterEntry.Folder, size: Dp, labelWidth: Dp, onOpen: () -> Unit) {
+    Box(
+        Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onClick = onOpen, onLongClick = onOpen),
+        contentAlignment = Alignment.Center,
+    ) { FolderTile(e.folder.name, e.apps, size = size, labelWidth = labelWidth, webLook = true) }
+}
+
+/**
+ * An open roster folder, like the web OS folder view: a frosted card with
+ * the name (tap to rename) and its apps; "Ungroup" puts them back.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RosterFolderView(a: MainActivity, ui: HomeUi, f: RosterFolder, byKey: Map<String, PhoneApp>, open: (PhoneApp) -> Unit) {
+    var name by remember(f.id) { mutableStateOf(f.name) }
+    val apps = f.keys.mapNotNull { byKey[it] }
+    fun close() {
+        if (name.isNotBlank() && name.trim() != f.name) RosterFolders.save(RosterFolders.rename(RosterFolders.all, f.id, name))
+        ui.rosterFolder = null
+    }
+    BackHandler { close() }
+    Box(
+        Modifier.fillMaxSize().background(Color(0x99080C18)).clickable(remember { MutableInteractionSource() }, null) { close() }.padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.widthIn(max = 460.dp).fillMaxWidth().shellGlass(RoundedCornerShape(24.dp), GlassLevel.SHEET, edge = Color.White.copy(alpha = 0.18f))
+                .clickable(remember { MutableInteractionSource() }, null) {}.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BasicTextField(
+                name, { name = it.take(RosterFolders.MAX_NAME) }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).padding(vertical = 4.dp, horizontal = 8.dp),
+                textStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp, color = NoCap.Text, textAlign = TextAlign.Center),
+                cursorBrush = SolidColor(NoCap.Red),
+            )
+            Spacer(Modifier.height(10.dp))
+            LazyVerticalGrid(GridCells.Fixed(4), Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
+                items(apps, key = { it.key }) { app ->
+                    var r by remember { mutableStateOf(Rect.Zero) }
                     Box(
-                        Modifier.padding(horizontal = 4.dp).size(if (on) 9.dp else 7.dp).clip(RoundedCornerShape(50))
-                            .background(if (on) NoCap.Red else NoCap.Muted.copy(alpha = 0.5f))
-                            .clickable { scope.launch { pager.animateScrollToPage(i) } },
-                    )
+                        Modifier.onGloballyPositioned { r = it.boundsInRoot() }.clip(RoundedCornerShape(14.dp))
+                            .combinedClickable(onClick = { ui.rosterFolder = null; open(app) }, onLongClick = { ui.menu = Menu(app, null, r, From.ROSTER_FOLDER, rosterFolder = f.id) }),
+                        contentAlignment = Alignment.Center,
+                    ) { AppTile(app, size = 50.dp, onWallpaper = false, labelWidth = 72.dp) }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                PillButton(t("Ungroup", "Remove folder"), {
+                    RosterFolders.save(RosterFolders.delete(RosterFolders.all, f.id))
+                    ui.rosterFolder = null
+                    a.toast = t("Folder's gone. Apps are back in the roster.", "Folder removed. Its apps are back in the list.")
+                }, primary = false, icon = "folder")
+            }
+        }
+    }
+}
+
+/** "Add to a folder" from an app's menu in the roster: an existing folder, or a new one. */
+@Composable
+fun RosterFolderPicker(a: MainActivity, ui: HomeUi, app: PhoneApp) {
+    val folders = RosterFolders.all
+    var name by remember(app.key) { mutableStateOf("") }
+    fun done() { ui.folderPick = null }
+    NcDialog(
+        title = t("Add to a folder", "Add to folder"),
+        text = null,
+        onDismiss = ::done,
+        dismiss = t("Nah", "Cancel") to ::done,
+        confirm = t("New folder", "Create folder") to {
+            val n = name.trim().ifBlank { t("New folder", "New folder") }
+            val list = RosterFolders.create(RosterFolders.all, n, listOf(app.key))
+            RosterFolders.save(list)
+            ui.rosterFolder = list.last().id
+            done()
+        },
+    ) {
+        if (folders.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(NoCap.Field)) {
+                folders.forEach { f ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            RosterFolders.save(RosterFolders.add(RosterFolders.all, f.id, app.key))
+                            a.toast = t("${app.label} slid into ${f.name}.", "${app.label} added to ${f.name}.")
+                            done()
+                        }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        NcIcon("folder", NoCap.Muted, 18.dp)
+                        Text(f.name, Modifier.padding(start = 10.dp).weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${f.keys.size}", style = MaterialTheme.typography.labelMedium, color = NoCap.Muted)
+                    }
                 }
             }
         }
+        com.nocap.link.widget.Field(name, { name = it.take(RosterFolders.MAX_NAME) }, t("New folder name", "New folder name"))
     }
 }
 
