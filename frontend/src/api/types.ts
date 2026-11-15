@@ -97,7 +97,14 @@ export interface Container {
   created: string;
   ports: Port[];
   project?: string;
+  /** Compose service. */
+  service?: string;
   system: boolean;
+  image_id?: string;
+  /** Named volumes it uses. */
+  volumes?: string[] | null;
+  /** http(s)://<name>.nocap.local addresses that open it (when on). */
+  local_addresses?: string[] | null;
   labels: Record<string, string> | null;
   networks?: NetworkAttachment[] | null;
   /** Set while running. */
@@ -145,6 +152,20 @@ export interface ContainerDetail {
   system: boolean;
   mounts: { type: string; name?: string; source: string; destination: string; rw: boolean }[];
   networks: NetworkAttachment[];
+  cmd?: string[] | null;
+  entrypoint?: string[] | null;
+  working_dir?: string;
+  user?: string;
+  /** Values that look like secrets come back empty with secret: true. */
+  env?: { key: string; value: string; secret: boolean }[] | null;
+  memory_mb?: number;
+  cpus?: number;
+  pids_limit?: number;
+  read_only?: boolean;
+  cap_add?: string[] | null;
+  cap_drop?: string[] | null;
+  devices?: string[] | null;
+  local_addresses?: string[] | null;
 }
 
 export interface ContainerStats {

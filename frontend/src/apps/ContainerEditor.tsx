@@ -15,6 +15,7 @@ export function ContainerEditor({
   onClose,
   onSaved,
   onApplying,
+  addDevice,
 }: {
   /** null = a new container */
   containerId: string | null;
@@ -22,6 +23,8 @@ export function ContainerEditor({
   onSaved: () => void;
   /** Called just before an existing container is recreated (it stops on purpose). */
   onApplying?: (name: string) => void;
+  /** A device to add (from Containers → Devices), e.g. "/dev/serial/by-id/…:/dev/ttyUSB0". */
+  addDevice?: string;
 }) {
   const [spec, setSpec] = useState<ContainerSpec | null>(containerId ? null : emptySpec());
   const [original, setOriginal] = useState<ContainerSpec | null>(null);
@@ -38,8 +41,9 @@ export function ContainerEditor({
       void dockerApi.spec(containerId).then((r) => {
         if (!r.ok) return setError(r.error ?? 'Couldn’t read the container');
         const s = { ...r.data.spec, cap_add: r.data.spec.cap_add ?? [] };
-        setSpec(s);
         setOriginal(s);
+        const host = addDevice?.split(':')[0];
+        setSpec(addDevice && !s.devices.some((d) => d.split(':')[0] === host) ? { ...s, devices: [...s.devices, addDevice] } : s);
         setMeta({ app: r.data.app, service: r.data.service, stack: r.data.stack, system: r.data.system });
         const { app, service } = r.data;
         if (app && service) void storeApi.template(app).then((t) => t.ok && setAppInfo(t.data.services.find((x) => x.service === service) ?? null));
@@ -47,7 +51,7 @@ export function ContainerEditor({
     }
     void dockerApi.networks().then((r) => r.ok && setNetworks(r.data.networks));
     void dockerApi.volumes().then((r) => r.ok && setVolumes(r.data.volumes.map((v) => v.name)));
-  }, [containerId]);
+  }, [containerId, addDevice]);
 
   if (!spec) {
     return (
@@ -104,6 +108,7 @@ export function ContainerEditor({
             {meta.system && <p className="ce-note bad">This is one of NoCapOS's own containers; it can't be edited.</p>}
             {meta.stack && <p className="ce-note">This container belongs to the stack “{meta.stack}”. Edit the stack's compose file instead.</p>}
             {meta.app && <p className="ce-note">Changes are saved with the app, so they stick around when it updates.</p>}
+            {addDevice && <p className="ce-note">{tr('ctr.dev.editorNote', { flag: addDevice })}</p>}
             <SpecForm
               spec={spec}
               onChange={setSpec}
