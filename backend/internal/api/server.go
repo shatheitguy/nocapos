@@ -103,6 +103,7 @@ type Server struct {
 	linkFeed         linkFeed     // the person's phones changed, or handed a link over
 	mirror           mirrorState  // phone mirroring: rooms and viewer tickets
 	shield           *shieldState // Shield: firewall (ufw) and DNS blocker
+	dohS             dohState     // Shield on the phone: DNS-over-HTTPS for linked devices
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -489,6 +490,7 @@ func (s *Server) Handler() http.Handler {
 
 	// Shield: firewall and DNS ad blocker (admin, audited).
 	s.shieldRoutes(mux)
+	s.dohRoutes(mux) // and DNS-over-HTTPS for linked phones (/dns-query)
 
 	// Everything else: JSON 404 under /api, the embedded UI for GET/HEAD.
 	// A single catch-all avoids "GET /" vs "/api/" pattern conflicts.

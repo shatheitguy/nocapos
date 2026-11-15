@@ -77,6 +77,8 @@ type Service struct {
 	refreshing  bool
 	sets        map[string]*DomainSet // loaded lists by id
 	systemHooks bool                  // false in tests: never touch the host's resolver
+	personal    *personalStore        // people's and devices' own lists (DNS-over-HTTPS)
+	loopback    bool                  // tests: listen on 127.0.0.1 only
 }
 
 // listRedirect never lets a list fetched over https:// be handed over to
@@ -131,6 +133,14 @@ func (s *Service) Start(ctx context.Context) error {
 		q.db.Close()
 	}()
 	return nil
+}
+
+// TestMode keeps s away from this machine: it never touches the system's
+// resolver and only listens on 127.0.0.1 (tests in other packages).
+func (s *Service) TestMode() {
+	s.mu.Lock()
+	s.systemHooks, s.loopback = false, true
+	s.mu.Unlock()
 }
 
 // Settings returns the current settings.
@@ -198,7 +208,14 @@ func (s *Service) applyLocked(next Settings, boot bool) error {
 	restart := boot || s.srv == nil || prev.Listen != next.Listen || prev.Port != next.Port
 	if restart {
 		s.stopLocked()
-		srv, note, err := listen(next.Listen, next.Port)
+		var srv *listeners
+		var note string
+		var err error
+		if s.loopback {
+			srv, err = listenOn([]string{"127.0.0.1"}, next.Port)
+		} else {
+			srv, note, err = listen(next.Listen, next.Port)
+		}
 		s.listenNote = note
 		if err != nil {
 			s.listenErr = err.Error()
