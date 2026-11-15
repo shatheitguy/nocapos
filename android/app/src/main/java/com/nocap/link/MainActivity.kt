@@ -237,6 +237,17 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) { if (crashReport == null) crashReport = r }
         }
         handle(intent)
+        runCatching {
+            androidx.core.content.ContextCompat.registerReceiver(
+                this, packages,
+                android.content.IntentFilter().apply {
+                    addAction(Intent.ACTION_PACKAGE_ADDED); addAction(Intent.ACTION_PACKAGE_REMOVED)
+                    addAction(Intent.ACTION_PACKAGE_CHANGED); addAction(Intent.ACTION_PACKAGE_REPLACED)
+                    addDataScheme("package")
+                },
+                androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+            )
+        }
         setContent {
             // Rotation, and the status bar on the home screen, from Settings.
             val rot = Opt.rotation.v
@@ -296,6 +307,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(packages) }
+        super.onDestroy()
+    }
+
     override fun onStart() {
         super.onStart()
         runCatching { Widgets.host(this).startListening() }
@@ -321,10 +337,13 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumeTick++
-        reloadApps()
+        // Only when something changed: reading every app and icon on each return home was slow and reset drags.
+        if (appsDirty || phoneApps.isEmpty()) reloadApps()
         refresh()
         com.nocap.link.widget.Media.start(this)
-        Sync.start(this)
+        // Leaves a running connection alone: restarting it on every resume dropped requests.
+        Sync.ensure(this)
+        askNotificationsOnce()
         liveJob?.cancel()
         liveJob = lifecycleScope.launch {
             while (isActive) {
@@ -342,8 +361,20 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Reloads the app list (after installs, custom icons/names, or a new icon style). */
+    private var appsJob: kotlinx.coroutines.Job? = null
+    /** The app list needs reading again (first start, or an app was installed, updated or removed). */
+    @Volatile private var appsDirty = true
+    private val packages = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent?) {
+            appsDirty = true
+            if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) reloadApps()
+        }
+    }
+
     fun reloadApps() {
-        lifecycleScope.launch {
+        appsDirty = false
+        appsJob?.cancel()
+        appsJob = lifecycleScope.launch {
             val apps = withContext(Dispatchers.IO) { PhoneApps.load(this@MainActivity) }
             phoneApps = apps
             Home.load(this@MainActivity) { firstRun(apps) }
@@ -356,6 +387,19 @@ class MainActivity : ComponentActivity() {
         if (!Home.loaded) return
         val keep = Home.layout.pages.flatMap { p -> p.items.filterIsInstance<NoCapItem>().flatMap { it.opt("photos").split('|') } }.filter { it.isNotBlank() }.toSet()
         lifecycleScope.launch(Dispatchers.IO) { com.nocap.link.widget.Photos.prune(this@MainActivity, keep) }
+    }
+
+    /**
+     * Requests from NoCap OS (mirror my screen, ring, open) are notifications:
+     * once linked, Android 13+ has to allow them, so ask once (setup asks too).
+     */
+    private fun askNotificationsOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33 || Opt.notifAsked.v || screen is Screen.Setup) return
+        if (runCatching { vault.link }.getOrNull() == null) return
+        Opt.notifAsked.set(true)
+        askPermission(android.Manifest.permission.POST_NOTIFICATIONS) { ok ->
+            if (!ok) toast = t("Notifications are off, so NoCap OS asks can't reach you. Settings → Your Squad fixes it.", "Notifications are off, so requests from NoCap OS can't appear. Turn them on in Settings → Linked Devices.")
+        }
     }
 
     fun askPermission(perm: String, done: (Boolean) -> Unit) {
@@ -399,7 +443,8 @@ class MainActivity : ComponentActivity() {
 
     /** The drawer, or (with all apps on home pages) the Stash page (app groups). */
     fun openDrawer() {
-        if (Opt.drawer.v == DrawerStyle.HOME_PAGES) libraryTick++ else layer = Layer.DRAWER
+        // All apps on the home pages: those are the drawer, so "open the drawer" means search.
+        layer = if (Opt.drawer.v == DrawerStyle.HOME_PAGES) Layer.SEARCH else Layer.DRAWER
     }
 
     override fun onPause() {
@@ -470,7 +515,8 @@ class MainActivity : ComponentActivity() {
     private fun linked() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
-        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
+        Sync.start(this) // requests from NoCap OS start arriving now, not after the next restart
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.NOCAP)
         toast = t("Bet — you're on NoCap Link.", "Linked with NoCap Link.")
         refresh()
     }
@@ -479,12 +525,13 @@ class MainActivity : ComponentActivity() {
     fun linkedFromPhoneSetup() {
         HeartbeatWorker.schedule(this)
         HeartbeatWorker.now(this)
+        Sync.start(this)
         refresh()
     }
 
     /** Done setting up a new server from the phone. */
     fun phoneSetupFinished() {
-        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.GUIDE)
+        screen = if (vault.introDone) Screen.Home else Screen.Setup(SetupStep.NOCAP)
         toast = t("Your NoCap server is set up and linked. W.", "Your NoCap server is set up and linked.")
     }
 
@@ -509,7 +556,8 @@ class MainActivity : ComponentActivity() {
         }
         refreshJob?.cancel()
         refreshJob = lifecycleScope.launch {
-            val api = NoCapApi(link)
+            // A stored link that can't be used (no pin for https, say) must not crash every resume.
+            val api = runCatching { NoCapApi(link) }.getOrElse { server = ServerState.Offline(friendly(it)); return@launch }
             try {
                 val me = withContext(Dispatchers.IO) { api.me() }
                 val apps = withContext(Dispatchers.IO) { api.apps() }
@@ -627,7 +675,7 @@ class MainActivity : ComponentActivity() {
 
     fun pickToSend() {
         if (vault.link == null) { toast = t("Link your NoCap server first.", "Link a NoCap server first."); return }
-        sendPicker.launch(arrayOf("*/*"))
+        runCatching { sendPicker.launch(arrayOf("*/*")) }.onFailure { toast = t("No file picker on this phone.", "No file picker is available.") }
     }
 
     private fun sendUris(uris: List<Uri>) {
@@ -687,7 +735,7 @@ class MainActivity : ComponentActivity() {
 
     // ---------- wallpaper ----------
 
-    fun pickWallpaper() = customWallpaper.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+    fun pickWallpaper() { runCatching { customWallpaper.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }.onFailure { toast = t("No photo picker on this phone.", "No photo picker is available.") } }
 
     fun setPhoneWallpaper(home: Boolean, lock: Boolean) {
         lifecycleScope.launch {
@@ -734,8 +782,8 @@ class MainActivity : ComponentActivity() {
         toast = t("Layout's back. Like it never left.", "Layout restored.")
     }
 
-    fun exportToFile() = exportLayout.launch("nocap-os-layout.json")
-    fun importFromFile() = importLayout.launch(arrayOf("application/json", "text/plain", "*/*"))
+    fun exportToFile() { runCatching { exportLayout.launch("nocap-os-layout.json") }.onFailure { toast = t("No file picker on this phone.", "No file picker is available.") } }
+    fun importFromFile() { runCatching { importLayout.launch(arrayOf("application/json", "text/plain", "*/*")) }.onFailure { toast = t("No file picker on this phone.", "No file picker is available.") } }
 
     fun backupToServer() {
         val api = api() ?: return

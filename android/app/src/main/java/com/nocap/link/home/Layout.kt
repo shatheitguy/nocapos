@@ -137,9 +137,21 @@ object Home {
         save(clean)
     }
 
-    /** Writes to a temp file, then renames it over the old one, so a crash mid-write never leaves half a layout. */
+    private val saver = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val pending = java.util.concurrent.atomic.AtomicReference<Layout?>(null)
+
+    /**
+     * Saves off the main thread: one writer, and a burst of changes (placing
+     * every app, dragging) becomes one write of the newest layout.
+     */
     private fun save(l: Layout) {
         val f = file ?: return
+        if (pending.getAndSet(l) != null) return // a write is queued already; it takes the newest
+        saver.execute { pending.getAndSet(null)?.let { write(f, it) } }
+    }
+
+    /** Writes to a temp file, then renames it over the old one, so a crash mid-write never leaves half a layout. */
+    private fun write(f: File, l: Layout) {
         runCatching {
             val tmp = File(f.parentFile, f.name + ".tmp")
             tmp.writeText(toJson(l).toString())
@@ -241,6 +253,13 @@ object Home {
 
     fun addPage() = set(layout.copy(pages = layout.pages + Page()))
 
+    /** Empty pages at the end (left over from dragging past the edge) go; at least one page stays. */
+    fun trimEmptyTail(keep: Int = 1) {
+        var n = layout.pages.size
+        while (n > keep.coerceAtLeast(1) && layout.pages[n - 1].items.isEmpty()) n--
+        if (n < layout.pages.size) set(layout.copy(pages = layout.pages.take(n)))
+    }
+
     fun removePage(i: Int) {
         if (layout.pages.size <= 1) return
         set(layout.copy(pages = layout.pages.filterIndexed { idx, _ -> idx != i }))
@@ -267,8 +286,23 @@ object Home {
         val have = placedKeys()
         val missing = keys.filter { it !in have }
         if (missing.isEmpty()) return
+        // One layout change (and one save) for the whole batch, not one per app.
         val from = (layout.pages.size - 1).coerceAtLeast(0)
-        for (k in missing) addApp(k, from)
+        val cols = Prefs.columns.coerceAtLeast(1)
+        val rows = Prefs.rows.coerceAtLeast(1)
+        val pages = layout.pages.map { it.items.toMutableList() }.toMutableList()
+        var p = from
+        for (k in missing) {
+            var placed = false
+            while (!placed) {
+                if (p >= pages.size) pages.add(mutableListOf())
+                val items = pages[p]
+                val spot = (0 until rows).asSequence().flatMap { y -> (0 until cols).asSequence().map { x -> Cell(x, y) } }
+                    .firstOrNull { c -> items.none { it.cell.overlaps(c) } }
+                if (spot == null) p++ else { items += AppItem(newId(), spot, k); placed = true }
+            }
+        }
+        set(layout.copy(pages = pages.map { Page(it) }))
     }
 
     /** Removes apps that were uninstalled. */

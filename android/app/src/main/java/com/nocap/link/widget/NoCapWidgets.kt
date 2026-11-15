@@ -253,7 +253,7 @@ fun StatusWidget(a: MainActivity, item: NoCapItem, show: String) {
     val ctx = LocalContext.current
     val wantPhone = show != "server"
     val wantServer = show != "phone"
-    if (wantPhone) LaunchedEffect(Unit) { while (true) { DeviceStats.refresh(ctx); delay(2000) } }
+    if (wantPhone) com.nocap.link.ui.Every(2000) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DeviceStats.refresh(ctx) } }
     val title = when (show) {
         "server" -> t("Server Vibes", "Server status")
         "phone" -> t("This Phone", "This phone")
@@ -421,7 +421,7 @@ private fun PhoneBlock(modifier: Modifier, rich: Boolean, tall: Boolean = false,
 @Composable
 private fun StorageWidget(a: MainActivity, item: NoCapItem) {
     val ctx = LocalContext.current
-    LaunchedEffect(Unit) { while (true) { DeviceStats.refresh(ctx); delay(10_000) } }
+    com.nocap.link.ui.Every(10_000) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DeviceStats.refresh(ctx) } }
     val d = DeviceStats.snap
     val s = a.summary
     WSurface(item, onClick = { a.openSystem(android.provider.Settings.ACTION_INTERNAL_STORAGE_SETTINGS) }) {

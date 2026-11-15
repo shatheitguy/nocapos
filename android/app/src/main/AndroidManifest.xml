@@ -55,6 +55,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Finding your server on the home network (mDNS). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Requests from NoCap OS (mirror my screen) show over the lock screen, like a call. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- "Find my phone" vibrates too. -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Decline a call from NoCap OS (asked only when you turn calls on). -->
@@ -254,6 +256,8 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- Buttons on requests from NoCap OS (Decline a mirror ask). -->
+        <receiver android:name=".sync.RequestReceiver" android:exported="false" />
         <!-- Stop button of "Find my phone". -->
         <receiver android:name=".sync.FindPhoneStop" android:exported="false" />
 

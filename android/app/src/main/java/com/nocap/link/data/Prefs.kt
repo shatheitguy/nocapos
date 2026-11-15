@@ -140,7 +140,7 @@ object Opt {
     // Look
     val lingo = StrPref("lingo", "genz")
     val theme = EnumPref("theme_mode", ThemeMode.DARK, ThemeMode.entries.toTypedArray())
-    val accent = StrPref("accent", "#FF2A2A")
+    val accent = StrPref("accent", "#E8232B")
     val font = EnumPref("app_font", AppFont.NOCAP, AppFont.entries.toTypedArray())
     val haptics = BoolPref("haptics", true)
     val rotation = EnumPref("rotation", Rotation.AUTO, Rotation.entries.toTypedArray())
@@ -226,6 +226,9 @@ object Opt {
     // NoCap Link + one-offs (not part of a backup)
     val serverNotices = BoolPref("server_notices", false)
     val homeAsked = BoolPref("home_asked", false)
+    /** Asked once (when linked) for Android 13+'s notification permission, so requests can pop up. */
+    val notifAsked = BoolPref("notif_asked", false)
+    val notifAskedTwice = BoolPref("notif_asked_twice", false)
 
     // Phone style: language source, NoCap lock screen, control center (see lock/, control/)
     /** The server's language, for Language → "Same as my server" (refetched, so not backed up). */
@@ -305,6 +308,10 @@ object Prefs {
     val homeAsked get() = Opt.homeAsked.v
 
     private var sp: SharedPreferences? = null
+    val linkCursor: Long get() = sp?.getLong("link_cursor", 0) ?: 0
+    val linkCursorAt: Long get() = sp?.getLong("link_cursor_at", 0) ?: 0
+    fun setLinkCursor(c: Long, at: Long) { sp?.edit()?.putLong("link_cursor", c)?.putLong("link_cursor_at", at)?.apply() }
+
     var lastNotice: Long
         get() = sp?.getLong("last_notice", 0) ?: 0
         set(v) { sp?.edit()?.putLong("last_notice", v)?.apply() }
