@@ -65,7 +65,7 @@ static const char *const OPEN_APPS[] = {"settings", "appstore", "files", "home",
 static const ParamSpec P_NONE[] = {{NULL}};
 static const ParamSpec P_SURFACE[] = {
   {"name", PT_STRING, TRUE, 1, 32, SURFACE_NAMES, 0, 0}, {NULL}};
-static const ParamSpec P_SIZE[] = {{"height", PT_INT, TRUE, 1, 2000, NULL, 0, 0}, {NULL}};
+static const ParamSpec P_SIZE[] = {{"height", PT_INT, TRUE, 0, 2000, NULL, 0, 0}, {NULL}};
 static const ParamSpec P_APP[] = {{"id", PT_STRING, TRUE, 1, 255, NULL, 0, PF_DESKTOP_ID}, {NULL}};
 static const ParamSpec P_DOCK_SET[] = {
   {"pinned", PT_STRV, TRUE, 1, 255, NULL, 24, PF_DESKTOP_ID}, {NULL}};
@@ -102,7 +102,7 @@ static const MethodSpec methods[] = {
   {"surface.hide", S_SESSION, P_SURFACE},
   {"surface.toggle", S_SESSION, P_SURFACE},
   {"surface.size", S_BANNERS, P_SIZE},
-  {"apps.list", S_LAUNCHER | S_DOCK, P_NONE},
+  {"apps.list", S_LAUNCHER | S_DOCK | S_BAR, P_NONE},
   {"apps.launch", S_LAUNCHER | S_DOCK | S_CENTER, P_APP},
   {"dock.get", S_DOCK | S_LAUNCHER, P_NONE},
   {"dock.set", S_DOCK | S_LAUNCHER, P_DOCK_SET},

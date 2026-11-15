@@ -133,6 +133,7 @@ JsonNode *greeter_users_json(void);
 void greeter_login(const char *username, ShellReply *r);
 void greeter_respond(const char *response, gboolean has_response, ShellReply *r);
 void greeter_cancel(ShellReply *r);
+void greeter_power(const char *action, ShellReply *r);
 
 /* ---- control (control.c) ---- */
 void control_own(void);
