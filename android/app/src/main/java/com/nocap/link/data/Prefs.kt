@@ -191,6 +191,8 @@ object Opt {
     val drawerBlur = BoolPref("drawer_blur", true)
     val drawerRecents = BoolPref("drawer_recents", true)
     val hidden = SetPref("hidden")
+    /** Folders in the roster (JSON, see [RosterFolders]). */
+    val rosterFolders = StrPref("roster_folders", "[]")
 
     // Gestures
     val gestures = MapPref(
@@ -281,7 +283,7 @@ object Opt {
 
     /** Back to how NoCap OS ships (layout and link untouched). */
     fun resetAll() {
-        for (p in all) if (p.key !in skip && p.key != "hidden" && p.key != "custom_labels") p.reset()
+        for (p in all) if (p.key !in skip && p.key != "hidden" && p.key != "custom_labels" && p.key != "roster_folders") p.reset()
     }
 
     fun binding(g: Gesture): String = gestures.v[g.name] ?: Act.NONE.name
