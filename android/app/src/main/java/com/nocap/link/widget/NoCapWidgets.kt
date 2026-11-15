@@ -67,7 +67,9 @@ import com.nocap.link.MainActivity
 import com.nocap.link.Screen
 import com.nocap.link.ServerState
 import com.nocap.link.ui.Chip
+import com.nocap.link.ui.GlassLevel
 import com.nocap.link.ui.glass
+import com.nocap.link.ui.shellGlass
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.Orbitron
 import kotlinx.coroutines.delay
@@ -106,13 +108,14 @@ class WScope(val maxWidth: Dp, val maxHeight: Dp)
 
 @Composable
 fun WSurface(item: NoCapItem, onClick: (() -> Unit)?, pad: Dp = 12.dp, content: @Composable WScope.() -> Unit) {
+    // The web OS widget: frosted glass, 22 dp corners, a hairline edge (an accent glow only when asked for).
     val shape = RoundedCornerShape(22.dp)
     val accent = NoCap.Red
-    val glow = item.flag("glow", true)
+    val glow = item.flag("glow", false)
     val base = when (item.opt("bg", "glass")) {
         "solid" -> Modifier.clip(shape).background(NoCap.Card).border(1.dp, NoCap.GlassEdge, shape)
         "clear" -> Modifier
-        else -> Modifier.glass(shape, edge = if (glow) accent.copy(alpha = 0.32f) else NoCap.GlassEdge)
+        else -> Modifier.shellGlass(shape, GlassLevel.WIDGET, edge = if (glow) accent.copy(alpha = 0.32f) else null)
     }
     val glowMod = if (glow && item.opt("bg", "glass") != "clear") Modifier.drawBehind {
         drawRect(Brush.radialGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent), center = Offset(0f, 0f), radius = size.maxDimension * 0.8f))
@@ -122,15 +125,14 @@ fun WSurface(item: NoCapItem, onClick: (() -> Unit)?, pad: Dp = 12.dp, content: 
     ) { WScope(maxWidth, maxHeight).content() }
 }
 
-/** A widget title like the desktop's: red dot + Orbitron caps. */
+/** A widget title like the web desktop's widget head: semibold, one line, optional trailing bit. */
 @Composable
 fun WTitle(text: String, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(NoCap.Red))
         Text(
-            text.uppercase(), Modifier.weight(1f).padding(start = 7.dp),
-            style = MaterialTheme.typography.labelMedium.copy(fontFamily = Orbitron, fontSize = 9.sp, letterSpacing = 1.8.sp),
-            color = NoCap.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            text, Modifier.weight(1f),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
+            color = NoCap.Text, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         trailing?.invoke()
     }
@@ -233,15 +235,34 @@ fun Pill(text: String, onClick: () -> Unit) {
     )
 }
 
-/** A round glyph button (widget controls). */
+/** The web OS stroke icon for a control glyph, when there is one. */
+fun glyphIcon(glyph: String): String? = when (glyph) {
+    "⏮" -> "skipBack"
+    "⏭" -> "skipForward"
+    "▶" -> "play"
+    "❚❚" -> "pause"
+    "⚙" -> "settings"
+    "✕" -> "close"
+    "➤" -> "send"
+    "■" -> "stop"
+    "↻", "⟳" -> "restart"
+    "+" -> "plus"
+    else -> null
+}
+
+/** A round control button (widget controls), like the web OS's round icon buttons. */
 @Composable
 fun GlyphButton(glyph: String, label: String?, on: Boolean = false, size: Dp = 36.dp, onClick: () -> Unit) {
     Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(size).clip(CircleShape).background(if (on) NoCap.Red else NoCap.Red.copy(alpha = 0.16f))
-                .border(1.dp, NoCap.Red.copy(alpha = if (on) 0.9f else 0.35f), CircleShape),
+            Modifier.size(size).clip(CircleShape).background(if (on) NoCap.Red else NoCap.Text.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center,
-        ) { Text(glyph, style = MaterialTheme.typography.labelLarge.copy(fontFamily = Orbitron, fontSize = (size.value * 0.32f).sp), color = if (on) Color.White else NoCap.Red, maxLines = 1) }
+        ) {
+            val icon = glyphIcon(glyph)
+            val ink = if (on) Color.White else NoCap.Text
+            if (icon != null) com.nocap.link.ui.NcIcon(icon, ink, size * 0.46f)
+            else Text(glyph, style = MaterialTheme.typography.labelLarge.copy(fontFamily = Orbitron, fontSize = (size.value * 0.32f).sp), color = ink, maxLines = 1)
+        }
         if (label != null) Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

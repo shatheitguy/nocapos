@@ -48,12 +48,30 @@ object Weather {
 
     private val http = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(15, TimeUnit.SECONDS).build()
 
-    /** Latest reports, keyed by place, shared by every weather widget. */
+    /**
+     * Latest reports, keyed by place, shared by every weather widget. Compose
+     * state, so it is only ever written on the main thread ([publish]);
+     * [store] is the thread-safe copy that background fetches read.
+     */
     val reports = mutableStateMapOf<String, Report>()
+    private val store = java.util.concurrent.ConcurrentHashMap<String, Report>()
+    private val main by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     private fun key(p: Place, f: Boolean) = "%.2f,%.2f,%s".format(p.lat, p.lon, if (f) "f" else "c")
 
-    fun cached(p: Place, f: Boolean): Report? = reports[key(p, f)]
+    fun cached(p: Place, f: Boolean): Report? = store[key(p, f)] ?: reports[key(p, f)]
+
+    /** Runs [block] on the main thread: right away when already there, otherwise posted. */
+    private fun onMain(block: () -> Unit) {
+        val looper = android.os.Looper.getMainLooper()
+        if (looper == null || android.os.Looper.myLooper() == looper) block() else main.post(block)
+    }
+
+    /** Keeps a fresh report: the thread-safe store at once, the Compose state on the main thread. */
+    private fun publish(k: String, r: Report) {
+        store[k] = r
+        onMain { reports[k] = r }
+    }
 
     /** City search (blocking). */
     fun search(q: String): List<Place> {
@@ -94,7 +112,7 @@ object Weather {
             cur.optDouble("wind_speed_10m"), cur.optInt("relative_humidity_2m"),
             days.firstOrNull()?.hi ?: 0.0, days.firstOrNull()?.lo ?: 0.0, days, hours, System.currentTimeMillis(), f,
         )
-        reports[key(p, f)] = r
+        publish(key(p, f), r)
         return r
     }
 
@@ -130,7 +148,8 @@ object Weather {
             .mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
             .maxByOrNull { it.time } ?: return null
         val p = Place(t("Right here", "My location"), rough(loc.latitude), rough(loc.longitude))
-        Opt.weatherPlace.set(p.encode()) // remembered for home-screen widgets in other launchers
+        val code = p.encode()
+        onMain { Opt.weatherPlace.set(code) } // remembered for home-screen widgets in other launchers
         return p
     }
 
