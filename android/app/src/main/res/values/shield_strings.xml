@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shield_label">NoCap Shield</string>
+    <string name="shield_tile">Shield</string>
+    <string name="w_shield">NoCap Shield</string>
+    <string name="w_shield_desc">Shield on or off, and how much it blocked today</string>
+    <string name="shield_fgs_subtype">Ad, tracker and per-app blocking through Android\'s VPN slot, answered by your own NoCap server</string>
+</resources>

@@ -101,7 +101,7 @@ func TestQueryLogRowCap(t *testing.T) {
 	defer func() { maxLogRows = old }()
 	now := time.Now().UnixMilli()
 	for i := range 12 {
-		if _, err := l.db.Exec(`INSERT INTO queries VALUES (?, '', 'a.example', 'A', 'forwarded', '', '', 1, 'NOERROR')`, now-int64(12-i)); err != nil {
+		if _, err := l.db.Exec(`INSERT INTO queries (t, client, name, qtype, status, reason, upstream, ms, rcode) VALUES (?, '', 'a.example', 'A', 'forwarded', '', '', 1, 'NOERROR')`, now-int64(12-i)); err != nil {
 			t.Fatal(err)
 		}
 	}
