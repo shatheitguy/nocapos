@@ -172,6 +172,18 @@ func (c *Client) send(ctx context.Context, hc *http.Client, method, path string,
 }
 
 func (c *Client) sendBody(ctx context.Context, hc *http.Client, method, path string, q url.Values, in any) (*http.Response, error) {
+	if in == nil {
+		return c.sendReader(ctx, hc, method, path, q, nil, "")
+	}
+	b, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	return c.sendReader(ctx, hc, method, path, q, bytes.NewReader(b), "application/json")
+}
+
+// sendReader sends a request with a raw body (e.g. a tar archive).
+func (c *Client) sendReader(ctx context.Context, hc *http.Client, method, path string, q url.Values, body io.Reader, contentType string) (*http.Response, error) {
 	version, err := c.ensure(ctx)
 	if err != nil {
 		return nil, err
@@ -180,20 +192,12 @@ func (c *Client) sendBody(ctx context.Context, hc *http.Client, method, path str
 	if len(q) > 0 {
 		u += "?" + q.Encode()
 	}
-	var bodyReader io.Reader
-	if in != nil {
-		b, err := json.Marshal(in)
-		if err != nil {
-			return nil, err
-		}
-		bodyReader = bytes.NewReader(b)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return nil, err
 	}
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := hc.Do(req)
 	if err != nil {

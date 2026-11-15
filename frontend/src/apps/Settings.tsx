@@ -22,6 +22,7 @@ import { InterfacePage, NetworkHome, WifiPage } from './SettingsNetwork';
 import { UsersSettings, YourAccount } from './UsersSettings';
 import { DevicesSettings } from './SettingsDevices';
 import { AgentsSettings } from './SettingsAgents';
+import { ContainersSettings } from './SettingsContainers';
 import { Backup, DateTime, LockScreen, Security, SoundSettings } from './SettingsSections';
 import { LanguageRegion } from './SettingsLanguage';
 import { openApp } from './meta';
@@ -52,7 +53,7 @@ function IconTile({ icon, color, size = 28 }: { icon: IconName; color: string; s
 
 /** Sidebar sections, with a heading each (the first has none). */
 const SIDEBAR: { title?: string; cats: Cat[] }[] = [
-  { cats: ['network', 'general', 'devices', 'agents'] },
+  { cats: ['network', 'general', 'devices', 'agents', 'containers'] },
   { title: 'set.group.personal', cats: ['appearance', 'desktop', 'windows'] },
   { title: 'set.group.notify', cats: ['notifications', 'sound'] },
   { title: 'set.group.security', cats: ['lock', 'security', 'users'] },
@@ -324,6 +325,8 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
       return <DevicesSettings />;
     case 'agents':
       return <AgentsSettings />;
+    case 'containers':
+      return isAdmin ? <ContainersSettings /> : null;
     default:
       return null;
   }
