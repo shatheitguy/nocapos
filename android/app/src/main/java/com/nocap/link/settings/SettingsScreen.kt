@@ -44,7 +44,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.nocap.link.ui.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -119,29 +119,42 @@ import com.nocap.link.sync.Sync
 import com.nocap.link.system.DotsService
 import com.nocap.link.system.Phone
 import com.nocap.link.ui.glass
-import com.nocap.link.ui.Label
+import com.nocap.link.ui.IconTile
+import com.nocap.link.ui.NavRow
+import com.nocap.link.ui.NcDialog
+import com.nocap.link.ui.NcIcon
+import com.nocap.link.ui.PageHeader
+import com.nocap.link.ui.SectionCard
+import com.nocap.link.ui.SwitchRow
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import com.nocap.link.ui.Label as UiLabel
 import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.SearchField
 import com.nocap.link.ui.Wallpaper
 import com.nocap.link.widget.Widgets
 
-/** One searchable block of settings. */
+/** One searchable block of settings: a grouped card on its category's page. */
 private class Sec(val cat: String, val title: String, val sub: String?, val keys: String, val content: @Composable () -> Unit)
 
-/** The groups, in order: few and clear, like the NoCapOS web Settings. */
+/** A Settings category: the same names (both voices), icons and colors as the NoCapOS web Settings. */
+private class Cat(val id: String, val name: String, val desc: String, val icon: String, val color: Color)
+
+/** In the web Settings' order; phone-only pages (gestures, privacy) sit where they fit. */
 private fun cats() = listOf(
-    "all" to t("All", "All"), "system" to t("System", "System"), "look" to t("Look", "Appearance"), "home" to t("Home screen", "Home screen"),
-    "sync" to t("Sync & Save Point", "Sync & backup"), "privacy" to t("Privacy", "Privacy & permissions"),
+    Cat("devices", t("Your Squad", "Linked Devices"), t("NoCap Link, asks, clipboard, mirroring", "NoCap Link, requests, clipboard and mirroring"), "phone", Color(0xFF30D158)),
+    Cat("general", t("The Essentials", "General"), t("Glow Up, Local Vibes, Save Point, System Specs", "Updates, language, backup and about"), "settings", Color(0xFF8E8E93)),
+    Cat("appearance", t("The Aesthetic", "Appearance"), t("Mode, accent, wallpaper, the whole phone NoCap", "Theme, accent color, wallpaper and phone theme"), "palette", Color(0xFF5E5CE6)),
+    Cat("desktop", t("The Hub", "Desktop & Dock"), t("Grid, icons, dock, The Roster, widgets", "Home screen grid, icons, dock, app drawer and widgets"), "launcher", Color(0xFF3A3A3C)),
+    Cat("gestures", t("Moves", "Gestures & Control Center"), t("Swipes, taps, pinches and the control center", "Gesture actions and the control center"), "grid", Color(0xFFFF9F0A)),
+    Cat("notifications", t("Yap Control", "Notifications"), t("Server tea here, phone notifs there", "Server notifications and forwarding"), "bell", Color(0xFFFF3B30)),
+    Cat("lock", t("Lock In", "Lock Screen"), t("The NoCap layer over your lock screen", "The NoCap lock screen layer"), "lock", Color(0xFF48484A)),
+    Cat("privacy", t("Privacy", "Privacy & Permissions"), t("What NoCap OS can use, and why", "Permissions and what each is for"), "shield", Color(0xFF30A0FF)),
 )
 
-private fun catIcon(cat: String) = when (cat) {
-    "system" -> Icons.Filled.Settings
-    "look" -> Icons.Filled.Face
-    "home" -> Icons.Filled.Home
-    "sync" -> Icons.Filled.Refresh
-    "privacy" -> Icons.Filled.Lock
-    else -> Icons.Filled.Info
-}
+/** Web-style groups of categories on the Settings home page. */
+private val catGroups = listOf(listOf("devices"), listOf("general", "appearance", "desktop", "gestures"), listOf("notifications", "lock", "privacy"))
 
 /** Can the app drawer still be opened without the dock button? */
 private fun drawerReachable(): Boolean =
@@ -172,10 +185,10 @@ fun SettingsScreen(a: MainActivity) {
     com.nocap.link.update.AutoCheck(a)
 
     val secs = listOf(
-        Sec("system", t("Updates", "Updates"), t("This app and your NoCap server", "App and server versions"), "update updates version upgrade github glow up install") {
+        Sec("general", t("Glow Up", "Software Update"), t("This app and your NoCap server", "App and server versions"), "update updates version upgrade github glow up install") {
             com.nocap.link.update.UpdatesSection(a)
         },
-        Sec("system", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
+        Sec("devices", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
             ServerStatus(a)
             if (linked) {
                 Action(t("Open NoCap Link", "Open NoCap Link")) { a.layer = Layer.HUB }
@@ -184,7 +197,7 @@ fun SettingsScreen(a: MainActivity) {
                 Action(t("Link with NoCap Link", "Link with NoCap Link")) { a.layer = Layer.NONE; a.screen = Screen.LinkForm() }
             }
         },
-        Sec("system", t("About", "About"), null, "about version licenses fonts crash report bug privacy terms") {
+        Sec("general", t("System Specs", "About"), null, "about version licenses fonts crash report bug privacy terms") {
             Hint("NoCap OS ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             Action(t("Privacy", "Privacy")) { Extras.privacy = true }
             Action(t("Report a bug", "Report a bug")) { Extras.bug = true }
@@ -199,16 +212,17 @@ fun SettingsScreen(a: MainActivity) {
             }
             Hint(t("Orbitron & Rajdhani fonts under the SIL Open Font License · Weather by Open-Meteo", "Orbitron and Rajdhani fonts: SIL Open Font License. Weather data: Open-Meteo."))
         },
-        Sec("look", t("NoCap phone", "NoCap theme for the phone"), t("Lock wallpaper, phone colors", "Wallpapers and system colors"), "theme whole phone nocap red material you colors lock wallpaper root") {
+        Sec("appearance", t("Theme my whole phone NoCap", "NoCap theme for the phone"), t("Lock wallpaper, phone colors", "Wallpapers and system colors"), "theme whole phone nocap red material you colors lock wallpaper root") {
             ThemePhoneSettings(a)
         },
-        Sec("look", t("NoCap lock screen", "NoCap lock screen"), t("Clock, music, notifs over the lock", "Shown over the system lock screen"), "lock screen keyguard clock music notifications wake") {
+        Sec("lock", t("NoCap lock screen", "NoCap lock screen"), t("Clock, music, notifs over the lock", "Shown over the system lock screen"), "lock screen keyguard clock music notifications wake") {
             LockScreenSettings(a)
         },
-        Sec("look", t("Theme & display", "Theme and display"), t("Lingo, colors, font, bars, rotation", "Language, colors, font, system bars and rotation"), "theme dark light auto mode accent color colour red picker font typeface language lingo gen z standard wording status bar navigation nav transparent hide hidden fullscreen rotation landscape portrait haptics vibration") {
-            Label(t("The Lingo", "Language"))
+        Sec("general", t("Local Vibes", "Language & Region"), t("How NoCap OS talks to you", "Wording used across the app"), "language lingo gen z genz standard wording voice slang professional") {
+            Label(t("Voice", "Voice"))
             LanguagePicker(a)
-            Spacer(Modifier.height(10.dp))
+        },
+        Sec("appearance", t("Theme & display", "Theme and display"), t("Mode, colors, font, bars, rotation", "Colors, font, system bars and rotation"), "theme dark light auto mode accent color colour red picker font typeface status bar navigation nav transparent hide hidden fullscreen rotation landscape portrait haptics vibration") {
             Label(t("Mode", "Mode"))
             Choice(listOf(t("Dark", "Dark") to ThemeMode.DARK, t("Light", "Light") to ThemeMode.LIGHT, t("Auto", "Automatic") to ThemeMode.AUTO), Opt.theme.v) { Opt.theme.set(it) }
             Spacer(Modifier.height(10.dp))
@@ -228,8 +242,8 @@ fun SettingsScreen(a: MainActivity) {
             Choice(listOf(t("Auto", "Automatic") to Rotation.AUTO, t("Portrait", "Portrait") to Rotation.PORTRAIT, t("Landscape", "Landscape") to Rotation.LANDSCAPE), Opt.rotation.v) { Opt.rotation.set(it) }
             Toggle(t("Haptics", "Haptic feedback"), null, Opt.haptics.v) { Opt.haptics.set(it) }
         },
-        Sec("look", t("Wall Aesthetic", "Wallpaper"), t("The NoCapOS wallpapers, or your own pic", "Built-in wallpapers or your own picture"), "wallpaper background aesthetic picture dim blur parallax wall") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Sec("appearance", t("Wall Aesthetic", "Wallpaper"), t("The NoCapOS wallpapers, or your own pic", "Built-in wallpapers or your own picture"), "wallpaper background aesthetic picture dim blur parallax wall") {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Wallpapers.builtIn.forEach { w ->
                     Thumb(Prefs.wallpaper == w.id, Modifier.weight(1f), { Prefs.setWallpaper(w.id) }) {
                         Image(painterResource(w.thumb), w.genz, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -247,7 +261,7 @@ fun SettingsScreen(a: MainActivity) {
             Action(t("Set as my phone's wallpaper too", "Also set as phone wallpaper")) { phoneWall = true }
             if (linked) Action(t("Sync wallpaper & accent from my NoCap server", "Sync wallpaper and accent from my NoCap server")) { a.syncFromServer() }
         },
-        Sec("home", t("The Hub grid", "Home screen grid"), t("Rows, columns, pages", "Grid size, page effects and layout lock"), "grid rows columns page transition effect cube fade zoom stack carousel search bar dots folder lock layout") {
+        Sec("desktop", t("The Hub grid", "Home screen grid"), t("Rows, columns, pages", "Grid size, page effects and layout lock"), "grid rows columns page transition effect cube fade zoom stack carousel search bar dots folder lock layout") {
             SliderRow(t("Columns", "Columns"), Opt.columns.v.toFloat(), 3f..7f, "${Opt.columns.v}", steps = 3) { Opt.columns.set(it.toInt()) }
             SliderRow(t("Rows", "Rows"), Opt.rows.v.toFloat(), 4f..9f, "${Opt.rows.v}", steps = 4) { Opt.rows.set(it.toInt()) }
             Label(t("Page flip", "Page transition"))
@@ -259,7 +273,7 @@ fun SettingsScreen(a: MainActivity) {
             Toggle(t("Page dots", "Show page indicator"), null, Opt.pageDots.v) { Opt.pageDots.set(it) }
             Toggle(t("Lock the layout", "Lock home screen layout"), t("No accidental moves, adds or yeets.", "Prevents moving, adding or removing items."), Opt.lockLayout.v) { Opt.lockLayout.set(it) }
         },
-        Sec("home", t("Icons & names", "Icons and labels"), t("Style, shape, size and app names", "Style, shape, size and labels"), "icon theme nocap tile shape circle squircle rounded square original themed monochrome tinted size glyph label labels name font color colour shadow text dots") {
+        Sec("desktop", t("Icons & names", "Icons and labels"), t("Style, shape, size and app names", "Style, shape, size and labels"), "icon theme nocap tile shape circle squircle rounded square original themed monochrome tinted size glyph label labels name font color colour shadow text dots") {
             Label(t("Style", "Icon style"))
             Chips(
                 listOf("NoCap" to IconTheme.NOCAP, t("Original", "Original") to IconTheme.ORIGINAL, t("Themed", "Themed") to IconTheme.THEMED, t("NoCap Red", "Tinted") to IconTheme.TINTED, t("Mono", "Monochrome") to IconTheme.MONO),
@@ -282,17 +296,17 @@ fun SettingsScreen(a: MainActivity) {
             Chips(listOf(t("White", "White") to LabelColor.WHITE, t("Accent", "Accent") to LabelColor.ACCENT, t("Soft", "Soft white") to LabelColor.SOFT, t("Dark", "Dark") to LabelColor.DARK), Opt.labelColor.v) { Opt.labelColor.set(it) }
             Toggle(t("Shadow", "Text shadow"), null, Opt.labelShadow.v) { Opt.labelShadow.set(it) }
         },
-        Sec("home", t("Dock", "Dock"), t("Like the NoCap desktop's", "Style, apps and buttons"), "dock style glass floating none count apps buttons roster drawer button link labels hide") {
+        Sec("desktop", t("Dock", "Dock"), t("Like the NoCap desktop's", "Style, apps and buttons"), "dock style glass floating none count apps buttons roster drawer button link labels hide") {
             Label(t("Style", "Style"))
             Choice(listOf(t("Glass bar", "Glass bar") to DockStyle.GLASS, t("Floating", "Floating") to DockStyle.FLOATING, t("None", "None") to DockStyle.NONE), Opt.dockStyle.v) { Opt.dockStyle.set(it) }
             SliderRow(t("Apps", "Apps"), Opt.dockCount.v.toFloat(), 3f..7f, "${Opt.dockCount.v}", steps = 3) { Opt.dockCount.set(it.toInt()); Home.setDock(Home.layout.dock) }
-            Toggle(t("App drawer button", "Show app drawer button"), if (!drawerReachable()) t("Heads up: no gesture opens the Roster right now.", "No gesture currently opens the app drawer.") else t("Swipe up opens the Roster either way.", "The drawer also opens with its gesture."), Opt.dockDrawerButton.v) { on ->
+            if (Opt.drawer.v == DrawerStyle.HOME_PAGES) Hint(t("All your apps live on the home pages, so there's no Roster button. Swipe up searches.", "All apps are on the home pages, so the app drawer button is hidden. Swipe up opens search.")) else Toggle(t("App drawer button", "Show app drawer button"), if (!drawerReachable()) t("Heads up: no gesture opens the Roster right now.", "No gesture currently opens the app drawer.") else t("Swipe up opens the Roster either way.", "The drawer also opens with its gesture."), Opt.dockDrawerButton.v) { on ->
                 if (!on && !drawerReachable()) hideDrawerAsk = true else Opt.dockDrawerButton.set(on)
             }
             Toggle(t("NoCap Link button", "Show NoCap Link button"), null, Opt.dockButtons.v) { Opt.dockButtons.set(it) }
             Toggle(t("Names under dock apps", "Dock labels"), null, Opt.dockLabels.v) { Opt.dockLabels.set(it) }
         },
-        Sec("home", t("The Roster", "App drawer"), t("Style, sort, look and hidden apps", "Drawer style, sort, look and hidden apps"), "drawer roster launchpad style paged grid list categories classic home pages library sort columns opacity blur recent hide hidden unhide") {
+        Sec("desktop", t("The Roster", "App drawer"), t("Style, sort, look and hidden apps", "Drawer style, sort, look and hidden apps"), "drawer roster style paged grid list categories classic home pages library sort columns opacity blur recent hide hidden unhide") {
             DrawerStylePicker()
             Spacer(Modifier.height(8.dp))
             SliderRow(t("Columns", "Columns"), Opt.drawerColumns.v.toFloat(), 3f..7f, "${Opt.drawerColumns.v}", steps = 3) { Opt.drawerColumns.set(it.toInt()) }
@@ -306,19 +320,16 @@ fun SettingsScreen(a: MainActivity) {
             val hidden = a.phoneApps.filter { it.key in Prefs.hidden }
             if (hidden.isEmpty()) Hint(t("Nothing hidden. Long-press an app → Hide.", "No hidden apps. Long-press an app and choose Hide."))
             hidden.forEach { app ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     AppIcon(app, 30.dp)
                     Text(app.label, Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(t("Unhide", "Unhide"), Modifier.clip(RoundedCornerShape(8.dp)).clickable { Prefs.hide(app.key, false) }.padding(8.dp), style = MaterialTheme.typography.labelLarge, color = NoCap.Red)
                 }
             }
         },
-        Sec("home", t("Gestures", "Gestures"), t("Bind swipes, taps and pinches", "Choose what each gesture does"), "gesture swipe up down double tap pinch two finger home button lock notifications shade quick settings bind action") {
+        Sec("gestures", t("Gestures", "Gestures"), t("Bind swipes, taps and pinches", "Choose what each gesture does"), "gesture swipe up down double tap pinch two finger home button lock notifications shade quick settings bind action") {
             Gesture.entries.forEach { g ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { bindFor = g }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(gestureName(g), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                    Text(bindingName(a, Opt.binding(g)), style = MaterialTheme.typography.labelLarge, color = NoCap.Red, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
-                }
+                NavRow(gestureName(g), value = bindingName(a, Opt.binding(g))) { bindFor = g }
             }
             val canLock = remember(tick) { Phone.canLock(a) }
             if (Opt.gestures.v.values.any { it == Act.LOCK.name } && !canLock) {
@@ -326,17 +337,20 @@ fun SettingsScreen(a: MainActivity) {
             }
             Hint(t("Lock uses an accessibility helper that locks the screen (and taps and types for you only while you mirror this phone). Off unless you bind it.", "Locking uses an accessibility service that locks the screen (and controls this phone only while you mirror it)."))
         },
-        Sec("home", t("Control center", "Control center"), t("Swipe down for toggles and notifs", "Quick toggles and notifications"), "control center swipe down toggles brightness wifi bluetooth flashlight rotation edge overlay any app") {
+        Sec("gestures", t("Control center", "Control center"), t("Swipe down for toggles and notifs", "Quick toggles and notifications"), "control center swipe down toggles brightness wifi bluetooth flashlight rotation edge overlay any app") {
             ControlCenterSettings(a)
         },
-        Sec("home", t("Widgets", "Widgets"), t("NoCap widgets + every app's", "Weather place and units"), "widget widgets weather celsius fahrenheit place city clock") {
+        Sec("desktop", t("Widgets", "Widgets"), t("NoCap widgets + every app's", "Weather place and units"), "widget widgets weather celsius fahrenheit place city clock") {
             Action(t("Add widgets", "Add widgets")) { a.layer = Layer.WIDGETS }
             Hint(t("Long-press a NoCap widget → Customize for faces, sizes and more.", "Long-press a NoCap widget and choose Customize to change it."))
             Toggle(t("Fahrenheit", "Use °F"), null, Opt.fahrenheit.v) { Opt.fahrenheit.set(it) }
             val place = com.nocap.link.widget.Weather.Place.decode(Opt.weatherPlace.v)
             Hint(t("Shared weather place: ${place?.name ?: "none yet"}", "Shared weather location: ${place?.name ?: "not set"}"))
         },
-        Sec("sync", t("Notifications & clipboard", "Notifications and clipboard"), t("Between this phone and NoCap OS", "Sync with your NoCap server"), "sync notifications forward mirror clipboard copy paste server tea alerts live") {
+        Sec("devices", t("Asks from NoCap OS", "Requests from NoCap OS"), t("Mirror, ring, open, files: they pop up here", "Mirroring, ring, open and send requests"), "requests asks mirror ring find open send file notification heads up popup lock screen full screen battery doze not showing test") {
+            RequestsHealth(a, tick) { tick++ }
+        },
+        Sec("notifications", t("Notifications", "Notifications"), t("Between this phone and NoCap OS", "Sync with your NoCap server"), "sync notifications forward server tea alerts live apps") {
             if (!linked) {
                 Hint(t("Link your NoCap server first.", "Link a NoCap server first."))
                 Action(t("Link with NoCap Link", "Link with NoCap Link")) { a.layer = Layer.NONE; a.screen = Screen.LinkForm() }
@@ -363,6 +377,12 @@ fun SettingsScreen(a: MainActivity) {
                 Sync.start(a)
             }
             if (Opt.forward.v) Action(t("Pick which apps", "Choose apps")) { allowList = true }
+        },
+        Sec("devices", t("Shared clipboard", "Clipboard"), t("Copy here, paste there", "Clipboard sync with NoCap OS"), "clipboard copy paste sync pictures images exclude apps") {
+            if (!linked) {
+                Hint(t("Link your NoCap server first.", "Link a NoCap server first."))
+                return@Sec
+            }
             Toggle(
                 t("Shared clipboard", "Clipboard sync"),
                 t("Copy on NoCap OS → just paste here. Copy here → just paste on NoCap OS. Private stuff (passwords, codes) never leaves this phone.", "Text copied on NoCap OS is placed on this phone's clipboard, and text copied here is sent to NoCap OS. Content marked as sensitive is never sent."),
@@ -387,7 +407,15 @@ fun SettingsScreen(a: MainActivity) {
                 ) { clipSkip = true }
             }
             Action(t("Send my clipboard now", "Send clipboard now")) { Sync.sendClipboard(a, force = true) { _, m -> a.toast = m } }
+        },
+        Sec("devices", t("Staying connected", "Connection"), t("Always on, calls", "Background connection and calls"), "always connected background battery doze calls decline nearby remote status") {
+            if (!linked) {
+                Hint(t("Link your NoCap server first.", "Link a NoCap server first."))
+                return@Sec
+            }
             com.nocap.link.sync.LinkSettings(a)
+        },
+        Sec("devices", t("Screen Squad", "Screen mirroring"), t("Show this phone on NoCap OS", "Mirror this phone on NoCap OS"), "mirror mirroring screen share control accessibility") {
             Toggle(
                 t("Let NoCap OS ask to mirror this screen", "Allow screen mirroring requests"),
                 t("You still OK every session, here and in Android's prompt.", "Each session still needs your OK, here and in Android's prompt."),
@@ -399,7 +427,7 @@ fun SettingsScreen(a: MainActivity) {
                 Action(t("Open Accessibility settings", "Open Accessibility settings")) { com.nocap.link.system.MirrorInput.accessibilitySettings(a) }
             }
         },
-        Sec("sync", t("Save Point", "Export & restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
+        Sec("general", t("Save Point", "Export & Restore"), t("Pages, folders, dock and every setting", "Layout and all settings"), "backup restore layout export import reset defaults") {
             if (linked) {
                 Action(t("Back up to my NoCap server", "Back up to my NoCap server")) { a.backupToServer() }
                 Action(t("Restore from my NoCap server", "Restore from my NoCap server")) { a.restoreFromServer() }
@@ -409,7 +437,7 @@ fun SettingsScreen(a: MainActivity) {
             Action(t("Reset settings to default", "Reset all settings"), danger = true) { resetAsk = true }
             Hint(t("Android widgets and custom icons stay put — they belong to this phone.", "Android widgets and custom icons aren't included; they belong to this phone."))
         },
-        Sec("privacy", t("Permissions & privacy", "Permissions and privacy"), t("What NoCap OS can use, and why", "What each permission is for"), "permissions privacy camera notifications location calendar accessibility device admin notification access do not disturb lock home default launcher battery install unknown setup guide restricted weather collect") {
+        Sec("privacy", t("Permissions", "Permissions"), t("What NoCap OS can use, and why", "What each permission is for"), "permissions privacy camera notifications location calendar accessibility device admin notification access do not disturb lock home default launcher battery install unknown setup guide restricted weather collect") {
             val missing = remember(tick) { com.nocap.link.settings.Permissions.missingCore(a) }
             Hint(
                 if (missing == 0) t("The basics are all on. Extras only if you use them.", "All recommended permissions are allowed.")
@@ -417,6 +445,7 @@ fun SettingsScreen(a: MainActivity) {
             )
             Action(t("Open permissions", "Manage permissions")) { a.layer = Layer.PERMISSIONS }
             Action(t("Setup guide", "Setup guide")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.GUIDE) }
+            Action(t("Run setup again", "Run setup again")) { a.layer = Layer.NONE; a.screen = Screen.Setup(SetupStep.WELCOME) }
             Spacer(Modifier.height(6.dp))
             Label(t("Lock helper", "Lock helper"))
             val canLock = remember(tick) { Phone.canLock(a) }
@@ -428,50 +457,128 @@ fun SettingsScreen(a: MainActivity) {
         },
     )
     val term = q.trim().lowercase()
-    val shown = secs.filter { s ->
-        (cat == "all" || s.cat == cat) && (term.isEmpty() || term in s.title.lowercase() || term in (s.sub ?: "").lowercase() || s.keys.split(' ').any { it.startsWith(term) } || term in s.keys)
+    val all = cats()
+    fun matches(sec: Sec): Boolean {
+        val catName = all.firstOrNull { it.id == sec.cat }?.name.orEmpty().lowercase()
+        return term in sec.title.lowercase() || term in (sec.sub ?: "").lowercase() || sec.keys.split(' ').any { it.startsWith(term) } ||
+            term in sec.keys || term in catName
+    }
+    val badge = com.nocap.link.update.updateBadge(a)
+    val updateAvailable = com.nocap.link.update.Updater.state is com.nocap.link.update.UpdateState.Available
+    BackHandler(cat != "all" || q.isNotEmpty()) { if (q.isNotEmpty()) q = "" else cat = "all" }
+
+    @Composable
+    fun Sections(list: List<Sec>, crumbs: Boolean) {
+        list.forEachIndexed { i, sec ->
+            if (crumbs && (i == 0 || list[i - 1].cat != sec.cat)) {
+                all.firstOrNull { it.id == sec.cat }?.let { c ->
+                    Row(Modifier.padding(start = 6.dp, top = if (i == 0) 0.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconTile(c.icon, c.color, 20.dp)
+                        Label(c.name, Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+            val isUpdates = sec.keys.startsWith("update")
+            Group(sec.title, sec.sub, badge = if (isUpdates && updateAvailable) t("Update available", "Update available") else null) { sec.content() }
+        }
+    }
+
+    @Composable
+    fun CatList(selected: String?) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Who's here: the device and the server it's linked to, like the web Settings' account card.
+            SectionCard {
+                Row(Modifier.fillMaxWidth().clickable { cat = "devices" }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(com.nocap.link.R.drawable.nocap_mark), null, Modifier.size(46.dp))
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text("NoCap OS · ${Build.MODEL}", style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val server = (a.server as? ServerState.Online)?.me?.server?.name?.ifBlank { null } ?: a.link?.serverName?.ifBlank { null }
+                        Text(
+                            if (linked) t("Linked to ${server ?: "your NoCap server"}", "Linked to ${server ?: "your NoCap server"}") else t("Not linked yet: tap to link", "Not linked: tap to link a server"),
+                            style = MaterialTheme.typography.bodySmall, color = NoCap.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (linked) com.nocap.link.sync.LinkRouteChip()
+                }
+            }
+            if (badge) com.nocap.link.update.UpdateBanner(a) { q = ""; cat = "general" }
+            catGroups.forEach { group ->
+                SectionCard {
+                    group.mapNotNull { id -> all.firstOrNull { it.id == id } }.forEach { c ->
+                        NavRow(
+                            c.name, sub = c.desc, icon = c.icon, iconColor = c.color, selected = selected == c.id,
+                            badge = (c.id == "general" && badge) || (c.id == "devices" && linked && remember(tick) { com.nocap.link.sync.Requests.problems(a).isNotEmpty() }),
+                        ) { q = ""; cat = c.id }
+                    }
+                }
+            }
+            Text(
+                "NoCap OS ${BuildConfig.VERSION_NAME}",
+                Modifier.fillMaxWidth().padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+
+    @Composable
+    fun CatPage(c: Cat) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            PageHeader(c.name, c.desc, c.icon, c.color)
+            Sections(secs.filter { it.cat == c.id }, crumbs = false)
+        }
     }
 
     Column(
         Modifier.fillMaxSize().background(NoCap.Sheet).clickable(remember { MutableInteractionSource() }, null) {}
             .statusBarsPadding().navigationBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(Modifier.widthIn(max = 680.dp).fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(t("SETTINGS", "SETTINGS"), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                IconButton(onClick = { a.layer = Layer.NONE }) { Icon(Icons.Filled.Close, t("Close", "Close"), tint = NoCap.Text) }
-            }
-            SearchField(q, { q = it }, t("Search settings…", "Search settings"), Modifier.padding(horizontal = 14.dp))
-            val badge = com.nocap.link.update.updateBadge(a)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                cats().forEach { (id, name) ->
-                    val on = cat == id
-                    Row(
-                        Modifier.clip(RoundedCornerShape(50)).background(if (on) NoCap.Text.copy(alpha = 0.12f) else Color.Transparent)
-                            .border(1.dp, if (on) NoCap.Text.copy(alpha = 0.35f) else NoCap.GlassEdge, RoundedCornerShape(50))
-                            .clickable { cat = id }.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(name, style = MaterialTheme.typography.labelLarge, color = if (on) NoCap.Text else NoCap.Muted, maxLines = 1)
-                        if (badge && id == "system") Box(Modifier.padding(start = 6.dp).size(7.dp).clip(CircleShape).background(NoCap.Red))
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // Wide screens get the web layout: categories on the left, the page on the right.
+            val wide = maxWidth >= 720.dp
+            val current = all.firstOrNull { it.id == cat }
+            val searching = term.isNotEmpty()
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!wide && (current != null || searching)) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).clickable { if (searching) q = "" else cat = "all" }, contentAlignment = Alignment.Center) {
+                            NcIcon("chevronLeft", NoCap.Text, 22.dp, desc = t("Back", "Back"))
+                        }
+                    } else Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (!wide && current != null && !searching) current.name else t("Settings", "Settings"),
+                        Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontSize = androidx.compose.ui.unit.TextUnit(22f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Box(Modifier.size(40.dp).clip(CircleShape).background(NoCap.Field).clickable { a.layer = Layer.NONE }, contentAlignment = Alignment.Center) {
+                        NcIcon("close", NoCap.Text, 18.dp, desc = t("Close", "Close"))
                     }
                 }
-            }
-            LazyColumn(contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (badge) item { com.nocap.link.update.UpdateBanner(a) { q = ""; cat = "system" } }
-                if (shown.isEmpty()) item { Text(t("Nothing matches “$q”.", "No settings match “$q”."), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted) }
-                shown.forEachIndexed { i, s ->
-                    if (i == 0 || shown[i - 1].cat != s.cat) item(key = "head:${s.cat}") {
-                        val name = cats().firstOrNull { it.first == s.cat }?.second.orEmpty()
-                        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = if (i == 0) 2.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(catIcon(s.cat), null, tint = NoCap.Muted, modifier = Modifier.size(16.dp))
-                            Label(name, Modifier.padding(start = 8.dp))
+                SearchField(q, { q = it }, t("Search settings…", "Search settings"), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                val listState = androidx.compose.foundation.rememberScrollState()
+                val pageState = androidx.compose.foundation.rememberScrollState()
+                LaunchedEffect(cat, searching) { pageState.scrollTo(0) }
+                if (wide) {
+                    Row(Modifier.fillMaxSize()) {
+                        Column(Modifier.width(320.dp).fillMaxHeight().verticalScroll(listState).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 28.dp)) {
+                            CatList(if (searching) null else (current?.id ?: "devices"))
+                        }
+                        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(pageState).padding(start = 8.dp, end = 18.dp, top = 8.dp, bottom = 28.dp)) {
+                            when {
+                                searching -> SearchResults(secs.filter(::matches), q) { list -> Sections(list, crumbs = true) }
+                                else -> CatPage(current ?: all.first())
+                            }
                         }
                     }
-                    item(key = s.title) {
-                        val updates = s.keys.startsWith("update")
-                        Group(s.title, s.sub, badge = if (updates && com.nocap.link.update.Updater.state is com.nocap.link.update.UpdateState.Available) t("Update available", "Update available") else null) { s.content() }
+                } else {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(if (current == null && !searching) listState else pageState)
+                            .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 28.dp),
+                    ) {
+                        when {
+                            searching -> SearchResults(secs.filter(::matches), q) { list -> Sections(list, crumbs = true) }
+                            current != null -> CatPage(current)
+                            else -> CatList(null)
+                        }
                     }
                 }
             }
@@ -490,85 +597,110 @@ fun SettingsScreen(a: MainActivity) {
     if (allowList) ForwardAppsDialog(a) { allowList = false }
     if (clipSkip) ClipSkipDialog(a) { clipSkip = false }
     if (hideDrawerAsk) {
-        AlertDialog(
-            onDismissRequest = { hideDrawerAsk = false },
-            containerColor = NoCap.GlassStrong,
-            title = { Text(t("Hide the Roster button?", "Hide the app drawer button?"), style = MaterialTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    t(
-                        "No gesture opens the Roster right now, so you'd have no way in. Bind swipe up to it first, or hide the button anyway and use search.",
-                        "No gesture currently opens the app drawer, so it would be unreachable. Assign swipe up to the drawer first, or hide the button anyway and use search.",
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+        NcDialog(
+            t("Hide the Roster button?", "Hide the app drawer button?"),
+            t(
+                "No gesture opens the Roster right now, so you'd have no way in. Bind swipe up to it first, or hide the button anyway and use search.",
+                "No gesture currently opens the app drawer, so it would be unreachable. Assign swipe up to the drawer first, or hide the button anyway and use search.",
+            ),
+            onDismiss = { hideDrawerAsk = false },
+            confirm = t("Swipe up opens it + hide", "Use swipe up and hide") to {
+                hideDrawerAsk = false
+                Opt.gestures.set(Opt.gestures.v + (Gesture.SWIPE_UP.name to Act.DRAWER.name))
+                Opt.dockDrawerButton.set(false)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    hideDrawerAsk = false
-                    Opt.gestures.set(Opt.gestures.v + (Gesture.SWIPE_UP.name to Act.DRAWER.name))
-                    Opt.dockDrawerButton.set(false)
-                }) { Text(t("Swipe up opens it + hide", "Use swipe up and hide"), color = NoCap.Red) }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { hideDrawerAsk = false; Opt.dockDrawerButton.set(false) }) { Text(t("Hide anyway", "Hide anyway"), color = NoCap.Text) }
-                    TextButton(onClick = { hideDrawerAsk = false }) { Text(t("Nah", "Cancel"), color = NoCap.Text) }
-                }
-            },
+            dismiss = t("Nah", "Cancel") to { hideDrawerAsk = false },
+            extra = listOf(t("Hide anyway", "Hide anyway") to { hideDrawerAsk = false; Opt.dockDrawerButton.set(false) }),
         )
     }
     viewCrash?.let { r -> CrashViewer(r) { viewCrash = null } }
     if (resetAsk) {
-        AlertDialog(
-            onDismissRequest = { resetAsk = false },
-            containerColor = NoCap.GlassStrong,
-            title = { Text(t("Back to factory vibes?", "Reset all settings?"), style = MaterialTheme.typography.titleMedium) },
-            text = { Text(t("Every setting goes back to default. Your pages, apps and link stay.", "All settings return to their defaults. Your layout and link are kept."), style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = { TextButton(onClick = { resetAsk = false; Opt.resetAll(); a.reloadApps() }) { Text(t("Reset", "Reset"), color = NoCap.Red) } },
-            dismissButton = { TextButton(onClick = { resetAsk = false }) { Text(t("Nah", "Cancel"), color = NoCap.Text) } },
+        NcDialog(
+            t("Back to factory vibes?", "Reset all settings?"),
+            t("Every setting goes back to default. Your pages, apps and link stay.", "All settings return to their defaults. Your layout and link are kept."),
+            onDismiss = { resetAsk = false },
+            confirm = t("Reset", "Reset") to { resetAsk = false; Opt.resetAll(); a.reloadApps() },
+            dismiss = t("Nah", "Cancel") to { resetAsk = false },
+            danger = true,
         )
     }
     if (phoneWall) {
-        AlertDialog(
-            onDismissRequest = { phoneWall = false },
-            containerColor = NoCap.GlassStrong,
-            title = { Text(t("Where should it go?", "Set wallpaper on"), style = MaterialTheme.typography.titleMedium) },
-            text = { Text(t("Puts the current NoCap wallpaper on your phone itself.", "Applies the current wallpaper to your phone."), style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = { phoneWall = false; a.setPhoneWallpaper(true, false) }) { Text(t("Home", "Home screen"), color = NoCap.Red) }
-                    TextButton(onClick = { phoneWall = false; a.setPhoneWallpaper(false, true) }) { Text(t("Lock", "Lock screen"), color = NoCap.Red) }
-                    TextButton(onClick = { phoneWall = false; a.setPhoneWallpaper(true, true) }) { Text(t("Both", "Both"), color = NoCap.Red) }
-                }
-            },
+        NcDialog(
+            t("Where should it go?", "Set wallpaper on"),
+            t("Puts the current NoCap wallpaper on your phone itself.", "Applies the current wallpaper to your phone."),
+            onDismiss = { phoneWall = false },
+            confirm = t("Both", "Both") to { phoneWall = false; a.setPhoneWallpaper(true, true) },
+            dismiss = t("Nah", "Cancel") to { phoneWall = false },
+            extra = listOf(
+                t("Home", "Home screen") to { phoneWall = false; a.setPhoneWallpaper(true, false) },
+                t("Lock", "Lock screen") to { phoneWall = false; a.setPhoneWallpaper(false, true) },
+            ),
         )
     }
     if (lockSetup) {
-        AlertDialog(
-            onDismissRequest = { lockSetup = false },
-            containerColor = NoCap.GlassStrong,
-            title = { Text(t("Switch on the lock helper", "Enable the lock helper"), style = MaterialTheme.typography.titleMedium) },
-            text = {
-                Text(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) t("In Accessibility, find NoCap OS lock and turn it on. It locks your screen, and does your taps and typing while you mirror this phone — nothing else.", "In Accessibility settings, turn on NoCap OS lock. It locks the screen, and performs your taps and typing while you mirror this phone.")
-                    else t("Allow NoCap OS as a device admin. It can only lock the screen.", "Allow NoCap OS as a device admin. It can only lock the screen."),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = { TextButton(onClick = { lockSetup = false; runCatching { a.startActivity(Phone.lockSetupIntent(a)) } }) { Text(t("Take me there", "Open settings"), color = NoCap.Red) } },
-            dismissButton = { TextButton(onClick = { lockSetup = false }) { Text(t("Nah", "Cancel"), color = NoCap.Text) } },
+        NcDialog(
+            t("Switch on the lock helper", "Enable the lock helper"),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) t("In Accessibility, find NoCap OS lock and turn it on. It locks your screen, and does your taps and typing while you mirror this phone — nothing else.", "In Accessibility settings, turn on NoCap OS lock. It locks the screen, and performs your taps and typing while you mirror this phone.")
+            else t("Allow NoCap OS as a device admin. It can only lock the screen.", "Allow NoCap OS as a device admin. It can only lock the screen."),
+            onDismiss = { lockSetup = false },
+            confirm = t("Take me there", "Open settings") to { lockSetup = false; runCatching { a.startActivity(Phone.lockSetupIntent(a)) } },
+            dismiss = t("Nah", "Cancel") to { lockSetup = false },
         )
     }
     if (forget) {
-        AlertDialog(
-            onDismissRequest = { forget = false },
-            containerColor = NoCap.GlassStrong,
-            title = { Text(t("Unlink this phone?", "Unlink this phone?"), style = MaterialTheme.typography.titleMedium) },
-            text = { Text(t("This phone drops its key, signs out of your NoCap desktop, and your server forgets it.", "This phone deletes its key, signs out of the NoCap desktop and is removed from your server's devices."), style = MaterialTheme.typography.bodyMedium) },
-            confirmButton = { TextButton(onClick = { forget = false; a.layer = Layer.NONE; a.forget(alsoServer = true) }) { Text(t("Unlink", "Unlink"), color = NoCap.Red) } },
-            dismissButton = { TextButton(onClick = { forget = false }) { Text(t("Nah", "Cancel"), color = NoCap.Text) } },
+        NcDialog(
+            t("Unlink this phone?", "Unlink this phone?"),
+            t("This phone drops its key, signs out of your NoCap desktop, and your server forgets it.", "This phone deletes its key, signs out of the NoCap desktop and is removed from your server's devices."),
+            onDismiss = { forget = false },
+            confirm = t("Unlink", "Unlink") to { forget = false; a.layer = Layer.NONE; a.forget(alsoServer = true) },
+            dismiss = t("Nah", "Cancel") to { forget = false },
+            danger = true,
         )
+    }
+}
+
+/** Search results, or "nothing matches". */
+@Composable
+private fun SearchResults(found: List<Sec>, q: String, show: @Composable (List<Sec>) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (found.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(top = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                NcIcon("search", NoCap.Muted, 40.dp)
+                Text(t("Nothing matches “$q”.", "No settings match “$q”."), Modifier.padding(top = 10.dp), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted)
+            }
+        } else show(found)
+    }
+}
+
+/**
+ * Can NoCap OS's requests (mirror, ring, open, files) pop up on this phone?
+ * Lists whatever is in the way, each with a fix, plus a test.
+ */
+@Composable
+private fun RequestsHealth(a: MainActivity, tick: Int, recheck: () -> Unit) {
+    val problems = remember(tick) { com.nocap.link.sync.Requests.problems(a) }
+    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { recheck() }
+    if (problems.isEmpty()) {
+        Hint(t("All good: asks pop up here, over the lock screen too, with Let it / Nah buttons.", "Requests appear as pop-up notifications, also on the lock screen, with Accept and Decline."))
+    }
+    problems.forEach { p ->
+        NavRow(p.text, icon = "alert", iconColor = NoCap.Warn, value = p.fix, chevron = true) {
+            if (p.id == "notifications" && Build.VERSION.SDK_INT >= 33 &&
+                androidx.core.content.ContextCompat.checkSelfPermission(a, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                !Opt.notifAskedTwice.v
+            ) {
+                Opt.notifAskedTwice.set(true)
+                askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else com.nocap.link.sync.Requests.fix(a, p)
+            recheck()
+        }
+    }
+    NavRow(t("Send a test ask", "Send a test request"), icon = "bell", iconColor = Color(0xFFFF3B30)) {
+        a.toast = if (com.nocap.link.sync.Requests.test(a)) t("Sent. Did it pop up?", "Test request sent.") else t("Couldn't show it: notifications are off.", "Couldn't show it: notifications are turned off.")
+        recheck()
+    }
+    if (com.nocap.link.data.LinkOpt.alwaysOn.v.not()) {
+        Hint(t("Heads up: with Always connected off, asks only arrive while NoCap OS is open.", "With Always connected off, requests only arrive while the app is open."))
     }
 }
 
@@ -583,7 +715,7 @@ private fun ServerStatus(a: MainActivity) {
         ServerState.Unlinked -> t("Your server forgot this phone. Link it again.", "This phone is no longer linked. Link it again.") to NoCap.Bad
         ServerState.NotLinked -> t("Not linked yet.", "Not linked.") to NoCap.Muted
     }
-    Text(text, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.titleSmall, color = color)
+    Text(text, Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall, color = color)
     if (a.server is ServerState.Offline) Action(t("Try again", "Retry")) { a.refresh() }
 }
 
@@ -592,6 +724,7 @@ private fun ServerStatus(a: MainActivity) {
 @Composable
 private fun AccentPicker(a: MainActivity, linked: Boolean) {
     val cur = NoCap.Red
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         NoCap.presets.forEach { c ->
             val col = Color(c)
@@ -612,6 +745,7 @@ private fun AccentPicker(a: MainActivity, linked: Boolean) {
     Row {
         Text(t("Back to NoCap red", "Reset to NoCap red"), Modifier.clip(RoundedCornerShape(10.dp)).clickable { Opt.accent.reset() }.padding(vertical = 8.dp), style = MaterialTheme.typography.titleSmall, color = NoCap.Red)
     }
+    }
 }
 
 /** A row of the current icon look, with a few real apps. */
@@ -619,7 +753,7 @@ private fun AccentPicker(a: MainActivity, linked: Boolean) {
 private fun IconPreview(a: MainActivity) {
     val apps = remember(a.phoneApps) { a.phoneApps.take(5) }
     if (apps.isEmpty()) return
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF14161C)).padding(10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF14161C)).padding(10.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
         apps.forEach { AppTile(it, size = 44.dp, label = Opt.labels.v, labelWidth = 60.dp) }
     }
 }
@@ -634,7 +768,7 @@ private fun DrawerStylePicker() {
     )
     val accent = NoCap.Red
     val ink = NoCap.Text
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
+    FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 3) {
         styles.forEach { (s, name) ->
             val on = Opt.drawer.v == s
             Column(
@@ -795,22 +929,14 @@ private fun ForwardAppsDialog(a: MainActivity, onClose: () -> Unit) {
     )
 }
 
+/** A small heading inside a card. */
+@Composable
+private fun Label(text: String, modifier: Modifier = Modifier) = UiLabel(text, modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp))
+
+/** A settings card: header above, hairline-separated rows inside (the web's grouped settings). */
 @Composable
 fun Group(title: String, sub: String?, badge: String? = null, content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(NoCap.Field.copy(alpha = 0.6f))
-            .border(1.dp, NoCap.GlassEdge, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            if (badge != null) com.nocap.link.ui.Chip(badge, NoCap.Red)
-        }
-        if (!sub.isNullOrBlank()) Text(sub, style = MaterialTheme.typography.bodySmall, color = NoCap.Muted)
-        Spacer(Modifier.height(8.dp))
-        Divider()
-        Spacer(Modifier.height(4.dp))
-        content()
-    }
+    SectionCard(title, sub = sub, badge = badge) { content() }
 }
 
 /** A hairline between rows. */
@@ -819,20 +945,21 @@ fun Divider() {
     Box(Modifier.fillMaxWidth().height(1.dp).background(NoCap.GlassEdge))
 }
 
+/** A short explanation row. */
 @Composable
 fun Hint(text: String) {
-    if (text.isNotBlank()) Text(text, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+    if (text.isNotBlank()) Text(text, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted)
 }
 
-/** A segmented control; wraps to chips when the labels wouldn't fit. */
+/** A segmented control (the web's .segmented); wraps to chips when the labels wouldn't fit. */
 @Composable
 fun <T> Choice(options: List<Pair<String, T>>, selected: T, onPick: (T) -> Unit) {
     if (options.size > 4 || options.sumOf { it.first.length } > 34) { Chips(options, selected, onPick); return }
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(NoCap.Field).padding(3.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp).clip(RoundedCornerShape(50)).background(NoCap.Field).padding(3.dp)) {
         options.forEach { (label, v) ->
             val on = v == selected
             Box(
-                Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(if (on) NoCap.Red else Color.Transparent).clickable { onPick(v) }.padding(vertical = 8.dp, horizontal = 2.dp),
+                Modifier.weight(1f).clip(RoundedCornerShape(50)).background(if (on) NoCap.Red else Color.Transparent).clickable { onPick(v) }.padding(vertical = 8.dp, horizontal = 2.dp),
                 contentAlignment = Alignment.Center,
             ) { Text(label, style = MaterialTheme.typography.labelLarge, color = if (on) Color.White else NoCap.Text, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
@@ -842,7 +969,7 @@ fun <T> Choice(options: List<Pair<String, T>>, selected: T, onPick: (T) -> Unit)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> Chips(options: List<Pair<String, T>>, selected: T, onPick: (T) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { (label, v) ->
             val on = v == selected
             Text(
@@ -853,33 +980,20 @@ fun <T> Chips(options: List<Pair<String, T>>, selected: T, onPick: (T) -> Unit) 
     }
 }
 
+/** A switch row. */
 @Composable
-fun Toggle(title: String, sub: String?, on: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(10.dp)).clickable { onChange(!on) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
-            if (!sub.isNullOrBlank()) Text(sub, style = MaterialTheme.typography.bodySmall)
-        }
-        Switch(on, onChange, colors = SwitchDefaults.colors(checkedTrackColor = NoCap.Red, checkedThumbColor = Color.White))
-    }
-}
+fun Toggle(title: String, sub: String?, on: Boolean, onChange: (Boolean) -> Unit) = SwitchRow(title, sub, on, onChange = onChange)
 
+/** A row that does something (chevron), or a red one that can't be undone easily. */
 @Composable
-fun Action(title: String, danger: Boolean = false, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = if (danger) NoCap.Red else NoCap.Text)
-        if (!danger) Text("›", style = MaterialTheme.typography.titleMedium, color = NoCap.Muted)
-    }
-}
+fun Action(title: String, danger: Boolean = false, onClick: () -> Unit) = NavRow(title, danger = danger, onClick = onClick)
 
+/** A label + slider + value row. */
 @Composable
 private fun SliderRow(title: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, steps: Int = 0, onChange: (Float) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.width(92.dp), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Slider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps, colors = SliderDefaults.colors(thumbColor = NoCap.Red, activeTrackColor = NoCap.Red))
+        Slider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps, colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = NoCap.Red, inactiveTrackColor = NoCap.Field, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent))
         Text(shown, Modifier.width(44.dp).padding(start = 6.dp), style = MaterialTheme.typography.labelLarge, color = NoCap.Muted, maxLines = 1)
     }
 }

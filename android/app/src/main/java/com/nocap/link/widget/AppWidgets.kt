@@ -152,7 +152,7 @@ object AppWidgets {
                 }
                 v.setTextViewText(R.id.w_hilo, "")
             } else {
-                v.setImageViewBitmap(R.id.w_icon, Weather.bitmap(144, Weather.kind(r.code, r.isDay), 0xFFFF2A2A.toInt()))
+                v.setImageViewBitmap(R.id.w_icon, Weather.bitmap(144, Weather.kind(r.code, r.isDay), 0xFFE8232B.toInt()))
                 v.setTextViewText(R.id.w_temp, Weather.deg(r.temp))
                 v.setTextViewText(R.id.w_place, r.place.name)
                 v.setTextViewText(R.id.w_desc, Weather.describe(r.code))

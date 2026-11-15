@@ -440,7 +440,7 @@ fun TogglesWidget(a: MainActivity, item: NoCapItem) {
     val ctx = LocalContext.current
     val ids = item.opt("items", "torch,wifi,bt,dnd,data,location").split(',').filter { it in toggleIds }
     var tick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(a.resumeTick) { while (true) { tick++; delay(3000) } }
+    com.nocap.link.ui.Every(3000, a.resumeTick) { tick++ }
     fun state(id: String): Boolean? = when (id) {
         "torch" -> Torch.on
         "wifi" -> runCatching { ctx.applicationContext.getSystemService(WifiManager::class.java).isWifiEnabled }.getOrNull()
@@ -592,7 +592,7 @@ fun TimerWidget(a: MainActivity, item: NoCapItem) {
     val ctx = LocalContext.current
     val countdown = item.opt("mode", "timer") == "countdown"
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(500) } }
+    com.nocap.link.ui.Every(500) { now = System.currentTimeMillis() }
     WSurface(item, onClick = { a.editing = item }) {
         val tiny = maxHeight < 90.dp
         if (countdown) {
