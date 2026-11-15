@@ -1,0 +1,2 @@
+# NoCap Shell build (npm run build:shell); installed to /usr/share/nocapos/shell
+dist-shell/
