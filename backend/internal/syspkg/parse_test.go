@@ -334,4 +334,34 @@ func TestFeatureSteps(t *testing.T) {
 	if len(FeatureSteps(rd, "pacman")) != 1 { // only the refresh
 		t.Error("pacman has no guacd packages")
 	}
+	// "wsdd/wsdd2": one step trying wsdd, then wsdd2.
+	d, _ := FeatureByID("discovery")
+	ds := FeatureSteps(d, "apt")
+	alt := ds[len(ds)-1].Alternatives
+	if len(alt) != 2 || alt[0][len(alt[0])-1] != "wsdd" || alt[1][len(alt[1])-1] != "wsdd2" {
+		t.Errorf("discovery alternatives: %+v", ds[len(ds)-1])
+	}
+}
+
+func TestJobsAlternativesStopAtFirstSuccess(t *testing.T) {
+	js := NewJobs()
+	var ran []string
+	js.exec = func(ctx context.Context, args []string) *exec.Cmd {
+		ran = append(ran, args[len(args)-1])
+		if args[len(args)-1] == "wsdd" {
+			return exec.CommandContext(ctx, "this-command-does-not-exist-nocap")
+		}
+		return exec.CommandContext(ctx, os.Args[0], "-test.run=^$") // succeeds
+	}
+	done := make(chan Job, 1)
+	steps := []Step{{Label: "install", Alternatives: [][]string{{"apt-get", "install", "wsdd"}, {"apt-get", "install", "wsdd2"}, {"apt-get", "install", "never"}}}}
+	if _, err := js.Start("feature", "discovery", steps, func(j Job) { done <- j }); err != nil {
+		t.Fatal(err)
+	}
+	if end := <-done; !end.OK {
+		t.Errorf("job: %+v", end)
+	}
+	if strings.Join(ran, ",") != "wsdd,wsdd2" {
+		t.Errorf("ran %v, want wsdd then wsdd2", ran)
+	}
 }

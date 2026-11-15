@@ -31,6 +31,8 @@ type Step struct {
 	Optional bool
 	Fn       func(ctx context.Context, out io.Writer) error
 	Label    string // shown instead of Args (for Fn steps)
+	// Alternatives: commands tried in order until one succeeds (Args unused).
+	Alternatives [][]string
 }
 
 // Job is a package task as the UI sees it.
@@ -138,6 +140,18 @@ func (js *Jobs) run(ctx context.Context, x *job, steps []Step) error {
 		var err error
 		if st.Fn != nil {
 			err = st.Fn(ctx, x)
+		} else if len(st.Alternatives) > 0 {
+			// The first one that works (packages named differently per release).
+			for i, alt := range st.Alternatives {
+				if i > 0 {
+					fmt.Fprintf(x, "$ %s\n", strings.Join(alt, " "))
+				}
+				cmd := js.exec(ctx, alt)
+				cmd.Stdout, cmd.Stderr = x, x
+				if err = cmd.Run(); err == nil || ctx.Err() != nil {
+					break
+				}
+			}
 		} else {
 			cmd := js.exec(ctx, st.Args)
 			cmd.Stdout, cmd.Stderr = x, x
@@ -216,13 +230,22 @@ func FeatureSteps(f Feature, mgr string) []Step {
 			steps = append(steps, Step{Args: r, Optional: true})
 		}
 	}
-	for _, p := range f.Packages[mgr] {
-		plan, err := Plan(mgr, ActInstall, p)
-		if err != nil {
-			continue
+	for _, entry := range f.Packages[mgr] {
+		var cmds [][]string
+		for _, p := range Alternatives(entry) {
+			plan, err := Plan(mgr, ActInstall, p)
+			if err != nil {
+				continue
+			}
+			cmds = append(cmds, plan[len(plan)-1]) // skip the per-install refresh on apt
 		}
-		last := plan[len(plan)-1] // skip the per-install refresh on apt
-		steps = append(steps, Step{Args: last, Optional: true})
+		switch len(cmds) {
+		case 0:
+		case 1:
+			steps = append(steps, Step{Args: cmds[0], Optional: true})
+		default: // "a/b": whichever this distribution has
+			steps = append(steps, Step{Label: strings.Join(cmds[0], " "), Alternatives: cmds, Optional: true})
+		}
 	}
 	return steps
 }

@@ -20,7 +20,7 @@ MODE="${1:-}"
 VNC_PORT="${NOCAP_VNC_PORT:?}"
 WEB_PORT="${NOCAP_WEB_PORT:?}"
 GEOM="${NOCAP_GEOMETRY:-1600x900}"
-REPAIR='open Packages and repair "Full Linux desktop and app streams"'
+REPAIR='open Packages and repair "Linux app streams (virtual display and VNC)"'
 
 novnc_dir() {
   local d

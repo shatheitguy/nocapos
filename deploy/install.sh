@@ -213,13 +213,14 @@ ensure_docker() { # $1 = required (1) or optional (0)
 # ---------------------------------------------------------------- host packages
 # What NoCapOS's features need from the host, per package manager. One line per
 # feature: feature|apt|dnf|pacman|zypper ("-" = this distribution doesn't have
-# it). Keep in sync with backend/internal/syspkg/features.go (a test checks).
-# Packages a distribution doesn't carry are skipped with a warning; none of
-# them is required, so the install never fails over one. --minimal skips all.
+# it; "a/b" = whichever of a and b this distribution has). Keep in sync with
+# backend/internal/syspkg/features.go (a test checks). None of them is
+# required, so the install never fails over one; what didn't install is
+# listed at the end, with the reason. --minimal skips all.
 PKG_TABLE='
 virtualization|qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients ovmf swtpm swtpm-tools|qemu-kvm qemu-img libvirt edk2-ovmf swtpm swtpm-tools|qemu-base libvirt edk2-ovmf swtpm dnsmasq|qemu-kvm qemu-tools libvirt qemu-ovmf-x86_64 swtpm
 sharing|samba smbclient cifs-utils nfs-common|samba samba-client cifs-utils nfs-utils|samba smbclient cifs-utils nfs-utils|samba samba-client cifs-utils nfs-client
-discovery|wsdd|wsdd|wsdd|wsdd
+discovery|wsdd/wsdd2|wsdd|wsdd|wsdd
 remote-desktop|guacd libguac-client-rdp0 libguac-client-vnc0|guacd libguac-client-rdp libguac-client-vnc|-|-
 mdns|avahi-daemon libnss-mdns|avahi nss-mdns|avahi nss-mdns|avahi nss-mdns
 smart|smartmontools|smartmontools|smartmontools|smartmontools
@@ -227,8 +228,35 @@ zfs|zfsutils-linux|-|-|-
 media|ffmpeg|ffmpeg-free|ffmpeg|ffmpeg
 backup|restic rclone|restic rclone|restic rclone|restic rclone
 flatpak|flatpak|flatpak|flatpak|flatpak
-linux-desktop|xvfb x11vnc novnc websockify openbox lxpanel pcmanfm lxterminal dbus-x11 dbus-user-session wayvnc|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox lxpanel pcmanfm lxterminal dbus-x11 wayvnc|xorg-server-xvfb x11vnc novnc websockify openbox lxpanel pcmanfm lxterminal wayvnc|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox lxpanel pcmanfm lxterminal dbus-1-x11 wayvnc
+app-streams|xvfb x11vnc novnc websockify openbox|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox|xorg-server-xvfb x11vnc novnc websockify openbox|xorg-x11-server-Xvfb x11vnc novnc python3-websockify openbox
 '
+
+# >>> package helpers
+# Installing packages. On apt, before anything is installed: wait while
+# another package tool holds the lock, refresh the package lists once, and
+# repair a broken dpkg/apt state (the same steps as Settings → Glow Up's
+# repair: finish what dpkg left half-done, then fix unmet dependencies; a
+# package is never removed without being listed first). Each feature's
+# packages go in one install; when that fails, one at a time, and every
+# package that fails gets the package tool's own error lines. What didn't
+# install is collected for pkg_summary at the end; none of it stops the
+# install. Tested with a fake apt in backend/internal/deploytest.
+
+APT_LOCK_TIMEOUT="${APT_LOCK_TIMEOUT:-600}" # seconds to wait for another package tool
+APT_LOCK_POLL="${APT_LOCK_POLL:-5}"
+APT_LOCKS="${APT_LOCKS:-/var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock}"
+APT_MAX_AUTO_REMOVE=10 # with --yes, a repair removes at most this many packages without asking
+APT_OPTS=(-o DPkg::Lock::Timeout=120 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+APT_REFRESHED=0
+APT_REFRESH_RC=0
+APT_PREPARED=0
+APT_RETRIED=0
+APT_BROKEN_PKGS=""
+PKG_FAILED=() # "feature|package|why", for pkg_summary
+PKG_REMOVED=""
+PKG_LOG="$(mktemp 2>/dev/null || echo "/tmp/nocapos-pkg.$$")"
+PKG_LOG2="$PKG_LOG.2"
+trap 'rm -f "$PKG_LOG" "$PKG_LOG2"' EXIT
 
 pkg_manager() {
   if has apt-get; then echo apt
@@ -238,18 +266,211 @@ pkg_manager() {
   else echo none; fi
 }
 
-pkg_refresh() { # $1 = manager
+# seconds_text N: "90 seconds", "10 minutes".
+seconds_text() { if [ "$1" -ge 120 ] 2>/dev/null; then echo "$(($1 / 60)) minutes"; else echo "$1 seconds"; fi; }
+
+# pkg_error_tail LOG [N]: the package tool's last N (10) meaningful lines,
+# indented, for the person to read.
+pkg_error_tail() {
+  grep -vE '^(Reading package lists|Building dependency tree|Reading state information|WARNING: apt does not have a stable CLI)|^[[:space:]]*$' "$1" 2>/dev/null |
+    tail -n "${2:-10}" | sed 's/^/      | /' || true
+}
+
+# pkg_reason LOG: one line saying why, for the summary.
+pkg_reason() {
+  local r
+  r="$(grep -m1 -E '^(E: |dpkg: error|Error: |error: )' "$1" 2>/dev/null || true)"
+  [ -n "$r" ] || r="$(pkg_error_tail "$1" 1 | sed 's/^      | //')"
+  printf '%s' "${r:-no message}"
+}
+
+# apt_lock_holder: prints what holds an apt/dpkg lock; fails when nothing does.
+apt_lock_holder() {
+  local f pids names
+  if has fuser; then
+    for f in $APT_LOCKS; do
+      [ -e "$f" ] || continue
+      pids="$(fuser "$f" 2>/dev/null || true)"
+      pids="$(echo $pids)" # one line, single spaces
+      [ -n "$pids" ] || continue
+      names="$(ps -o comm= -p "${pids// /,}" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
+      echo "${names}pid $pids"
+      return 0
+    done
+    return 1
+  fi
+  # No fuser (psmisc): look for the package tools themselves.
+  local d c found=""
+  for d in /proc/[0-9]*; do
+    c="$(cat "$d/comm" 2>/dev/null || true)"
+    case "$c" in apt | apt-get | aptitude | dpkg | unattended-upgr) ;; *) continue ;; esac
+    [ "$d/root" -ef / ] || continue # inside a container: not this system's apt
+    found="$found${found:+, }$c pid ${d#/proc/}"
+  done
+  [ -n "$found" ] || return 1
+  echo "$found"
+}
+
+# apt_wait_lock: waits (up to APT_LOCK_TIMEOUT) while another package tool,
+# say the automatic updates, holds apt's lock.
+apt_wait_lock() {
+  local who waited=0 said=0 poll="$APT_LOCK_POLL"
+  [ "$poll" -ge 1 ] 2>/dev/null || poll=1
+  while who="$(apt_lock_holder)"; do
+    if [ "$waited" -ge "$APT_LOCK_TIMEOUT" ]; then
+      warn "apt is still busy after $(seconds_text "$APT_LOCK_TIMEOUT") ($who); carrying on, so installs may fail on apt's lock"
+      return 1
+    fi
+    if [ "$said" -eq 0 ]; then
+      info "Waiting for another package tool to finish ($who; up to $(seconds_text "$APT_LOCK_TIMEOUT"))"
+      said=1
+    fi
+    sleep "$poll"
+    waited=$((waited + poll))
+  done
+  [ "$said" -eq 0 ] || printf '    apt is free again\n'
+  return 0
+}
+
+# apt_refresh [force]: apt-get update, once per run unless forced. Says
+# what went wrong: a failed update, or sources that couldn't be read.
+apt_refresh() {
+  if [ "$APT_REFRESHED" -eq 1 ] && [ "${1:-}" != force ]; then return "$APT_REFRESH_RC"; fi
+  APT_REFRESHED=1
+  apt_wait_lock || true
+  if LC_ALL=C apt-get update -q "${APT_OPTS[@]}" >"$PKG_LOG" 2>&1; then
+    APT_REFRESH_RC=0
+    # apt-get update succeeds even when some sources failed.
+    if grep -qE '^(W|E): ' "$PKG_LOG"; then
+      warn "Some package sources couldn't be read; packages from them may be missing. apt said:"
+      grep -E '^(W|E): ' "$PKG_LOG" | tail -n 5 | sed 's/^/      | /' >&2
+    fi
+  else
+    APT_REFRESH_RC=1
+    warn "Couldn't refresh the package lists (apt-get update failed); trying with what's cached. apt said:"
+    pkg_error_tail "$PKG_LOG" >&2
+  fi
+  return "$APT_REFRESH_RC"
+}
+
+# apt_health: fails when dpkg/apt are in a broken state, naming the
+# packages in APT_BROKEN_PKGS. The same checks as
+# backend/internal/syspkg/repair.go: packages dpkg left half-done
+# (half-installed, unpacked, half-configured, awaiting triggers) or marked
+# for reinstall, `dpkg --audit`, and `apt-get check`.
+apt_health() {
+  local half audit check rc=0 names
+  half="$(LC_ALL=C dpkg-query -W -f='${binary:Package}\t${db:Status-Abbrev}\n' 2>/dev/null |
+    awk -F'\t' 'length($2) >= 2 && (index("HUFWt", substr($2, 2, 1)) || substr($2, 3, 1) == "R") {print $1}' || true)"
+  audit="$(LC_ALL=C dpkg --audit 2>&1 || true)"
+  check="$(LC_ALL=C apt-get check -q 2>&1)" || rc=$?
+  case "$check" in *"Could not get lock"* | *"Unable to acquire"*) rc=0 ;; esac # busy, not broken
+  [ "$rc" -ne 0 ] || check=""
+  names="$(
+    {
+      printf '%s\n' "$half"
+      printf '%s\n' "$audit" | awk '/^ [^ ]/ {print $1}'
+      printf '%s\n' "$check" | awk -F' : ' '/^ +[^ ]+ : / {sub(/^ +/, "", $1); print $1}'
+    } | grep -E '^[a-z0-9][a-z0-9+.:-]*$' | sort -u | tr '\n' ' ' || true
+  )"
+  APT_BROKEN_PKGS="${names% }"
+  [ -z "$half" ] && [ -z "${audit//[[:space:]]/}" ] && [ -z "$check" ]
+}
+
+# apt_confirm_remove PACKAGES: whether a repair may remove these packages.
+# With --yes: yes for a few (never the running kernel's); otherwise it asks.
+apt_confirm_remove() {
+  local n a
+  n="$(wc -w <<<"$1")"
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    if grep -qw -- "linux-image-$(uname -r)" <<<"$1"; then
+      warn "Not removing the running kernel's package without asking."
+      return 1
+    fi
+    if [ "$n" -gt "$APT_MAX_AUTO_REMOVE" ]; then
+      warn "That's $n packages, too many to remove without asking; run the installer without --yes to decide."
+      return 1
+    fi
+    return 0
+  fi
+  local tty="${NOCAP_TTY:-/dev/tty}" # the tests answer from a file
+  if ! [ -r "$tty" ] || ! (: <"$tty") 2>/dev/null; then
+    warn "There's no terminal to ask on, so nothing is removed."
+    return 1
+  fi
+  read -r -p "Remove them so packages can install again? [y/N] " a <"$tty" || return 1
+  [[ "$a" =~ ^[Yy] ]]
+}
+
+# apt_repair: finishes what dpkg left half-done and fixes unmet
+# dependencies, like the in-app repair. Fails (after saying why) when the
+# package system is still broken.
+apt_repair() {
+  local removes no_remove=(--no-remove)
+  info "Repairing the package system first (an earlier install or update didn't finish)"
+  [ -z "$APT_BROKEN_PKGS" ] || printf '    broken: %s\n' "$APT_BROKEN_PKGS"
+  apt_wait_lock || true
+  # A package whose dependency is missing can't be configured yet, so this
+  # may fail; --fix-broken below installs what's missing.
+  LC_ALL=C DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a >"$PKG_LOG2" 2>&1 || true
+  LC_ALL=C apt-get -s --fix-broken install >"$PKG_LOG" 2>&1 || true
+  removes="$(awk '$1 == "Remv" || $1 == "Purg" {print $2}' "$PKG_LOG" | sort -u | tr '\n' ' ')"
+  removes="${removes% }"
+  if [ -n "$removes" ]; then
+    warn "Repairing the package system would remove: $removes"
+    if apt_confirm_remove "$removes"; then
+      no_remove=()
+    else
+      warn "Nothing was removed; the repair goes as far as it can without that."
+    fi
+  fi
+  if LC_ALL=C DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -q ${no_remove[@]+"${no_remove[@]}"} "${APT_OPTS[@]}" --fix-broken >"$PKG_LOG" 2>&1; then
+    if [ -n "$removes" ] && [ "${#no_remove[@]}" -eq 0 ]; then
+      PKG_REMOVED="${PKG_REMOVED:+$PKG_REMOVED }$removes"
+      info "Removed to repair the package system: $removes"
+    fi
+  fi
+  LC_ALL=C DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a >"$PKG_LOG2" 2>&1 || true
+  if apt_health; then
+    printf '    package system repaired\n'
+    return 0
+  fi
+  warn "The package system is still broken${APT_BROKEN_PKGS:+ ($APT_BROKEN_PKGS)}, so installs may fail. The package tools said:"
+  if grep -q . "$PKG_LOG2" 2>/dev/null; then # dpkg's own error, then apt's verdict
+    { pkg_error_tail "$PKG_LOG2" 6; grep '^E: ' "$PKG_LOG" | tail -n 2 | sed 's/^/      | /' || true; } >&2
+  else
+    pkg_error_tail "$PKG_LOG" 6 >&2
+  fi
+  local why
+  why="$(pkg_reason "$PKG_LOG2")"
+  [ "$why" != "no message" ] || why="$(pkg_reason "$PKG_LOG")"
+  PKG_FAILED+=("package system|${APT_BROKEN_PKGS:-apt}|still broken: $why")
+  APT_RETRIED=1 # a second try wouldn't get further
+  return 1
+}
+
+# apt_prepare: once per run, before the first apt install.
+apt_prepare() {
+  [ "$APT_PREPARED" -eq 0 ] || return 0
+  APT_PREPARED=1
+  apt_refresh || true
+  apt_health || apt_repair || true
+}
+
+pkg_refresh() { # $1 = manager, $2 = force (apt refreshes once per run otherwise)
   case "$1" in
-    apt) apt-get update -q >/dev/null 2>&1 ;;
+    apt) apt_refresh "${2:-}" ;;
     dnf) dnf -q makecache >/dev/null 2>&1 ;;
     pacman) pacman -Sy >/dev/null 2>&1 ;;
     zypper) zypper --non-interactive -q refresh >/dev/null 2>&1 ;;
   esac
 }
 
-pkg_available() { # $1 = manager, $2 = package
+# pkg_available MANAGER PACKAGE: this system's repositories have it (on
+# apt: it has an install candidate; a purely virtual package hasn't).
+pkg_available() {
   case "$1" in
-    apt) apt-cache show "$2" >/dev/null 2>&1 ;;
+    apt) [ -n "$(LC_ALL=C apt-cache policy "$2" 2>/dev/null | awk '$1 == "Candidate:" && $2 != "(none)" {print $2; exit}')" ] ;;
     dnf) dnf -q info "$2" >/dev/null 2>&1 ;;
     pacman) pacman -Si "$2" >/dev/null 2>&1 ;;
     zypper) zypper --non-interactive -q info "$2" 2>/dev/null | grep -q '^Name' ;;
@@ -268,17 +489,157 @@ pkg_installed() {
   esac
 }
 
-pkg_install() { # $1 = manager, rest = packages
-  local mgr="$1"; shift
+# pkg_pick MANAGER ALTERNATIVES: of "a/b", the one that's installed, else
+# the first one this system's repositories have; fails when there's none.
+pkg_pick() {
+  local alt
+  for alt in ${2//\// }; do
+    if pkg_installed "$1" "$alt"; then echo "$alt"; return 0; fi
+  done
+  for alt in ${2//\// }; do
+    if pkg_available "$1" "$alt"; then echo "$alt"; return 0; fi
+  done
+  return 1
+}
+
+# pkg_run_install MANAGER full|lean PACKAGE...: the install, with the
+# package tool's output on stdout (lean: without apt's "recommended" extras).
+pkg_run_install() {
+  local mgr="$1" lean="$2"
+  shift 2
   case "$mgr" in
-    apt) DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -q \
-      -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@" >/dev/null 2>&1 ;;
-    dnf) dnf install -y -q "$@" >/dev/null 2>&1 ;;
-    pacman) pacman -S --noconfirm --needed "$@" >/dev/null 2>&1 ;;
-    zypper) zypper --non-interactive -q install "$@" >/dev/null 2>&1 ;;
+    apt)
+      local extra=()
+      [ "$lean" != lean ] || extra=(--no-install-recommends)
+      LC_ALL=C DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -q ${extra[@]+"${extra[@]}"} "${APT_OPTS[@]}" "$@" 2>&1
+      ;;
+    dnf) dnf install -y -q "$@" 2>&1 ;;
+    pacman) pacman -S --noconfirm --needed "$@" 2>&1 ;;
+    zypper) zypper --non-interactive -q install "$@" 2>&1 ;;
     *) return 1 ;;
   esac
 }
+
+pkg_install() { # $1 = manager, rest = packages; quiet
+  local mgr="$1"
+  shift
+  [ "$mgr" != apt ] || { apt_prepare; apt_wait_lock || true; }
+  pkg_run_install "$mgr" full "$@" >/dev/null 2>&1
+}
+
+# apt_broken_output LOG: apt stopped on a broken package state.
+apt_broken_output() { grep -qE 'Unmet dependencies|--fix-broken|dpkg was interrupted|dpkg --configure -a' "$1" 2>/dev/null; }
+
+# pkg_install_group MANAGER FEATURE full|lean PACKAGE...: installs the
+# packages in one go; when that fails, one at a time, printing the package
+# tool's error for each one that fails. Fails when any did.
+pkg_install_group() {
+  local mgr="$1" feature="$2" lean="$3" p rc=0
+  shift 3
+  [ "$#" -gt 0 ] || return 0
+  [ "$mgr" != apt ] || { apt_prepare; apt_wait_lock || true; }
+  pkg_run_install "$mgr" "$lean" "$@" >"$PKG_LOG" 2>&1 && return 0
+  # The package system broke partway (or couldn't be repaired at the
+  # start): one more repair, then the group again.
+  if [ "$mgr" = apt ] && [ "$APT_RETRIED" -eq 0 ] && apt_broken_output "$PKG_LOG"; then
+    APT_RETRIED=1
+    if ! apt_health && apt_repair; then
+      pkg_run_install "$mgr" "$lean" "$@" >"$PKG_LOG" 2>&1 && return 0
+    fi
+  fi
+  # A package that can't be configured (a DKMS build that fails, say) makes
+  # every install report an error, even when this group's packages went in
+  # fine: only the ones that really aren't installed count.
+  local left=()
+  for p in "$@"; do pkg_installed "$mgr" "$p" || left+=("$p"); done
+  [ "${#left[@]}" -gt 0 ] || return 0
+  set -- "${left[@]}"
+  # apt refuses every install while the package system is broken: one by
+  # one wouldn't get further, so say it once for the whole group.
+  if [ "$mgr" = apt ] && apt_broken_output "$PKG_LOG"; then
+    local what="$*"
+    [ "$#" -le 4 ] || what="$# packages ($1, $2, $3, ...)"
+    warn "$feature: nothing could install while the package system is broken${APT_BROKEN_PKGS:+ ($APT_BROKEN_PKGS)}. apt said:"
+    pkg_error_tail "$PKG_LOG" 4 >&2
+    PKG_FAILED+=("$feature|$what|the package system is broken: $(pkg_reason "$PKG_LOG")")
+    return 1
+  fi
+  for p in "$@"; do
+    if [ "$#" -gt 1 ]; then
+      [ "$mgr" != apt ] || apt_wait_lock || true
+      pkg_run_install "$mgr" "$lean" "$p" >"$PKG_LOG" 2>&1 && continue
+      pkg_installed "$mgr" "$p" && continue
+    fi
+    rc=1
+    warn "$feature: $p didn't install. The package tool said:"
+    pkg_error_tail "$PKG_LOG" >&2
+    PKG_FAILED+=("$feature|$p|install failed: $(pkg_reason "$PKG_LOG")")
+  done
+  return "$rc"
+}
+
+# pkg_not_available FEATURE PACKAGE...: not in this system's repositories.
+pkg_not_available() {
+  local feature="$1" p
+  shift
+  [ "$#" -gt 0 ] || return 0
+  warn "$feature: not in this system's repositories, skipped: $*"
+  for p in "$@"; do PKG_FAILED+=("$feature|$p|not in this system's repositories"); done
+}
+
+# GUACD_NOTE: guacd (the Remote Desktop engine) isn't packaged everywhere;
+# NoCapOS runs it as a container then, so that isn't a warning.
+GUACD_NOTE="guacd isn't packaged for this system; NoCapOS runs it as a container the first time Remote Desktop is used"
+GUACD_SAID=0
+guacd_note() { # $1 = feature; said once per run
+  [ "$GUACD_SAID" -eq 0 ] || return 0
+  GUACD_SAID=1
+  printf '    %s: %s\n' "$1" "$GUACD_NOTE"
+}
+
+# host_feature_packages MANAGER FEATURE LIST: installs one feature's
+# packages; the ones already installed are skipped, the ones this system's
+# repositories don't have are reported.
+host_feature_packages() {
+  local mgr="$1" feature="$2" list="$3" p pick avail=() missing=()
+  for p in $list; do
+    if [[ "$p" == */* ]]; then # alternatives: whichever this system has
+      if pick="$(pkg_pick "$mgr" "$p")"; then
+        pkg_installed "$mgr" "$pick" || avail+=("$pick")
+      else
+        missing+=("${p//\// or }")
+      fi
+      continue
+    fi
+    pkg_installed "$mgr" "$p" && continue # already here (NoCapOS images): no download
+    if pkg_available "$mgr" "$p"; then avail+=("$p"); else missing+=("$p"); fi
+  done
+  if [ "$feature" = remote-desktop ] && [ "${#missing[@]}" -gt 0 ] && [[ " ${missing[*]} " == *" guacd "* ]]; then
+    # Without guacd its plugins are no use; the container has both.
+    guacd_note remote-desktop
+    return 0
+  fi
+  pkg_not_available "$feature" ${missing[@]+"${missing[@]}"}
+  [ "${#avail[@]}" -gt 0 ] || return 0
+  printf '    %s: %s\n' "$feature" "${avail[*]}"
+  pkg_install_group "$mgr" "$feature" full "${avail[@]}" || true
+}
+
+# pkg_summary: what didn't install, and why; nothing when all went well.
+pkg_summary() {
+  local e f p why
+  [ "${#PKG_FAILED[@]}" -gt 0 ] || [ -n "$PKG_REMOVED" ] || return 0
+  echo
+  [ -z "$PKG_REMOVED" ] || echo "   Removed to repair the package system: $PKG_REMOVED"
+  [ "${#PKG_FAILED[@]}" -gt 0 ] || return 0
+  printf '\033[1;33m   Some packages didn'"'"'t install.\033[0m %s runs without them; only their features stay off:\n' "$NAME"
+  for e in "${PKG_FAILED[@]}"; do
+    IFS='|' read -r f p why <<<"$e"
+    printf '     %s: %s (%s)\n' "$f" "$p" "$why"
+  done
+  echo "   Settings → Glow Up → Update everything repairs the packages; each app then offers to install what it needs."
+}
+# <<< package helpers
 
 is_ubuntu() { grep -qE '^ID="?ubuntu"?$' /etc/os-release 2>/dev/null; }
 
@@ -392,60 +753,68 @@ install_zfs_debian() {
   if has zfs && { [ -e /sys/module/zfs ] || modprobe zfs 2>/dev/null; }; then printf '    zfs: already installed\n'; return 0; fi
   printf '    zfs: building OpenZFS for kernel %s with DKMS (a few minutes; longer on small boards)\n' "$(uname -r)"
   enable_contrib
-  pkg_refresh apt || warn "zfs: couldn't refresh the package lists; trying with what's cached"
-  local hdr
+  pkg_refresh apt force || true # contrib may have just been turned on
+  local hdr had=0
   if hdr="$(zfs_headers)"; then
     printf '    zfs: %s\n' "$hdr"
-    pkg_install apt "$hdr" || warn "zfs: couldn't install $hdr; trying the build anyway"
+    pkg_installed apt "$hdr" || pkg_install_group apt zfs full "$hdr" || warn "zfs: trying the build without $hdr"
   else
     warn "zfs: no kernel headers for kernel $(uname -r) in your apt sources; trying the build anyway"
   fi
   if ! pkg_available apt zfs-dkms; then
-    warn "zfs: zfs-dkms isn't in your apt sources (contrib missing?); skipped. Install it later from the Storage app"
+    pkg_not_available zfs zfs-dkms
+    warn "zfs: zfs-dkms comes from Debian's contrib component; install it later from the Storage app"
     return 0
   fi
+  if pkg_installed apt zfs-dkms || pkg_installed apt zfsutils-linux; then had=1; fi
   printf '    zfs: zfs-dkms zfsutils-linux\n'
-  if ! pkg_install apt zfs-dkms zfsutils-linux; then
+  if ! pkg_install_group apt zfs full zfs-dkms zfsutils-linux; then
     warn "zfs: the ZFS build failed, usually no kernel headers for $(uname -r); update, reboot, then hit Install in the Storage app"
+    [ "$had" -eq 1 ] || zfs_undo_failed_build
     return 0
   fi
   modprobe zfs 2>/dev/null || warn "zfs: installed, but the kernel module didn't load; reboot, then open the Storage app"
 }
 
+# zfs_undo_failed_build: a DKMS build that failed leaves zfs-dkms half
+# configured, and every later apt install would stop on it. This run put it
+# there, so it comes back out (the Storage app installs it again later).
+zfs_undo_failed_build() {
+  local st
+  st="$(dpkg-query -W -f='${db:Status-Abbrev}' zfs-dkms 2>/dev/null || true)"
+  case "$st" in '' | ii* | un* | pn* | rc*) return 0 ;; esac
+  printf '    zfs: taking the half-installed zfs-dkms back out, so the other packages still install\n'
+  LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get purge -y -q "${APT_OPTS[@]}" zfs-dkms >"$PKG_LOG" 2>&1 ||
+    pkg_error_tail "$PKG_LOG" 6 >&2
+  LC_ALL=C DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a >/dev/null 2>&1 || true
+}
+
 install_host_packages() {
-  local mgr col line feature list p avail skipped
+  local mgr col line feature list
   mgr="$(pkg_manager)"
   case "$mgr" in
     apt) col=2 ;; dnf) col=3 ;; pacman) col=4 ;; zypper) col=5 ;;
     *) warn "No supported package manager: skipping the host packages (NoCapOS offers them later)."; return 0 ;;
   esac
   info "Installing host packages for virtual machines, sharing, remote desktop, mDNS, disks, media and Linux apps (skip with --minimal)"
-  local refreshed=0
+  if [ "$mgr" = apt ]; then
+    apt_prepare
+  else
+    pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
+  fi
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     feature="${line%%|*}"
     list="$(cut -d'|' -f"$col" <<<"$line")"
-    [ "$list" = "-" ] && { warn "$feature: no packages for this distribution; skipped"; continue; }
+    if [ "$list" = "-" ]; then
+      if [ "$feature" = remote-desktop ]; then guacd_note remote-desktop; else printf '    %s: no packages for this distribution; skipped\n' "$feature"; fi
+      continue
+    fi
     if [ "$feature" = zfs ] && [ "$mgr" = apt ] && ! is_ubuntu; then
       install_zfs_debian # Debian, Raspberry Pi OS: built with DKMS; never fails the install
       continue
     fi
-    avail=() skipped=()
-    for p in $list; do
-      pkg_installed "$mgr" "$p" && continue # already here (NoCapOS images): no download
-      if [ "$refreshed" -eq 0 ]; then
-        pkg_refresh "$mgr" || warn "Couldn't refresh the package lists; trying with what's cached."
-        refreshed=1
-      fi
-      if pkg_available "$mgr" "$p"; then avail+=("$p"); else skipped+=("$p"); fi
-    done
-    [ "${#skipped[@]}" -eq 0 ] || warn "$feature: not available here, skipped: ${skipped[*]}"
-    [ "${#avail[@]}" -gt 0 ] || continue
-    printf '    %s: %s\n' "$feature" "${avail[*]}"
-    if ! pkg_install "$mgr" "${avail[@]}"; then
-      # One broken package shouldn't take the rest of the feature down.
-      for p in "${avail[@]}"; do pkg_install "$mgr" "$p" || warn "$feature: couldn't install $p"; done
-    fi
+    host_feature_packages "$mgr" "$feature" "$list"
   done <<<"$PKG_TABLE"
   enable_host_services
   setup_flathub
@@ -1101,6 +1470,7 @@ EOF
   echo "   storage and a host terminal — all admin-only and recorded in the audit log."
   echo "   Turn on two-factor sign-in under Settings → Security."
   echo "   Manage:  systemctl status|restart nocapos · cap update · cap logs -f · settings in $ETC/nocapos.env"
+  pkg_summary
 }
 
 if [ "$MODE" = docker ]; then install_docker_mode; else install_native_mode; fi

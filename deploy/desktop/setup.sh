@@ -1,5 +1,6 @@
 # NoCap Desktop, the full desktop: sourced by install.sh after lib.sh. Uses
-# install.sh's helpers (info, warn, has, pkg_*) and settings (BUNDLE_DIR,
+# install.sh's helpers (info, warn, has, pkg_*, guacd_note; the package
+# helpers between its "package helpers" marks) and settings (BUNDLE_DIR,
 # ETC, DATA, ARCH, BRANDING). Every file changed outside NoCapOS's own
 # folders is recorded in $DESK_BACKUP, and uninstall-desktop.sh (run by
 # uninstall.sh) puts it back.
@@ -66,19 +67,22 @@ desk_install_packages() { # $1 = family, $2 = manager
     done | desktop_select "$1"
   )
   if [ "${#missing[@]}" -gt 0 ]; then
-    warn "full desktop: these packages aren't available here: ${missing[*]}"
+    pkg_not_available desktop "${missing[@]//|/ or }"
     return 1
   fi
-  [ "${#skipped[@]}" -eq 0 ] || warn "full desktop: optional packages not available here, skipped: ${skipped[*]}"
+  # guacd isn't packaged everywhere; NoCapOS runs it as a container then.
+  local s opt=() guac=0
+  for s in ${skipped[@]+"${skipped[@]}"}; do
+    case "$s" in guacd* | libguac*) guac=1 ;; *) opt+=("${s//|/ or }") ;; esac
+  done
+  [ "${#opt[@]}" -eq 0 ] || printf '    desktop: optional packages not in this system'"'"'s repositories, skipped: %s\n' "${opt[*]}"
+  [ "$guac" -eq 0 ] || guacd_note desktop
   printf '    desktop: %s\n' "${want[*]}"
   desk_hold_services && held=1
-  if ! pkg_install_lean "$2" "${want[@]}"; then
-    local p
-    for p in "${want[@]}"; do pkg_install_lean "$2" "$p" || warn "full desktop: couldn't install $p"; done
-  fi
+  pkg_install_group "$2" desktop lean "${want[@]}" || true
   [ "$held" -eq 0 ] || desk_release_services
-  has gnome-shell || { warn "full desktop: GNOME Shell didn't install"; return 1; }
-  [ -x /usr/sbin/gdm3 ] || [ -x /usr/sbin/gdm ] || has gdm || has gdm3 || { warn "full desktop: the sign-in screen (GDM) didn't install"; return 1; }
+  has gnome-shell || { warn "full desktop: GNOME Shell didn't install (the package tool's error is above)"; return 1; }
+  [ -x /usr/sbin/gdm3 ] || [ -x /usr/sbin/gdm ] || has gdm || has gdm3 || { warn "full desktop: the sign-in screen (GDM) didn't install (the package tool's error is above)"; return 1; }
 }
 
 # The helpers uninstall.sh needs to undo what's recorded in $DESK_BACKUP.
