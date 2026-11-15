@@ -171,8 +171,8 @@ fun WidgetEditSheet(a: MainActivity, start: NoCapItem) {
                 Label(t("Size", "Size"))
                 Chips(NoCapKinds.sizes(item.kind).map { (w, h) -> "$w×$h" to (w to h) }, { it.first == item.cell.w && it.second == item.cell.h }) { (w, h) -> resizeTo(a, item, w, h) }
                 Label(t("Look", "Background"))
-                Chips(listOf(t("Glass", "Glass") to "glass", t("Solid", "Solid") to "solid", t("See-through", "None") to "clear"), { it == item.opt("bg", if (item.kind == NoCapKinds.CLOCK && item.opt("face", "glow") != "analog") "clear" else "glass") }) { put("bg" to it) }
-                Toggle(t("NoCap glow", "Accent glow"), null, item.flag("glow", true)) { put("glow" to if (it) "1" else "0") }
+                Chips(listOf(t("Glass", "Glass") to "glass", t("Solid", "Solid") to "solid", t("See-through", "None") to "clear"), { it == item.opt("bg", if (item.kind == NoCapKinds.CLOCK && item.opt("face", CLOCK_FACE) != "analog") "clear" else "glass") }) { put("bg" to it) }
+                Toggle(t("NoCap glow", "Accent glow"), null, item.flag("glow", false)) { put("glow" to if (it) "1" else "0") }
                 Spacer(Modifier.height(10.dp))
             }
         }
@@ -187,7 +187,7 @@ private fun KindOptions(a: MainActivity, item: NoCapItem, put: (Array<out Pair<S
     when (item.kind) {
         NoCapKinds.CLOCK -> {
             Label(t("Face", "Clock face"))
-            Chips(clockFaces.map { faceName(it) to it }, { it == item.opt("face", "glow") }) { p("face" to it) }
+            Chips(clockFaces.map { faceName(it) to it }, { it == item.opt("face", CLOCK_FACE) }) { p("face" to it) }
             Label(t("Hours", "Time format"))
             Chips(listOf(t("Phone default", "Automatic") to "auto", "12h" to "12", "24h" to "24"), { it == item.opt("h24", "auto") }) { p("h24" to it) }
             Label(t("Alignment", "Alignment"))

@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nocap.link.data.Prefs
 import com.nocap.link.data.t
 import com.nocap.link.home.From
@@ -59,7 +60,11 @@ import com.nocap.link.ServerState
 import com.nocap.link.ui.glass
 import com.nocap.link.ui.Label
 import com.nocap.link.ui.NoCap
-import com.nocap.link.ui.SearchField
+import com.nocap.link.ui.GlassLevel
+import com.nocap.link.ui.NcIcon
+import com.nocap.link.ui.RosterSearch
+import com.nocap.link.ui.ShellIconButton
+import com.nocap.link.ui.shellGlass
 import com.nocap.link.widget.Widgets
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -134,8 +139,9 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
             .statusBarsPadding().navigationBarsPadding().imePadding().padding(horizontal = 14.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            SearchField(q, { q = it }, t("Apps, files, settings…", "Search apps, files and settings"), Modifier.weight(1f).focusRequester(focus))
-            Text(t("Done", "Close"), Modifier.padding(start = 10.dp).clickable { a.layer = Layer.NONE }.padding(6.dp), style = MaterialTheme.typography.labelLarge, color = NoCap.Red)
+            RosterSearch(q, { q = it }, t("Apps, files, settings…", "Search apps, files and settings"), Modifier.weight(1f).focusRequester(focus))
+            Spacer(Modifier.width(8.dp))
+            ShellIconButton("close", t("Close", "Close"), size = 40.dp) { a.layer = Layer.NONE }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (term.isEmpty()) {
@@ -159,20 +165,26 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
             }
             if (term.isNotEmpty()) item {
                 Row(
-                    Modifier.fillMaxWidth().glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.45f)).clickable {
+                    Modifier.fillMaxWidth().shellGlass(RoundedCornerShape(16.dp), GlassLevel.MENU, edge = NoCap.Red.copy(alpha = 0.45f)).clickable {
                         runCatching { a.openAi(q.trim()) }.onFailure { a.toast = t("NoCap AI wouldn't open. Try again.", "NoCap AI couldn't be opened.") }
                         a.layer = Layer.NONE
                     }.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = com.nocap.link.ui.Orbitron), color = NoCap.Red)
+                    NcIcon("sparkles", NoCap.Red, 20.dp)
                     Text(t("Ask NoCap AI: “${q.trim()}”", "Ask NoCap AI: “${q.trim()}”"), Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             if (settings.isNotEmpty()) item {
                 Section(t("Settings", "Settings")) {
                     settings.take(6).forEach { s ->
-                        Text(s.title, Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { a.layer = Layer.NONE; if (s.go === openMine) a.settingsQuery = s.words.substringBefore(' '); s.go(a) }.padding(vertical = 9.dp, horizontal = 4.dp), style = MaterialTheme.typography.titleSmall)
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { a.layer = Layer.NONE; if (s.go === openMine) a.settingsQuery = s.words.substringBefore(' '); s.go(a) }.padding(vertical = 9.dp, horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            NcIcon(if (s.go === openMine) "sliders" else "settings", NoCap.Muted, 17.dp)
+                            Text(s.title, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.titleSmall)
+                        }
                     }
                 }
             }
@@ -201,8 +213,8 @@ fun SearchLayer(a: MainActivity, ui: HomeUi) {
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(12.dp)) {
-        Label(title)
+    Column(Modifier.fillMaxWidth().shellGlass(RoundedCornerShape(18.dp), GlassLevel.MENU).padding(12.dp)) {
+        Text(title, style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 0.sp), color = NoCap.Muted)
         Spacer(Modifier.height(8.dp))
         content()
     }

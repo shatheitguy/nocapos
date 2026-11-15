@@ -71,6 +71,7 @@ import com.nocap.link.ui.NoCap
 import com.nocap.link.ui.NoCapTheme
 import com.nocap.link.widget.Widgets
 import java.io.File
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -375,9 +376,12 @@ class MainActivity : ComponentActivity() {
         appsDirty = false
         appsJob?.cancel()
         appsJob = lifecycleScope.launch {
+            // The saved home layout is read alongside the app list, both off the main thread;
+            // until then the home screen shows its light placeholder.
+            val saved = if (Home.loaded) null else async(Dispatchers.IO) { Home.readSaved(this@MainActivity) }
             val apps = withContext(Dispatchers.IO) { PhoneApps.load(this@MainActivity) }
             phoneApps = apps
-            Home.load(this@MainActivity) { firstRun(apps) }
+            saved?.await()?.let { s -> Home.install(s) { firstRun(apps) } }
             Home.prune(apps.map { it.key }.toSet())
             prunePhotos()
         }
