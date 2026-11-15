@@ -1,5 +1,24 @@
 package com.nocap.link.ai
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.nocap.link.ui.GlassLevel
+import com.nocap.link.ui.NcIcon
+import com.nocap.link.ui.PillButton
+import com.nocap.link.ui.Shell
+import com.nocap.link.ui.ShellIconButton
+import com.nocap.link.ui.shellGlass
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
@@ -259,39 +278,78 @@ class AiActivity : ComponentActivity() {
 
     private fun voiceAvailable() = canListen
 
+    /*
+     * Laid out like the web OS AI Assistant: a top bar (chats, title, new
+     * chat), the thread with the assistant's avatar and accent user bubbles,
+     * the welcome orb with suggestions, and the compose box at the bottom;
+     * the chat list slides in from the left as a drawer.
+     */
     @Composable
     private fun Screen() {
         BackHandler(showList) { showList = false }
         Wallpaper {
+            Box(Modifier.fillMaxSize().background(Shell.tint(GlassLevel.SHEET)))
             // Clear of status/nav bars, cutouts and the keyboard, so nothing sits under them.
-            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-                Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { showList = !showList }) { Icon(Icons.Filled.List, t("Chats", "Conversations"), tint = NoCap.Text) }
-                    Column(Modifier.weight(1f)) {
-                        Text("NOCAP AI", style = MaterialTheme.typography.headlineSmall)
-                        Text(conversations.firstOrNull { it.id == current }?.title?.ifBlank { null } ?: t("New chat", "New conversation"), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                Column(Modifier.fillMaxSize()) {
+                    TopBar()
+                    if (api == null) {
+                        Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                            Orb(68.dp)
+                            Spacer(Modifier.height(14.dp))
+                            Text(t("NoCap AI lives on your NoCap server. Link this phone first.", "NoCap AI runs on your NoCap server. Link this phone first."), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+                            Spacer(Modifier.height(16.dp))
+                            PillButton(t("Link with NoCap Link", "Link with NoCap Link"), {
+                                startActivity(Intent(this@AiActivity, MainActivity::class.java).setAction(MainActivity.ACTION_HUB))
+                                finish()
+                            })
+                        }
+                        return@Column
                     }
-                    IconButton(onClick = { newChat() }) { Icon(Icons.Filled.Add, t("New chat", "New conversation"), tint = NoCap.Red) }
-                    IconButton(onClick = { finish() }) { Icon(Icons.Filled.Close, t("Close", "Close"), tint = NoCap.Text) }
-                }
-                if (api == null) {
-                    Column(Modifier.weight(1f).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(t("NoCap AI lives on your NoCap server. Link this phone first.", "NoCap AI runs on your NoCap server. Link this phone first."), style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.height(16.dp))
-                        RedButton(t("Link with NoCap Link", "Link with NoCap Link"), {
-                            startActivity(Intent(this@AiActivity, MainActivity::class.java).setAction(MainActivity.ACTION_HUB))
-                            finish()
-                        })
+                    Box(Modifier.weight(1f).fillMaxWidth()) { Chat() }
+                    error?.let { e ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(NoCap.Bad.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            NcIcon("alert", NoCap.Bad, 16.dp)
+                            Text(e, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Bad)
+                        }
                     }
-                    return@Column
+                    InputBar()
                 }
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                    Chat()
-                    if (showList) ChatList()
-                }
-                error?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Warn) }
-                InputBar()
+                if (showList) ChatList()
             }
+        }
+    }
+
+    /** The red orb (.ai-orb): an accent gradient circle with the sparkles. */
+    @Composable
+    private fun Orb(size: androidx.compose.ui.unit.Dp) {
+        val red = NoCap.Red
+        Box(
+            Modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(red, androidx.compose.ui.graphics.lerp(red, Color.Black, 0.45f)))),
+            contentAlignment = Alignment.Center,
+        ) { NcIcon("sparkles", Color.White, size * 0.5f) }
+    }
+
+    @Composable
+    private fun TopBar() {
+        Column {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ShellIconButton("menu", t("Chats", "Conversations")) { showList = !showList }
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                    Text(
+                        conversations.firstOrNull { it.id == current }?.title?.ifBlank { null } ?: t("New chat", "New chat"),
+                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    Text("NoCap AI", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = NoCap.Muted, maxLines = 1)
+                }
+                ShellIconButton("plus", t("New chat", "New chat"), tint = NoCap.Red) { newChat() }
+                Spacer(Modifier.width(6.dp))
+                ShellIconButton("close", t("Close", "Close")) { finish() }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Shell.edge))
         }
     }
 
@@ -306,62 +364,143 @@ class AiActivity : ComponentActivity() {
             if (seen < 0 || seen >= messages.lastIndex - 2) state.scrollToItem(messages.lastIndex, Int.MAX_VALUE)
         }
         if (messages.isEmpty()) {
-            Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-                Text(t("What's good?", "How can I help?"), style = MaterialTheme.typography.displaySmall)
-                Spacer(Modifier.height(8.dp))
-                Text(t("Ask anything. It runs on your own NoCap server, with your memory and rules.", "Ask anything. NoCap AI runs on your NoCap server with your saved memory and rules."), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted)
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Orb(68.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(t("What's the move?", "How can I help?"), style = MaterialTheme.typography.titleMedium.copy(fontSize = 22.sp), textAlign = TextAlign.Center)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    t("Ask anything. It runs on your own NoCap server, with your memory and rules. No cap.", "Ask anything. NoCap AI runs on your NoCap server with your saved memory and rules."),
+                    style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted, textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(14.dp))
+                listOf(
+                    t("What's eating all my disk space?", "Explain what is using the most disk space on a server"),
+                    t("Write me a script that backs up a folder every night", "Write a shell script that backs up a folder every night"),
+                    t("Give me a checklist to lock down my home server", "Give me a checklist for securing a home server"),
+                ).forEach { s ->
+                    Text(
+                        s,
+                        Modifier.padding(vertical = 4.dp).widthIn(max = 520.dp).clip(RoundedCornerShape(50)).background(Shell.hover).border(1.dp, Shell.edge, RoundedCornerShape(50))
+                            .clickable { input = s; send() }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp), color = NoCap.Text,
+                    )
+                }
             }
             return
         }
-        LazyColumn(state = state, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+        val clip = LocalClipboardManager.current
+        LazyColumn(state = state, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
             itemsIndexed(messages) { i, m ->
                 val mine = m.role == "user"
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                    Box(
-                        Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(16.dp))
-                            .background(if (mine) NoCap.Red.copy(alpha = 0.85f) else NoCap.Card)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                    ) {
-                        val text = when {
-                            m.error.isNotBlank() && m.content.isBlank() -> "⚠ " + m.error
-                            m.content.isEmpty() && thinking && i == messages.lastIndex -> t("Cooking…", "Thinking…")
-                            else -> m.content
+                val text = when {
+                    m.error.isNotBlank() && m.content.isBlank() -> m.error
+                    m.content.isEmpty() && thinking && i == messages.lastIndex -> t("Cooking…", "Thinking…")
+                    else -> m.content
+                }
+                if (mine) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Box(
+                            Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 4.dp, bottomStart = 16.dp))
+                                .background(NoCap.Red).padding(horizontal = 14.dp, vertical = 9.dp),
+                        ) { SelectionContainer { Text(text, style = MaterialTheme.typography.bodyLarge, color = Color.White) } }
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth()) {
+                        Orb(28.dp)
+                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            val failed = m.error.isNotBlank() && m.content.isBlank()
+                            if (failed) {
+                                Row(Modifier.clip(RoundedCornerShape(12.dp)).background(NoCap.Bad.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                                    NcIcon("alert", NoCap.Bad, 16.dp)
+                                    Text(text, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium, color = NoCap.Bad)
+                                }
+                            } else {
+                                SelectionContainer { Text(text, style = MaterialTheme.typography.bodyLarge, color = if (m.content.isEmpty()) NoCap.Muted else NoCap.Text) }
+                            }
+                            // Message actions, like the web's (shown for finished replies).
+                            if (m.content.isNotEmpty() && !(thinking && i == messages.lastIndex)) {
+                                Row(Modifier.padding(top = 4.dp)) {
+                                    Box(
+                                        Modifier.size(30.dp).clip(CircleShape).clickable {
+                                            clip.setText(AnnotatedString(m.content))
+                                            error = null
+                                        },
+                                        contentAlignment = Alignment.Center,
+                                    ) { NcIcon("copy", NoCap.Muted, 16.dp, desc = t("Copy", "Copy")) }
+                                }
+                            }
                         }
-                        SelectionContainer { Text(text, style = MaterialTheme.typography.bodyLarge, color = if (mine) Color.White else NoCap.Text) }
                     }
                 }
             }
         }
     }
 
+    /** The chat list as a drawer from the left (.ai-sidebar.drawer): new chat, search, your chats. */
     @Composable
     private fun ChatList() {
-        Column(Modifier.fillMaxSize().background(NoCap.Sheet).padding(12.dp)) {
-            Label(t("Your chats", "Conversations"))
-            Spacer(Modifier.height(8.dp))
-            if (conversations.isEmpty()) Text(t("No chats yet.", "No conversations yet."), style = MaterialTheme.typography.bodyMedium)
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(conversations, key = { it.id }) { c ->
-                    Row(
-                        Modifier.fillMaxWidth().glass(RoundedCornerShape(14.dp), edge = if (c.id == current) NoCap.Red else NoCap.GlassEdge)
-                            .clickable { open(c.id) }.padding(start = 14.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(c.title.ifBlank { t("Untitled", "Untitled") }, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (c.preview.isNotBlank()) Text(c.preview, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        var query by remember { mutableStateOf("") }
+        Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(remember { MutableInteractionSource() }, null) { showList = false })
+            Column(
+                Modifier.fillMaxHeight().widthIn(max = 320.dp).fillMaxWidth(0.84f)
+                    .shellGlass(RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp), GlassLevel.MENU)
+                    .clickable(remember { MutableInteractionSource() }, null) {}.padding(12.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PillButton(t("New chat", "New chat"), { newChat() }, Modifier.weight(1f), icon = "plus")
+                    Spacer(Modifier.width(8.dp))
+                    ShellIconButton("close", t("Close", "Close")) { showList = false }
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().height(40.dp).clip(RoundedCornerShape(10.dp)).background(Shell.hover).border(1.dp, Shell.edge, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    NcIcon("search", NoCap.Muted, 16.dp)
+                    Box(Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) Text(t("Search your chats", "Search chats"), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted, maxLines = 1)
+                        BasicTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = NoCap.Text), cursorBrush = SolidColor(NoCap.Red))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                val q = query.trim().lowercase()
+                val list = if (q.isEmpty()) conversations else conversations.filter { q in it.title.lowercase() || q in it.preview.lowercase() }
+                if (list.isEmpty()) Text(if (q.isEmpty()) t("No chats yet.", "No conversations yet.") else t("No chats match.", "No matching chats."), Modifier.padding(6.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Muted)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    items(list, key = { it.id }) { c ->
+                        val on = c.id == current
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (on) Shell.hover else Color.Transparent)
+                                .clickable { open(c.id) }.padding(start = 10.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(c.title.ifBlank { t("Untitled", "Untitled") }, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (c.preview.isNotBlank()) Text(c.preview, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable { delete(c.id) }, contentAlignment = Alignment.Center) {
+                                NcIcon("trash", NoCap.Muted, 16.dp, desc = t("Delete", "Delete"))
+                            }
                         }
-                        IconButton(onClick = { delete(c.id) }) { Icon(Icons.Filled.Delete, t("Delete", "Delete"), tint = NoCap.Muted) }
                     }
                 }
             }
         }
     }
 
+    /** The compose box (.ai-compose): rounded, the text, then voice and the round send button. */
     @Composable
     private fun InputBar() {
+        val shape = RoundedCornerShape(16.dp)
         Row(
-            Modifier.fillMaxWidth().padding(10.dp).glass(RoundedCornerShape(24.dp), strong = true).padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
+                .clip(shape).background(Shell.tint(GlassLevel.MENU)).border(1.dp, if (input.isNotEmpty()) NoCap.Red.copy(alpha = 0.6f) else Shell.edge, shape)
+                .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f).heightIn(min = 44.dp), contentAlignment = Alignment.CenterStart) {
@@ -371,10 +510,11 @@ class AiActivity : ComponentActivity() {
             if (voiceAvailable()) {
                 Box(Modifier.size(40.dp).clip(CircleShape).clickable { voice() }, contentAlignment = Alignment.Center) { MicGlyph() }
             }
+            val ready = input.isNotBlank() && !thinking
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(if (input.isNotBlank() && !thinking) NoCap.Red else Color(0x33FFFFFF)).clickable { send() },
+                Modifier.size(38.dp).clip(CircleShape).background(if (ready) NoCap.Red else NoCap.Text.copy(alpha = 0.12f)).clickable(enabled = ready) { send() },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.Send, t("Send", "Send"), tint = Color.White, modifier = Modifier.size(18.dp)) }
+            ) { NcIcon("arrowUp", if (ready) Color.White else NoCap.Muted, 18.dp, desc = t("Send", "Send")) }
         }
     }
 

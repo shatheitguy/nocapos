@@ -7,13 +7,13 @@
 import type { IconName } from '../components/Icon';
 import { translate, tr } from '../i18n';
 
-export type Cat = 'network' | 'general' | 'devices' | 'agents' | 'appearance' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
+export type Cat = 'network' | 'general' | 'devices' | 'agents' | 'containers' | 'appearance' | 'desktop' | 'windows' | 'notifications' | 'sound' | 'lock' | 'security' | 'users' | 'account';
 export type Sub =
   | 'about' | 'update' | 'access' | 'storage' | 'datetime' | 'language' | 'backup' | 'troubleshoot'
   | 'appearance' | 'desktop' | 'windows'
   | 'notifications' | 'sound'
   | 'security' | 'lock'
-  | 'account' | 'users' | 'devices' | 'agents'
+  | 'account' | 'users' | 'devices' | 'agents' | 'containers'
   | 'wifi' | `iface:${string}`;
 
 export interface CatInfo {
@@ -31,6 +31,7 @@ export const CATS: CatInfo[] = [
     groups: [['about', 'update'], ['access'], ['storage'], ['datetime', 'language'], ['backup', 'troubleshoot']] },
   { id: 'devices', icon: 'phone', color: '#30d158', groups: [] },
   { id: 'agents', icon: 'sparkles', color: '#bf5af2', groups: [] },
+  { id: 'containers', icon: 'containers', color: '#ff3b30', admin: true, groups: [] },
   { id: 'appearance', icon: 'palette', color: '#5e5ce6', groups: [] },
   { id: 'desktop', icon: 'launcher', color: '#3a3a3c', groups: [] },
   { id: 'windows', icon: 'maximize', color: '#3a3a3c', groups: [] },
@@ -109,6 +110,8 @@ export const ENTRIES: Entry[] = [
     options: ['ld.nocapId', 'ld.link', 'ld.unlink', 'ld.rename', 'ld.defaultLabel', 'recv.title', 'recv.folderLabel', 'link.addr.title'] },
   { id: 'agents', cat: 'agents', icon: 'sparkles', keywords: 'mcp ai agent token computer use automation assistant approval',
     options: ['ag.letIn', 'ag.loopback', 'ag.add', 'ag.revoke', 'ag.stop', 'ag.scopes'] },
+  { id: 'containers', cat: 'containers', admin: true, icon: 'containers', keywords: 'docker local addresses nocap.local domain mdns https certificate ca trust reverse proxy containers',
+    options: ['ctr.la.title', 'ctr.la.toggle', 'ctr.la.trustTitle', 'ctr.la.download'] },
   { id: 'appearance', cat: 'appearance', icon: 'palette', keywords: 'theme glass classic cyber deck dark light accent color colour',
     options: ['pz.theme', 'pz.lightDark', 'pz.accent', 'pz.wallpapers', 'pz.dim', 'pz.brightness', 'pz.icons', 'pz.transparency', 'pz.motion', 'pz.square', 'pz.grid', 'pz.resetRow'] },
   { id: 'wallpaper', cat: 'appearance', icon: 'image', keywords: 'background photo picture',

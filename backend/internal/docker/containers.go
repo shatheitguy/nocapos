@@ -29,7 +29,12 @@ type containerSummary struct {
 		PublicPort  uint16
 		Type        string
 	}
-	Labels          map[string]string
+	Labels  map[string]string
+	ImageID string
+	Mounts  []struct {
+		Type string
+		Name string
+	}
 	NetworkSettings struct {
 		Networks map[string]struct {
 			IPAddress string
@@ -58,12 +63,26 @@ type containerJSON struct {
 		Labels       map[string]string
 		Env          []string
 		ExposedPorts map[string]struct{}
+		Cmd          []string
+		Entrypoint   []string
+		WorkingDir   string
+		User         string
 	}
 	HostConfig struct {
-		Privileged    bool
-		NetworkMode   string
-		Runtime       string
-		RestartPolicy struct{ Name string }
+		Privileged     bool
+		NetworkMode    string
+		Runtime        string
+		RestartPolicy  struct{ Name string }
+		Memory         int64
+		NanoCpus       int64
+		PidsLimit      *int64
+		ReadonlyRootfs bool
+		CapAdd         []string
+		CapDrop        []string
+		Devices        []struct {
+			PathOnHost      string
+			PathInContainer string
+		}
 	}
 	Mounts []struct {
 		Type        string
@@ -127,7 +146,10 @@ type Container struct {
 	Created time.Time         `json:"created"`
 	Ports   []Port            `json:"ports"`
 	Project string            `json:"project,omitempty"`
+	Service string            `json:"service,omitempty"` // compose service
 	System  bool              `json:"system"`
+	ImageID string            `json:"image_id,omitempty"`
+	Volumes []string          `json:"volumes"` // named volumes it uses
 	Labels  map[string]string `json:"labels"`
 	// Networks with the container's address on each (from the list call).
 	Networks []NetworkAttachment `json:"networks"`
@@ -138,6 +160,8 @@ type Container struct {
 	Health       string     `json:"health,omitempty"`
 	WebURL       string     `json:"web_url,omitempty"`     // where "Open" goes when it isn't host:published port
 	WebAddress   string     `json:"web_address,omitempty"` // the admin's own address for it
+	// Local addresses (http://<name>.nocap.local) that reach it, when on.
+	LocalAddresses []string `json:"local_addresses,omitempty"`
 }
 
 type Mount struct {
@@ -185,6 +209,22 @@ type ContainerDetail struct {
 	Labels        map[string]string   `json:"labels"`
 	Mounts        []Mount             `json:"mounts"`
 	Networks      []NetworkAttachment `json:"networks"`
+
+	// The details page: how it runs and its limits. Env values that look
+	// like secrets are masked (EnvEntry.Secret).
+	Cmd            []string   `json:"cmd"`
+	Entrypoint     []string   `json:"entrypoint"`
+	WorkingDir     string     `json:"working_dir,omitempty"`
+	User           string     `json:"user,omitempty"`
+	Env            []EnvEntry `json:"env"`
+	MemoryMB       int64      `json:"memory_mb"`  // 0 = no limit
+	CPUs           float64    `json:"cpus"`       // 0 = no limit
+	PidsLimit      int64      `json:"pids_limit"` // 0 = no limit
+	ReadOnly       bool       `json:"read_only"`
+	CapAdd         []string   `json:"cap_add"`
+	CapDrop        []string   `json:"cap_drop"`
+	Devices        []string   `json:"devices"` // host[:container]
+	LocalAddresses []string   `json:"local_addresses,omitempty"`
 }
 
 type Info struct {
@@ -270,7 +310,15 @@ func (c *Client) ListContainers(ctx context.Context, all bool) ([]Container, err
 			Ports:   make([]Port, 0, len(r.Ports)),
 			Labels:  r.Labels,
 			Project: r.Labels["com.docker.compose.project"],
+			Service: r.Labels["com.docker.compose.service"],
 			System:  r.Labels[LabelSystem] == "true",
+			ImageID: r.ImageID,
+			Volumes: []string{},
+		}
+		for _, m := range r.Mounts {
+			if m.Type == "volume" && m.Name != "" {
+				ct.Volumes = append(ct.Volumes, m.Name)
+			}
 		}
 		if len(r.Names) > 0 {
 			ct.Name = strings.TrimPrefix(r.Names[0], "/")
@@ -329,6 +377,24 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (*ContainerDet
 	if raw.State.Health != nil {
 		d.Health = raw.State.Health.Status
 	}
+	d.Cmd, d.Entrypoint = nonNil(raw.Config.Cmd), nonNil(raw.Config.Entrypoint)
+	d.WorkingDir, d.User = raw.Config.WorkingDir, raw.Config.User
+	d.Env = MaskEnv(raw.Config.Env)
+	d.MemoryMB = raw.HostConfig.Memory / (1 << 20)
+	d.CPUs = float64(raw.HostConfig.NanoCpus) / 1e9
+	if p := raw.HostConfig.PidsLimit; p != nil && *p > 0 {
+		d.PidsLimit = *p
+	}
+	d.ReadOnly = raw.HostConfig.ReadonlyRootfs
+	d.CapAdd, d.CapDrop = nonNil(raw.HostConfig.CapAdd), nonNil(raw.HostConfig.CapDrop)
+	d.Devices = []string{}
+	for _, dv := range raw.HostConfig.Devices {
+		if dv.PathInContainer == "" || dv.PathInContainer == dv.PathOnHost {
+			d.Devices = append(d.Devices, dv.PathOnHost)
+		} else {
+			d.Devices = append(d.Devices, dv.PathOnHost+":"+dv.PathInContainer)
+		}
+	}
 	for _, m := range raw.Mounts {
 		d.Mounts = append(d.Mounts, Mount{Type: m.Type, Name: m.Name, Source: m.Source, Destination: m.Destination, RW: m.RW})
 	}
@@ -341,6 +407,13 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (*ContainerDet
 	}
 	sort.Strings(d.ExposedPorts)
 	return d, nil
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // envNames returns just the names of KEY=value pairs, sorted.

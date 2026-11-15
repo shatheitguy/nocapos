@@ -14,6 +14,7 @@ import './styles/settings.css';
 import './styles/devices.css';
 import './styles/storage.css';
 import './styles/containers.css';
+import './styles/containers-app.css';
 import './styles/virtualdesk.css';
 import './styles/notifications.css';
 import './styles/users.css';

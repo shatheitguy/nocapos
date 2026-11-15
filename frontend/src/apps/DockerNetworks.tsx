@@ -3,6 +3,7 @@ import { dockerApi, type DockerNetwork, type HostInterface, type NewNetwork } fr
 import { Icon } from '../components/Icon';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
+import { tr, useT } from '../i18n';
 
 // Networks for containers: the default bridge, private bridges, and macvlan /
 // ipvlan networks that give containers their own address on your LAN.
@@ -20,8 +21,11 @@ function suggestRange(subnet: string): string {
   return `${m[1]}.${m[2]}.${m[3]}.224/27`;
 }
 
-export function DockerNetworks() {
+export function DockerNetworks({ containers = [] }: { containers?: string[] }) {
+  const t = useT();
   const [nets, setNets] = useState<DockerNetwork[] | null>(null);
+  const [search, setSearch] = useState('');
+  const [busy, setBusy] = useState(false);
   const [ifaces, setIfaces] = useState<HostInterface[]>([]);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
@@ -45,6 +49,19 @@ export function DockerNetworks() {
     void load();
   };
 
+  const member = async (n: DockerNetwork, container: string, join: boolean) => {
+    if (!join) {
+      const ok = await confirmDialog({ title: tr('ctr.net.disconnectTitle', { name: container, net: n.name }), message: tr('ctr.net.disconnectMsg'), confirmLabel: tr('ctr.net.disconnect'), danger: true });
+      if (!ok) return;
+    }
+    setBusy(true);
+    const r = join ? await dockerApi.connect(n.name, container) : await dockerApi.disconnect(n.name, container);
+    setBusy(false);
+    if (!r.ok) return toast('error', join ? tr('ctr.net.connectFail') : tr('ctr.net.disconnectFail'), r.error);
+    toast('success', join ? tr('ctr.net.connected', { name: container, net: n.name }) : tr('ctr.net.disconnected', { name: container, net: n.name }));
+    void load();
+  };
+
   if (error) return <p className="error dn-pad">{error}</p>;
   if (!nets) return <span className="spinner" />;
   return (
@@ -65,6 +82,11 @@ export function DockerNetworks() {
           }}
         />
       )}
+      <label className="search compact ct-search">
+        <Icon name="search" size={15} />
+        <input placeholder={t('ctr.net.search')} aria-label={t('ctr.net.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
+      </label>
+      <div className="ct-table-wrap">
       <table className="table">
         <thead>
           <tr>
@@ -76,7 +98,7 @@ export function DockerNetworks() {
           </tr>
         </thead>
         <tbody>
-          {nets.map((n) => (
+          {nets.filter((n) => { const q = search.trim().toLowerCase(); return !q || n.name.toLowerCase().includes(q) || n.driver.includes(q) || (n.subnet ?? '').includes(q) || n.containers.some((c) => c.toLowerCase().includes(q)); }).map((n) => (
             <tr key={n.id}>
               <td>
                 <b>{n.name}</b>
@@ -92,7 +114,29 @@ export function DockerNetworks() {
                 {n.gateway && <div className="muted">gw {n.gateway}</div>}
                 {n.ip_range && <div className="muted">range {n.ip_range}</div>}
               </td>
-              <td className="small">{n.containers.length ? n.containers.join(', ') : <span className="muted">none</span>}</td>
+              <td className="small">
+                <div className="ct-chips">
+                  {n.containers.map((c) => (
+                    <span key={c} className="chip tiny sf-chip">
+                      {c}
+                      {n.name !== 'host' && n.name !== 'none' && (
+                        <button type="button" className="ghost icon-btn" disabled={busy} title={t('ctr.net.disconnect')} aria-label={t('ctr.net.disconnectFrom', { name: c })} onClick={() => void member(n, c, false)}>
+                          <Icon name="close" size={10} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {!n.containers.length && <span className="muted">{t('ctr.none2')}</span>}
+                </div>
+                {n.name !== 'host' && n.name !== 'none' && containers.some((c) => !n.containers.includes(c)) && (
+                  <select className="ct-select dn-connect" value="" disabled={busy} aria-label={t('ctr.net.connect')} onChange={(e) => e.target.value && void member(n, e.target.value, true)}>
+                    <option value="">{t('ctr.net.connect')}</option>
+                    {containers.filter((c) => !n.containers.includes(c)).map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
+              </td>
               <td className="row-actions">
                 {!n.builtin && (
                   <button type="button" className="ghost icon-btn danger" title={n.containers.length ? 'In use' : 'Delete'} disabled={n.containers.length > 0} onClick={() => void remove(n)}>
@@ -104,6 +148,7 @@ export function DockerNetworks() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

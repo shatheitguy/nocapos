@@ -98,12 +98,15 @@ type Server struct {
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
 	linkOnce         sync.Once
-	linkSync         *linkHub     // NoCap Link: phone notifications, clipboard, events
-	sessions         sessionFeed  // sign-in alerts and session list changes, live
-	linkFeed         linkFeed     // the person's phones changed, or handed a link over
-	mirror           mirrorState  // phone mirroring: rooms and viewer tickets
-	shield           *shieldState // Shield: firewall (ufw) and DNS blocker
-	dohS             dohState     // Shield on the phone: DNS-over-HTTPS for linked devices
+	linkSync         *linkHub        // NoCap Link: phone notifications, clipboard, events
+	sessions         sessionFeed     // sign-in alerts and session list changes, live
+	linkFeed         linkFeed        // the person's phones changed, or handed a link over
+	mirror           mirrorState     // phone mirroring: rooms and viewer tickets
+	shield           *shieldState    // Shield: firewall (ufw) and DNS blocker
+	localAddr        *localAddrState // containers' local addresses (*.nocap.local)
+	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
+	pulls            pullJobs        // image downloads in progress
+	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -146,6 +149,7 @@ func New(ctx context.Context, d Deps) *Server {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
 	s.shield = newShield(ctx, d.Config.DataDir, d.Log, s.shieldReverted)
+	s.initLocalAddresses(ctx)
 	// NoCap Link: phones find this server nearby (_nocap._tcp).
 	go s.advertiseLink(ctx)
 	go s.advertiseBLE(ctx) // and over Bluetooth (link_discovery.go)
@@ -301,6 +305,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/stacks/{name}/logs", s.admin(s.stackLogs))
 	mux.Handle("POST /api/v1/stacks/{name}/{action}", s.admin(s.stackAction))
 	mux.Handle("GET /api/v1/images", s.admin(s.listImages))
+	s.containerExtraRoutes(mux)
 
 	// App Store: one-click installs (admin, audited).
 	// Everyone may list the installed apps they're allowed to use (filtered).
@@ -507,7 +512,9 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	// localOnly comes first so a device that's kept out reaches nothing.
-	return s.localOnly(s.recoverer(s.requestLogger(securityHeaders(mux))))
+	// Local addresses (<container>.nocap.local) go to their containers,
+	// past the UI's headers but still behind the local-only switch.
+	return s.localOnly(s.recoverer(s.localAddrRouter(s.requestLogger(securityHeaders(mux)))))
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
