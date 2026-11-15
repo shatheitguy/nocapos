@@ -30,6 +30,8 @@ type Spec struct {
 	Restart     string      `json:"restart"`      // no | always | unless-stopped | on-failure
 	MemoryMB    int64       `json:"memory_mb"`    // 0 = no limit
 	CPUs        float64     `json:"cpus"`         // 0 = no limit
+	PidsLimit   int64       `json:"pids_limit"`   // 0 = no limit
+	ReadOnly    bool        `json:"read_only"`    // read-only root filesystem
 	Privileged  bool        `json:"privileged"`
 	Devices     []string    `json:"devices"` // "/dev/dri" or "/dev/ttyUSB0:/dev/ttyACM0"
 	CapAdd      []string    `json:"cap_add"` // extra Linux capabilities, e.g. NET_ADMIN
@@ -190,6 +192,10 @@ func specFrom(raw *rawContainer) Spec {
 	}
 	s.MemoryMB = int64(num(hc, "Memory")) / (1 << 20)
 	s.CPUs = num(hc, "NanoCpus") / 1e9
+	if p := int64(num(hc, "PidsLimit")); p > 0 {
+		s.PidsLimit = p
+	}
+	s.ReadOnly = hc["ReadonlyRootfs"] == true
 	if devs, ok := hc["Devices"].([]any); ok {
 		for _, d := range devs {
 			dm, _ := d.(map[string]any)
@@ -359,6 +365,12 @@ func (s *Spec) Validate() error {
 	if s.MemoryMB != 0 && s.MemoryMB < 6 {
 		return errors.New("a memory limit must be at least 6 MB")
 	}
+	if s.PidsLimit < 0 || (s.PidsLimit != 0 && s.PidsLimit < 8) {
+		return errors.New("a process limit must be at least 8 (or 0 for none)")
+	}
+	if s.CPUs > 1024 || s.MemoryMB > 1<<30 || s.PidsLimit > 1<<22 {
+		return errors.New("that limit is too large")
+	}
 	for _, d := range s.Devices {
 		host, ctr, two := strings.Cut(d, ":")
 		if !devRe.MatchString(host) || strings.Contains(host, "..") || (two && (!devRe.MatchString(ctr) || strings.Contains(ctr, ".."))) {
@@ -507,6 +519,8 @@ func createBody(raw *rawContainer, s Spec) map[string]any {
 	hc["Memory"] = s.MemoryMB << 20
 	hc["MemorySwap"] = 0
 	hc["NanoCpus"] = int64(s.CPUs * 1e9)
+	hc["PidsLimit"] = s.PidsLimit
+	hc["ReadonlyRootfs"] = s.ReadOnly
 	hc["Privileged"] = s.Privileged
 	hc["Devices"] = s.devices()
 	hc["CapAdd"] = s.CapAdd
@@ -777,6 +791,8 @@ func (s Spec) CreateConfig(labels map[string]string) CreateConfig {
 			RestartPolicy: &RestartPolicy{Name: s.Restart},
 			Memory:        s.MemoryMB << 20,
 			NanoCpus:      int64(s.CPUs * 1e9),
+			PidsLimit:     s.PidsLimit,
+			ReadOnly:      s.ReadOnly,
 			Privileged:    s.Privileged,
 			NetworkMode:   s.NetworkMode,
 			CapAdd:        s.CapAdd,
