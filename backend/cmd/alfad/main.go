@@ -371,6 +371,8 @@ func serve() error {
 	errCh := make(chan error, 1)
 	if certFile != "" {
 		httpSrv.TLSConfig = tlsutil.ServerConfig()
+		// Containers' local addresses get certificates from NoCapOS's own CA.
+		httpSrv.TLSConfig.GetCertificate = srv.LocalAddressCert
 		go func() { errCh <- httpSrv.ServeTLS(ln, certFile, keyFile) }()
 	} else {
 		go func() { errCh <- httpSrv.Serve(ln) }()
@@ -408,7 +410,7 @@ func startHTTPRedirect(addr string, httpsAddr net.Addr, srv *api.Server, log *sl
 	}
 	rs := &http.Server{
 		Addr:              addr,
-		Handler:           srv.LocalOnly(tlsutil.RedirectHandler(port)),
+		Handler:           srv.LocalOnly(srv.LocalAddresses(tlsutil.RedirectHandler(port))),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       30 * time.Second,
 		MaxHeaderBytes:    16 << 10,
