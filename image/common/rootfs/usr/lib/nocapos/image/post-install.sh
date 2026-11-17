@@ -42,7 +42,7 @@ EOF
 # The installers remove the live-only packages (live-boot, live-config, the
 # graphical installer); their settings and NoCapOS's live-session helpers go
 # too.
-for p in calamares calamares-settings-debian gnome-shell-extension-desktop-icons-ng live-boot live-boot-doc \
+for p in calamares calamares-settings-debian live-boot live-boot-doc \
   live-config live-config-doc live-config-systemd live-tools; do
   if dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^i'; then
     DEBIAN_FRONTEND=noninteractive apt-get purge -y -q "$p" >/dev/null 2>&1 || true
@@ -50,8 +50,14 @@ for p in calamares calamares-settings-debian gnome-shell-extension-desktop-icons
 done
 DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y -q >/dev/null 2>&1 || true
 rm -rf /etc/calamares "$IMG/live" /usr/lib/live/config/2000-nocapos
-rm -f /etc/sudoers.d/live /etc/dconf/db/local.d/50-nocapos-live /etc/xdg/autostart/nocapos-live-welcome.desktop
-if command -v dconf >/dev/null 2>&1; then dconf update >/dev/null 2>&1 || true; fi
+rm -f /etc/sudoers.d/live /etc/xdg/autostart/nocapos-live-welcome.desktop
+# The live session signed its user in automatically; the installed system
+# shows the sign-in screen.
+if [ -f /etc/greetd/config.toml ] && grep -q '^\[initial_session\]' /etc/greetd/config.toml; then
+  awk '/^\[initial_session\]/ {skip = 1; next} /^\[/ {skip = 0} !skip' /etc/greetd/config.toml >/etc/greetd/config.toml.tmp &&
+    cat /etc/greetd/config.toml.tmp >/etc/greetd/config.toml
+  rm -f /etc/greetd/config.toml.tmp
+fi
 
 # ---------------------------------------------------------------- NoCapOS
 rm -f /var/lib/nocapos/.image-firstboot-done
