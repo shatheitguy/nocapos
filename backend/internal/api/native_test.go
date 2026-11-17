@@ -182,18 +182,18 @@ func TestNativeStreamProxyNeedsOwnersCookie(t *testing.T) {
 	}
 	// A valid cookie for a stream that isn't this person's.
 	r := httptest.NewRequest("GET", nativePrefix+id+"/vnc.html", nil)
-	r.AddCookie(&http.Cookie{Name: nativeCookie, Value: w.s.signBrave(w.users["alex"].ID, "", time.Now().Add(time.Minute))})
+	r.AddCookie(&http.Cookie{Name: nativeCookie, Value: w.s.signStream(w.users["alex"].ID, "", time.Now().Add(time.Minute))})
 	rec := httptest.NewRecorder()
 	w.mux.ServeHTTP(rec, r)
 	if rec.Code == http.StatusOK {
 		t.Fatalf("reached a stream that isn't there: %d", rec.Code)
 	}
-	// Brave's cookie doesn't open app streams.
+	// A signed cookie under another name doesn't open app streams.
 	r = httptest.NewRequest("GET", nativePrefix+id+"/vnc.html", nil)
-	r.AddCookie(&http.Cookie{Name: braveCookie, Value: w.s.signBrave(w.users["alex"].ID, "", time.Now().Add(time.Minute))})
+	r.AddCookie(&http.Cookie{Name: "nocap_other", Value: w.s.signStream(w.users["alex"].ID, "", time.Now().Add(time.Minute))})
 	rec = httptest.NewRecorder()
 	w.mux.ServeHTTP(rec, r)
 	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("brave cookie: %d", rec.Code)
+		t.Fatalf("other cookie: %d", rec.Code)
 	}
 }

@@ -15,6 +15,7 @@ import './storage.css';
 import './containers.css';
 import './containers-app.css';
 import './virtualdesk.css';
+import './remotedesktop.css';
 import './notifications.css';
 import './users.css';
 import './shield.css';
