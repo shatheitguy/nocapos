@@ -81,7 +81,8 @@ wait_boot_check() {
   vssh 'timeout 600 systemctl is-system-running --wait' >/dev/null 2>&1 || true
 }
 
-python3 -m http.server "$BUNDLE_PORT" --bind 127.0.0.1 --directory "$BUILD" >"$WORK/http.log" 2>&1 &
+# Range requests, like GitHub release downloads: Rugix fetches only what it needs.
+python3 "$OS/test/serve.py" "$BUILD" "$BUNDLE_PORT" >"$WORK/http.log" 2>&1 &
 HTTP_PID=$!
 
 # ---- 1. first boot -----------------------------------------------------------
@@ -112,9 +113,13 @@ echo "NoCapOS is up: :443 OK, :80 redirects ($code80)"
 
 # ---- 3. settings and data survive a restart ----------------------------------
 log "Settings and data survive a restart"
-vssh 'hostnamectl set-hostname nocap-test && useradd -m -u 1500 -s /bin/bash testperson && echo hello >/srv/nocapos-test.txt && echo scratch >/etc/nocap-scratch-test && systemctl start nocapos-etc-changed.service'
+# The hostname the way NoCapOS's Settings changes it (a new /etc/hostname).
+vssh 'echo nocap-test >/etc/hostname.new && mv /etc/hostname.new /etc/hostname && hostname nocap-test && useradd -m -u 1500 -s /bin/bash testperson && echo hello >/srv/nocapos-test.txt && echo scratch >/etc/nocap-scratch-test && systemctl start nocapos-etc-changed.service && cat /var/lib/nocapos-system/etc/files/hostname'
 reboot_vm; wait_ssh 600 || fail "no SSH after restart"
-[ "$(vssh hostname)" = nocap-test ] || fail "hostname was lost"
+[ "$(vssh hostname)" = nocap-test ] || {
+  vssh 'journalctl -b -k --no-pager | grep -i -e etc-sync -e rugix | tail -40; ls -la /etc/rugix/hooks/boot/post-init/ /var/lib/nocapos-system/etc/ /var/lib/nocapos-system/etc/files/ 2>&1; cat /etc/hostname /var/lib/nocapos-system/etc/files/hostname 2>&1; findmnt /var/lib/nocapos-system'
+  fail "hostname was lost"
+}
 vssh 'id testperson >/dev/null' || fail "the account was lost"
 vssh 'test -d /home/testperson' || fail "the home folder was lost"
 [ "$(vssh cat /srv/nocapos-test.txt)" = hello ] || fail "a file in /srv was lost"

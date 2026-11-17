@@ -148,7 +148,7 @@ jobs:
           xz -T0 -6 -k os/build/pc.img
 
       - uses: actions/upload-artifact@v4
-        if: inputs.release || github.event_name == 'workflow_dispatch'
+        if: inputs.release
         with:
           name: os-pc
           path: |
@@ -233,7 +233,7 @@ jobs:
           xz -T0 -6 -k os/build/pi.img
 
       - uses: actions/upload-artifact@v4
-        if: inputs.release || github.event_name == 'workflow_dispatch'
+        if: inputs.release
         with:
           name: os-pi
           path: |
