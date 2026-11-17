@@ -145,13 +145,14 @@ wait_exit 120
 log "Booting the installed drive"
 # The data partition is locked: type the passphrase at the prompt.
 qemu "$WORK/vars-installed.fd" -drive "file=$WORK/target.qcow2,format=qcow2,if=virtio"
-t=0
-until grep -q 'unlock NoCapOS\|passphrase' "$WORK/serial.log" 2>/dev/null; do
-  sleep 2; t=$((t + 2))
+# The prompt comes up a while into the boot; type until NoCapOS is reachable
+# (the data partition driver allows three tries).
+for try in 1 2 3; do
+  sleep 50
   if vssh true 2>/dev/null; then break; fi
-  [ "$t" -lt 300 ] || break
+  if [ "$try" = 1 ]; then shot 05-unlock; fi
+  for k in n o c a p minus t e s t minus p a s s p h r a s e ret; do qmp key "$k" >/dev/null; done
 done
-for k in n o c a p minus t e s t minus p a s s p h r a s e ret; do qmp key "$k" >/dev/null; done
 wait_ssh 900
 vssh 'lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS; cat /etc/hostname; findmnt /run/rugix/mounts/data'
 vssh 'findmnt -no SOURCE /run/rugix/mounts/data' | grep -q mapper || fail "the data partition isn't the locked one"
@@ -169,8 +170,8 @@ usage="$(curl -fsk -H "Authorization: Bearer $tok" "https://127.0.0.1:$HTTPS_POR
 echo "account signs in; usage: $usage"
 
 log "\"Desktop only\" keeps other devices out"
-vssh "curl -fsS -X PUT -H 'Content-Type: application/json' -H 'Authorization: Bearer $tok' -d '{\"mode\":\"desktop\"}' http://127.0.0.1:8780/api/v1/system/usage" >/dev/null ||
-  fail "couldn't switch to Desktop only"
+vssh "curl -fsS -X PUT -H 'Content-Type: application/json' -H 'Authorization: Bearer $tok' -d '{\"enabled\":false}' http://127.0.0.1:8780/api/v1/system/remote-access" >/dev/null ||
+  fail "couldn't keep other devices out"
 if curl -sk --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" | grep -q status; then fail "another device still reaches NoCapOS"; fi
 vssh 'curl -fsS http://127.0.0.1:8780/healthz' | grep -q '"status":"ok"' || fail "NoCapOS stopped answering this machine"
 echo "network connections are closed; this machine still reaches NoCapOS"

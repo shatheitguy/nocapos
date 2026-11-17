@@ -53,7 +53,7 @@ fi
 
 # ---- services ---------------------------------------------------------------
 systemctl enable nocapos.service nocapos-boot-check.service nocapos-etc-save.service \
-  nocapos-etc-changed.path NetworkManager.service avahi-daemon.service \
+  nocapos-etc-changed.path nocapos-etc-restore.service NetworkManager.service avahi-daemon.service \
   systemd-timesyncd.service docker.service
 # NoCap Desktop's sign-in screen starts once NoCap Shell is in the image
 # (the nocap-shell package); until then the screen shows the console banner.
