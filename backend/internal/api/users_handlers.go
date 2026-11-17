@@ -308,6 +308,9 @@ func (s *Server) usersDelete(w http.ResponseWriter, r *http.Request) {
 	if u, err := s.Store.UserByUsername(r.Context(), name); err == nil {
 		s.live.closeUser(u.ID)
 		_ = s.Store.DeleteUser(r.Context(), u.ID)
+		if s.shield != nil {
+			s.shield.dns.ForgetUser(u.ID) // their own DNS lists
+		}
 	}
 	// Their access type, folder permissions and app access go too; their
 	// home folder stays on disk (an administrator can remove it in Files).

@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.Icons
-import androidx.compose.material3.AlertDialog
+import com.nocap.link.ui.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -116,7 +116,7 @@ fun Hub(a: MainActivity) {
                 }
                 FilesBrowser(a)
                 WifiShareCard(a)
-                Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(14.dp)) {
+                com.nocap.link.ui.SectionCard {
                     Toggle(
                         t("Server tea on this phone", "Server notifications"),
                         t("Get your server's alerts here (admins). Checked about every 15 min.", "Show your server's notifications here (administrators). Checked about every 15 minutes."),
@@ -125,10 +125,7 @@ fun Hub(a: MainActivity) {
                         if (on && Build.VERSION.SDK_INT >= 33 && !Notices.allowed(a)) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else { Prefs.setServerNotices(on); if (on) HeartbeatWorker.now(a) }
                     }
-                    Text(
-                        t("Unlink this phone", "Unlink this phone"), Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { unlink = true }.padding(vertical = 10.dp),
-                        style = MaterialTheme.typography.titleSmall, color = NoCap.Red,
-                    )
+                    com.nocap.link.ui.NavRow(t("Unlink this phone", "Unlink this phone"), danger = true) { unlink = true }
                 }
             }
             Spacer(Modifier.height(20.dp))

@@ -41,6 +41,18 @@ func openQueryLog(dir string) (*queryLog, error) {
 		db.Close()
 		return nil, err
 	}
+	// Which linked device asked (DNS-over-HTTPS); added after the first
+	// release, so older logs get the column here.
+	if !hasColumn(db, "queries", "device") {
+		if _, err := db.Exec(`ALTER TABLE queries ADD COLUMN device TEXT NOT NULL DEFAULT ''`); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS queries_device ON queries (device, t)`); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &queryLog{db: db, in: make(chan Query, 8192), keep: 24 * time.Hour}, nil
 }
 
@@ -56,6 +68,21 @@ func (l *queryLog) settings() (bool, bool, time.Duration) {
 	return l.enabled, l.withClients, l.keep
 }
 
+func hasColumn(db *sql.DB, table, col string) bool {
+	rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil && n == col {
+			return true
+		}
+	}
+	return false
+}
+
 // add queues q (dropped when the log is off or the queue is full).
 func (l *queryLog) add(q Query) {
 	on, clients, _ := l.settings()
@@ -63,7 +90,7 @@ func (l *queryLog) add(q Query) {
 		return
 	}
 	if !clients {
-		q.Client = ""
+		q.Client, q.Device = "", ""
 	}
 	select {
 	case l.in <- q:
@@ -84,10 +111,10 @@ func (l *queryLog) run(ctx context.Context) {
 		}
 		tx, err := l.db.Begin()
 		if err == nil {
-			st, err := tx.Prepare(`INSERT INTO queries (t, client, name, qtype, status, reason, upstream, ms, rcode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			st, err := tx.Prepare(`INSERT INTO queries (t, client, name, qtype, status, reason, upstream, ms, rcode, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 			if err == nil {
 				for _, q := range batch {
-					_, _ = st.Exec(q.Time.UnixMilli(), q.Client, q.Name, q.Type, q.Status, q.Reason, q.Upstream, q.Ms, q.RCode)
+					_, _ = st.Exec(q.Time.UnixMilli(), q.Client, q.Name, q.Type, q.Status, q.Reason, q.Upstream, q.Ms, q.RCode, q.Device)
 				}
 				st.Close()
 				_ = tx.Commit()
@@ -138,6 +165,7 @@ func (l *queryLog) clear() error {
 // LogFilter picks which log entries to show.
 type LogFilter struct {
 	Client string
+	Device string // one linked device's questions
 	Search string
 	Status string // "", blocked, forwarded, cached, local, error
 	Before time.Time
@@ -145,8 +173,12 @@ type LogFilter struct {
 }
 
 func (l *queryLog) list(ctx context.Context, f LogFilter) ([]Query, error) {
-	q := `SELECT t, client, name, qtype, status, reason, upstream, ms, rcode FROM queries WHERE 1=1`
+	q := `SELECT t, client, name, qtype, status, reason, upstream, ms, rcode, device FROM queries WHERE 1=1`
 	var args []any
+	if f.Device != "" {
+		q += ` AND device = ?`
+		args = append(args, f.Device)
+	}
 	if f.Client != "" {
 		q += ` AND client = ?`
 		args = append(args, f.Client)
@@ -178,7 +210,7 @@ func (l *queryLog) list(ctx context.Context, f LogFilter) ([]Query, error) {
 	for rows.Next() {
 		var x Query
 		var t int64
-		if err := rows.Scan(&t, &x.Client, &x.Name, &x.Type, &x.Status, &x.Reason, &x.Upstream, &x.Ms, &x.RCode); err != nil {
+		if err := rows.Scan(&t, &x.Client, &x.Name, &x.Type, &x.Status, &x.Reason, &x.Upstream, &x.Ms, &x.RCode, &x.Device); err != nil {
 			return nil, err
 		}
 		x.Time = time.UnixMilli(t)

@@ -53,7 +53,8 @@ object Wallpapers {
     /** Copies a picked picture in (scaled to the screen) and shows it. */
     suspend fun setCustom(ctx: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
         val bmp = decode(ctx, { ctx.contentResolver.openInputStream(uri) }) ?: return@withContext false
-        customFile(ctx).outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        // Disk full or similar: say no instead of crashing.
+        if (runCatching { customFile(ctx).outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) } }.isFailure) return@withContext false
         withContext(Dispatchers.Main) { version++; Prefs.setWallpaper(CUSTOM) }
         true
     }

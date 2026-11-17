@@ -17,6 +17,10 @@ type PullProgress struct {
 	ID       string `json:"id"`
 	Progress string `json:"progress"`
 	Error    string `json:"error"`
+	Detail   struct {
+		Current int64 `json:"current"`
+		Total   int64 `json:"total"`
+	} `json:"progressDetail"`
 }
 
 // ImageExists reports whether an image reference is present locally.
@@ -92,6 +96,8 @@ type HostConfig struct {
 	PortBindings  map[string][]PortBinding `json:"PortBindings,omitempty"`
 	Memory        int64                    `json:"Memory,omitempty"`
 	NanoCpus      int64                    `json:"NanoCpus,omitempty"`
+	PidsLimit     int64                    `json:"PidsLimit,omitempty"`
+	ReadOnly      bool                     `json:"ReadonlyRootfs,omitempty"`
 	Privileged    bool                     `json:"Privileged,omitempty"`
 	Devices       []DeviceMapping          `json:"Devices,omitempty"`
 	CapAdd        []string                 `json:"CapAdd,omitempty"`

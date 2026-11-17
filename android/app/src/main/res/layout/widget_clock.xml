@@ -14,7 +14,7 @@
         android:format12Hour="h:mm"
         android:format24Hour="HH:mm"
         android:maxLines="1"
-        android:shadowColor="#FFFF2A2A"
+        android:shadowColor="#FFE8232B"
         android:shadowRadius="18"
         android:textColor="#FFFFFFFF"
         android:textSize="52sp" />
@@ -24,7 +24,7 @@
         android:layout_height="2dp"
         android:layout_marginStart="2dp"
         android:layout_marginTop="2dp"
-        android:background="#FFFF2A2A" />
+        android:background="#FFE8232B" />
 
     <TextClock
         android:layout_width="wrap_content"
@@ -40,6 +40,6 @@
         android:shadowDy="1"
         android:shadowRadius="4"
         android:textAllCaps="true"
-        android:textColor="#FFFF2A2A"
+        android:textColor="#FFE8232B"
         android:textSize="14sp" />
 </LinearLayout>

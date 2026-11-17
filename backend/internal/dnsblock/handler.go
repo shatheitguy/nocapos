@@ -22,6 +22,44 @@ type Query struct {
 	Upstream string    `json:"upstream,omitempty"`
 	Ms       int       `json:"ms"`
 	RCode    string    `json:"rcode,omitempty"`
+	// Device is the linked device that asked over DNS-over-HTTPS (its id).
+	Device string `json:"device,omitempty"`
+}
+
+// Personal is one person's and one device's own allow and block lists,
+// asked over DNS-over-HTTPS. They come before the server's lists.
+type Personal struct {
+	DeviceAllow, DeviceBlock *DomainSet
+	UserAllow, UserBlock     *DomainSet
+}
+
+// Reasons a personal rule blocked a name (shown in the query log).
+const (
+	ReasonDeviceBlock = "This device's block list"
+	ReasonUserBlock   = "Their own block list"
+)
+
+func setHas(s *DomainSet, name string) bool {
+	if s == nil {
+		return false
+	}
+	_, ok := s.Match(name)
+	return ok
+}
+
+// Opts are per-request details of a question asked over DNS-over-HTTPS.
+type Opts struct {
+	Client   string    // shown in the query log instead of the address
+	Device   string    // the linked device's id
+	Personal *Personal // nil: the server's lists only
+	MaxSize  int       // 0: no limit
+}
+
+// Result is what Handle decided.
+type Result struct {
+	Msg    []byte
+	Status string // blocked | forwarded | cached | local | error
+	Reason string
 }
 
 // namedSet is one block list's domains.
@@ -88,6 +126,24 @@ func (rs *Resolver) current() (*rules, bool) {
 	return rs.r, rs.now().Before(rs.pausedUntil)
 }
 
+// blockedFor is blockedBy with someone's own lists first: their device's,
+// then their own, then the server's.
+func (r *rules) blockedFor(name string, p *Personal) string {
+	if p != nil {
+		switch {
+		case setHas(p.DeviceAllow, name):
+			return ""
+		case setHas(p.DeviceBlock, name):
+			return ReasonDeviceBlock
+		case setHas(p.UserAllow, name):
+			return ""
+		case setHas(p.UserBlock, name):
+			return ReasonUserBlock
+		}
+	}
+	return r.blockedBy(name)
+}
+
 // blockedBy reports which list or rule blocks name ("" = not blocked).
 func (r *rules) blockedBy(name string) string {
 	if _, ok := r.allow.Match(name); ok {
@@ -108,18 +164,25 @@ func (r *rules) blockedBy(name string) string {
 // answer the transport takes (0: no limit, as over TCP). It returns nil
 // for messages it won't answer (garbage, answers).
 func (rs *Resolver) Handle(ctx context.Context, req []byte, client netip.Addr, maxSize int) []byte {
+	return rs.HandleWith(ctx, req, client, Opts{MaxSize: maxSize}).Msg
+}
+
+// HandleWith answers one DNS message with per-request options and says
+// what it decided (Msg is nil for messages it won't answer).
+func (rs *Resolver) HandleWith(ctx context.Context, req []byte, client netip.Addr, o Opts) Result {
 	start := rs.now()
+	maxSize := o.MaxSize
 	var p dnsmessage.Parser
 	h, err := p.Start(req)
 	if err != nil || h.Response {
-		return nil
+		return Result{}
 	}
 	q, err := p.Question()
 	if err != nil {
-		return reply(h, nil, dnsmessage.RCodeFormatError)
+		return Result{Msg: reply(h, nil, dnsmessage.RCodeFormatError), Status: "error"}
 	}
 	if h.OpCode != 0 {
-		return reply(h, &q, dnsmessage.RCodeNotImplemented)
+		return Result{Msg: reply(h, &q, dnsmessage.RCodeNotImplemented), Status: "error"}
 	}
 	if maxSize > 0 {
 		maxSize = max(maxSize, ednsSize(&p))
@@ -127,8 +190,11 @@ func (rs *Resolver) Handle(ctx context.Context, req []byte, client netip.Addr, m
 	name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
 	qtype := typeName(q.Type)
 	r, paused := rs.current()
-	log := Query{Time: start, Client: client.Unmap().String(), Name: name, Type: qtype}
-	finish := func(resp []byte, status, reason, upstream string) []byte {
+	log := Query{Time: start, Client: client.Unmap().String(), Name: name, Type: qtype, Device: o.Device}
+	if o.Client != "" {
+		log.Client = o.Client
+	}
+	finish := func(resp []byte, status, reason, upstream string) Result {
 		log.Status, log.Reason, log.Upstream = status, reason, upstream
 		log.Ms = int(rs.now().Sub(start) / time.Millisecond)
 		log.RCode = rcodeOf(resp)
@@ -137,16 +203,16 @@ func (rs *Resolver) Handle(ctx context.Context, req []byte, client netip.Addr, m
 			rs.onQuery(log)
 		}
 		if maxSize > 0 && len(resp) > maxSize {
-			return truncated(h, q)
+			resp = truncated(h, q)
 		}
-		return resp
+		return Result{Msg: resp, Status: status, Reason: reason}
 	}
 
 	if recs, ok := r.records[name]; ok {
 		return finish(localAnswer(h, q, recs, r.records), "local", "", "")
 	}
 	if !paused {
-		if reason := r.blockedBy(name); reason != "" {
+		if reason := r.blockedFor(name, o.Personal); reason != "" {
 			return finish(blockedAnswer(h, q, r.blockMode), "blocked", reason, "")
 		}
 	}
@@ -168,7 +234,7 @@ func (rs *Resolver) Handle(ctx context.Context, req []byte, client netip.Addr, m
 			continue
 		}
 		if r.checkCNAMEs && !paused {
-			if target := blockedCNAME(resp, r); target != "" {
+			if target := blockedCNAME(resp, r, o.Personal); target != "" {
 				return finish(blockedAnswer(h, q, r.blockMode), "blocked", "CNAME "+target, up.String())
 			}
 		}
@@ -313,7 +379,7 @@ func localAnswer(h dnsmessage.Header, q dnsmessage.Question, recs []Record, all 
 }
 
 // blockedCNAME returns the first CNAME target in resp that's blocked.
-func blockedCNAME(resp []byte, r *rules) string {
+func blockedCNAME(resp []byte, r *rules, per *Personal) string {
 	var p dnsmessage.Parser
 	if _, err := p.Start(resp); err != nil || p.SkipAllQuestions() != nil {
 		return ""
@@ -334,7 +400,7 @@ func blockedCNAME(resp []byte, r *rules) string {
 			return ""
 		}
 		t := strings.ToLower(strings.TrimSuffix(c.CNAME.String(), "."))
-		if r.blockedBy(t) != "" {
+		if r.blockedFor(t, per) != "" {
 			return t
 		}
 	}

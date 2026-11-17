@@ -35,6 +35,6 @@
         android:fontFamily="@font/orbitron_bold"
         android:gravity="center"
         android:text="@string/ai_short"
-        android:textColor="#FFFF2A2A"
+        android:textColor="#FFE8232B"
         android:textSize="12sp" />
 </LinearLayout>

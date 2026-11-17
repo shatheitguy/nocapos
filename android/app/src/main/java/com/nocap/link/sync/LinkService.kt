@@ -88,6 +88,7 @@ class LinkService : Service() {
             override fun onLost(network: Network) { networkChanged() }
         }.also { cb -> runCatching { cm?.registerDefaultNetworkCallback(cb) } }
         FindPhone.onChange = { report(force = true) }
+        Requests.channel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -117,15 +118,29 @@ class LinkService : Service() {
         restart()
     }
 
-    /** Pick the route again, then follow the server. */
+    /**
+     * Pick the route, follow the server; when that stops (route gone, server
+     * away, older server), wait a little and pick again. Never gives up while
+     * the service runs, so requests keep arriving after a long outage.
+     */
     private fun restart() {
         loop?.cancel()
         loop = scope.launch {
             delay(800) // let the new network settle
-            chooseRoute(this@LinkService)
-            update()
-            report(force = true)
-            Sync.listen(this@LinkService, inService = true)
+            var pause = 10_000L
+            while (true) {
+                chooseRoute(this@LinkService)
+                update()
+                report(force = true)
+                val started = System.currentTimeMillis()
+                Sync.listen(this@LinkService, inService = true)
+                if (runCatching { Vault.get(this@LinkService).link }.getOrNull() == null) { stopSelf(); return@launch }
+                LinkService.connected(false)
+                update()
+                // A connection that held for a while starts over quickly; one that keeps failing backs off.
+                pause = if (System.currentTimeMillis() - started > 120_000) 10_000L else (pause * 2).coerceAtMost(300_000L)
+                delay(pause)
+            }
         }
     }
 
@@ -133,7 +148,12 @@ class LinkService : Service() {
         val n = notification(this)
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0
         runCatching { ServiceCompat.startForeground(this, ID, n, type) }
-            .onFailure { com.nocap.link.system.CrashLog.warn("link service", it) }
+            .onFailure {
+                // Not in the foreground means Android kills the app shortly: stop cleanly instead.
+                com.nocap.link.system.CrashLog.warn("link service", it)
+                running = false
+                stopSelf()
+            }
     }
 
     private fun update() {
@@ -165,6 +185,7 @@ class LinkService : Service() {
         private const val ID = 4100
         private const val CHANNEL = "nocap_link_live"
         @Volatile private var running = false
+        val isRunning: Boolean get() = running
         val status = mutableStateOf(Status(false, null))
 
         /** Starts the service; false when Android won't let it start right now. */

@@ -95,6 +95,8 @@ fun parseEvents(text: String): Pair<NoCapApi.Events, List<PhoneAction>> {
         },
         (0 until da.length()).map { da.getString(it) },
         signins,
+        // "Mirror my screen" asks ride on the same long-poll; dropping this field meant they never reached the phone.
+        o.optJSONObject("mirror")?.optString("id")?.takeIf { it.isNotBlank() },
     )
     val actions = (0 until aa.length()).map {
         val a = aa.getJSONObject(it)
