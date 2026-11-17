@@ -68,7 +68,7 @@ static const char *const POWER_GREETER[] = {"reboot", "poweroff", NULL};
 
 static const ParamSpec P_NONE[] = {{NULL}};
 static const ParamSpec P_INPUT[] = {
-  {"rects", PT_INTS, TRUE, 0, 32768, NULL, 128, 0}, /* x,y,w,h quadruples */
+  {"rects", PT_INTS, TRUE, 0, 32768, NULL, 1024, 0}, /* x,y,w,h quadruples: up to 256 rectangles */
   {"full", PT_BOOL, FALSE, 0, 0, NULL, 0, 0},
   {NULL}};
 static const ParamSpec P_ZONES[] = {

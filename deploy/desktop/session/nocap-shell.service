@@ -10,6 +10,6 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-ExecStart=/usr/local/lib/nocapos/shell/nocap-shell
+ExecStart=/usr/libexec/nocapos/nocap-shell
 Restart=always
 RestartSec=2

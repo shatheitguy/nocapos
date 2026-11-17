@@ -1,11 +1,11 @@
 # NoCap Shell native programs: nocap-shell (host) and nocap-lock.
 #   make                 build both
 #   make test            build and run the bridge unit tests (glib + json-glib only)
-#   make install DESTDIR= PREFIX=/usr/local/lib/nocapos/shell
+#   make install DESTDIR= PREFIX=/usr/libexec/nocapos
 
 PKG_CONFIG ?= pkg-config
 CC ?= cc
-PREFIX ?= /usr/local/lib/nocapos/shell
+PREFIX ?= /usr/libexec/nocapos
 DESTDIR ?=
 BUILD ?= build
 NOCAP_VERSION ?= $(shell cat ../VERSION 2>/dev/null || echo dev)

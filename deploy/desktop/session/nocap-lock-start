@@ -2,7 +2,7 @@
 # Starts the NoCap lock screen without waiting for it to unlock (the idle
 # watcher must not block, e.g. before the machine sleeps). nocap-lock
 # itself keeps to one copy.
-/usr/local/lib/nocapos/shell/nocap-lock >/dev/null 2>&1 &
+/usr/libexec/nocapos/nocap-lock >/dev/null 2>&1 &
 # Give it a moment to lock every screen before sleep goes ahead.
 sleep 1
 exit 0

@@ -7,6 +7,6 @@ ConditionPathExists=/usr/bin/swayidle
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/swayidle -w timeout 600 '/usr/local/lib/nocapos/shell/nocap-lock-start' before-sleep '/usr/local/lib/nocapos/shell/nocap-lock-start' lock '/usr/local/lib/nocapos/shell/nocap-lock-start'
+ExecStart=/usr/bin/swayidle -w timeout 600 '/usr/libexec/nocapos/nocap-lock-start' before-sleep '/usr/libexec/nocapos/nocap-lock-start' lock '/usr/libexec/nocapos/nocap-lock-start'
 Restart=on-failure
 RestartSec=5

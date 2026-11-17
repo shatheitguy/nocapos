@@ -9,7 +9,7 @@
 #include <string.h>
 
 #define MAX_MSG (64 * 1024)
-#define SESSION_CMD "/usr/local/lib/nocapos/shell/nocap-session"
+#define SESSION_CMD "/usr/libexec/nocapos/nocap-session"
 
 static GSocketConnection *conn; /* one greetd conversation */
 static gboolean busy;

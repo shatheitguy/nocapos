@@ -302,6 +302,8 @@ desk_migrate_old_desktop() {
     changed=1
   fi
   rm -f "$DESK_LIB/gdm-theme"
+  # Earlier builds of this desktop kept its programs here.
+  rm -rf /usr/local/lib/nocapos/shell
   if has update-alternatives && [ -f "$DESK_SHARE/gdm-theme.gresource" ]; then
     update-alternatives --remove gdm-theme.gresource "$DESK_SHARE/gdm-theme.gresource" >/dev/null 2>&1 || true
   fi

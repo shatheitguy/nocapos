@@ -154,7 +154,7 @@ test_too_long(void)
   g_string_free(s, TRUE);
 
   GString *a = g_string_new("{\"id\":1,\"method\":\"surface.input\",\"params\":{\"rects\":[");
-  for (int i = 0; i < 129; i++)
+  for (int i = 0; i < 1025; i++)
     g_string_append_printf(a, "%s%d", i ? "," : "", i);
   g_string_append(a, "]}}");
   expect_err("chrome", a->str, "too many items");

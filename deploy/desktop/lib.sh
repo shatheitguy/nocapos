@@ -549,11 +549,12 @@ config_txt_append() {
 # The physical screen: greetd shows NoCap's own sign-in screen (NoCap Shell
 # in greeter mode, in a labwc of its own, as greetd's unprivileged greeter
 # account), then starts the NoCap Desktop session for whoever signed in:
-# labwc + NoCap Shell (top bar, dock, launcher, notifications, control
-# center, lock screen). Files live in:
-#   /usr/local/lib/nocapos/shell     the programs (nocap-shell, nocap-lock,
+# labwc (windows) + NoCap Shell, which shows NoCap OS itself on the screen:
+# the same menu bar, dock, launcher, panels, widgets and apps as in the
+# browser, from local files, plus the lock screen. Files live in:
+#   /usr/libexec/nocapos             the programs (nocap-shell, nocap-lock,
 #                                    nocap-session, nocap-greeter-session)
-#   /usr/share/nocapos/shell         NoCap Shell's pages (local files only)
+#   /usr/share/nocapos/shell         NoCap OS's pages for the screen
 #   /usr/share/nocapos/labwc         labwc settings for every account's
 #                                    session (labwc -C: a person's own or a
 #                                    distribution's labwc settings never
@@ -564,7 +565,7 @@ config_txt_append() {
 #   /etc/greetd/config.toml          the sign-in service
 
 NOCAP_SESSION=nocapos
-SHELL_LIB=/usr/local/lib/nocapos/shell
+SHELL_LIB=/usr/libexec/nocapos
 SHELL_UI=/usr/share/nocapos/shell
 SHELL_CONF=/usr/share/nocapos/labwc
 GREETER_CONF=/usr/share/nocapos/greeter/labwc

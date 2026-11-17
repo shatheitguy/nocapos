@@ -1,6 +1,6 @@
 #!/bin/sh
 # NoCap Desktop: the session greetd starts for whoever signs in (installed
-# by NoCapOS to /usr/local/lib/nocapos/shell). labwc runs the windows with
+# by NoCapOS to /usr/libexec/nocapos). labwc runs the windows with
 # NoCap Desktop's own settings (/usr/share/nocapos/labwc); its autostart
 # brings up NoCap Shell.
 #
@@ -23,7 +23,7 @@ if [ "$(id -u)" -eq 0 ]; then
   exit 1
 fi
 
-LIB=/usr/local/lib/nocapos/shell
+LIB=/usr/libexec/nocapos
 CONF=/usr/share/nocapos/labwc
 LABWC=labwc
 if ! command -v labwc >/dev/null 2>&1 && [ -x "$LIB/labwc" ]; then LABWC="$LIB/labwc"; fi

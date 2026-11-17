@@ -59,31 +59,31 @@
     <repeatDelay>600</repeatDelay>
     <!-- The launcher: Super on its own, or Super+Space. -->
     <keybind key="Super_L" onRelease="yes">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle launcher" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --toggle launcher" />
     </keybind>
     <keybind key="W-space">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle launcher" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --toggle launcher" />
     </keybind>
     <keybind key="W-a">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle center" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --toggle center" />
     </keybind>
     <keybind key="W-n">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle center" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --toggle center" />
     </keybind>
     <keybind key="W-l">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-lock" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-lock" />
     </keybind>
     <keybind key="W-e">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open files" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-open files" />
     </keybind>
     <keybind key="C-A-t">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open terminal" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-open terminal" />
     </keybind>
     <keybind key="W-t">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open terminal" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-open terminal" />
     </keybind>
     <keybind key="W-i">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open settings" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-open settings" />
     </keybind>
     <keybind key="A-F4"><action name="Close" /></keybind>
     <keybind key="W-q"><action name="Close" /></keybind>
@@ -94,22 +94,22 @@
     <keybind key="A-Tab"><action name="NextWindow" /></keybind>
     <keybind key="A-S-Tab"><action name="PreviousWindow" /></keybind>
     <keybind key="XF86AudioRaiseVolume">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-up" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --osd volume-up" />
     </keybind>
     <keybind key="XF86AudioLowerVolume">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-down" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --osd volume-down" />
     </keybind>
     <keybind key="XF86AudioMute">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-mute" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --osd volume-mute" />
     </keybind>
     <keybind key="XF86MonBrightnessUp">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd brightness-up" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --osd brightness-up" />
     </keybind>
     <keybind key="XF86MonBrightnessDown">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd brightness-down" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-shell --osd brightness-down" />
     </keybind>
     <keybind key="Print">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open screenshot" />
+      <action name="Execute" command="/usr/libexec/nocapos/nocap-open screenshot" />
     </keybind>
   </keyboard>
 
