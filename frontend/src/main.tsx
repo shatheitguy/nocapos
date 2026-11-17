@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { Installer } from './installer/Installer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 // Theme fonts are bundled (served by NoCapOS itself — the CSP blocks font CDNs).
 import '@fontsource/orbitron/latin-600.css';
@@ -27,10 +28,13 @@ import './styles/photos.css';
 import './styles/media.css';
 import './styles/mobile.css';
 
+// The USB stick's setup screen (cmd/nocap-installer serves it at /installer).
+const installer = window.location.pathname.startsWith('/installer');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary title="NoCapOS" fallback="screen">
-      <App />
+      {installer ? <Installer /> : <App />}
     </ErrorBoundary>
   </StrictMode>,
 );
