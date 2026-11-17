@@ -4,7 +4,7 @@ import { setVoice } from './i18n';
 import type { ShellInfo, Theme } from './protocol';
 
 /** NoCap red: the shell's accent in every theme. */
-export const ACCENT = '#e5383b';
+export const ACCENT = '#e8232b';
 
 /** Dark is the Glass look; light is the classic NoCap look in light mode. */
 export function applyTheme(theme: unknown) {

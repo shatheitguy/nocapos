@@ -15,8 +15,8 @@ input, textarea { user-select: text; -webkit-user-select: text; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 :root {
-  --accent: #e5383b;
-  --nsh-red: #e5383b;
+  --accent: #e8232b;
+  --nsh-red: #e8232b;
   --nsh-panel: rgba(24, 25, 31, 0.94);
   --nsh-panel-2: rgba(255, 255, 255, 0.06);
   --nsh-edge: rgba(255, 255, 255, 0.12);
