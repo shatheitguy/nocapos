@@ -270,6 +270,24 @@ ICONS.shield = (g) => (
   </>
 );
 
+// Sticky Notes: a frosted note behind, a NoCap-red note in front with a
+// folded corner and a ticked checklist.
+ICONS.notes = (g) => (
+  <>
+    <defs>
+      {lin(g('back'), '#f8fafc', '#94a3b8', 1, 1)}
+      {lin(g('front'), '#ff6b70', '#c8141c', 1, 1)}
+    </defs>
+    <rect x="17" y="9" width="34" height="34" rx="7" fill={url(g('back'))} opacity=".55" transform="rotate(8 34 26)" />
+    <path d="M18 17h28a5 5 0 0 1 5 5v18L40 51H18a5 5 0 0 1-5-5V22a5 5 0 0 1 5-5Z" fill={url(g('front'))} />
+    <path d="M51 40H44a4 4 0 0 0-4 4v7Z" fill="#7a0f12" opacity=".55" />
+    {gloss('M13 22a5 5 0 0 1 5-5h28a5 5 0 0 1 5 5v3H13Z')}
+    <path d="m19.5 30 2.6 2.6 4.6-4.8" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <rect x="30" y="28.6" width="14" height="3" rx="1.5" fill="#fff" opacity=".9" />
+    <rect x="20" y="38" width="16" height="3" rx="1.5" fill="#fff" opacity=".6" />
+  </>
+);
+
 // A virtual machine's screen window wears Virtual Desk's icon.
 ICONS.vmscreen = ICONS.virtualdesk;
 ICONS.nocapdesktop = ICONS.remotedesktop;
@@ -296,6 +314,7 @@ const SHAPES: Record<string, () => ReactNode> = {
   logs: () => (<>{bg('#111827')}{[16, 25, 34, 43].map((y, i) => <rect key={y} x="14" y={y} width={[36, 26, 32, 18][i]} height="5" rx="2.5" fill={['#22c55e', '#38bdf8', '#f59e0b', '#ef4444'][i]} />)}</>),
 };
 SHAPES.vmscreen = SHAPES.virtualdesk;
+SHAPES.notes = () => (<>{bg('#b3121a')}<rect x="20" y="12" width="30" height="30" rx="6" fill="#fecaca" opacity=".55" transform="rotate(8 35 27)" /><path d="M17 18h26a4 4 0 0 1 4 4v16l-10 10H17a4 4 0 0 1-4-4V22a4 4 0 0 1 4-4Z" fill="#ff5a5f" /><path d="M47 38h-6a4 4 0 0 0-4 4v6Z" fill="#7a0f12" opacity=".6" /><rect x="19" y="27" width="20" height="3.5" rx="1.75" fill="#fff" /><rect x="19" y="35" width="13" height="3.5" rx="1.75" fill="#fff" opacity=".7" /></>);
 SHAPES.phone = () => (<>{bg('#0f766e')}<rect x="10" y="14" width="32" height="24" rx="4" fill="#5eead4" opacity=".7" /><rect x="34" y="20" width="19" height="31" rx="4" fill="#ccfbf1" /><rect x="40" y="46" width="7" height="2" rx="1" fill="#0f766e" /></>);
 SHAPES.shield = () => (<>{bg('#9b1015')}<path d="M32 12l17 6v11c0 11-7 19-17 23-10-4-17-12-17-23V18Z" fill="#ff5a5f" /><path d="m25 32 5 5 10-11" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></>);
 SHAPES.nocapdesktop = () => (<>{bg('#7a0f12')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#e5383b" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#fecaca" /></>);
