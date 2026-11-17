@@ -1,2 +1,5 @@
 description = "build the ZFS module for the image's kernels, then remove the compiler"
 dependencies = ["nocapos-packages"]
+# After the kernel and its headers (core/debian-grub-setup, priority 0)
+# and the system packages.
+priority = -200
