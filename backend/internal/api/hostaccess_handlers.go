@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"html"
+	"net"
 	"net/http"
 	"strings"
 
@@ -27,6 +28,10 @@ func (s *Server) localOnly(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// GateListener closes other devices' connections on arrival while NoCapOS
+// is local-only ("Desktop only"), for every network listener.
+func (s *Server) GateListener(ln net.Listener) net.Listener { return s.localGate.Listener(ln) }
 
 // LocalOnly wraps another listener's handler (the http→https redirect) with
 // the same switch.
@@ -89,6 +94,8 @@ type hostAccessState struct {
 	ClientLocal bool                    `json:"client_local"` // this browser runs on the server itself
 	Remote      remoteAccessState       `json:"remote"`
 	Desktop     hostaccess.DesktopState `json:"desktop"`
+	// Usage: how NoCapOS is used, from the two switches (usage_handlers.go).
+	Usage string `json:"usage"`
 }
 
 type remoteAccessState struct {
@@ -108,6 +115,7 @@ func (s *Server) hostAccessState(r *http.Request) hostAccessState {
 	if !native {
 		st.Remote.Reason = "This switch needs NoCapOS installed straight on Linux (not in Docker)."
 	}
+	st.Usage = usageOf(st.Remote.Enabled, st.Desktop)
 	return st
 }
 

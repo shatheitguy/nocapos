@@ -33,6 +33,8 @@ func (s *Server) initOSImage(ctx context.Context) {
 	if !ok {
 		return
 	}
+	// First start after the installer: make what it asked for.
+	s.applySeed(ctx)
 	s.osImg = &osState{upd: osimage.NewUpdater(s.Config.DataDir, info), info: info}
 	go s.osAutoLoop(ctx)
 	go s.osNotifyOutcome(ctx)
