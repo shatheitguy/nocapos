@@ -27,7 +27,7 @@ const ShellSocketPath = "/run/nocapos/shell.sock"
 const ShellOrigin = "nocap-shell://shell"
 
 // ShellPrograms are the programs allowed to ask for a session.
-var ShellPrograms = []string{"/usr/local/lib/nocapos/shell/nocap-shell", "/usr/libexec/nocapos/nocap-shell"}
+var ShellPrograms = []string{"/usr/libexec/nocapos/nocap-shell"}
 
 type shellPeer struct {
 	Account string

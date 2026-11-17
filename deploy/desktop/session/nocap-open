@@ -2,7 +2,7 @@
 # NoCap Desktop: opens one of NoCap OS's own apps in its own window
 # (keybindings use it): files, terminal, editor, settings, appstore; and
 # takes a screenshot (screenshot).
-SHELL_BIN=/usr/local/lib/nocapos/shell/nocap-shell
+SHELL_BIN=/usr/libexec/nocapos/nocap-shell
 case "$1" in
   files | terminal | settings) exec "$SHELL_BIN" --app "$1" ;;
   appstore) exec "$SHELL_BIN" --app appcenter ;;

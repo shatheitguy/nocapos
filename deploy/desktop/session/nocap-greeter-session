@@ -15,7 +15,7 @@ RT="${XDG_RUNTIME_DIR:-/tmp}"
 if [ -z "${HOME:-}" ] || [ ! -w "$HOME" ]; then export HOME="$RT"; fi
 export XDG_CACHE_HOME="$RT/nocap-greeter/cache" XDG_DATA_HOME="$RT/nocap-greeter/data" XDG_CONFIG_HOME="$RT/nocap-greeter/config"
 mkdir -p "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" 2>/dev/null
-LIB=/usr/local/lib/nocapos/shell
+LIB=/usr/libexec/nocapos
 CONF=/usr/share/nocapos/greeter/labwc
 LABWC=labwc
 if ! command -v labwc >/dev/null 2>&1 && [ -x "$LIB/labwc" ]; then LABWC="$LIB/labwc"; fi

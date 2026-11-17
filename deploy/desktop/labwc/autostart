@@ -7,5 +7,5 @@ dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DISPLAY >/dev/null 2>&1
 if ! systemctl --user start nocap-session.target >/dev/null 2>&1; then
   # No systemd user manager: run the shell directly.
-  /usr/local/lib/nocapos/shell/nocap-shell >/dev/null 2>&1 &
+  /usr/libexec/nocapos/nocap-shell >/dev/null 2>&1 &
 fi

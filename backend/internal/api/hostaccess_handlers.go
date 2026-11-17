@@ -285,7 +285,7 @@ func (s *Server) desktopRepair(w http.ResponseWriter, r *http.Request) {
 }
 
 // desktopDiagnostics is the text bundle for a black screen: health, the
-// sign-in screen's and GNOME Shell's journal, sessions, the GPU, screens.
+// sign-in service's, compositor's and NoCap Shell's journal, sessions, the GPU, screens.
 func (s *Server) desktopDiagnostics(w http.ResponseWriter, r *http.Request) {
 	if !s.desktop.Native {
 		writeError(w, http.StatusNotImplemented, "unsupported", s.desktop.State(r.Context()).Reason)
