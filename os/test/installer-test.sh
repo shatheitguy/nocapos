@@ -170,8 +170,8 @@ usage="$(curl -fsk -H "Authorization: Bearer $tok" "https://127.0.0.1:$HTTPS_POR
 echo "account signs in; usage: $usage"
 
 log "\"Desktop only\" keeps other devices out"
-vssh "curl -fsS -X PUT -H 'Content-Type: application/json' -H 'Authorization: Bearer $tok' -d '{\"mode\":\"desktop\"}' http://127.0.0.1:8780/api/v1/system/usage" >/dev/null ||
-  fail "couldn't switch to Desktop only"
+vssh "curl -fsS -X PUT -H 'Content-Type: application/json' -H 'Authorization: Bearer $tok' -d '{\"enabled\":false}' http://127.0.0.1:8780/api/v1/system/remote-access" >/dev/null ||
+  fail "couldn't keep other devices out"
 if curl -sk --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" | grep -q status; then fail "another device still reaches NoCapOS"; fi
 vssh 'curl -fsS http://127.0.0.1:8780/healthz' | grep -q '"status":"ok"' || fail "NoCapOS stopped answering this machine"
 echo "network connections are closed; this machine still reaches NoCapOS"
