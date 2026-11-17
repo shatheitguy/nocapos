@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, confirmNetwork } from '../api/client';
-import { hostAccessApi, type HostAccess } from '../api/hostaccess';
+import { hostAccessApi, type HostAccess, type Usage } from '../api/hostaccess';
+import { UsagePicker } from './UsagePicker';
 import { hostApi, type IPv4Config, type IPv6Config, type MachineSetup, type NetInterface } from '../api/hostctl';
 import type { User } from '../api/types';
 import { Choice, ThemeGallery } from '../apps/Personalize';
@@ -45,9 +46,10 @@ interface Draft {
   net: NetDraft | null; // null = keep
   zone: string; // '' = keep
   desktop: boolean | null; // null = keep
+  usage: Usage | null; // how NoCapOS is used (null = keep)
   updates: boolean; // look for a newer NoCapOS
 }
-const EMPTY_DRAFT: Draft = { hostname: '', net: null, zone: '', desktop: null, updates: true };
+const EMPTY_DRAFT: Draft = { hostname: '', net: null, zone: '', desktop: null, usage: null, updates: true };
 const DRAFT_KEY = 'nocap.setup.draft';
 
 function loadDraft(): Draft {
@@ -557,8 +559,16 @@ function ExtrasStep({ draft, setDraft, host }: { draft: Draft; setDraft: (p: Par
   const t = useT();
   const desk = host?.desktop;
   const deskOn = draft.desktop ?? !!desk?.enabled;
+  // Where both the screen and web access exist: one choice for both.
+  const pickUsage = !!(host?.native && host.remote.supported && desk?.available && host.usage);
   return (
     <Step icon="desktop" title={t('wiz.extrasTitle')} text={t('wiz.extrasText')}>
+      {pickUsage ? (
+        <div className="wiz-usage">
+          <b>{t('use.title')}</b>
+          <UsagePicker value={draft.usage ?? host!.usage!} onChange={(u) => setDraft({ usage: u === host!.usage ? null : u, desktop: null })} />
+        </div>
+      ) : (
       <label className={`wiz-toggle ${desk?.available ? '' : 'dimmed'}`}>
         <span className="wiz-toggle-icon">
           <Icon name="desktop" size={18} />
@@ -570,6 +580,7 @@ function ExtrasStep({ draft, setDraft, host }: { draft: Draft; setDraft: (p: Par
         <input type="checkbox" role="switch" checked={deskOn} disabled={!desk?.available}
           onChange={(e) => setDraft({ desktop: e.target.checked === !!desk?.enabled ? null : e.target.checked })} />
       </label>
+      )}
       <label className="wiz-toggle">
         <span className="wiz-toggle-icon">
           <Icon name="download" size={18} />
@@ -635,7 +646,11 @@ function SummaryStep({ draft, machine, machineSteps, onDone, onEdit, onBack }: {
       {
         step: 'extras',
         label: t('wiz.step.extras'),
-        value: [draft.desktop === null ? '' : draft.desktop ? t('wiz.desktopOn') : t('wiz.desktopOff'), draft.updates ? t('wiz.updatesCheck') : ''].filter(Boolean).join(' · ') || keep,
+        value: [
+          draft.usage ? t({ 'desktop-web': 'use.both', desktop: 'use.desktop', web: 'use.web' }[draft.usage]) : '',
+          draft.desktop === null ? '' : draft.desktop ? t('wiz.desktopOn') : t('wiz.desktopOff'),
+          draft.updates ? t('wiz.updatesCheck') : '',
+        ].filter(Boolean).join(' · ') || keep,
       },
     );
   }
@@ -654,6 +669,7 @@ function SummaryStep({ draft, machine, machineSteps, onDone, onEdit, onBack }: {
     const list: Task[] = [];
     if (machineSteps && draft.hostname.trim()) list.push({ id: 'name', label: t('wiz.hostname'), detail: draft.hostname.trim().toLowerCase(), state: 'wait' });
     if (machineSteps && draft.zone) list.push({ id: 'time', label: t('wiz.step.time'), detail: draft.zone.replace(/_/g, ' '), state: 'wait' });
+    if (machineSteps && draft.usage) list.push({ id: 'usage', label: t('use.title'), detail: t({ 'desktop-web': 'use.both', desktop: 'use.desktop', web: 'use.web' }[draft.usage]), state: 'wait' });
     if (machineSteps && draft.desktop !== null) list.push({ id: 'desktop', label: t('wiz.desktop'), detail: draft.desktop ? t('wiz.desktopOn') : t('wiz.desktopOff'), state: 'wait' });
     if (machineSteps && draft.updates) list.push({ id: 'updates', label: t('wiz.updates'), detail: '', state: 'wait' });
     if (machineSteps && draft.net) list.push({ id: 'net', label: t('wiz.step.network'), detail: '', state: 'wait' });
@@ -672,6 +688,9 @@ function SummaryStep({ draft, machine, machineSteps, onDone, onEdit, onBack }: {
         if (!r.ok) [state, note] = ['fail', r.error];
       } else if (task.id === 'time') {
         const r = await hostApi.setTimeZone(draft.zone);
+        if (!r.ok) [state, note] = ['fail', r.error];
+      } else if (task.id === 'usage' && draft.usage) {
+        const r = await hostAccessApi.setUsage(draft.usage, true);
         if (!r.ok) [state, note] = ['fail', r.error];
       } else if (task.id === 'desktop') {
         const r = await hostAccessApi.setDesktopMode(draft.desktop ? 'full' : 'off');
