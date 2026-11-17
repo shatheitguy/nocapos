@@ -2,14 +2,21 @@
 # Builds the Linux release bundles (amd64, arm64, armv7) into dist/ — the same
 # output as package.ps1, for Linux/macOS and GitHub Actions.
 #   scripts/package.sh 0.3.0
+#
+# NoCap Desktop's native programs (nocap-shell, nocap-lock) are C: set
+# NOCAP_SHELL_BINS to a folder holding amd64/, arm64/ and armv7/ builds of
+# them (shell/scripts/build-release.sh; the release workflow builds them in
+# containers of each architecture). An architecture without them still gets
+# the sources, and install.sh builds them on the machine.
 set -euo pipefail
 VERSION="${1:-0.0.0-dev}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 rm -rf "$DIST"; mkdir -p "$DIST"
 
-echo "==> Building the web UI"
-(cd "$ROOT/frontend" && npm ci --no-audit --no-fund && npm run build)
+echo "==> Building the web UI and NoCap Desktop's pages"
+(cd "$ROOT/frontend" && npm ci --no-audit --no-fund && npm run build && npm run build:shell)
+SHELL_BINS="${NOCAP_SHELL_BINS:-}"
 
 sums=()
 for target in amd64 arm64 armv7; do
@@ -27,6 +34,17 @@ for target in amd64 arm64 armv7; do
      "$ROOT/deploy/docker-compose.nvidia.yml" "$ROOT/deploy/Dockerfile.bundle" "$stage/"
   cp -R "$ROOT/deploy/plymouth" "$stage/plymouth" # boot splash theme
   cp -R "$ROOT/deploy/desktop" "$stage/desktop"   # NoCap Desktop: full desktop + boot branding
+  # NoCap Shell: NoCap OS's pages for the screen, the programs for this
+  # architecture, and their sources (built on the machine when needed).
+  mkdir -p "$stage/shell/src"
+  cp -R "$ROOT/frontend/dist-shell" "$stage/shell/ui"
+  cp -R "$ROOT/shell/Makefile" "$ROOT/shell/PROTOCOL.md" "$ROOT/shell/host" "$ROOT/shell/lock" "$ROOT/shell/protocols" "$ROOT/shell/test" "$stage/shell/src/"
+  if [ -n "$SHELL_BINS" ] && [ -x "$SHELL_BINS/$target/nocap-shell" ] && [ -x "$SHELL_BINS/$target/nocap-lock" ]; then
+    mkdir -p "$stage/shell/bin"
+    install -m 0755 "$SHELL_BINS/$target/nocap-shell" "$SHELL_BINS/$target/nocap-lock" "$stage/shell/bin/"
+  else
+    echo "    (no NoCap Shell build for $target: installs build it on the machine)"
+  fi
   mkdir -p "$stage/brand" "$stage/wallpapers"
   cp "$ROOT"/frontend/public/brand/*.png "$stage/brand/"
   cp "$ROOT"/frontend/public/wallpapers/*.jpg "$stage/wallpapers/"

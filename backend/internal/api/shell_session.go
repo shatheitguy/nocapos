@@ -107,21 +107,17 @@ func (s *Server) shellSession(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decodeJSON(w, r, &req) {
 		return
 	}
-	u, err := s.Store.UserByUsername(r.Context(), p.Account)
-	if err != nil || u == nil || u.Disabled {
-		writeError(w, http.StatusForbidden, "forbidden", "this account isn't a NoCapOS account")
-		return
-	}
 	meta := auth.ClientMeta{IP: "127.0.0.1", UserAgent: "NoCap Desktop"}
 	var sess *auth.Session
+	var err error
 	if req.Refresh != "" {
 		sess, err = s.Auth.Refresh(r.Context(), req.Refresh, meta)
-		if err == nil && (sess.User == nil || sess.User.ID != u.ID) {
-			err = auth.ErrInvalidToken
+		if err == nil && (sess.User == nil || sess.User.Username != p.Account) {
+			sess, err = nil, auth.ErrInvalidToken
 		}
 	}
 	if sess == nil {
-		sess, err = s.Auth.LinkedSession(r.Context(), u.ID, meta)
+		sess, err = s.Auth.ScreenSession(r.Context(), p.Account, meta)
 	}
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) {
