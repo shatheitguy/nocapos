@@ -1,0 +1,5 @@
+description = "the system packages NoCapOS uses (packages/*.list)"
+dependencies = ["nocapos-sources"]
+
+[parameters]
+target = { default = "pc" }

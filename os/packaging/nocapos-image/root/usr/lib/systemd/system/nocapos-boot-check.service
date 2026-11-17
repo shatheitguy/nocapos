@@ -1,0 +1,13 @@
+[Unit]
+Description=NoCapOS: keep a just-updated system only when it works
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+After=nocapos.service multi-user.target
+Wants=nocapos.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/health-commit
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

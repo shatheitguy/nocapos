@@ -1,0 +1,12 @@
+# NoCapOS for Raspberry Pi: the NoCapOS packages, branding and the
+# read-only system setup on top of pi-base.
+parent = "pi-base"
+
+recipes = [
+    "nocapos-os",
+    "core/pkg-cleanup",
+    "nocapos-slim",
+]
+
+[parameters.nocapos-os]
+target = "pi"

@@ -1,0 +1,8 @@
+[Unit]
+Description=NoCapOS: save changed settings to the data partition
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/etc-sync save

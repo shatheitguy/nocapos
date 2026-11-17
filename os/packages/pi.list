@@ -1,0 +1,12 @@
+# Raspberry Pi (arm64: Pi 4, Pi 5, CM4, CM5) only. Same format as
+# common.list. The kernels (linux-image-rpi-v8, linux-image-rpi-2712), the
+# boot firmware (raspi-firmware) and the Wi-Fi firmware come from Rugix's
+# core/rpi-debian-setup recipe and the Raspberry Pi archive; they are listed
+# here for the record.
+
+linux-image-rpi-v8         # kernel for Pi 4 / CM4 (installed by core/rpi-debian-setup)
+linux-image-rpi-2712       # kernel for Pi 5 / CM5 (installed by core/rpi-debian-setup)
+raspi-firmware             # boot firmware (installed by core/rpi-debian-setup)
+qemu-system-arm            # Virtual Desk: arm64 VMs
+qemu-efi-aarch64           # Virtual Desk: UEFI for arm64 VMs
+?raspi-utils               # Pi hardware info (vcgencmd) on the Hardware page
