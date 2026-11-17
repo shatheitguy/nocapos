@@ -1,0 +1,15 @@
+[Unit]
+Description=NoCapOS setup (installer)
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+# Only on the NoCapOS USB stick (os/scripts/make-usb.sh puts the flag there).
+ConditionPathExists=/run/rugix/mounts/config/nocapos-installer
+After=local-fs.target systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nocap-installer -listen 127.0.0.1:8790
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

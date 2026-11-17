@@ -46,7 +46,7 @@ type Seed struct {
 }
 
 var (
-	xkbRe  = regexp.MustCompile(`^[a-z]{2,3}(\([a-z0-9_-]+\))?$`)
+	xkbRe  = regexp.MustCompile(`^[a-z]{2,6}(\([a-z0-9_-]+\))?$`)
 	xkbVar = regexp.MustCompile(`^[a-z0-9_-]{0,32}$`)
 )
 

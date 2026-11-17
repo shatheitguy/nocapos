@@ -8,3 +8,4 @@ firmware-linux             # GPU, Wi-Fi and network firmware (installed by core/
 ?amd64-microcode           # CPU security fixes on AMD
 qemu-system-x86            # Virtual Desk: x86 VMs
 ovmf                       # Virtual Desk: UEFI for VMs (Windows 11)
+cage                       # the USB stick's full-screen setup (installer)
