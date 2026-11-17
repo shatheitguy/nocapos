@@ -10,7 +10,7 @@ DESTDIR ?=
 BUILD ?= build
 NOCAP_VERSION ?= $(shell cat ../VERSION 2>/dev/null || echo dev)
 
-HOST_PKGS := gtk+-3.0 gtk-layer-shell-0 webkit2gtk-4.1 json-glib-1.0 gio-unix-2.0 wayland-client polkit-agent-1
+HOST_PKGS := gtk+-3.0 gtk-layer-shell-0 webkit2gtk-4.1 libsoup-3.0 json-glib-1.0 gio-unix-2.0 wayland-client polkit-agent-1
 LOCK_PKGS := wayland-client xkbcommon cairo pangocairo gdk-pixbuf-2.0
 TEST_PKGS := glib-2.0 json-glib-1.0
 
