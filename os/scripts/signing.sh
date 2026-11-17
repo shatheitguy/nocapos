@@ -38,9 +38,10 @@ case "${1:-}" in
     printf '%s\n' "$SIGNING_KEY" >"$tmp/signer.key"
     printf '%s\n' "$SIGNING_CERT" >"$tmp/signer.crt"
     rel="${bundle#"$OS"/}"
-    (cd "$OS" && ./run-bakery bundler signatures sign "$rel" build/.sign/signer.crt build/.sign/signer.key "$rel.signed")
-    mv -f "$bundle.signed" "$bundle"
+    (cd "$OS" && ./run-bakery bundler signatures sign "$rel" build/.sign/signer.crt build/.sign/signer.key "$rel.new")
+    mv -f "$bundle.new" "$bundle"
     (cd "$OS" && ./run-bakery bundler signatures list "$rel")
+    touch "$bundle.signed" # tells the release manifest it's signed
     ;;
   *)
     sed -n '2,12p' "$0"

@@ -10,8 +10,21 @@ on:
   workflow_call:
     inputs:
       release:
+        description: build the release files (signed bundles, compressed images)
         type: boolean
         default: false
+      ref:
+        description: what to build (a tag); empty = this commit
+        type: string
+        default: ''
+      version:
+        description: the image version (e.g. 0.14.0-s1 for a security refresh); empty = VERSION
+        type: string
+        default: ''
+      snapshot:
+        description: Debian snapshot date to build from; empty = os/config/snapshot.toml
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -41,11 +54,18 @@ jobs:
     name: PC image (x86_64) + QEMU test
     needs: lists
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
+
+      - name: Debian snapshot (security refresh)
+        if: inputs.snapshot != ''
+        run: sed -i "s/[0-9]\{8\}T[0-9]\{6\}Z/${{ inputs.snapshot }}/g" os/config/snapshot.toml && cat os/config/snapshot.toml
 
       - name: Free disk space
         run: |
@@ -137,37 +157,44 @@ jobs:
         if: failure()
         run: tail -n 300 os/build/qemu/serial.log || true
 
-      - name: Sign and compress for release
+      - name: Release files
         if: inputs.release
         env:
           SIGNING_KEY: ${{ secrets.NOCAPOS_UPDATE_SIGNING_KEY }}
           SIGNING_CERT: ${{ secrets.NOCAPOS_UPDATE_SIGNING_CERT }}
-        run: |
-          bash os/scripts/signing.sh sign os/build/pc.rugixb
-          bash os/scripts/build.sh bundle-hash pc
-          xz -T0 -6 -k os/build/pc.img
+        run: bash os/scripts/release-files.sh pc
 
       - uses: actions/upload-artifact@v4
-        if: inputs.release || github.event_name == 'workflow_dispatch'
+        if: inputs.release
         with:
           name: os-pc
-          path: |
-            os/build/pc.img.xz
-            os/build/pc.rugixb
-            os/build/pc.hash
-            os/build/pc.packages.tsv
-          if-no-files-found: ignore
+          path: os/build/release/
+          retention-days: 7
+
+      - name: NoCapOS packages for the APT repository
+        if: inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs-amd64
+          path: os/build/debs/amd64/
           retention-days: 7
 
   pi:
     name: Raspberry Pi image (arm64)
     needs: lists
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 240
+    timeout-minutes: 300
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
+
+      - name: Debian snapshot (security refresh)
+        if: inputs.snapshot != ''
+        run: sed -i "s/[0-9]\{8\}T[0-9]\{6\}Z/${{ inputs.snapshot }}/g" os/config/snapshot.toml && cat os/config/snapshot.toml
 
       - name: Free disk space
         run: |
@@ -222,24 +249,24 @@ jobs:
             bash os/scripts/image-report.sh os/build/pi.img || true
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Sign and compress for release
+      - name: Release files
         if: inputs.release
         env:
           SIGNING_KEY: ${{ secrets.NOCAPOS_UPDATE_SIGNING_KEY }}
           SIGNING_CERT: ${{ secrets.NOCAPOS_UPDATE_SIGNING_CERT }}
-        run: |
-          bash os/scripts/signing.sh sign os/build/pi.rugixb
-          bash os/scripts/build.sh bundle-hash pi
-          xz -T0 -6 -k os/build/pi.img
+        run: bash os/scripts/release-files.sh pi
 
       - uses: actions/upload-artifact@v4
-        if: inputs.release || github.event_name == 'workflow_dispatch'
+        if: inputs.release
         with:
           name: os-pi
-          path: |
-            os/build/pi.img.xz
-            os/build/pi.rugixb
-            os/build/pi.hash
-            os/build/pi.packages.tsv
-          if-no-files-found: ignore
+          path: os/build/release/
+          retention-days: 7
+
+      - name: NoCapOS packages for the APT repository
+        if: inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: debs-arm64
+          path: os/build/debs/arm64/
           retention-days: 7

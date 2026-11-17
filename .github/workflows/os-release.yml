@@ -1,0 +1,113 @@
+name: NoCapOS image release
+
+# Adds the system images, update bundles and the update manifest
+# (nocapos-os.json) to a NoCapOS release, and refreshes the NoCapOS APT
+# repository. Runs after the Release workflow published a version that has no
+# system images yet (so every new VERSION gets them once), or by hand. The
+# release's other files (bundles for script installs, install.sh, the APK)
+# are left as they are. See os/README.md, "Cutting a release".
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to add system images to (empty = v + VERSION)
+        type: string
+        default: ''
+      force:
+        description: rebuild even when the release already has system images
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: os-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.c.outputs.tag }}
+      version: ${{ steps.c.outputs.version }}
+      build: ${{ steps.c.outputs.build }}
+      prerelease: ${{ steps.c.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_IN: ${{ inputs.tag }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          version="$(tr -d '[:space:]' <VERSION)"
+          tag="${TAG_IN:-v$version}"
+          version="${tag#v}"
+          build=true
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            echo "::warning::No release $tag yet."; build=false
+          elif gh release view "$tag" --json assets -q '.assets[].name' | grep -qx nocapos-os.json && [ "$FORCE" != true ]; then
+            echo "$tag already has system images."; build=false
+          fi
+          pre="$(gh release view "$tag" --json isPrerelease -q .isPrerelease 2>/dev/null || echo false)"
+          { echo "tag=$tag"; echo "version=$version"; echo "build=$build"; echo "prerelease=$pre"; } >>"$GITHUB_OUTPUT"
+
+  images:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    uses: ./.github/workflows/os.yml
+    with:
+      release: true
+      ref: ${{ needs.check.outputs.tag }}
+      version: ${{ needs.check.outputs.version }}
+    secrets: inherit
+
+  publish:
+    needs: [check, images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Manifest
+        run: |
+          mkdir -p rel
+          cp dl/os-pc/* dl/os-pi/* rel/
+          snap="$(sed -n 's/^snapshot = "\(.*\)"/\1/p' os/config/snapshot.toml | head -1)"
+          channel=stable
+          [ "${{ needs.check.outputs.prerelease }}" = true ] && channel=beta
+          python3 os/scripts/manifest.py --version "${{ needs.check.outputs.version }}" --tag "${{ needs.check.outputs.tag }}" \
+            --channel "$channel" --snapshot "$snap" --dir rel >rel/nocapos-os.json
+          cat rel/nocapos-os.json
+          { echo "### System images"; echo; echo '| File | Size |'; echo '|---|---|'
+            for f in rel/*; do printf '| %s | %s |\n' "$(basename "$f")" "$(du -h --apparent-size "$f" | cut -f1)"; done; } >>"$GITHUB_STEP_SUMMARY"
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd rel
+          rm -f ./*.signed ./*.hash
+          gh release upload "${{ needs.check.outputs.tag }}" --clobber ./*
+      - name: APT repository (release "apt")
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APT_SIGNING_KEY: ${{ secrets.NOCAPOS_APT_SIGNING_KEY }}
+        run: |
+          mkdir -p debs
+          cp dl/debs-amd64/*.deb dl/debs-arm64/*.deb debs/
+          bash os/scripts/apt-repo.sh debs apt
+          if ! gh release view apt >/dev/null 2>&1; then
+            gh release create apt --title "NoCapOS APT repository" --prerelease=false --latest=false \
+              --notes "NoCapOS's own Debian packages. See os/README.md."
+          fi
+          gh release upload apt --clobber apt/*
