@@ -73,15 +73,6 @@
 /* ---------- tray battery ---------- */
 .link-tray { display: inline-flex; align-items: center; gap: 3px; }
 
-/* ---------- browser: "Send a link" popover ---------- */
-.browser-bar { position: relative; }
-.browser-to-phone {
-  position: absolute; top: calc(100% + 4px); right: 10px; z-index: 5; width: 320px; padding: 12px; border-radius: 10px;
-  background: var(--glass-strong); border: 1px solid var(--glass-border); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
-}
-.browser-to-phone .nb-btn { flex: none; height: 28px; font-size: 13px; }
-
 /* ---------- Settings → Devices: phone addresses ---------- */
 .link-addr-list { overflow-wrap: anywhere; }
 .link-addr-form label { display: flex; flex-direction: column; gap: 4px; }

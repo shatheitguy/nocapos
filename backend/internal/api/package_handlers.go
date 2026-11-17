@@ -31,16 +31,9 @@ func (s *Server) packageRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/packages/jobs/{id}", s.admin(s.pkgJob))
 }
 
-// browserFeature is Brave: installed from its own repository by the same
-// script Brave's first launch uses, not from the feature table.
-var browserFeature = syspkg.Feature{ID: "browser", Title: "Brave browser and its stream tools"}
-
 func (s *Server) pkgStatus(w http.ResponseWriter, r *http.Request) {
 	st := s.pkgAdmin.Status()
-	features := syspkg.FeatureStates()
-	features = append(features, syspkg.FeatureState{Feature: browserFeature, Installed: webapps.NativeInstalled(),
-		CanInstall: st.Supported && (st.Manager == "apt" || st.Manager == "dnf")})
-	writeJSON(w, http.StatusOK, map[string]any{"status": st, "features": features, "checks": s.pkgChecks(st), "jobs": s.pkgJobs.Recent()})
+	writeJSON(w, http.StatusOK, map[string]any{"status": st, "features": syspkg.FeatureStates(), "checks": s.pkgChecks(st), "jobs": s.pkgJobs.Recent()})
 }
 
 // pkgCheck is one health check the Packages app shows.
@@ -316,11 +309,6 @@ func (s *Server) pkgFeatureInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if id == browserFeature.ID {
-		step := syspkg.Step{Label: "install Brave and its stream tools", Fn: webapps.InstallNative}
-		s.startPkgJob(w, r, "feature", id, []syspkg.Step{step}, nil)
-		return
-	}
 	f, found := syspkg.FeatureByID(id)
 	if !found {
 		writeError(w, http.StatusNotFound, "not_found", "no such feature")
