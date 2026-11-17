@@ -31,7 +31,8 @@ done
 # The module is built: drop dkms (forgetting the module first, so its
 # removal scripts don't delete it), the compiler and the kernel headers.
 rm -rf /var/lib/dkms/zfs
-apt-get purge -y --auto-remove zfs-dkms dkms build-essential 'linux-headers-*' 'gcc-[0-9]*' 'cpp-[0-9]*' gcc cpp make
+apt-get purge -y zfs-dkms dkms build-essential 'linux-headers-*'
+apt-get autoremove -y --purge
 for k in "${kernels[@]}"; do
   depmod -a "$k"
   modinfo -k "$k" zfs >/dev/null || { echo "ZFS module missing for $k" >&2; exit 1; }
