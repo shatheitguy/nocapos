@@ -1,3 +1,4 @@
+import { RETIRED_APPS } from '../apps/retired';
 import { create } from 'zustand';
 import { usePrefs, workArea, type IconSize } from './prefs';
 
@@ -25,7 +26,7 @@ const keyFor = (userId: string) => `alfa.desktop.${userId}`;
 function load(userId: string): DesktopIcon[] {
   try {
     const v = JSON.parse(localStorage.getItem(keyFor(userId)) ?? '[]');
-    return Array.isArray(v) ? v.filter((i) => i && typeof i.appId === 'string') : [];
+    return Array.isArray(v) ? v.filter((i) => i && typeof i.appId === 'string' && !RETIRED_APPS.has(i.appId)) : [];
   } catch {
     return [];
   }

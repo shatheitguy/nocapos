@@ -271,7 +271,7 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 			s.internalError(w, r, err)
 			return
 		}
-		// Terminals, remote desktops and Brave opened from this session end too.
+		// Terminals, remote desktops and app streams opened from this session end too.
 		s.live.closeSession(userID, sid)
 		if userID != "" {
 			s.sessionsChanged(userID)

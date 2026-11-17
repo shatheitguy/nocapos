@@ -12,7 +12,7 @@ export interface AppMeta {
   tile: [string, string];
   size: { w: number; h: number };
   description: string;
-  /** At most one window (e.g. one shared Brave stream). */
+  /** At most one window. */
   single?: boolean;
   adminOnly?: boolean;
   /** Not listed in the launcher (opened by other apps). */
@@ -94,17 +94,6 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Install, open and update self-hosted apps',
     adminOnly: true,
   },
-  browser: {
-    id: 'browser',
-    title: 'Brave',
-    icon: 'brave',
-    logo: '/app-icons/brave.svg',
-    tile: ['#fb542b', '#a52e12'],
-    size: { w: 1200, h: 780 },
-    description: 'Real Brave browser, installed on this system',
-    single: true,
-    adminOnly: true,
-  },
   nativeapp: {
     id: 'nativeapp',
     title: 'Linux app',
@@ -120,7 +109,8 @@ export const APPS: Record<string, AppMeta> = {
     icon: 'desktop',
     tile: ['#2f6bff', '#1b3f9e'],
     size: { w: 1080, h: 700 },
-    description: 'Connect to Windows and Linux PCs over RDP',
+    description: 'Connect to other computers over RDP or VNC',
+    keywords: 'rdp vnc remote desktop computer pc',
     adminOnly: true,
   },
   nocapdesktop: {

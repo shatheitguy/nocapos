@@ -154,7 +154,6 @@ func TestParseUpdateProgress(t *testing.T) {
 		{"==> Installing /usr/local/bin/nocapos", "install", 58},
 		{"==> Kept the previous version and a copy of the database for rollback", "install", 64},
 		{"==> Waiting for NoCapOS", "restart", 72},
-		{"==> Installing Brave and its stream tools (from Brave's repository)", "restart", 86},
 		{"==> NoCapOS is running.", "restart", 97},
 		{"   Open:  https://10.0.0.2/", "restart", 97},
 	}
