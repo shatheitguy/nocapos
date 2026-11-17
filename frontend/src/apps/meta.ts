@@ -109,7 +109,8 @@ export const APPS: Record<string, AppMeta> = {
     icon: 'desktop',
     tile: ['#2f6bff', '#1b3f9e'],
     size: { w: 1080, h: 700 },
-    description: 'Connect to Windows and Linux PCs over RDP',
+    description: 'Connect to other computers over RDP or VNC',
+    keywords: 'rdp vnc remote desktop computer pc',
     adminOnly: true,
   },
   nocapdesktop: {
