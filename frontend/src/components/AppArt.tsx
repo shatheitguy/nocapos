@@ -176,17 +176,6 @@ const ICONS: Record<string, Draw> = {
       <path d="M23 26.2v10M41 26.2v10" stroke="#fff" strokeOpacity=".35" strokeWidth="2" strokeLinecap="round" />
     </>
   ),
-  browser: (g) => (
-    <>
-      <defs>{lin(g('globe'), '#fdba74', '#ea580c', 1, 1)}</defs>
-      <circle cx="32" cy="32" r="19" fill={url(g('globe'))} />
-      <g fill="none" stroke="#fff" strokeOpacity=".8" strokeWidth="2">
-        <ellipse cx="32" cy="32" rx="8" ry="19" />
-        <path d="M13 32h38M16 22h32M16 42h32" />
-      </g>
-      {gloss('M15 26a18 18 0 0 1 34 0 19 8 0 0 0-34 0Z')}
-    </>
-  ),
   remotedesktop: (g) => (
     <>
       <defs>{lin(g('screen'), '#93c5fd', '#2563eb')}</defs>
@@ -306,7 +295,6 @@ const SHAPES: Record<string, () => ReactNode> = {
   backups: () => (<>{bg('#b45309')}<circle cx="32" cy="32" r="17" fill="none" stroke="#fde68a" strokeWidth="6" opacity=".45" /><path d="M32 15a17 17 0 0 1 17 17" fill="none" stroke="#fde68a" strokeWidth="6" strokeLinecap="round" /><circle cx="32" cy="32" r="5" fill="#fff7ed" /></>),
   storage: () => (<>{bg('#0f766e')}{[14, 27, 40].map((y, i) => <rect key={y} x="13" y={y} width="38" height="10" rx="5" fill="#5eead4" opacity={1 - i * 0.25} />)}</>),
   containers: () => (<>{bg('#1e3a8a')}<rect x="13" y="13" width="17" height="17" rx="3" fill="#60a5fa" /><rect x="34" y="13" width="17" height="17" rx="3" fill="#93c5fd" /><rect x="13" y="34" width="17" height="17" rx="3" fill="#93c5fd" /><rect x="34" y="34" width="17" height="17" rx="3" fill="#dbeafe" /></>),
-  browser: () => (<>{bg('#c2410c')}<circle cx="32" cy="32" r="18" fill="#fdba74" /><path d="M32 14a18 18 0 0 1 0 36Z" fill="#fff7ed" opacity=".7" /></>),
   remotedesktop: () => (<>{bg('#3730a3')}<rect x="11" y="15" width="42" height="28" rx="4" fill="#a5b4fc" /><path d="m34 30 14 6-6 2 3 6-3 1.5-3-6-5 4Z" fill="#fff" /><rect x="26" y="47" width="12" height="4" rx="2" fill="#a5b4fc" /></>),
   virtualdesk: () => (<>{bg('#0e7490')}<rect x="22" y="14" width="28" height="20" rx="4" fill="#67e8f9" opacity=".6" /><rect x="14" y="24" width="28" height="20" rx="4" fill="#cffafe" /><rect x="24" y="48" width="8" height="4" rx="2" fill="#cffafe" /></>),
   scripts: () => (<>{bg('#3f6212')}<path d="M22 16v32l26-16Z" fill="#bef264" /><rect x="14" y="44" width="16" height="5" rx="2.5" fill="#ecfccb" opacity=".6" /></>),

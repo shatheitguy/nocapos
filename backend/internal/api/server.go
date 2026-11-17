@@ -53,10 +53,10 @@ type Deps struct {
 	FileJobs  *files.Jobs
 	AI        *ai.Service
 	Terminal  *terminal.Service
-	Brave     *webapps.Brave
 	Streams   *webapps.Streams    // native Linux apps streamed into windows
 	Native    *nativeapps.Service // Linux apps from Flathub
 	Guacd     *rdp.Guacd
+	Secrets   Sealer // seals saved passwords (nil: none are kept)
 	Accounts  accounts.Directory
 	Scripts   *scripts.Runner
 	AppStore  *appstore.Manager
@@ -84,8 +84,7 @@ type Server struct {
 	// sensitiveLimiter: password checks by signed-in people, per account.
 	sensitiveLimiter *auth.Limiter
 	live             liveConns
-	brave            *webapps.Brave
-	braveKey         []byte
+	streamKey        []byte // signs streamed apps' cookies
 	notify           *notify.Service
 	crashes          *notify.CrashWatch
 	ctStats          *docker.StatsSampler // Containers app's live cards
@@ -118,8 +117,7 @@ func New(ctx context.Context, d Deps) *Server {
 		// 5 attempts burst, then one every 12s per client IP.
 		loginLimiter:     auth.NewLimiter(12*time.Second, 5),
 		sensitiveLimiter: auth.NewLimiter(12*time.Second, 5),
-		brave:            d.Brave,
-		braveKey:         randomKey(32),
+		streamKey:        randomKey(32),
 	}
 	s.hub = ws.NewHub(ctx, s.resolveTopic, d.Log)
 	s.notify = notify.New(d.Store, d.Log)
@@ -336,19 +334,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/terminal/ticket", s.admin(s.terminalTicket))
 	mux.HandleFunc("GET /ws/terminal", s.terminalConnect)
 
-	// Brave: a real Brave container streamed into a window. Start/status are
-	// admin+JWT; the proxy (and its VNC WebSocket) is gated by a path-scoped
-	// cookie the iframe sends automatically.
-	mux.Handle("POST /api/v1/apps/brave/start", s.admin(s.braveStart))
-	mux.Handle("GET /api/v1/apps/brave/status", s.admin(s.braveStatus))
-	mux.HandleFunc("GET /apps/brave", s.braveRedirect)
-	mux.HandleFunc("/apps/brave/", s.braveProxy)
-
 	// Remote Desktop: real RDP through guacd. Credentials ride in a single-use
 	// ticket; the WebSocket speaks the Guacamole protocol (admin only).
 	mux.Handle("GET /api/v1/rdp/status", s.admin(s.rdpStatus))
 	mux.Handle("POST /api/v1/rdp/ticket", s.admin(s.rdpTicket))
 	mux.HandleFunc("GET /ws/rdp", s.rdpConnect)
+	s.rdpSavedRoutes(mux)
 
 	// Files: everyone with the desktop. Admins see every location; others
 	// their home and the shared folders they may use (checked per request).

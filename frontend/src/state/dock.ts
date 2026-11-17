@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { OLD_PINNED, PINNED } from '../apps/meta';
+import { withoutRetired } from '../apps/retired';
 
 // Per-user dock pins. Falls back to the default PINNED set the first time.
 const keyFor = (userId: string) => `alfa.dock.${userId}`;
@@ -14,7 +15,7 @@ function load(userId: string): string[] {
     // Still an earlier default (never changed, or reset to it): follow the
     // current default instead.
     if (OLD_PINNED.some((d) => d.length === pins.length && d.every((id, i) => pins[i] === id))) return [...PINNED];
-    return pins;
+    return withoutRetired(pins);
   } catch {
     return [...PINNED];
   }

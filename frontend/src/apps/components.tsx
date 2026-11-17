@@ -17,7 +17,6 @@ const app = (load: () => Promise<AppBody>) =>
 
 export const APP_COMPONENTS: Record<string, AppBody> = {
   assistant: app(() => import('./assistant/Assistant').then((m) => m.Assistant)),
-  browser: app(() => import('./Browser').then((m) => m.Browser)),
   nativeapp: app(() => import('./NativeAppWindow').then((m) => m.NativeAppWindow)),
   backups: app(() => import('./Backups').then((m) => m.Backups)),
   remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
