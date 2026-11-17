@@ -28,7 +28,10 @@ let surface: NativeSurface | null | undefined;
 export function nativeSurface(): NativeSurface | null {
   if (surface !== undefined) return surface;
   surface = null;
-  if (typeof location !== 'undefined' && location.protocol === 'nocap-shell:') {
+  // The parity test (e2e/parity.spec.ts) runs these pages in a browser with
+  // a stand-in host; the host's own pages are always nocap-shell:.
+  const testHost = typeof window !== 'undefined' && (window as unknown as { __NOCAP_PARITY_TEST__?: boolean }).__NOCAP_PARITY_TEST__ === true;
+  if (typeof location !== 'undefined' && (location.protocol === 'nocap-shell:' || testHost)) {
     const q = new URLSearchParams(location.search).get('surface') ?? '';
     if ((SURFACES as readonly string[]).includes(q)) surface = q as NativeSurface;
   }

@@ -51,7 +51,8 @@ function setSession(s: Session) {
   expiresAt = new Date(s.expires_at).getTime();
   window.clearTimeout(refreshTimer);
   const ms = expiresAt - Date.now() - 60_000;
-  refreshTimer = window.setTimeout(() => void refresh(), Math.max(ms, 5_000));
+  // Timers can't wait longer than about 24.8 days (a longer wait fires at once).
+  refreshTimer = window.setTimeout(() => void refresh(), Math.min(Math.max(ms, 5_000), 2_000_000_000));
   emit();
 }
 
