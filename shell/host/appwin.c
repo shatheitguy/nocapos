@@ -1,176 +1,72 @@
-/* `nocap-shell --app NAME`: NoCapOS (this machine's own web UI on the
- * loopback address) in a normal app window: NoCapOS Settings, the App
- * Store, Files. Only that loopback origin is ever loaded in the window;
- * other links open in the default browser. */
+/* `nocap-shell --app ID [--props JSON] [--single]`: one NoCap OS app (Files,
+ * Terminal, Settings, the App Store, Photos, ...) in a native window of its
+ * own. The page is the same NoCap OS build as everywhere (from local files),
+ * showing just that app with the same title bar as in the browser; it talks
+ * to alfad on the loopback address with the person's session, like the
+ * desktop does. Apps that have one window (--single) raise it when opened
+ * again, and take the new props (a Settings section, say). */
 #include "shell.h"
 
 #include <string.h>
 
-typedef struct {
-  const char *name;
-  const char *title;
-  const char *route;
-  const char *icon;
-} AppDef;
-
-static const AppDef defs[] = {
-  {"settings", "NoCapOS Settings", "#/app/settings", "nocapos-settings"},
-  {"appstore", "NoCapOS App Store", "#/app/appstore", "nocapos-appstore"},
-  {"files", "NoCapOS Files", "#/app/files", "nocapos"},
-  {"home", "NoCapOS", "", "nocapos"},
-};
-
-static char *origin; /* scheme://host:port */
-static GtkWidget *win;
-static WebKitWebView *view;
-static gboolean tls_allowed;
-
-static char *
-origin_of(const char *uri)
+gboolean
+app_id_valid(const char *id)
 {
-  GUri *u = g_uri_parse(uri, G_URI_FLAGS_NONE, NULL);
-  if (u == NULL)
-    return NULL;
-  const char *host = g_uri_get_host(u);
-  char *o = NULL;
-  if (host != NULL)
-    o = g_strdup_printf("%s://%s:%d", g_uri_get_scheme(u), host,
-                        g_uri_get_port(u) > 0 ? g_uri_get_port(u)
-                                              : (g_strcmp0(g_uri_get_scheme(u), "https") == 0 ? 443 : 80));
-  g_uri_unref(u);
-  return o;
-}
-
-static gboolean
-same_origin(const char *uri)
-{
-  char *o = uri ? origin_of(uri) : NULL;
-  gboolean ok = o != NULL && g_strcmp0(o, origin) == 0;
-  g_free(o);
-  return ok;
-}
-
-static gboolean
-loopback_host(const char *host)
-{
-  return g_strcmp0(host, "127.0.0.1") == 0 || g_strcmp0(host, "::1") == 0 || g_strcmp0(host, "[::1]") == 0;
-}
-
-static gboolean
-on_decide(WebKitWebView *v, WebKitPolicyDecision *d, WebKitPolicyDecisionType type, gpointer u)
-{
-  if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
-    webkit_policy_decision_use(d);
-    return TRUE;
-  }
-  WebKitNavigationAction *a =
-      webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(d));
-  const char *uri = webkit_uri_request_get_uri(webkit_navigation_action_get_request(a));
-  if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION && same_origin(uri)) {
-    webkit_policy_decision_use(d);
-    return TRUE;
-  }
-  if (uri != NULL && (g_str_has_prefix(uri, "https://") || g_str_has_prefix(uri, "http://")) &&
-      webkit_navigation_action_is_user_gesture(a) && !same_origin(uri))
-    g_app_info_launch_default_for_uri(uri, NULL, NULL);
-  else if (uri != NULL && type == WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION && same_origin(uri))
-    webkit_web_view_load_uri(v, uri);
-  webkit_policy_decision_ignore(d);
+  if (id == NULL || *id == 0 || strlen(id) > 32)
+    return FALSE;
+  for (const char *p = id; *p; p++)
+    if (!((*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9')))
+      return FALSE;
   return TRUE;
 }
 
-/* The loopback address's self-signed certificate is accepted, nothing else. */
-static gboolean
-on_tls_error(WebKitWebView *v, const char *failing_uri, GTlsCertificate *cert, GTlsCertificateFlags errors,
-             gpointer u)
+static gboolean props_valid(const char *props)
 {
-  GUri *uri = g_uri_parse(failing_uri, G_URI_FLAGS_NONE, NULL);
-  gboolean ok = uri != NULL && loopback_host(g_uri_get_host(uri)) && same_origin(failing_uri) && !tls_allowed;
-  if (ok) {
-    tls_allowed = TRUE;
-    webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(v), cert,
-                                                      g_uri_get_host(uri));
-    webkit_web_view_load_uri(v, failing_uri);
-  }
-  if (uri)
-    g_uri_unref(uri);
-  return ok;
-}
-
-static gboolean
-on_permission(WebKitWebView *v, WebKitPermissionRequest *req, gpointer u)
-{
-  /* Notifications are shown by the desktop itself; nothing else is asked. */
-  webkit_permission_request_deny(req);
+  if (props == NULL)
+    return TRUE;
+  if (strlen(props) > 8192 || !g_utf8_validate(props, -1, NULL))
+    return FALSE;
+  for (const unsigned char *p = (const unsigned char *)props; *p; p++)
+    if (*p < 0x20 || *p == 0x7f)
+      return FALSE;
   return TRUE;
-}
-
-static void
-on_title(WebKitWebView *v, GParamSpec *p, gpointer data)
-{
-  const AppDef *def = data;
-  gtk_window_set_title(GTK_WINDOW(win), def->title);
 }
 
 static void
 on_app_activate(GtkApplication *app, gpointer data)
 {
-  const AppDef *def = data;
-  if (win != NULL) {
-    gtk_window_present(GTK_WINDOW(win));
+  if (shell.app_window != NULL) {
+    gtk_window_present(GTK_WINDOW(shell.app_window));
     return;
   }
-  JsonObject *s = alfad_session_sync(10);
-  const char *url = NULL;
-  if (s != NULL) {
-    JsonNode *n = json_object_get_member(s, "webURL");
-    if (n && JSON_NODE_HOLDS_VALUE(n) && json_node_get_value_type(n) == G_TYPE_STRING)
-      url = json_node_get_string(n);
+  surfaces_create_app();
+}
+
+/* A second launch of a one-window app: its props come as the "file". */
+static void
+on_app_open(GApplication *app, GFile **files, gint n, const char *hint, gpointer data)
+{
+  if (shell.app_window == NULL)
+    surfaces_create_app();
+  for (gint i = 0; i < n; i++) {
+    char *uri = g_file_get_uri(files[i]);
+    const char *prefix = "nocap-app:props/";
+    if (uri != NULL && g_str_has_prefix(uri, prefix)) {
+      char *props = g_uri_unescape_string(uri + strlen(prefix), NULL);
+      if (props_valid(props))
+        app_window_props(props);
+      g_free(props);
+    }
+    g_free(uri);
   }
-  char *base = NULL;
-  if (url != NULL && (g_str_has_prefix(url, "https://127.0.0.1") || g_str_has_prefix(url, "http://127.0.0.1")))
-    base = g_strdup(url);
-  else
-    base = g_strdup("https://127.0.0.1/");
-  if (s)
-    json_object_unref(s);
-  origin = origin_of(base);
-
-  WebKitWebContext *ctx = webkit_web_context_new();
-  WebKitSettings *st = webkit_settings_new();
-  webkit_settings_set_enable_developer_extras(st, shell.debug);
-  webkit_settings_set_javascript_can_open_windows_automatically(st, FALSE);
-  webkit_settings_set_allow_file_access_from_file_urls(st, FALSE);
-  webkit_settings_set_allow_universal_access_from_file_urls(st, FALSE);
-  view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", ctx, "settings", st, NULL));
-  g_object_unref(st);
-  g_object_unref(ctx);
-  g_signal_connect(view, "decide-policy", G_CALLBACK(on_decide), NULL);
-  g_signal_connect(view, "load-failed-with-tls-errors", G_CALLBACK(on_tls_error), NULL);
-  g_signal_connect(view, "permission-request", G_CALLBACK(on_permission), NULL);
-  g_signal_connect(view, "notify::title", G_CALLBACK(on_title), (gpointer)def);
-
-  win = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(win), def->title);
-  gtk_window_set_icon_name(GTK_WINDOW(win), def->icon);
-  gtk_window_set_default_size(GTK_WINDOW(win), 1180, 760);
-  gtk_container_add(GTK_CONTAINER(win), GTK_WIDGET(view));
-
-  char *start = g_strdup_printf("%s%s%s", origin, "/", def->route);
-  webkit_web_view_load_uri(view, start);
-  g_free(start);
-  g_free(base);
-  gtk_widget_show_all(win);
+  if (n == 0)
+    app_window_props(NULL);
 }
 
 int
-appwin_run(const char *app, int argc, char **argv)
+appwin_run(const char *app, const char *props, gboolean single, int argc, char **argv)
 {
-  const AppDef *def = NULL;
-  for (gsize i = 0; i < G_N_ELEMENTS(defs); i++)
-    if (g_strcmp0(defs[i].name, app) == 0)
-      def = &defs[i];
-  if (def == NULL) {
+  if (!app_id_valid(app) || !props_valid(props)) {
     g_printerr("nocap-shell: unknown app '%s'\n", app ? app : "");
     return 2;
   }
@@ -178,15 +74,31 @@ appwin_run(const char *app, int argc, char **argv)
     g_printerr("nocap-shell: needs a Wayland session\n");
     return 1;
   }
-  char *id = g_strdup_printf("io.nocapos.App.%s", def->name);
-  /* One window per app: a second launch raises the first. */
-  GtkApplication *ga = gtk_application_new(id, G_APPLICATION_FLAGS_NONE);
+  shell.app_id = g_strdup(app);
+  shell.app_props = g_strdup(props ? props : "");
+  /* The window's app id: labwc matches its window rules (NoCap OS draws
+   * this window's title bar) and the dock its running apps on it. */
+  char *id = g_strdup_printf("io.nocapos.App.%s", app);
+  g_set_prgname(id);
+  GApplicationFlags flags = single ? G_APPLICATION_HANDLES_OPEN : G_APPLICATION_NON_UNIQUE;
+  GtkApplication *ga = gtk_application_new(id, flags);
   g_free(id);
-  g_set_prgname(def->name);
-  g_signal_connect(ga, "activate", G_CALLBACK(on_app_activate), (gpointer)def);
+  g_signal_connect(ga, "activate", G_CALLBACK(on_app_activate), NULL);
+  g_signal_connect(ga, "open", G_CALLBACK(on_app_open), NULL);
   shell.app = ga;
-  char *fake_argv[] = {argv[0], NULL};
-  int status = g_application_run(G_APPLICATION(ga), 1, fake_argv);
+  alfad_start();
+  int status;
+  if (single && props != NULL && *props) {
+    char *esc = g_uri_escape_string(props, NULL, FALSE);
+    char *uri = g_strdup_printf("nocap-app:props/%s", esc);
+    char *fake_argv[] = {argv[0], uri, NULL};
+    status = g_application_run(G_APPLICATION(ga), 2, fake_argv);
+    g_free(uri);
+    g_free(esc);
+  } else {
+    char *fake_argv[] = {argv[0], NULL};
+    status = g_application_run(G_APPLICATION(ga), 1, fake_argv);
+  }
   g_object_unref(ga);
   return status;
 }

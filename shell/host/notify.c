@@ -30,6 +30,16 @@ static guint32 next_dbus_id = 1;
 static GDBusConnection *bus;
 static guint reg_id;
 static guint banner_timer;
+
+/* NoCap OS's own notifications reach the desktop through its live
+ * connection to alfad (the web OS's notification center); only apps'
+ * desktop notifications come through here, so there's nothing to mark. */
+static void
+alfad_mark_read(JsonArray *ids, gboolean all)
+{
+  (void)ids;
+  (void)all;
+}
 static gboolean remote_initialised;
 
 enum { CLOSE_EXPIRED = 1, CLOSE_DISMISSED = 2, CLOSE_CALLED = 3 };
@@ -101,7 +111,7 @@ notify_list_json(void)
   return jarr_node(arr);
 }
 
-#define NOTIFY_SURFACES (SM(SURF_CENTER) | SM(SURF_BANNERS) | SM(SURF_BAR))
+#define NOTIFY_SURFACES SM(SURF_CHROME)
 
 static void
 emit_unread(void)
@@ -156,11 +166,8 @@ banners_update(void)
     g_source_remove(banner_timer);
     banner_timer = 0;
   }
-  if (!any) {
-    surface_hide(SURF_BANNERS);
+  if (!any)
     return;
-  }
-  surface_show(SURF_BANNERS);
   if (next != 0)
     banner_timer = g_timeout_add((guint)MAX(50, (next - now) / 1000 + 20), banner_timeout, NULL);
 }

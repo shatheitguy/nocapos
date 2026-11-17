@@ -5,24 +5,21 @@
 #include <string.h>
 
 enum {
-  S_BAR = 1 << 0,
-  S_DOCK = 1 << 1,
-  S_LAUNCHER = 1 << 2,
-  S_CENTER = 1 << 3,
-  S_BANNERS = 1 << 4,
-  S_OSD = 1 << 5,
-  S_POLKIT = 1 << 6,
-  S_GREETER = 1 << 7,
+  S_DESKTOP = 1 << 0, /* the desktop: wallpaper, widgets, icons (bottom layer) */
+  S_CHROME = 1 << 1,  /* menu bar, dock, launcher, panels, notifications (top layer) */
+  S_APP = 1 << 2,     /* one NoCap OS app in its own window */
+  S_POLKIT = 1 << 3,
+  S_GREETER = 1 << 4,
 };
-#define S_SESSION (S_BAR | S_DOCK | S_LAUNCHER | S_CENTER | S_BANNERS | S_OSD | S_POLKIT)
+#define S_OS (S_DESKTOP | S_CHROME | S_APP)
+#define S_SESSION (S_OS | S_POLKIT)
 #define S_ALL (S_SESSION | S_GREETER)
 
 static const struct {
   const char *name;
   guint bit;
 } surfaces[] = {
-  {"bar", S_BAR},         {"dock", S_DOCK}, {"launcher", S_LAUNCHER},
-  {"center", S_CENTER},   {"banners", S_BANNERS}, {"osd", S_OSD},
+  {"desktop", S_DESKTOP}, {"chrome", S_CHROME}, {"app", S_APP},
   {"polkit", S_POLKIT},   {"greeter", S_GREETER},
 };
 
@@ -32,12 +29,15 @@ typedef enum {
   PT_BOOL,
   PT_ID,   /* integer 0..2^32-1 or short token string; normalised to string */
   PT_STRV, /* array of strings */
+  PT_INTS, /* array of integers, each min..max */
 } PType;
 
 enum {
   PF_DESKTOP_ID = 1 << 0,
   PF_USERNAME = 1 << 1,
   PF_PRINTABLE = 1 << 2,
+  PF_APP_ID = 1 << 3, /* a NoCap OS app id: lowercase letters and digits */
+  PF_TEXT = 1 << 4,   /* no control characters */
 };
 
 typedef struct {
@@ -57,19 +57,40 @@ typedef struct {
   const ParamSpec *params;
 } MethodSpec;
 
-static const char *const SURFACE_NAMES[] = {"launcher", "center", "osd", NULL};
+static const char *const UI_COMMANDS[] = {"launcher", "spotlight", "center", "notifications", NULL};
+static const char *const KEYBOARD_MODES[] = {"none", "on-demand", "exclusive", NULL};
+static const char *const WINDOW_ACTIONS[] = {"minimize", "maximize", "restore", "close", "move",
+                                             "resize-n", "resize-s", "resize-e", "resize-w",
+                                             "resize-ne", "resize-nw", "resize-se", "resize-sw",
+                                             "fullscreen", "unfullscreen", NULL};
 static const char *const POWER_SESSION[] = {"lock", "logout", "suspend", "reboot", "poweroff", NULL};
 static const char *const POWER_GREETER[] = {"reboot", "poweroff", NULL};
-static const char *const OPEN_APPS[] = {"settings", "appstore", "files", "home", NULL};
 
 static const ParamSpec P_NONE[] = {{NULL}};
-static const ParamSpec P_SURFACE[] = {
-  {"name", PT_STRING, TRUE, 1, 32, SURFACE_NAMES, 0, 0}, {NULL}};
-static const ParamSpec P_SIZE[] = {{"height", PT_INT, TRUE, 0, 2000, NULL, 0, 0}, {NULL}};
+static const ParamSpec P_INPUT[] = {
+  {"rects", PT_INTS, TRUE, 0, 32768, NULL, 128, 0}, /* x,y,w,h quadruples */
+  {"full", PT_BOOL, FALSE, 0, 0, NULL, 0, 0},
+  {NULL}};
+static const ParamSpec P_ZONES[] = {
+  {"top", PT_INT, FALSE, 0, 600, NULL, 0, 0},
+  {"bottom", PT_INT, FALSE, 0, 600, NULL, 0, 0},
+  {"left", PT_INT, FALSE, 0, 600, NULL, 0, 0},
+  {"right", PT_INT, FALSE, 0, 600, NULL, 0, 0},
+  {NULL}};
+static const ParamSpec P_KEYBOARD[] = {
+  {"mode", PT_STRING, TRUE, 1, 16, KEYBOARD_MODES, 0, 0}, {NULL}};
+static const ParamSpec P_UI[] = {{"name", PT_STRING, TRUE, 1, 32, UI_COMMANDS, 0, 0}, {NULL}};
+static const ParamSpec P_OPEN[] = {
+  {"app", PT_STRING, TRUE, 1, 32, NULL, 0, PF_APP_ID},
+  {"props", PT_STRING, FALSE, 0, 8192, NULL, 0, PF_TEXT},
+  {"single", PT_BOOL, FALSE, 0, 0, NULL, 0, 0},
+  {NULL}};
 static const ParamSpec P_APP[] = {{"id", PT_STRING, TRUE, 1, 255, NULL, 0, PF_DESKTOP_ID}, {NULL}};
-static const ParamSpec P_DOCK_SET[] = {
-  {"pinned", PT_STRV, TRUE, 1, 255, NULL, 24, PF_DESKTOP_ID}, {NULL}};
 static const ParamSpec P_WINDOW[] = {{"id", PT_ID, TRUE, 0, 0, NULL, 0, 0}, {NULL}};
+static const ParamSpec P_WINDOW_ACTION[] = {
+  {"action", PT_STRING, TRUE, 1, 16, WINDOW_ACTIONS, 0, 0}, {NULL}};
+static const ParamSpec P_WINDOW_TITLE[] = {
+  {"title", PT_STRING, TRUE, 0, 256, NULL, 0, PF_TEXT}, {NULL}};
 static const ParamSpec P_AUDIO_SET[] = {
   {"volume", PT_INT, FALSE, 0, 150, NULL, 0, 0},
   {"muted", PT_BOOL, FALSE, 0, 0, NULL, 0, 0},
@@ -84,7 +105,6 @@ static const ParamSpec P_NOTIFY_INVOKE[] = {
   {"key", PT_STRING, TRUE, 1, 256, NULL, 0, 0},
   {NULL}};
 static const ParamSpec P_NOTIFY_READ[] = {{"id", PT_ID, FALSE, 0, 0, NULL, 0, 0}, {NULL}};
-static const ParamSpec P_OPEN[] = {{"app", PT_STRING, FALSE, 1, 16, OPEN_APPS, 0, 0}, {NULL}};
 static const ParamSpec P_POLKIT_RESPOND[] = {
   {"cookie", PT_STRING, TRUE, 1, 512, NULL, 0, PF_PRINTABLE},
   {"password", PT_STRING, TRUE, 0, 512, NULL, 0, 0},
@@ -98,32 +118,34 @@ static const ParamSpec P_RESPOND[] = {{"response", PT_STRING, FALSE, 0, 1024, NU
  * (power.action is narrower on the greeter). */
 static const MethodSpec methods[] = {
   {"shell.info", S_ALL, P_NONE},
-  {"surface.show", S_SESSION, P_SURFACE},
-  {"surface.hide", S_SESSION, P_SURFACE},
-  {"surface.toggle", S_SESSION, P_SURFACE},
-  {"surface.size", S_BANNERS, P_SIZE},
-  {"apps.list", S_LAUNCHER | S_DOCK | S_BAR, P_NONE},
-  {"apps.launch", S_LAUNCHER | S_DOCK | S_CENTER, P_APP},
-  {"dock.get", S_DOCK | S_LAUNCHER, P_NONE},
-  {"dock.set", S_DOCK | S_LAUNCHER, P_DOCK_SET},
-  {"windows.list", S_DOCK | S_BAR, P_NONE},
-  {"windows.focus", S_DOCK | S_BAR, P_WINDOW},
-  {"windows.minimize", S_DOCK | S_BAR, P_WINDOW},
-  {"windows.close", S_DOCK | S_BAR, P_WINDOW},
-  {"windows.maximize", S_DOCK | S_BAR, P_WINDOW},
-  {"audio.get", S_CENTER | S_BAR | S_OSD, P_NONE},
-  {"audio.set", S_CENTER, P_AUDIO_SET},
-  {"brightness.get", S_CENTER | S_OSD, P_NONE},
-  {"brightness.set", S_CENTER, P_BRIGHTNESS_SET},
-  {"network.get", S_CENTER | S_BAR, P_NONE},
-  {"power.action", S_CENTER | S_BAR, P_POWER},
+  {"session.get", S_OS, P_NONE},
+  {"session.refresh", S_OS, P_NONE},
+  {"surface.input", S_CHROME, P_INPUT},
+  {"surface.zones", S_CHROME, P_ZONES},
+  {"surface.keyboard", S_CHROME | S_DESKTOP, P_KEYBOARD},
+  {"ui.command", S_OS, P_UI},
+  {"nocap.open", S_OS, P_OPEN},
+  {"apps.list", S_CHROME | S_DESKTOP, P_NONE},
+  {"apps.launch", S_CHROME | S_DESKTOP, P_APP},
+  {"windows.list", S_CHROME, P_NONE},
+  {"windows.focus", S_CHROME, P_WINDOW},
+  {"windows.minimize", S_CHROME, P_WINDOW},
+  {"windows.close", S_CHROME, P_WINDOW},
+  {"windows.maximize", S_CHROME, P_WINDOW},
+  {"window.action", S_APP, P_WINDOW_ACTION},
+  {"window.title", S_APP, P_WINDOW_TITLE},
+  {"audio.get", S_CHROME, P_NONE},
+  {"audio.set", S_CHROME, P_AUDIO_SET},
+  {"brightness.get", S_CHROME, P_NONE},
+  {"brightness.set", S_CHROME, P_BRIGHTNESS_SET},
+  {"network.get", S_CHROME, P_NONE},
+  {"power.action", S_CHROME, P_POWER},
   {"power.action", S_GREETER, P_POWER_GREETER},
-  {"notify.list", S_CENTER | S_BANNERS | S_BAR, P_NONE},
-  {"notify.dismiss", S_CENTER | S_BANNERS, P_NOTIFY_ID},
-  {"notify.invoke", S_CENTER | S_BANNERS, P_NOTIFY_INVOKE},
-  {"notify.clear", S_CENTER | S_BANNERS, P_NONE},
-  {"notify.read", S_CENTER | S_BANNERS, P_NOTIFY_READ},
-  {"nocapos.open", S_CENTER | S_BAR | S_LAUNCHER | S_DOCK, P_OPEN},
+  {"notify.list", S_CHROME, P_NONE},
+  {"notify.dismiss", S_CHROME, P_NOTIFY_ID},
+  {"notify.invoke", S_CHROME, P_NOTIFY_INVOKE},
+  {"notify.clear", S_CHROME, P_NONE},
+  {"notify.read", S_CHROME, P_NOTIFY_READ},
   {"polkit.respond", S_POLKIT, P_POLKIT_RESPOND},
   {"polkit.cancel", S_POLKIT, P_POLKIT_CANCEL},
   {"greeter.users", S_GREETER, P_NONE},
@@ -240,6 +262,29 @@ str_is_printable(const char *s)
 }
 
 static gboolean
+str_is_app_id(const char *s)
+{
+  if (*s == 0)
+    return FALSE;
+  for (const char *p = s; *p; p++)
+    if (!((*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9')))
+      return FALSE;
+  return TRUE;
+}
+
+/* Valid UTF-8 without control characters (tabs and newlines included). */
+static gboolean
+str_is_text(const char *s)
+{
+  if (!g_utf8_validate(s, -1, NULL))
+    return FALSE;
+  for (const unsigned char *p = (const unsigned char *)s; *p; p++)
+    if (*p < 0x20 || *p == 0x7f)
+      return FALSE;
+  return TRUE;
+}
+
+static gboolean
 str_is_id_token(const char *s)
 {
   gsize n = strlen(s);
@@ -274,6 +319,14 @@ check_string(const ParamSpec *spec, const char *s, char **error)
     return FALSE;
   }
   if ((spec->flags & PF_USERNAME) && !str_is_username(s)) {
+    *error = g_strdup_printf("invalid value: %s", spec->name);
+    return FALSE;
+  }
+  if ((spec->flags & PF_APP_ID) && !str_is_app_id(s)) {
+    *error = g_strdup_printf("invalid value: %s", spec->name);
+    return FALSE;
+  }
+  if ((spec->flags & PF_TEXT) && !str_is_text(s)) {
     *error = g_strdup_printf("invalid value: %s", spec->name);
     return FALSE;
   }
@@ -361,6 +414,31 @@ check_param(const ParamSpec *spec, JsonObject *params, JsonNode *node, char **er
     }
     *error = g_strdup_printf("wrong type: %s", spec->name);
     return FALSE;
+  }
+
+  case PT_INTS: {
+    if (!JSON_NODE_HOLDS_ARRAY(node)) {
+      *error = g_strdup_printf("wrong type: %s", spec->name);
+      return FALSE;
+    }
+    JsonArray *arr = json_node_get_array(node);
+    guint n = json_array_get_length(arr);
+    if (n > spec->max_items) {
+      *error = g_strdup_printf("too many items: %s", spec->name);
+      return FALSE;
+    }
+    for (guint i = 0; i < n; i++) {
+      gint64 v;
+      if (!node_get_integer(json_array_get_element(arr, i), &v)) {
+        *error = g_strdup_printf("wrong type: %s", spec->name);
+        return FALSE;
+      }
+      if (v < spec->min || v > spec->max) {
+        *error = g_strdup_printf("out of range: %s", spec->name);
+        return FALSE;
+      }
+    }
+    return TRUE;
   }
 
   case PT_STRV: {

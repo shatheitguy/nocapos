@@ -461,7 +461,7 @@ network_maybe_emit(void)
   if (g_strcmp0(text, last_network) != 0) {
     g_free(last_network);
     last_network = text;
-    shell_emit(SM(SURF_CENTER) | SM(SURF_BAR), "network.changed", n);
+    shell_emit(SM(SURF_CHROME), "network.changed", n);
   } else {
     g_free(text);
     json_node_unref(n);
