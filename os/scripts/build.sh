@@ -30,8 +30,10 @@ case "$cmd" in
     ;;
   image)
     sys="${1:?system}"
-    bakery bake image "$sys" "build/$sys.img" --release-version "$VERSION" --release-id nocapos \
+    bakery bake image "$sys" --release-version "$VERSION" --release-id nocapos \
       --param-file config/snapshot.toml
+    # Bakery leaves it in build/SYSTEM/system.img.
+    cp --sparse=always "$BUILD/$sys/system.img" "$BUILD/$sys.img"
     ;;
   bundle)
     sys="${1:?system}"
