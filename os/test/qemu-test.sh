@@ -114,7 +114,10 @@ echo "NoCapOS is up: :443 OK, :80 redirects ($code80)"
 log "Settings and data survive a restart"
 vssh 'hostnamectl set-hostname nocap-test && useradd -m -u 1500 -s /bin/bash testperson && echo hello >/srv/nocapos-test.txt && echo scratch >/etc/nocap-scratch-test && systemctl start nocapos-etc-changed.service'
 reboot_vm; wait_ssh 600 || fail "no SSH after restart"
-[ "$(vssh hostname)" = nocap-test ] || fail "hostname was lost"
+[ "$(vssh hostname)" = nocap-test ] || {
+  vssh 'journalctl -b -k --no-pager | grep -i -e etc-sync -e rugix | tail -40; ls -la /etc/rugix/hooks/boot/post-init/ /var/lib/nocapos-system/etc/ /var/lib/nocapos-system/etc/files/ 2>&1; cat /etc/hostname /var/lib/nocapos-system/etc/files/hostname 2>&1; findmnt /var/lib/nocapos-system'
+  fail "hostname was lost"
+}
 vssh 'id testperson >/dev/null' || fail "the account was lost"
 vssh 'test -d /home/testperson' || fail "the home folder was lost"
 [ "$(vssh cat /srv/nocapos-test.txt)" = hello ] || fail "a file in /srv was lost"
