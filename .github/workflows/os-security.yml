@@ -1,0 +1,115 @@
+name: NoCapOS security refresh
+
+# Every day (and by hand): does Debian have security fixes (or point-release
+# fixes) for packages in the newest released NoCapOS image? If so, the same
+# NoCapOS release is rebuilt from today's Debian snapshot, tested in QEMU
+# (boot, update and rollback, installer) and published as a security
+# refresh: version X.Y.Z-sN, tag vX.Y.Z-sN. Glow Up shows it as a security
+# update with the fixed packages and CVEs; it installs when the owner says
+# so (or by itself, if they turned that on). See os/README.md.
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: only report what would be fixed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: os-security
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.c.outputs.needed }}
+      base_tag: ${{ steps.c.outputs.base_tag }}
+      version: ${{ steps.c.outputs.version }}
+      snapshot: ${{ steps.c.outputs.snapshot }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The newest stable release that has system images.
+          base=""
+          for tag in $(gh release list --exclude-pre-releases --limit 40 --json tagName -q '.[].tagName'); do
+            if gh release view "$tag" --json assets -q '.assets[].name' | grep -qx nocapos-os.json; then base="$tag"; break; fi
+          done
+          if [ -z "$base" ]; then echo "No release has system images yet."; echo "needed=false" >>"$GITHUB_OUTPUT"; exit 0; fi
+          mkdir -p cur
+          gh release download "$base" -p 'nocapos-*.packages.tsv' -D cur
+          python3 os/scripts/security-check.py cur/*.packages.tsv >fixes.json
+          n="$(python3 -c 'import json; print(sum(1 for f in json.load(open("fixes.json")) if f["security"]))')"
+          echo "Base release $base; packages with security fixes: $n"
+          { echo "### Security check of $base"; echo; python3 -c '
+          import json
+          for f in json.load(open("fixes.json")):
+              print(f"- {f[\"package\"]} {f[\"from\"]} -> {f[\"to\"]} {\" \".join(f[\"cves\"][:6])}")'; } >>"$GITHUB_STEP_SUMMARY"
+          if [ "$n" = 0 ]; then echo "needed=false" >>"$GITHUB_OUTPUT"; exit 0; fi
+          # Next security refresh number of this release: vX.Y.Z-sN.
+          rel="${base#v}"; rel="${rel%%-s*}"
+          last="$(gh release list --limit 100 --json tagName -q '.[].tagName' | sed -n "s/^v${rel//./\\.}-s\([0-9]*\)$/\1/p" | sort -n | tail -1)"
+          version="$rel-s$(( ${last:-0} + 1 ))"
+          { echo "needed=true"; echo "base_tag=v$rel"; echo "version=$version"; echo "snapshot=$(date -u +%Y%m%dT000000Z)"; } >>"$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: steps.c.outputs.needed == 'true'
+        with:
+          name: fixes
+          path: fixes.json
+
+  images:
+    needs: check
+    if: needs.check.outputs.needed == 'true' && !inputs.dry_run
+    uses: ./.github/workflows/os.yml
+    with:
+      release: true
+      ref: ${{ needs.check.outputs.base_tag }}
+      version: ${{ needs.check.outputs.version }}
+      snapshot: ${{ needs.check.outputs.snapshot }}
+    secrets: inherit
+
+  publish:
+    needs: [check, images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Publish the security refresh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+          BASE: ${{ needs.check.outputs.base_tag }}
+          SNAP: ${{ needs.check.outputs.snapshot }}
+        run: |
+          mkdir -p rel
+          cp dl/os-pc/* dl/os-pi/* rel/
+          python3 -c '
+          import json
+          fixes = [f for f in json.load(open("dl/fixes/fixes.json")) if f["security"]]
+          for f in fixes:
+              f.pop("security", None)
+          json.dump(fixes, open("security-fixes.json", "w"), indent=2)'
+          python3 os/scripts/manifest.py --version "$VERSION" --tag "v$VERSION" --channel stable --snapshot "$SNAP" \
+            --dir rel --security security-fixes.json >rel/nocapos-os.json
+          python3 - <<'PY' >notes.md
+          import json, os
+          fixes = json.load(open("security-fixes.json"))
+          print(f"Security refresh of NoCapOS {os.environ['BASE'][1:]}: the same NoCapOS with Debian's security fixes as of {os.environ['SNAP'][:8]}.\n")
+          print("Install it from Glow Up on NoCapOS image installs. Script installs keep updating with install.sh.\n")
+          for f in fixes:
+              cves = (" (" + ", ".join(f["cves"][:8]) + ")") if f["cves"] else ""
+              print(f"- {f['package']} {f['to']}{cves}")
+          PY
+          rm -f rel/*.signed rel/*.hash
+          gh release create "v$VERSION" --target "$(git rev-list -n1 "$BASE" 2>/dev/null || git rev-parse HEAD)" \
+            --title "NoCapOS $VERSION (security)" --notes-file notes.md --latest=false rel/*
