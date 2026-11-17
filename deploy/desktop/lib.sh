@@ -37,153 +37,151 @@ desktop_family() {
   esac
 }
 
-# desktop_packages FAMILY: the desktop's packages, one per line. "a|b"
-# means the first of them the distribution has (newer apps first, the
-# older ones they replaced after). A line starting with "?" is optional:
-# the desktop works without it. Only what the desktop needs: no games,
-# office suite, mail, maps or other extras. Installs skip "recommended"
-# packages, so everything the screen needs to light up is listed: the
-# Mesa drivers (with llvmpipe, the software renderer for VMs and boards
-# without a GPU driver), Xorg (GDM's fallback when Wayland can't run on a
-# GPU) and logind's PAM module.
+# desktop_packages FAMILY: the packages NoCap Desktop itself needs, one per
+# line, each with the reason it's there. "a|b" means the first of them the
+# distribution has (newer names first). A line starting with "?" is
+# optional: the desktop works without it. There are no third-party default
+# apps: Files, Terminal, Text Editor, Photos, the players, Settings and the
+# App Store are NoCap OS's own, and a web browser or anything else comes
+# from the App Store (Flatpak) when someone wants one. Installs skip
+# "recommended" packages, so everything the screen needs to light up is
+# listed. labwc comes from the distribution: Debian 13, Raspberry Pi OS and
+# Ubuntu 24.04 have it; Debian 12 and Ubuntu 22.04 don't, so NoCap Desktop
+# needs Debian 13 there (desk_install_packages says so; the rest of NoCapOS
+# works as it is).
 desktop_packages() {
+  desktop_package_list "$1" | sed -e 's/[[:space:]]*#.*$//' -e '/^$/d'
+}
+
+desktop_package_list() {
   case "$1" in
     debian | ubuntu)
-      cat <<'EOF'
-gdm3
-gnome-session
-gnome-shell
-gnome-control-center
-nautilus
-gnome-console|gnome-terminal
-gnome-text-editor|gedit
-loupe|eog
-papers|evince
-file-roller
-gnome-system-monitor
-xdg-desktop-portal-gnome
-xdg-desktop-portal-gtk
-xdg-user-dirs-gtk
-gnome-keyring
-libpam-gnome-keyring
-dconf-cli
-libglib2.0-bin
-libsecret-tools
-adwaita-icon-theme
-fonts-cantarell
-fonts-dejavu-core
-xwayland
-flatpak
-?gnome-software
-?gnome-software-plugin-flatpak
-?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock
-?gnome-shell-extension-appindicator
-gnome-remote-desktop
-pipewire
-wireplumber|pipewire-media-session
-dbus-user-session
-?libglib2.0-dev-bin
-?guacd
-?libguac-client-rdp0|libguac-client-rdp
-?libguac-client-vnc0|libguac-client-vnc
-xserver-xorg-core
-xserver-xorg-input-libinput|xserver-xorg-input-all
-?xserver-xorg-video-fbdev
-libgl1-mesa-dri
-libegl-mesa0
-libgbm1
-libpam-systemd
-?firmware-amd-graphics
-?firmware-misc-nonfree
-?wayvnc
-x11vnc
-?wl-clipboard
-?xclip
-?systemd-zram-generator|zram-tools
-EOF
+      cat <<'EOF2'
+labwc                                   # the compositor: windows, input, screens
+greetd                                  # the sign-in service (NoCap's sign-in screen runs in it)
+xwayland                                # apps that only speak X11 open in the session
+wayvnc                                  # "Open screen" in NoCapOS shows this screen in the browser
+swayidle                                # locks the screen when idle and before sleep
+libgtk-3-0t64|libgtk-3-0                # NoCap Shell's windows
+libgtk-layer-shell0                     # NoCap Shell's desktop, top bar and dock layers
+libwebkit2gtk-4.1-0                     # draws NoCap OS natively, from local files
+libjson-glib-1.0-0                      # NoCap Shell's checked messages
+libpolkit-agent-1-0                     # NoCap's admin password prompt
+libxkbcommon0                           # the lock screen's keyboard
+libpangocairo-1.0-0                     # the lock screen's text
+libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0  # the lock screen's wallpaper
+libpam0g                                # the lock screen's password check
+polkitd|policykit-1                     # who may do admin things
+xdg-desktop-portal                      # file open/save and screen sharing for installed apps
+xdg-desktop-portal-wlr                  # screen sharing and screenshots in labwc
+xdg-desktop-portal-gtk                  # the open/save dialog for installed apps
+xdg-user-dirs                           # Documents, Pictures, Downloads in each home
+gnome-keyring                           # the passwords installed apps save (unlocks at sign-in)
+libpam-gnome-keyring                    # unlocks it with the sign-in password
+dbus-user-session                       # each person's session bus and services
+pipewire                                # sound and screen capture
+wireplumber|pipewire-media-session      # connects sound devices
+?pipewire-pulse                         # sound for apps that use PulseAudio
+wl-clipboard                            # the clipboard shared with your phones
+?grim                                   # screenshots (the Print key)
+?brightnessctl                          # screen brightness on laptops
+adwaita-icon-theme                      # cursors and icons for installed apps
+fonts-dejavu-core                       # a font every app can fall back to
+flatpak                                 # the App Store's Linux apps
+?guacd                                  # "Open screen": the browser view (else a container)
+?libguac-client-vnc0|libguac-client-vnc # "Open screen": the VNC client inside it
+libgl1-mesa-dri                         # graphics drivers, with the software renderer
+libegl-mesa0                            # graphics drivers (EGL)
+libgbm1                                 # graphics buffers for the compositor
+libpam-systemd                          # a seat session for the screen
+?firmware-amd-graphics                  # AMD graphics firmware
+?firmware-misc-nonfree                  # Intel and other graphics firmware
+?systemd-zram-generator|zram-tools      # compressed swap on small machines
+EOF2
       ;;
     fedora)
-      cat <<'EOF'
-gdm
-gnome-session
-gnome-shell
-gnome-control-center
-nautilus
-gnome-console|gnome-terminal
-gnome-text-editor|gedit
-loupe|eog
-papers|evince
-file-roller
-gnome-system-monitor
-xdg-desktop-portal-gnome
-xdg-user-dirs-gtk
-gnome-keyring
-dconf
-glib2
-libsecret
-adwaita-icon-theme
-abattis-cantarell-fonts
-xorg-x11-server-Xwayland
-flatpak
-?gnome-software
-?gnome-shell-extension-dash-to-dock
-?gnome-shell-extension-appindicator
-gnome-remote-desktop
-pipewire
-wireplumber
-?guacd
-?libguac-client-rdp
-?libguac-client-vnc
-xorg-x11-server-Xorg
-?xorg-x11-drv-libinput
-mesa-dri-drivers
-mesa-libEGL
-mesa-libgbm
-?wayvnc
-x11vnc
-?wl-clipboard
-?xclip
-?zram-generator
-EOF
+      cat <<'EOF2'
+labwc                       # the compositor
+greetd                      # the sign-in service
+xorg-x11-server-Xwayland    # X11 apps
+wayvnc                      # "Open screen"
+swayidle                    # idle lock
+gtk3                        # NoCap Shell's windows
+gtk-layer-shell             # NoCap Shell's layers
+webkit2gtk4.1               # draws NoCap OS natively
+json-glib                   # NoCap Shell's messages
+polkit                      # admin prompts
+xdg-desktop-portal          # file dialogs for installed apps
+xdg-desktop-portal-wlr      # screen sharing
+xdg-desktop-portal-gtk      # open/save dialog
+xdg-user-dirs               # home folders
+gnome-keyring               # saved passwords
+pipewire                    # sound
+wireplumber                 # sound devices
+wl-clipboard                # shared clipboard
+?grim                       # screenshots
+?brightnessctl              # brightness
+adwaita-icon-theme          # cursors and icons
+dejavu-sans-fonts           # fallback font
+flatpak                     # App Store Linux apps
+?guacd                      # "Open screen"
+?libguac-client-vnc         # "Open screen"
+mesa-dri-drivers            # graphics drivers
+mesa-libEGL                 # graphics drivers
+mesa-libgbm                 # graphics buffers
+?zram-generator             # compressed swap
+EOF2
       ;;
     arch)
-      cat <<'EOF'
-gdm
-gnome-session
-gnome-shell
-gnome-control-center
-nautilus
-gnome-console|gnome-terminal
-gnome-text-editor|gedit
-loupe|eog
-papers|evince
-file-roller
-gnome-system-monitor
-xdg-desktop-portal-gnome
-xdg-user-dirs-gtk
-gnome-keyring
-dconf
-glib2
-libsecret
-adwaita-icon-theme
-cantarell-fonts
-xorg-xwayland
-flatpak
-?gnome-software
-?gnome-shell-extension-appindicator
-gnome-remote-desktop
-pipewire
-wireplumber
-xorg-server
-?xf86-input-libinput
-mesa
-?wayvnc
-x11vnc
-?wl-clipboard
-?xclip
-?zram-generator
-EOF
+      cat <<'EOF2'
+labwc                       # the compositor
+greetd                      # the sign-in service
+xorg-xwayland               # X11 apps
+wayvnc                      # "Open screen"
+swayidle                    # idle lock
+gtk3                        # NoCap Shell's windows
+gtk-layer-shell             # NoCap Shell's layers
+webkit2gtk-4.1              # draws NoCap OS natively
+json-glib                   # NoCap Shell's messages
+polkit                      # admin prompts
+xdg-desktop-portal          # file dialogs for installed apps
+xdg-desktop-portal-wlr      # screen sharing
+xdg-desktop-portal-gtk      # open/save dialog
+xdg-user-dirs               # home folders
+gnome-keyring               # saved passwords
+pipewire                    # sound
+wireplumber                 # sound devices
+wl-clipboard                # shared clipboard
+?grim                       # screenshots
+?brightnessctl              # brightness
+adwaita-icon-theme          # cursors and icons
+ttf-dejavu                  # fallback font
+flatpak                     # App Store Linux apps
+mesa                        # graphics drivers
+?zram-generator             # compressed swap
+EOF2
       ;;
+  esac
+}
+
+# OLD_DESKTOP_PACKAGES: what earlier versions' desktop ran on. Updates move
+# the screen off it (NoCap Desktop is labwc + NoCap Shell now) and leave the
+# packages installed: nothing anyone saved goes away. The image builds
+# leave them out.
+OLD_DESKTOP_PACKAGES="gdm3 gdm gnome-shell gnome-session gnome-remote-desktop"
+
+# OLD_DISPLAY_MANAGERS: sign-in services that step aside for greetd (the
+# earlier versions' one and the distributions' own).
+OLD_DISPLAY_MANAGERS="gdm3.service gdm.service lightdm.service sddm.service lxdm.service slim.service xdm.service nodm.service"
+
+# shell_build_packages FAMILY: what building NoCap Shell's two programs on
+# the machine itself needs (the release bundle carries them built for
+# amd64, arm64 and armv7; this is the fallback when those can't run here).
+shell_build_packages() {
+  case "$1" in
+    debian | ubuntu) echo "make gcc pkg-config libgtk-3-dev libgtk-layer-shell-dev libwebkit2gtk-4.1-dev libjson-glib-dev libpolkit-agent-1-dev libwayland-dev wayland-protocols libxkbcommon-dev libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-dev|libgdk-pixbuf2.0-dev libpam0g-dev" ;;
+    fedora) echo "make gcc pkgconf-pkg-config gtk3-devel gtk-layer-shell-devel webkit2gtk4.1-devel json-glib-devel polkit-devel wayland-devel wayland-protocols-devel libxkbcommon-devel cairo-devel pango-devel gdk-pixbuf2-devel pam-devel" ;;
+    arch) echo "make gcc pkgconf gtk3 gtk-layer-shell webkit2gtk-4.1 json-glib polkit wayland wayland-protocols libxkbcommon cairo pango gdk-pixbuf2 pam" ;;
   esac
 }
 
@@ -274,44 +272,6 @@ swapfile_mb() {
   if [ "$(memory_profile "$1")" = low ]; then echo 1024; else echo 0; fi
 }
 
-# LOWMEM_USER_UNITS: the per-person background services the low-memory
-# profile masks: file indexing (tracker, called localsearch from GNOME 47)
-# and the calendar and contacts store. GNOME works without them: search
-# still finds apps and settings, and the clock menu shows no events.
-LOWMEM_USER_UNITS="tracker-miner-fs-3.service tracker-extract-3.service tracker-miner-fs-control-3.service tracker-miner-rss-3.service tracker-writeback-3.service localsearch-3.service localsearch-control-3.service localsearch-extractor-3.service localsearch-writeback-3.service evolution-source-registry.service evolution-calendar-factory.service evolution-addressbook-factory.service evolution-user-prompter.service"
-
-# LOWMEM_AUTOSTART: autostart entries hidden in the low-memory profile.
-LOWMEM_AUTOSTART="tracker-miner-fs-3.desktop localsearch-3.desktop org.gnome.Evolution-alarm-notify.desktop evolution-alarm-notify.desktop gnome-software-service.desktop org.gnome.Software.desktop"
-
-# render_dconf_lowmem: /etc/dconf/db/local.d/10-nocapos-lowmem.
-render_dconf_lowmem() {
-  cat <<'EOF'
-# NoCapOS low-memory profile (written by install.sh).
-[org/gnome/desktop/interface]
-enable-animations=false
-
-[org/gnome/desktop/search-providers]
-disable-external=true
-
-[org/freedesktop/tracker/miner/files]
-enable-monitors=false
-crawling-interval=-2
-index-recursive-directories=@as []
-index-single-directories=@as []
-
-[org/freedesktop/localsearch/miner/files]
-enable-monitors=false
-crawling-interval=-2
-index-recursive-directories=@as []
-index-single-directories=@as []
-EOF
-}
-
-# render_autostart_hidden: an autostart entry that hides the system one.
-render_autostart_hidden() {
-  printf '[Desktop Entry]\n# Hidden by NoCapOS (low-memory profile).\nType=Application\nName=Hidden\nHidden=true\n'
-}
-
 # render_clipboard_unit CAP: the desktop session's clipboard agent, a user
 # service started with every graphical sign-in. It shares this account's
 # clipboard with the person's phones through alfad's local socket (cap
@@ -335,17 +295,15 @@ EOF
 }
 
 # ---------------------------------------------------------------- the accent
-# NoCap red in apps on every GNOME version. GNOME 47 and newer have an
-# accent setting (accent-color='red' in render_dconf_local). Older GNOME
-# (Debian 12 is 43) and every GTK 3 app don't, so each person's
-# ~/.config/gtk-4.0/gtk.css and gtk-3.0/gtk.css get a NoCapOS block. It's a
-# marked block, so a person's own CSS around it stays as it is.
+# NoCap red in apps: each person's ~/.config/gtk-4.0/gtk.css and
+# gtk-3.0/gtk.css get a NoCapOS block. It's a marked block, so a person's
+# own CSS around it stays as it is.
 
-NOCAP_RED=#e5383b
+NOCAP_RED=#e8232b
 ACCENT_BEGIN='/* NoCapOS accent: begin (kept up to date by NoCapOS) */'
 ACCENT_END='/* NoCapOS accent: end */'
 
-# render_gtk4_accent: libadwaita's accent colours (GNOME 43-46).
+# render_gtk4_accent: GTK 4 (libadwaita) accent colours.
 render_gtk4_accent() {
   cat <<EOF
 $ACCENT_BEGIN
@@ -365,10 +323,10 @@ $ACCENT_BEGIN
 @define-color theme_selected_fg_color #ffffff;
 @define-color accent_bg_color $NOCAP_RED;
 button.suggested-action, button.suggested-action:hover, button.suggested-action:active, button.suggested-action:checked {
-  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+  background-image: none; background-color: $NOCAP_RED; border-color: #b51b22; color: #ffffff;
 }
 switch:checked, progressbar progress, scale highlight, levelbar block.filled, check:checked, radio:checked, check:indeterminate, radio:indeterminate {
-  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+  background-image: none; background-color: $NOCAP_RED; border-color: #b51b22; color: #ffffff;
 }
 row:selected, .view:selected, iconview:selected, treeview.view:selected, flowboxchild:selected, entry selection, textview text selection, label selection, calendar:selected {
   background-color: $NOCAP_RED; color: #ffffff;
@@ -396,11 +354,6 @@ css_with_accent() {
   if [ -n "$rest" ]; then printf '%s\n\n' "$rest"; fi
   cat "$1"
 }
-
-# gtk4_accent_wanted GNOME_MAJOR: libadwaita needs the CSS block (GNOME 46
-# and older; 0 = unknown, which gets it too). GNOME 47+ uses the setting,
-# so a person's own accent choice in Settings works there.
-gtk4_accent_wanted() { [ "$1" -lt 47 ]; }
 
 # boot_methods ROOT: how this machine boots, one per line (more than one is
 # possible): pi (Raspberry Pi firmware: cmdline.txt/config.txt), grub,
@@ -561,258 +514,11 @@ config_txt_without() {
   awk -v want="$1" '{ s = $0; sub(/[ \t\r]+$/, "", s); if (s != want) print }'
 }
 
-# gdm_config ROOT: GDM's settings file on this distribution.
-gdm_config() {
-  local f
-  for f in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
-    if [ -f "$1$f" ]; then echo "$f"; return 0; fi
-  done
-  if [ -d "$1/etc/gdm3" ]; then echo /etc/gdm3/daemon.conf; else echo /etc/gdm/custom.conf; fi
-}
-
-# gdm_unit ROOT: GDM's systemd unit name.
-gdm_unit() {
-  local d u
-  for u in gdm3.service gdm.service; do
-    for d in /etc/systemd/system /usr/lib/systemd/system /lib/systemd/system; do
-      if [ -f "$1$d/$u" ] && [ ! -L "$1$d/$u" ]; then echo "$u"; return 0; fi
-    done
-  done
-  echo gdm.service
-}
-
-# gnome_major VERSION_TEXT: "GNOME Shell 48.4" -> 48 (0 when unknown).
-gnome_major() {
-  local v
-  v="$(printf '%s\n' "$1" | sed -n 's/.*[^0-9]\([0-9][0-9]*\)\.[0-9].*/\1/p' | head -1)"
-  echo "${v:-0}"
-}
-
 # nvidia_proprietary SYSROOT: the NVIDIA driver (not nouveau) is in use.
 nvidia_proprietary() { [ -d "$1/sys/module/nvidia_drm" ] || [ -d "$1/sys/module/nvidia" ]; }
 
-# ---------------------------------------------------------------- settings files
-# NoCapOS's look for every account on this machine: GSettings defaults
-# (/usr/share/glib-2.0/schemas/90_nocapos.gschema.override) for the keys
-# every GNOME since 43 has, and the dconf system database
-# (/etc/dconf/db/local.d) for the rest (newer keys, the dock, app folders),
-# which never fails over a key an older GNOME doesn't know. People can
-# change all of it; only the few keys in render_dconf_locks are locked.
-
-NOCAP_WALLPAPER=/usr/share/backgrounds/nocapos/tide.jpg
-NOCAP_BRAND_UUID=nocapos-brand@shatheitguy.github.io
-
-# gv_list ITEM...: a GVariant string list, ['a', 'b'] (empty items skipped).
-gv_list() {
-  local out="" i
-  for i in "$@"; do [ -n "$i" ] && out="$out, '$i'"; done
-  printf '[%s]\n' "${out#, }"
-}
-
-# dock_apps ROOT: the dock's apps, one desktop file name per line, all of
-# them native: Files, the browser, Software, the terminal, Text Editor and
-# Settings (whichever of each this machine has under ROOT; Files and
-# Settings always, they're required packages).
-dock_apps() {
-  local d="$1/usr/share/applications" a
-  first() { for a in "$@"; do if [ -f "$d/$a" ]; then echo "$a"; return 0; fi; done; return 0; }
-  echo org.gnome.Nautilus.desktop
-  first firefox-esr.desktop firefox.desktop org.mozilla.firefox.desktop chromium.desktop chromium-browser.desktop \
-    brave-browser.desktop com.brave.Browser.desktop google-chrome.desktop
-  first org.gnome.Software.desktop
-  first org.gnome.Console.desktop org.gnome.Terminal.desktop
-  first org.gnome.TextEditor.desktop org.gnome.gedit.desktop
-  if [ -f "$d/gnome-control-center.desktop" ] && [ ! -f "$d/org.gnome.Settings.desktop" ]; then
-    echo gnome-control-center.desktop
-  else
-    echo org.gnome.Settings.desktop
-  fi
-}
-
-# render_gschema_override DOCK_APPS EXTENSION_UUID...: DOCK_APPS is a
-# GVariant list (gv_list of dock_apps).
-render_gschema_override() {
-  local favs="$1"
-  shift
-  cat <<EOF
-# NoCapOS defaults for every account (written by NoCapOS's install.sh).
-[org.gnome.desktop.background]
-picture-uri='file://$NOCAP_WALLPAPER'
-picture-uri-dark='file://$NOCAP_WALLPAPER'
-picture-options='zoom'
-primary-color='#050508'
-
-[org.gnome.desktop.screensaver]
-picture-uri='file://$NOCAP_WALLPAPER'
-picture-options='zoom'
-primary-color='#050508'
-
-[org.gnome.desktop.interface]
-color-scheme='prefer-dark'
-gtk-theme='Adwaita-dark'
-
-[org.gnome.desktop.wm.preferences]
-button-layout='appmenu:minimize,maximize,close'
-
-[org.gnome.shell]
-favorite-apps=$favs
-enabled-extensions=$(gv_list "$@")
-EOF
-}
-
-# render_dconf_local DOCK_APPS EXTENSION_UUID...: /etc/dconf/db/local.d/00-nocapos
-render_dconf_local() {
-  local favs="$1" exts
-  shift
-  exts="$(gv_list "$@")"
-  cat <<EOF
-# NoCapOS defaults for every account (written by NoCapOS's install.sh).
-[org/gnome/desktop/interface]
-color-scheme='prefer-dark'
-gtk-theme='Adwaita-dark'
-accent-color='red'
-
-[org/gnome/desktop/background]
-picture-uri='file://$NOCAP_WALLPAPER'
-picture-uri-dark='file://$NOCAP_WALLPAPER'
-picture-options='zoom'
-primary-color='#050508'
-
-[org/gnome/desktop/screensaver]
-picture-uri='file://$NOCAP_WALLPAPER'
-picture-options='zoom'
-primary-color='#050508'
-
-[org/gnome/desktop/wm/preferences]
-button-layout='appmenu:minimize,maximize,close'
-
-[org/gnome/shell]
-favorite-apps=$favs
-enabled-extensions=$exts
-disable-user-extensions=false
-welcome-dialog-last-shown-version='999'
-
-[org/gnome/shell/extensions/dash-to-dock]
-dock-fixed=true
-autohide=false
-intellihide=false
-dock-position='BOTTOM'
-extend-height=false
-dash-max-icon-size=48
-show-trash=false
-show-mounts=false
-show-show-apps-button=true
-apply-custom-theme=false
-custom-background-color=true
-background-color='#050508'
-transparency-mode='FIXED'
-background-opacity=0.7
-running-indicator-style='DOTS'
-custom-theme-customize-running-dots=true
-custom-theme-running-dots-color='#e5383b'
-
-[org/gnome/desktop/app-folders]
-folder-children=['Utilities', 'System']
-
-[org/gnome/desktop/app-folders/folders/Utilities]
-name='Utilities'
-categories=['Utility', 'X-GNOME-Utilities', 'Archiving', 'TextEditor']
-
-[org/gnome/desktop/app-folders/folders/System]
-name='System'
-categories=['System', 'Settings', 'Monitor']
-
-[org/gnome/settings-daemon/plugins/power]
-sleep-inactive-ac-type='nothing'
-sleep-inactive-battery-type='nothing'
-
-[org/gnome/software]
-allow-updates=false
-download-updates=false
-download-updates-notify=false
-first-run=false
-
-[org/gnome/desktop/privacy]
-report-technical-problems=false
-EOF
-}
-
-# render_dconf_locks: the keys people can't change. A server must not put
-# itself to sleep, and updates come from NoCapOS, never a second updater.
-render_dconf_locks() {
-  cat <<'EOF'
-# Locked by NoCapOS (written by NoCapOS's install.sh).
-/org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type
-/org/gnome/software/allow-updates
-/org/gnome/software/download-updates
-EOF
-}
-
-# render_dconf_gdm: the sign-in screen (/etc/dconf/db/gdm.d/90-nocapos).
-render_dconf_gdm() {
-  cat <<'EOF'
-# NoCapOS sign-in screen (written by NoCapOS's install.sh).
-[org/gnome/login-screen]
-logo='/usr/share/nocapos/desktop/login-logo.png'
-banner-message-enable=false
-
-[org/gnome/desktop/interface]
-color-scheme='prefer-dark'
-accent-color='red'
-
-[org/gnome/settings-daemon/plugins/power]
-sleep-inactive-ac-type='nothing'
-sleep-inactive-battery-type='nothing'
-EOF
-}
-
-# render_gdm_css: added to the sign-in screen's theme (the gdm-theme.gresource
-# NoCapOS builds from the system's own).
-render_gdm_css() {
-  cat <<'EOF'
-
-/* NoCapOS sign-in screen */
-#lockDialogGroup {
-  background: #050508 url("resource:///org/gnome/shell/theme/nocapos-login.jpg");
-  background-size: cover;
-  background-position: center;
-}
-.login-dialog .login-dialog-button.default-button,
-.unlock-dialog .login-dialog-button.default-button { background-color: #e5383b; color: #ffffff; }
-.login-dialog-prompt-entry:focus { border-color: #e5383b; }
-EOF
-}
-
-# render_gdm_profile: the sign-in screen's dconf profile. stdin is the
-# distribution's own (/usr/share/dconf/profile/gdm; empty when there's
-# none); it's kept as it is, with NoCapOS's system database (system-db:gdm)
-# added before its file-db, so the distribution's greeter defaults still
-# apply (Debian keeps them in /var/lib/gdm3, not where upstream does).
-render_gdm_profile() {
-  awk '
-    { sub(/\r$/, "") }
-    $0 == "" { next }
-    { lines[++n] = $0; if ($0 == "system-db:gdm") has = 1 }
-    END {
-      if (n == 0) { print "user-db:user"; print "system-db:gdm"; print "file-db:/usr/share/gdm/greeter-dconf-defaults"; exit }
-      for (i = 1; i <= n; i++) {
-        if (!has && !done && lines[i] ~ /^file-db:/) { print "system-db:gdm"; done = 1 }
-        print lines[i]
-      }
-      if (!has && !done) print "system-db:gdm"
-    }
-  '
-}
-
-# LEGACY_GDM_PROFILE: what earlier versions wrote to /etc/dconf/profile/gdm
-# whatever the distribution (its file-db doesn't exist on Debian, so the
-# sign-in screen lost the distribution's greeter defaults).
-LEGACY_GDM_PROFILE='user-db:user
-system-db:gdm
-file-db:/usr/share/gdm/greeter-dconf-defaults'
-
-# PI_KMS_OVERLAY: the Raspberry Pi's KMS graphics driver. GNOME Shell needs
-# KMS; without it the screen only has the firmware's framebuffer.
+# PI_KMS_OVERLAY: the Raspberry Pi's KMS graphics driver. The compositor
+# needs KMS; without it the screen only has the firmware's framebuffer.
 PI_KMS_OVERLAY=dtoverlay=vc4-kms-v3d
 
 # pi_kms_missing: a Raspberry Pi config.txt on stdin turns on no KMS
@@ -840,76 +546,128 @@ config_txt_append() {
 }
 
 # ---------------------------------------------------------------- the session
-# The physical screen runs one session: NoCapOS (GNOME Shell with NoCapOS's
-# look). GDM starts it by default, every account is moved to it, and other
-# desktops' sessions (a distribution's own desktop, say) are taken out of
-# the sign-in screen's list.
+# The physical screen: greetd shows NoCap's own sign-in screen (NoCap Shell
+# in greeter mode, in a labwc of its own, as greetd's unprivileged greeter
+# account), then starts the NoCap Desktop session for whoever signed in:
+# labwc (windows) + NoCap Shell, which shows NoCap OS itself on the screen:
+# the same menu bar, dock, launcher, panels, widgets and apps as in the
+# browser, from local files, plus the lock screen. Files live in:
+#   /usr/libexec/nocapos             the programs (nocap-shell, nocap-lock,
+#                                    nocap-session, nocap-greeter-session)
+#   /usr/share/nocapos/shell         NoCap OS's pages for the screen
+#   /usr/share/nocapos/labwc         labwc settings for every account's
+#                                    session (labwc -C: a person's own or a
+#                                    distribution's labwc settings never
+#                                    replace NoCap Desktop's)
+#   /usr/share/nocapos/greeter/labwc labwc settings for the sign-in screen
+#   /etc/systemd/user                the session's services (shell, idle lock)
+#   /usr/share/themes/NoCap          window decorations
+#   /etc/greetd/config.toml          the sign-in service
 
-# NOCAP_SESSION: the session's name (its file is NOCAP_SESSION.desktop in
-# /usr/share/wayland-sessions and /usr/share/xsessions).
 NOCAP_SESSION=nocapos
+SHELL_LIB=/usr/libexec/nocapos
+SHELL_UI=/usr/share/nocapos/shell
+SHELL_CONF=/usr/share/nocapos/labwc
+GREETER_CONF=/usr/share/nocapos/greeter/labwc
+GREETD_CONF=/etc/greetd/config.toml
+NOCAP_WALLPAPER=/usr/share/backgrounds/nocapos/tide.jpg
 
-# render_session_desktop wayland|x11: the session's .desktop file.
+# render_session_desktop: /usr/share/wayland-sessions/nocapos.desktop (for
+# tools that list sessions; greetd itself starts nocap-session directly).
 render_session_desktop() {
-  local name=NoCapOS
-  [ "$1" = x11 ] && name="NoCapOS (X11)"
   cat <<EOF
 [Desktop Entry]
 # The NoCapOS desktop (written by NoCapOS's install.sh).
-Name=$name
+Name=NoCapOS
 Comment=The NoCapOS desktop
-Exec=gnome-session
-TryExec=gnome-session
+Exec=$SHELL_LIB/nocap-session
+TryExec=$SHELL_LIB/nocap-session
 Type=Application
-DesktopNames=GNOME
-X-GDM-SessionRegisters=true
+DesktopNames=NoCap;wlroots
 EOF
 }
 
-# other_sessions ROOT: the session files under ROOT that aren't NoCapOS's,
-# one path (without ROOT) per line.
-other_sessions() {
-  local d f
-  for d in /usr/share/wayland-sessions /usr/share/xsessions; do
-    for f in "$1$d"/*.desktop; do
-      [ -f "$f" ] || continue
-      [ "$(basename "$f")" = "$NOCAP_SESSION.desktop" ] && continue
-      echo "$d/$(basename "$f")"
-    done
-  done
-  return 0
+# greeter_user ROOT: greetd's own unprivileged account on this system
+# (Debian and Raspberry Pi OS: _greetd; Fedora: greetd; others: greeter).
+greeter_user() {
+  if grep -qs '^_greetd:' "$1/etc/passwd"; then echo _greetd
+  elif grep -qs '^greetd:' "$1/etc/passwd"; then echo greetd
+  elif grep -qs '^greeter:' "$1/etc/passwd"; then echo greeter
+  else echo _greetd
+  fi
 }
 
-# session_file_wants_change: an AccountsService user file (or ~/.dmrc) on
-# stdin names a session other than NoCapOS's.
-session_file_wants_change() {
-  awk -v want="$NOCAP_SESSION" '
+# render_greetd_config GREETER_USER [AUTOLOGIN_USER]: /etc/greetd/config.toml.
+# With an AUTOLOGIN_USER the desktop starts for that account once per boot
+# without the sign-in screen (off unless someone turns it on in Settings).
+render_greetd_config() {
+  cat <<EOF
+# NoCap Desktop's sign-in service (written by NoCapOS; Settings changes it).
+[terminal]
+vt = 7
+
+[default_session]
+command = "$SHELL_LIB/nocap-greeter-session"
+user = "$1"
+EOF
+  if [ -n "${2:-}" ]; then
+    cat <<EOF
+
+[initial_session]
+command = "$SHELL_LIB/nocap-session"
+user = "$2"
+EOF
+  fi
+}
+
+# greetd_autologin: the account a greetd config on stdin signs in
+# automatically (empty when none).
+greetd_autologin() {
+  awk '
     { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s) }
-    s ~ /^(Session|XSession)=/ { v = s; sub(/^[^=]*=/, "", v); if (v != want) bad = 1 }
-    END { exit !bad }
-  '
-}
-
-# session_file_with SECTION: the file on stdin with Session and XSession set
-# to NoCapOS's in SECTION (User for AccountsService, Desktop for ~/.dmrc).
-session_file_with() {
-  ini_set "$1" Session "$NOCAP_SESSION" | ini_set "$1" XSession "$NOCAP_SESSION"
-}
-
-# ini_set SECTION KEY VALUE: reads an ini file (GDM's daemon.conf) on stdin
-# and prints it with KEY=VALUE in [SECTION]: a commented-out or existing
-# KEY line is replaced, else it's added at the end of that section; the
-# section is added if it's missing.
-ini_set() {
-  awk -v sec="[$1]" -v key="$2" -v val="$3" '
-    function emit() { if (insec && !done) { print key "=" val; done = 1 } }
-    { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); c = s; sub(/^#[ \t]*/, "", c) }
-    s ~ /^\[/ { emit(); insec = (s == sec); if (insec) seen = 1; print; next }
-    insec && index(c, key "=") == 1 {
-      if (!done) { print key "=" val; done = 1 }
-      next
+    s ~ /^\[/ { sec = s; next }
+    sec == "[initial_session]" && s ~ /^user[ \t]*=/ {
+      v = s; sub(/^user[ \t]*=[ \t]*/, "", v); gsub(/"/, "", v); print v; exit
     }
-    { print }
-    END { emit(); if (!seen) { print ""; print sec; print key "=" val } }
   '
 }
+
+# render_pam_lock FAMILY: /etc/pam.d/nocap-lock, the lock screen's password
+# check (the account's own password, as at sign-in).
+render_pam_lock() {
+  case "$1" in
+    debian | ubuntu) printf '#%%PAM-1.0\n# NoCap Desktop lock screen (written by NoCapOS).\n@include common-auth\n@include common-account\n' ;;
+    *) printf '#%%PAM-1.0\n# NoCap Desktop lock screen (written by NoCapOS).\nauth include system-auth\naccount include system-auth\n' ;;
+  esac
+}
+
+# pam_with_keyring: a greetd PAM file on stdin with the keyring added (it
+# unlocks with the sign-in password; apps keep their secrets in it). Lines
+# already there stay as they are.
+pam_with_keyring() {
+  awk '
+    { lines[++n] = $0; if ($0 ~ /pam_gnome_keyring\.so/) has = 1 }
+    END {
+      for (i = 1; i <= n; i++) print lines[i]
+      if (!has) {
+        print "# NoCapOS: the keyring unlocks with the sign-in password."
+        print "auth       optional   pam_gnome_keyring.so"
+        print "session    optional   pam_gnome_keyring.so auto_start"
+      }
+    }
+  '
+}
+
+# render_portals_conf: which portal answers what in the NoCap session
+# (screen sharing and screenshots: wlr; files and the rest: gtk).
+render_portals_conf() {
+  cat <<'EOF'
+# NoCap Desktop (written by NoCapOS).
+[preferred]
+default=gtk
+org.freedesktop.impl.portal.ScreenCast=wlr
+org.freedesktop.impl.portal.Screenshot=wlr
+org.freedesktop.impl.portal.Secret=gnome-keyring
+EOF
+}
+

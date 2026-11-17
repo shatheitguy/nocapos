@@ -3,6 +3,7 @@ import type { IconName } from '../components/Icon';
 import { useRecents } from '../state/recents';
 import { useWM } from '../state/windows';
 import { tr } from '../i18n';
+import { hostSend, isNative } from '../native/platform';
 
 export interface AppMeta {
   id: string;
@@ -278,6 +279,15 @@ export interface OpenOptions {
 export function openApp(appId: string, opts: OpenOptions = {}) {
   const meta = APPS[appId];
   if (!meta) return;
+  // NoCap Desktop: every app gets a real window of its own on the screen.
+  // One window per app unless another is asked for; opening it again brings
+  // it to the front (with the new props, e.g. a Settings section).
+  if (isNative()) {
+    const props = opts.props ? JSON.stringify(opts.props) : undefined;
+    hostSend('nocap.open', { app: appId, ...(props && props.length <= 8192 ? { props } : {}), single: !!meta.single || !opts.newWindow });
+    if (!meta.hidden) useRecents.getState().push(appId);
+    return;
+  }
   const wm = useWM.getState();
   const mine = wm.windows.filter((w) => w.appId === appId);
 
