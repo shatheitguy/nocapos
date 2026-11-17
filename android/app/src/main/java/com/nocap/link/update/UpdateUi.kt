@@ -85,12 +85,12 @@ fun UpdateBanner(a: MainActivity, onOpen: () -> Unit) {
 fun UpdatesSection(a: MainActivity) {
     val s = Updater.state
     val run = { force: Boolean -> a.lifecycleScope.launch { Updater.refresh(a, force) }; Unit }
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(t("This app", "This app"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
         Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", style = MaterialTheme.typography.labelLarge, color = NoCap.Muted)
     }
     val lv = Updater.latestVersion
-    if (Updater.latest != null) Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    if (Updater.latest != null) Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(t("Latest", "Latest version"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
         Text(
             lv?.let { v -> listOfNotNull(v.name, v.code?.let { "($it)" }).joinToString(" ") } ?: t("in ${Updater.latest?.tag}", "in release ${Updater.latest?.tag}"),
@@ -100,39 +100,39 @@ fun UpdatesSection(a: MainActivity) {
     when (s) {
         UpdateState.Idle -> Hint(t("Not checked yet.", "Not checked yet."))
         UpdateState.Checking -> Hint(t("Checking…", "Checking for updates…"))
-        UpdateState.UpToDate -> Row(Modifier.padding(vertical = 6.dp)) { Chip(t("You're on the latest. W.", "Up to date"), NoCap.Ok) }
+        UpdateState.UpToDate -> Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { Chip(t("You're on the latest. W.", "Up to date"), NoCap.Ok) }
         is UpdateState.NoApk -> Hint(t("The newest release (${s.release.tag}) has no phone app attached yet. Check again later.", "The latest release (${s.release.tag}) doesn't include the app yet. Try again later."))
         is UpdateState.Available -> {
-            Row(Modifier.padding(vertical = 6.dp)) { Chip(t("Update available", "Update available"), NoCap.Red) }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { Chip(t("Update available", "Update available"), NoCap.Red) }
             if (s.version == null) Hint(t("Can't tell the version from here. It's downloaded and checked before anything installs.", "The version can't be determined in advance; the download is checked before installing."))
             val notes = remember(s.release.body) { Releases.whatsNew(s.release.body) }
             if (notes.isNotBlank()) {
-                Text(t("What's new", "What's new"), Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelLarge, color = NoCap.Muted)
-                Text(notes, Modifier.padding(top = 2.dp), style = MaterialTheme.typography.bodySmall)
+                Text(t("What's new", "What's new"), Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp), style = MaterialTheme.typography.labelLarge, color = NoCap.Muted)
+                Text(notes, Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp), style = MaterialTheme.typography.bodySmall)
             }
             Action(t("Download and install", "Download and install")) { a.lifecycleScope.launch { Updater.update(a, s) } }
         }
         is UpdateState.Downloading -> {
             val p = if (s.total > 0) (s.done.toFloat() / s.total).coerceIn(0f, 1f) else null
-            Text(t("Downloading… ", "Downloading… ") + if (s.total > 0) "${mb(s.done)} / ${mb(s.total)}" else mb(s.done), Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall)
+            Text(t("Downloading… ", "Downloading… ") + if (s.total > 0) "${mb(s.done)} / ${mb(s.total)}" else mb(s.done), Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), style = MaterialTheme.typography.bodySmall)
             if (p != null) LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), color = NoCap.Red, trackColor = NoCap.Field)
             else LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 6.dp), color = NoCap.Red, trackColor = NoCap.Field)
         }
         UpdateState.Installing -> Hint(t("Installing… NoCap OS restarts when it's done.", "Installing… NoCap OS will restart."))
         UpdateState.WaitingForYou -> Hint(t("Confirm the install in Android's prompt.", "Confirm the install in the Android prompt."))
-        is UpdateState.Failed -> Text(s.why, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Warn)
+        is UpdateState.Failed -> Text(s.why, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = NoCap.Warn)
     }
     if (!Updater.busy) Action(t("Check for updates", "Check for updates")) { run(true) }
 
     // The linked server.
     val sv = serverVersion(a)
     if (sv != null) {
-        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(t("NoCap server", "NoCapOS server"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             Text("v$sv", style = MaterialTheme.typography.labelLarge, color = NoCap.Muted)
         }
         if (Updater.serverBehind(sv)) {
-            Row(Modifier.padding(vertical = 6.dp)) { Chip(t("Server update available: ${Updater.latest?.tag}", "Server update available (${Updater.latest?.tag})"), NoCap.Red) }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { Chip(t("Server update available: ${Updater.latest?.tag}", "Server update available (${Updater.latest?.tag})"), NoCap.Red) }
             Action(t("Open Glow Up on my server", "Open Glow Up on the server")) { a.openDesktop(app = "settings", section = "update") }
             Hint(t("Glow Up needs an admin account on the server.", "Updating the server requires an administrator account."))
         }

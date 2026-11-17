@@ -26,6 +26,7 @@ func (s *Server) listContainers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.enrichContainers(r.Context(), list)
+	s.fillLocalAddresses(r.Context(), list)
 	writeJSON(w, http.StatusOK, list)
 }
 
@@ -126,6 +127,11 @@ func (s *Server) inspectContainer(w http.ResponseWriter, r *http.Request) {
 	}
 	d.WebAddress = book[webaddr.ContainerKey(d.Name)]
 	d.WebURL = s.containerWebURL(d.Name, d.Labels, d.Networks, ports, book)
+	if s.localAddr != nil && s.localAddrOn(r.Context()) {
+		for _, n := range s.localAddr.table.ByContainer()[d.ID] {
+			d.LocalAddresses = append(d.LocalAddresses, s.preferredURL(n))
+		}
+	}
 	writeJSON(w, http.StatusOK, d)
 }
 

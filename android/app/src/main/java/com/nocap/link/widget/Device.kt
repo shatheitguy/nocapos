@@ -46,6 +46,7 @@ object DeviceStats {
     private var lastTx = -1L
 
     /** Takes a fresh reading (at most every 2 s, however many widgets ask). */
+    @Synchronized
     fun refresh(ctx: Context) {
         val now = SystemClock.elapsedRealtime()
         if (now - last < 1800 && snap != null) return

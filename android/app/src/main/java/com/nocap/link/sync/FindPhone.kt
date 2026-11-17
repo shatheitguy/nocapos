@@ -125,6 +125,7 @@ object FindPhone {
             .setContentText(t("NoCap OS is ringing this phone. Tap to stop.", "NoCap OS is ringing this phone. Tap to stop."))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setContentIntent(stop)
             .setDeleteIntent(stop)

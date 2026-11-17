@@ -14,11 +14,14 @@ class NoCapApp : Application() {
         CrashLog.install(this)
         Prefs.init(this)
         Notices.channel(this)
-        // The vault is encrypted with a key in the Android Keystore; a broken
-        // keystore must not stop the launcher from starting.
-        val linked = runCatching { Vault.get(this).link != null }.getOrDefault(false)
-        if (linked) HeartbeatWorker.schedule(this)
-        Sync.start(this)
+        com.nocap.link.sync.Requests.channel(this)
+        // The vault is encrypted with a key in the Android Keystore: opening it
+        // can take a moment (or fail), so it's done off the main thread.
+        java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+            val linked = runCatching { Vault.get(this).link != null }.getOrDefault(false)
+            if (linked) runCatching { HeartbeatWorker.schedule(this) }
+            runCatching { Sync.start(this) }
+        }
         // Opt-in NoCap lock screen and control-center edge strip (both do nothing unless switched on).
         if (com.nocap.link.data.Opt.lockScreen.v) com.nocap.link.lock.LockWatch.start(this)
         runCatching { com.nocap.link.control.EdgeStrip.sync(this) }

@@ -36,7 +36,6 @@ import java.io.File
  * notification is going over (a call, a message you can answer, or other).
  */
 object PhoneActions {
-    private const val CARRY = "nocap_carry"
 
     fun handle(ctx: Context, api: NoCapApi, a: PhoneAction) {
         when (a.kind) {
@@ -141,12 +140,12 @@ object PhoneActions {
                 open(ctx, view, t("Open $name", "Open $name"), t("From NoCap OS, saved in Downloads/NoCap.", "From NoCap OS, saved in Downloads/NoCap."), a.id)
             } else {
                 Notices.show(
-                    ctx, 3000 + (a.id % 1000).toInt(), t("$name landed 📥", "File received: $name"),
+                    ctx, 31_000 + (a.id % 1000).toInt(), t("$name landed 📥", "File received: $name"),
                     t("From NoCap OS → Downloads/NoCap.", "From NoCap OS, saved in Downloads/NoCap."), view?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             }
         } catch (e: Exception) {
-            Notices.show(ctx, 3000 + (a.id % 1000).toInt(), t("Couldn't grab $name", "Couldn't receive $name"), e.message ?: "")
+            Notices.show(ctx, 31_000 + (a.id % 1000).toInt(), t("Couldn't grab $name", "Couldn't receive $name"), e.message ?: "")
         } finally {
             tmp.delete()
         }
@@ -159,27 +158,7 @@ object PhoneActions {
     private fun open(ctx: Context, intent: Intent, title: String, text: String, id: Long) {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (inFront() && runCatching { ctx.startActivity(intent) }.isSuccess) return
-        if (!Notices.allowed(ctx)) return
-        val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
-        runCatching {
-            nm.createNotificationChannel(NotificationChannel(CARRY, "Open on phone", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Links and files NoCap OS sends to this phone"
-            })
-        }
-        val nid = 5000 + (id % 1000).toInt()
-        val pi = PendingIntent.getActivity(ctx, nid, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, CARRY)
-            .setSmallIcon(R.drawable.ic_stat_nocap)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setContentIntent(pi)
-            .build()
-        try {
-            NotificationManagerCompat.from(ctx).notify(nid, n)
-        } catch (_: SecurityException) {
-        }
+        Requests.carry(ctx, 30_000 + (id % 1000).toInt(), title, text, intent)
     }
 
     private fun inFront(): Boolean {

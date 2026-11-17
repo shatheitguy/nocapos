@@ -3,6 +3,7 @@ import { dockerApi, type ContainerSpec, type DockerNetwork, type EnvVar, type Ne
 import { fileApi, type FileRoot } from '../api/files';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
+import { tr } from '../i18n';
 
 // The container settings form, shared by "Edit before install" (App Store),
 // editing an installed container, and adding a new one: image and tag, name,
@@ -94,6 +95,7 @@ export function validateSpec(s: ContainerSpec): string[] {
     if (!DEV_RE.test(h) || h.includes('..') || (c !== undefined && (!DEV_RE.test(c) || c.includes('..')))) errs.push(`Device “${d}” must be under /dev.`);
   }
   if (s.memory_mb && s.memory_mb < 6) errs.push('A memory limit must be at least 6 MB.');
+  if (s.pids_limit && s.pids_limit < 8) errs.push('A process limit must be at least 8 (or 0 for none).');
   for (const n of s.networks) if (n.ipv4 && !/^\d{1,3}(\.\d{1,3}){3}$/.test(n.ipv4)) errs.push(`“${n.ipv4}” isn't an IPv4 address.`);
   return Array.from(new Set(errs));
 }
@@ -135,6 +137,8 @@ export function specDiff(a: ContainerSpec, b: ContainerSpec, secrets: string[] =
   field('Hostname', a.hostname, b.hostname);
   field('Memory limit', a.memory_mb, b.memory_mb, (v) => (v ? `${v} MB` : 'none'));
   field('CPU limit', a.cpus, b.cpus, (v) => (v ? `${v} cores` : 'none'));
+  field('Process limit', a.pids_limit ?? 0, b.pids_limit ?? 0, (v) => (v ? String(v) : 'none'));
+  field('Read-only filesystem', !!a.read_only, !!b.read_only, (v) => (v ? 'on' : 'off'));
   field('Privileged', a.privileged, b.privileged, (v) => (v ? 'on' : 'off'));
   const sets = (label: string, x: string[], y: string[]) => {
     const xs = new Set(x);
@@ -545,13 +549,27 @@ export function SpecForm({
             <input type="number" min={0} step={0.25} value={spec.cpus || 0} onChange={(e) => set('cpus', Math.max(0, Number(e.target.value) || 0))} />
           </label>
           <label>
+            {tr('ctr.spec.pids')} <span className="muted">{tr('ctr.spec.zeroNone')}</span>
+            <input type="number" min={0} step={1} value={spec.pids_limit || 0} onChange={(e) => set('pids_limit', Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+          </label>
+          <label>
             Hostname <span className="muted">(optional)</span>
             <input value={spec.hostname ?? ''} disabled={mainNet === 'host'} spellCheck={false} onChange={(e) => set('hostname', e.target.value.trim())} />
           </label>
-          <label className="ce-check">
-            <input type="checkbox" checked={spec.privileged} onChange={(e) => set('privileged', e.target.checked)} /> Privileged <span className="muted">(full access to the server; only if the app needs it)</span>
-          </label>
         </div>
+        <p className="muted small">{tr('ctr.spec.limitsHint')}</p>
+      </section>
+
+      <details className="ce-sec ce-advanced" open={spec.privileged || !!spec.read_only || caps.length > 0}>
+        <summary><h3>{tr('ctr.spec.advanced')}</h3></summary>
+        <label className="ce-check">
+          <input type="checkbox" checked={!!spec.read_only} onChange={(e) => set('read_only', e.target.checked)} /> {tr('ctr.spec.readOnly')}
+        </label>
+        <p className="muted small ce-risk ok">{tr('ctr.spec.readOnlyNote')}</p>
+        <label className="ce-check">
+          <input type="checkbox" checked={spec.privileged} onChange={(e) => set('privileged', e.target.checked)} /> {tr('ctr.spec.privileged')}
+        </label>
+        <p className="small ce-risk bad">{tr('ctr.spec.privilegedNote')}</p>
         <div className="ce-devices">
           <span className="small">Extra capabilities</span>
           <div className="sf-chips">
@@ -585,9 +603,14 @@ export function SpecForm({
               ))}
             </datalist>
           </div>
+          <p className="small ce-risk warn">{caps.some((c) => ['SYS_ADMIN', 'SYS_PTRACE', 'SYS_MODULE', 'DAC_READ_SEARCH', 'ALL'].includes(c)) ? tr('ctr.spec.capsHighRisk') : tr('ctr.spec.capsNote')}</p>
         </div>
+      </details>
+
+      <section className="ce-sec">
+        <h3>{tr('ctr.devices')}</h3>
         <div className="ce-devices">
-          <span className="small">Devices</span>
+          <span className="small">{tr('ctr.spec.devicesHint')}</span>
           {spec.devices.map((d, i) => (
             <div key={i} className="ce-row ce-net">
               <input value={d} spellCheck={false} placeholder="/dev/dri" onChange={(e) => set('devices', spec.devices.map((x, j) => (j === i ? e.target.value : x)))} aria-label="Device" />

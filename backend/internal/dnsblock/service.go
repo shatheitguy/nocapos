@@ -76,7 +76,10 @@ type Service struct {
 	listenNote  string
 	refreshing  bool
 	sets        map[string]*DomainSet // loaded lists by id
+	extra       []Record              // records other parts of NoCapOS add (local addresses)
 	systemHooks bool                  // false in tests: never touch the host's resolver
+	personal    *personalStore        // people's and devices' own lists (DNS-over-HTTPS)
+	loopback    bool                  // tests: listen on 127.0.0.1 only
 }
 
 // listRedirect never lets a list fetched over https:// be handed over to
@@ -131,6 +134,14 @@ func (s *Service) Start(ctx context.Context) error {
 		q.db.Close()
 	}()
 	return nil
+}
+
+// TestMode keeps s away from this machine: it never touches the system's
+// resolver and only listens on 127.0.0.1 (tests in other packages).
+func (s *Service) TestMode() {
+	s.mu.Lock()
+	s.systemHooks, s.loopback = false, true
+	s.mu.Unlock()
 }
 
 // Settings returns the current settings.
@@ -198,7 +209,14 @@ func (s *Service) applyLocked(next Settings, boot bool) error {
 	restart := boot || s.srv == nil || prev.Listen != next.Listen || prev.Port != next.Port
 	if restart {
 		s.stopLocked()
-		srv, note, err := listen(next.Listen, next.Port)
+		var srv *listeners
+		var note string
+		var err error
+		if s.loopback {
+			srv, err = listenOn([]string{"127.0.0.1"}, next.Port)
+		} else {
+			srv, note, err = listen(next.Listen, next.Port)
+		}
 		s.listenNote = note
 		if err != nil {
 			s.listenErr = err.Error()
@@ -239,6 +257,15 @@ func (s *Service) rebuildLocked() {
 	for _, rec := range st.Records {
 		r.records[rec.Name] = append(r.records[rec.Name], rec)
 	}
+	people := make(map[string]bool, len(st.Records))
+	for _, rec := range st.Records {
+		people[rec.Name] = true
+	}
+	for _, rec := range s.extra {
+		if !people[rec.Name] { // records people add win
+			r.records[rec.Name] = append(r.records[rec.Name], rec)
+		}
+	}
 	budget := MaxDomains
 	for _, l := range st.Lists {
 		if !l.Enabled || !st.Enabled {
@@ -267,6 +294,17 @@ func (s *Service) rebuildLocked() {
 		}
 	}
 	s.res.setRules(r, st.CacheSize)
+}
+
+// SetExtraRecords replaces the records NoCapOS itself answers (the
+// containers' local addresses). Records people add keep priority.
+func (s *Service) SetExtraRecords(recs []Record) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.extra = append([]Record(nil), recs...)
+	if s.qlog != nil { // started; before that Start builds the rules
+		s.rebuildLocked()
+	}
 }
 
 func enabledList(st Settings, id string) bool {

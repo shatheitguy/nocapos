@@ -3,6 +3,20 @@ package com.nocap.link.home
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import com.nocap.link.ui.GlassLevel
+import com.nocap.link.ui.RosterArt
+import com.nocap.link.ui.NcIcon
+import com.nocap.link.ui.Shell
+import com.nocap.link.ui.ShellDots
+import com.nocap.link.ui.ShelfSep
+import com.nocap.link.ui.canBlur
+import com.nocap.link.ui.reducedMotion
+import com.nocap.link.ui.shellGlass
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -116,9 +130,9 @@ import kotlinx.coroutines.launch
 data class Drag(val item: Item?, val dockKey: String?, val pos: Offset, val grab: Offset, val start: Offset, val moved: Boolean = false)
 
 /** What a long-press menu is about. */
-data class Menu(val app: PhoneApp?, val item: Item?, val anchor: Rect, val from: From, val folder: FolderItem? = null)
+data class Menu(val app: PhoneApp?, val item: Item?, val anchor: Rect, val from: From, val folder: FolderItem? = null, val rosterFolder: String? = null)
 
-enum class From { HOME, DOCK, DRAWER, FOLDER, SEARCH }
+enum class From { HOME, DOCK, DRAWER, FOLDER, SEARCH, ROSTER_FOLDER }
 
 /** What's under a finger. */
 private sealed interface Hit {
@@ -137,6 +151,9 @@ class HomeUi {
     var editAt by mutableStateOf<Offset?>(null)
     var widgetMenu by mutableStateOf<Pair<Int, Item>?>(null)
     var moving by mutableStateOf<Item?>(null)
+    /** The roster folder that's open, and the app being put into a folder. */
+    var rosterFolder by mutableStateOf<String?>(null)
+    var folderPick by mutableStateOf<PhoneApp?>(null)
     var gridRect by mutableStateOf(Rect.Zero)
     var dockRect by mutableStateOf(Rect.Zero)
     var removeRect by mutableStateOf(Rect.Zero)
@@ -149,9 +166,10 @@ class HomeUi {
 fun HomeScreen(a: MainActivity) {
     val ui = remember { HomeUi() }
     val layout = Home.layout
-    val library = Opt.drawer.v == DrawerStyle.HOME_PAGES
-    val pageCount = layout.pages.size + if (library) 1 else 0
-    val pager = rememberPagerState { Home.layout.pages.size + if (Opt.drawer.v == DrawerStyle.HOME_PAGES) 1 else 0 }
+    // "All apps on home pages": the pages are the drawer, so there's no extra drawer page (or dock button).
+    val library = false
+    val pageCount = layout.pages.size
+    val pager = rememberPagerState { Home.layout.pages.size }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val density = LocalDensity.current
@@ -159,8 +177,9 @@ fun HomeScreen(a: MainActivity) {
     val locked = Opt.lockLayout.v
     fun firstPage() { scope.launch { pager.animateScrollToPage(0) } }
 
-    BackHandler(a.layer != Layer.NONE || ui.folder != null || ui.menu != null || ui.editAt != null || ui.widgetMenu != null || ui.moving != null || a.editing != null || a.weatherFor != null || a.customizing != null) {
+    BackHandler(a.layer != Layer.NONE || ui.folder != null || ui.menu != null || ui.editAt != null || ui.widgetMenu != null || ui.moving != null || a.editing != null || a.weatherFor != null || a.customizing != null || ui.folderPick != null) {
         when {
+            ui.folderPick != null -> ui.folderPick = null
             a.customizing != null -> a.customizing = null
             a.editing != null -> a.editing = null
             a.weatherFor != null -> a.weatherFor = null
@@ -176,11 +195,10 @@ fun HomeScreen(a: MainActivity) {
     LaunchedEffect(Prefs.columns, Prefs.rows) { if (Home.loaded) Home.refit() }
     LaunchedEffect(a.homeTick) {
         if (a.homeTick > 0) {
-            ui.menu = null; ui.folder = null; ui.editAt = null; ui.widgetMenu = null; ui.moving = null
+            ui.menu = null; ui.folder = null; ui.editAt = null; ui.widgetMenu = null; ui.moving = null; ui.rosterFolder = null; ui.folderPick = null
             runGesture(a, Gesture.HOME, ::firstPage)
         }
     }
-    LaunchedEffect(a.libraryTick) { if (a.libraryTick > 0 && library) pager.animateScrollToPage(pageCount - 1) }
 
     // Flip pages while dragging near an edge.
     val edge = ui.drag?.let { d ->
@@ -196,9 +214,15 @@ fun HomeScreen(a: MainActivity) {
     LaunchedEffect(edge) {
         while (edge != 0) {
             delay(650)
+            val pages = Home.layout.pages
             val target = pager.currentPage + edge
-            if (target < 0 || target >= Home.layout.pages.size + 1) break
-            if (target >= Home.layout.pages.size) Home.addPage()
+            if (target < 0) break
+            if (target >= pages.size) {
+                // At most one spare page: only add one when the last page has something besides what's being dragged.
+                val dragged = ui.drag?.item?.id
+                if (pages.last().items.none { it.id != dragged }) break
+                Home.addPage()
+            }
             pager.animateScrollToPage(target)
         }
     }
@@ -206,6 +230,8 @@ fun HomeScreen(a: MainActivity) {
     fun onLibrary() = library && pager.currentPage >= Home.layout.pages.size
 
     fun hit(pos: Offset): Hit {
+        // The tray sits beside the dock, so its buttons are looked up first.
+        ui.dockSlots.entries.firstOrNull { it.key.startsWith("btn:") && it.value.contains(pos) }?.let { return Hit.Button(it.key.removePrefix("btn:")) }
         if (ui.dockRect.contains(pos)) {
             ui.dockSlots.entries.firstOrNull { it.value.contains(pos) }?.let { (k, _) ->
                 return when {
@@ -245,6 +271,7 @@ fun HomeScreen(a: MainActivity) {
             is Hit.Button -> when (h.id) {
                 "roster" -> a.openDrawer()
                 "hub" -> a.layer = Layer.HUB
+                "cc" -> a.layer = Layer.CONTROL
             }
             else -> {}
         }
@@ -284,7 +311,7 @@ fun HomeScreen(a: MainActivity) {
         ui.drag = d.copy(pos = pos, moved = moved)
     }
 
-    fun drop(pos: Offset) {
+    fun dropAt(pos: Offset) {
         val d = ui.drag ?: return
         ui.drag = null
         if (!d.moved) return
@@ -336,8 +363,19 @@ fun HomeScreen(a: MainActivity) {
         }
     }
 
+    fun drop(pos: Offset) {
+        try { dropAt(pos) } finally {
+            // Pages added while dragging past the edge and left empty go away again.
+            Home.trimEmptyTail(keep = pager.currentPage + 1)
+        }
+    }
+
     val overlay = a.layer == Layer.DRAWER || a.layer == Layer.SETTINGS || a.layer == Layer.SEARCH
-    val blurAmount by animateDpAsState(if (overlay && Opt.drawerBlur.v && Build.VERSION.SDK_INT >= 31) 18.dp else 0.dp, label = "blur")
+    // Blur behind the roster only where the phone can do it cheaply (Android 12+) and animations are on;
+    // elsewhere the roster's darker backdrop stands in for it.
+    val blurOk = Opt.drawerBlur.v && canBlur()
+    val motion = !reducedMotion()
+    val blurAmount by animateDpAsState(if (overlay && blurOk) 18.dp else 0.dp, label = "blur")
 
     Box(Modifier.fillMaxSize()) {
         WallpaperLayer(scroll = { (pager.currentPage + pager.currentPageOffsetFraction) / (pageCount - 1).coerceAtLeast(1) }, extraBlur = blurAmount)
@@ -492,8 +530,8 @@ fun HomeScreen(a: MainActivity) {
                     }
                 }
                 if (Opt.pageDots.v && pageCount > 1) PageDots(pager, pageCount, library)
-                Dock(a, ui, byKey)
-                Spacer(Modifier.height(if (Opt.dockStyle.v == DockStyle.FLOATING) 14.dp else 8.dp))
+                if (Home.loaded) Dock(a, ui, byKey) else DockPlaceholder()
+                Spacer(Modifier.height(if (Opt.dockStyle.v == DockStyle.FLOATING) 14.dp else 10.dp))
             }
         }
 
@@ -512,17 +550,17 @@ fun HomeScreen(a: MainActivity) {
             Row(
                 Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 6.dp)
                     .onGloballyPositioned { ui.removeRect = it.boundsInRoot().inflate(24f) }
-                    .glass(RoundedCornerShape(50), strong = true, edge = if (over) NoCap.Red else NoCap.GlassEdge)
+                    .shellGlass(RoundedCornerShape(50), GlassLevel.MENU, edge = if (over) NoCap.Red else null)
                     .padding(horizontal = 18.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Delete, null, tint = if (over) NoCap.Red else NoCap.Text, modifier = Modifier.size(18.dp))
+                NcIcon("trash", if (over) NoCap.Red else NoCap.Text, 18.dp)
                 Text(t("Yeet", "Remove"), Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelLarge, color = if (over) NoCap.Red else NoCap.Text)
             }
             DragGhost(d, byKey, ui)
         }
         if (ui.moving != null) {
-            Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 6.dp).glass(RoundedCornerShape(50), strong = true).padding(horizontal = 18.dp, vertical = 10.dp)) {
+            Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 6.dp).shellGlass(RoundedCornerShape(50), GlassLevel.MENU).padding(horizontal = 18.dp, vertical = 10.dp)) {
                 Text(t("Tap an empty spot to move it there", "Tap an empty spot to move it"), style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -531,10 +569,14 @@ fun HomeScreen(a: MainActivity) {
         ui.widgetMenu?.let { (page, item) -> WidgetMenu(a, ui, page, item) }
         ui.editAt?.let { at -> EditMenu(a, ui, at, pager.currentPage) { scope.launch { pager.animateScrollToPage(it) } } }
 
-        AnimatedVisibility(a.layer == Layer.DRAWER, enter = fadeIn() + slideInVertically { it / 5 }, exit = fadeOut() + slideOutVertically { it / 5 }) {
+        AnimatedVisibility(
+            a.layer == Layer.DRAWER,
+            enter = if (motion) fadeIn(tween(160)) + scaleIn(tween(200), initialScale = 0.96f) else EnterTransition.None,
+            exit = if (motion) fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 0.97f) else ExitTransition.None,
+        ) {
             Drawer(a, ui, pager.currentPage)
         }
-        AnimatedVisibility(a.layer == Layer.SEARCH, enter = fadeIn() + slideInVertically { -it / 8 }, exit = fadeOut()) {
+        AnimatedVisibility(a.layer == Layer.SEARCH, enter = if (motion) fadeIn() + slideInVertically { -it / 8 } else EnterTransition.None, exit = if (motion) fadeOut() else ExitTransition.None) {
             SearchLayer(a, ui)
         }
         AnimatedVisibility(a.layer == Layer.HUB, enter = fadeIn() + slideInVertically { it / 6 }, exit = fadeOut() + slideOutVertically { it / 6 }) {
@@ -546,13 +588,14 @@ fun HomeScreen(a: MainActivity) {
         AnimatedVisibility(a.layer == Layer.PERMISSIONS, enter = fadeIn(), exit = fadeOut()) {
             com.nocap.link.settings.PermissionsScreen(a)
         }
-        AnimatedVisibility(a.layer == Layer.CONTROL, enter = fadeIn() + slideInVertically { -it / 3 }, exit = fadeOut() + slideOutVertically { -it / 3 }) {
+        AnimatedVisibility(a.layer == Layer.CONTROL, enter = if (motion) fadeIn() + slideInVertically { -it / 3 } else EnterTransition.None, exit = if (motion) fadeOut() + slideOutVertically { -it / 3 } else ExitTransition.None) {
             com.nocap.link.control.ControlCenter(remember(a) { com.nocap.link.control.LauncherHost(a) })
         }
         if (a.layer == Layer.WIDGETS) {
             WidgetPicker(a, a.cellW, a.cellH, onNoCap = { k, w, h -> a.addNoCapWidget(k, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1), w, h) }, onPick = { a.addWidget(it, pager.currentPage.coerceAtMost(Home.layout.pages.size - 1)) }, onClose = { a.layer = Layer.NONE })
         }
         ui.menu?.let { m -> AppMenu(a, ui, m, page = pager.currentPage.coerceAtMost(Home.layout.pages.size - 1)) }
+        ui.folderPick?.let { app -> com.nocap.link.drawer.RosterFolderPicker(a, ui, app) }
         a.weatherFor?.let { com.nocap.link.widget.WeatherSheet(a, it) }
         a.editing?.let { com.nocap.link.widget.WidgetEditSheet(a, it) }
         a.customizing?.let { CustomizeApp(a, it) }
@@ -591,36 +634,38 @@ private fun Modifier.pageFx(pager: PagerState, page: Int): Modifier = graphicsLa
 
 @Composable
 private fun TopStrip(a: MainActivity, ui: HomeUi) {
+    // Like the web OS home: a frosted search pill over the wallpaper, plus NoCap AI.
     if (Opt.searchBar.v) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
-            Modifier.weight(1f).height(44.dp).glass(RoundedCornerShape(22.dp))
+            Modifier.weight(1f).height(44.dp).shellGlass(RoundedCornerShape(50), GlassLevel.WIDGET)
                 .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); val up = waitUp(); if (up) a.layer = Layer.SEARCH } }
-                .padding(horizontal = 14.dp),
+                .padding(start = 14.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val ink = if (NoCap.light) NoCap.Text else Color.White.copy(alpha = 0.82f)
+            NcIcon("search", ink, 18.dp)
+            Text(t("Search apps, files, settings…", "Search apps, files and settings"), Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium, color = ink, maxLines = 1)
             Image(painterResource(R.drawable.nocap_mark), null, Modifier.size(20.dp))
-            Text(t("Search apps, files, settings…", "Search apps, files and settings"), Modifier.weight(1f).padding(start = 10.dp), style = MaterialTheme.typography.bodyMedium, color = NoCap.Muted, maxLines = 1)
-            Icon(Icons.Filled.Search, null, tint = NoCap.Muted, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.size(44.dp).glass(CircleShape, edge = NoCap.Red.copy(alpha = 0.5f))
+            Modifier.size(44.dp).shellGlass(CircleShape, GlassLevel.WIDGET, edge = NoCap.Red.copy(alpha = 0.5f))
                 .pointerInput(Unit) { awaitEachGesture { val d = awaitFirstDown(); d.consume(); if (waitUp()) runCatching { a.openAi() }.onFailure { a.toast = t("NoCap AI wouldn't open. Try again.", "NoCap AI couldn't be opened.") } } },
             contentAlignment = Alignment.Center,
-        ) { Text("AI", style = MaterialTheme.typography.labelLarge.copy(fontFamily = Orbitron), color = NoCap.Red) }
+        ) { NcIcon("sparkles", NoCap.Red, 20.dp, desc = "NoCap AI") }
     } else Spacer(Modifier.height(8.dp))
     // A PackageManager call: checked once per resume, not on every recomposition.
     val isHome = remember(a.resumeTick) { runCatching { PhoneApps.isDefaultHome(a) }.getOrDefault(true) }
     if (ui.drag == null && !Prefs.homeAsked && !isHome) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).glass(RoundedCornerShape(16.dp), edge = NoCap.Red.copy(alpha = 0.4f)).padding(12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).shellGlass(RoundedCornerShape(18.dp), GlassLevel.MENU, edge = NoCap.Red.copy(alpha = 0.4f)).padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(t("Make NoCap OS your home screen?", "Set NoCap OS as your home app?"), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
             Text(
-                t("Bet", "Set"), Modifier.clip(RoundedCornerShape(10.dp)).background(NoCap.Red)
+                t("Bet", "Set"), Modifier.clip(RoundedCornerShape(50)).background(NoCap.Red)
                     .pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume(); if (waitUp()) { Prefs.setHomeAsked(); runCatching { PhoneApps.askToBeHome(a) }.onFailure { a.toast = t("Couldn't open the home app picker.", "The home app settings couldn't be opened.") } } } }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 7.dp),
                 style = MaterialTheme.typography.labelLarge, color = Color.White,
             )
             Text(
@@ -708,24 +753,16 @@ private fun DragGhost(d: Drag, byKey: Map<String, PhoneApp>, ui: HomeUi) {
 }
 
 @Composable
-private fun PageDots(pager: PagerState, count: Int, library: Boolean) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        repeat(count) { i ->
-            val on = i == pager.currentPage
-            if (library && i == count - 1) {
-                // The Stash page's dot is a little grid.
-                Box(Modifier.padding(horizontal = 3.dp).size(8.dp).clip(RoundedCornerShape(2.dp)).border(1.5.dp, if (on) NoCap.Red else Color.White.copy(alpha = 0.5f), RoundedCornerShape(2.dp)))
-            } else {
-                Box(
-                    Modifier.padding(horizontal = 3.dp).height(6.dp).width(if (on) 16.dp else 6.dp).clip(RoundedCornerShape(3.dp))
-                        .background(if (on) NoCap.Red else Color.White.copy(alpha = 0.35f)),
-                )
-            }
-        }
-    }
+private fun PageDots(pager: PagerState, count: Int, @Suppress("UNUSED_PARAMETER") library: Boolean) {
+    ShellDots(count, pager.currentPage, Modifier.padding(vertical = 2.dp))
 }
 
-/** The dock, like the NoCapOS desktop's: the Roster, your apps and NoCap Link. */
+/**
+ * The dock, like the web OS Shelf: a glass pill with the launcher button
+ * first, a divider, then your apps; beside it the tray pill (network and
+ * sound open the control center, the NoCap mark opens NoCap Link, with the
+ * server's status dot).
+ */
 @Composable
 private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
     val apps = Home.layout.dock.mapNotNull { k -> byKey[k] }.take(Opt.dockCount.v)
@@ -734,49 +771,87 @@ private fun Dock(a: MainActivity, ui: HomeUi, byKey: Map<String, PhoneApp>) {
     val style = Opt.dockStyle.v
     val buttons = Opt.dockButtons.v
     // The app drawer button can be hidden on its own; the drawer still opens with its gesture.
-    val roster = Opt.dockDrawerButton.v
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = if (style == DockStyle.FLOATING) 20.dp else 12.dp), contentAlignment = Alignment.Center) {
-        // Fit everything on one row, however narrow the screen.
-        val slots = apps.size.coerceAtLeast(1) + (if (buttons) 1 else 0) + (if (roster) 1 else 0)
-        val avail = maxWidth - 20.dp - (if (buttons) 18.dp else 0.dp)
-        val s = minOf((Opt.iconSize.v - 4).coerceAtLeast(40).dp, avail / slots - 8.dp).coerceAtLeast(32.dp)
-        val shape = RoundedCornerShape(if (style == DockStyle.FLOATING) 30.dp else 26.dp)
+    // With every app on the home pages there is no separate drawer, so no button for one.
+    val roster = Opt.dockDrawerButton.v && Opt.drawer.v != DrawerStyle.HOME_PAGES
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
+        // Fit everything on one row, however narrow the screen; the tray shrinks to the NoCap mark when it's tight.
+        val wideTray = buttons && maxWidth >= 380.dp
+        val slots = apps.size.coerceAtLeast(1) + (if (roster) 1 else 0) + (if (buttons) (if (wideTray) 2 else 1) else 0)
+        val chrome = 20.dp + (if (roster) 9.dp else 0.dp) + (if (buttons) 30.dp else 0.dp)
+        val s = minOf((Opt.iconSize.v - 6).coerceAtLeast(40).dp, (maxWidth - chrome) / slots - 8.dp).coerceAtLeast(30.dp)
+        val shape = RoundedCornerShape(if (style == DockStyle.FLOATING) 30.dp else 22.dp)
+        val edge = when {
+            over -> NoCap.Red.copy(alpha = 0.8f)
+            style == DockStyle.FLOATING -> NoCap.Red.copy(alpha = 0.35f)
+            else -> null
+        }
         val bg = when (style) {
-            DockStyle.GLASS -> Modifier.fillMaxWidth().glass(shape, edge = if (over) NoCap.Red.copy(alpha = 0.7f) else NoCap.GlassEdge)
-            DockStyle.FLOATING -> Modifier.widthIn(max = maxWidth).glass(shape, strong = true, edge = if (over) NoCap.Red.copy(alpha = 0.8f) else NoCap.Red.copy(alpha = 0.35f))
-            DockStyle.NONE -> Modifier.fillMaxWidth().then(if (over) Modifier.border(1.dp, NoCap.Red.copy(alpha = 0.6f), shape) else Modifier)
+            DockStyle.GLASS -> Modifier.shellGlass(shape, GlassLevel.SHELF, edge)
+            DockStyle.FLOATING -> Modifier.shellGlass(shape, GlassLevel.MENU, edge)
+            DockStyle.NONE -> if (over) Modifier.border(1.dp, NoCap.Red.copy(alpha = 0.6f), shape) else Modifier
         }
-        Row(
-            bg.onGloballyPositioned { ui.dockRect = it.boundsInRoot() }.padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalArrangement = if (style == DockStyle.FLOATING) Arrangement.spacedBy(8.dp) else Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
-            if (roster) {
-                Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(s).nocapTile(iconShape(s, nocapDefault = true) ?: RoundedCornerShape(s * 0.24f), NoCap.Red, NoCap.light), contentAlignment = Alignment.Center) { RosterGlyph(s * 0.5f) }
-                }
-                Box(Modifier.width(1.dp).height(s * 0.6f).background(NoCap.GlassEdge))
-            } else ui.dockSlots.remove("btn:roster")
-            apps.forEach { app ->
-                val hidden = drag?.moved == true && drag.dockKey == app.key
-                Box(Modifier.onGloballyPositioned { ui.dockSlots[app.key] = it.boundsInRoot() }.alpha(if (hidden) 0.25f else 1f)) {
-                    AppTile(app, size = s, label = Opt.dockLabels.v, labelWidth = s + 12.dp)
-                }
-            }
-            if (apps.isEmpty()) Text(t("Drag apps here", "Drag apps here"), style = MaterialTheme.typography.bodySmall)
-            if (buttons) {
-                Box(Modifier.width(1.dp).height(s * 0.6f).background(NoCap.GlassEdge))
-                Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:hub"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
-                    Image(painterResource(R.drawable.nocap_mark), t("NoCap Link", "NoCap Link"), Modifier.size(s * 0.8f))
-                    val dot = when (a.server) {
-                        is ServerState.Online -> if (a.outdated != null) NoCap.Warn else NoCap.Ok
-                        is ServerState.NotLinked -> null
-                        is ServerState.Checking -> NoCap.Muted
-                        else -> NoCap.Warn
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.weight(1f, fill = false).then(bg).onGloballyPositioned { ui.dockRect = it.boundsInRoot() }.padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ui.dockSlots.keys.removeAll { !it.startsWith("btn:") && it !in Home.layout.dock }
+                if (roster) {
+                    Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:roster"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+                        RosterArt(s)
                     }
-                    if (dot != null) Box(Modifier.align(Alignment.BottomEnd).size(10.dp).clip(CircleShape).background(dot).border(1.5.dp, Color(0xFF07080B), CircleShape))
+                    ShelfSep(s * 0.6f)
+                } else ui.dockSlots.remove("btn:roster")
+                apps.forEach { app ->
+                    val hidden = drag?.moved == true && drag.dockKey == app.key
+                    Box(Modifier.onGloballyPositioned { ui.dockSlots[app.key] = it.boundsInRoot() }.alpha(if (hidden) 0.25f else 1f)) {
+                        AppTile(app, size = s, label = Opt.dockLabels.v, labelWidth = s + 12.dp)
+                    }
                 }
-            } else ui.dockSlots.remove("btn:hub")
+                if (apps.isEmpty()) Text(t("Drag apps here", "Drag apps here"), Modifier.padding(horizontal = 6.dp), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+            }
+            if (buttons) Tray(a, ui, s, wideTray, style) else { ui.dockSlots.remove("btn:hub"); ui.dockSlots.remove("btn:cc") }
         }
+    }
+}
+
+/** The Shelf's tray pill: network + sound (control center) and the NoCap mark (NoCap Link). */
+@Composable
+private fun Tray(a: MainActivity, ui: HomeUi, s: Dp, wide: Boolean, style: DockStyle) {
+    val shape = RoundedCornerShape(if (style == DockStyle.FLOATING) 30.dp else 22.dp)
+    val bg = when (style) {
+        DockStyle.NONE -> Modifier
+        DockStyle.FLOATING -> Modifier.shellGlass(shape, GlassLevel.MENU, NoCap.Red.copy(alpha = 0.35f))
+        DockStyle.GLASS -> Modifier.shellGlass(shape, GlassLevel.SHELF)
+    }
+    val ink = if (NoCap.light && style != DockStyle.NONE) NoCap.Text else Color.White.copy(alpha = 0.9f)
+    Row(bg.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (wide) {
+            Row(
+                Modifier.height(s).clip(RoundedCornerShape(12.dp)).onGloballyPositioned { ui.dockSlots["btn:cc"] = it.boundsInRoot() }.padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                NcIcon("network", ink, 17.dp, desc = t("Control center", "Control center"))
+                NcIcon("sound", ink, 17.dp)
+            }
+        } else ui.dockSlots.remove("btn:cc")
+        Box(Modifier.size(s).onGloballyPositioned { ui.dockSlots["btn:hub"] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+            Image(painterResource(R.drawable.nocap_mark), t("NoCap Link", "NoCap Link"), Modifier.size(s * 0.72f))
+            val dot = when (a.server) {
+                is ServerState.Online -> if (a.outdated != null) NoCap.Warn else NoCap.Ok
+                is ServerState.NotLinked -> null
+                is ServerState.Checking -> NoCap.Muted
+                else -> NoCap.Warn
+            }
+            if (dot != null) Box(Modifier.align(Alignment.BottomEnd).size(9.dp).clip(CircleShape).background(dot).border(1.5.dp, Color(0xFF16171C), CircleShape))
+        }
+    }
+}
+
+/** While the saved layout loads (off the main thread): just the Shelf's launcher pill. */
+@Composable
+private fun DockPlaceholder() {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(Modifier.shellGlass(RoundedCornerShape(22.dp), GlassLevel.SHELF).padding(horizontal = 10.dp, vertical = 8.dp)) { RosterArt(46.dp) }
     }
 }
