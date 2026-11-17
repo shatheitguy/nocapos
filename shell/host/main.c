@@ -1,10 +1,11 @@
 /* nocap-shell: the NoCap Desktop shell host (see shell/PROTOCOL.md).
  *
- *   nocap-shell                 the signed-in session's shell surfaces
+ *   nocap-shell                 NoCap OS on the screen (desktop and chrome)
  *   nocap-shell --greeter       the sign-in screen (greetd greeter)
- *   nocap-shell --app NAME      NoCapOS (local) in an app window
- *   nocap-shell --toggle|--show|--hide SURFACE, --osd WHAT
- *                               control the running shell
+ *   nocap-shell --app ID [--props JSON] [--single]
+ *                               one NoCap OS app in its own window
+ *   nocap-shell --toggle|--show|--hide launcher|spotlight|center|notifications,
+ *               --osd WHAT      control the running shell (keybindings)
  */
 #include "shell.h"
 
@@ -20,8 +21,8 @@ static const char *DEFAULT_SHELL_DIR = "/usr/share/nocapos/shell";
 static void
 usage(void)
 {
-  g_printerr("usage: nocap-shell [--greeter | --app settings|appstore|files|home |\n"
-             "                   --toggle|--show|--hide launcher|center|osd |\n"
+  g_printerr("usage: nocap-shell [--greeter | --app ID [--props JSON] [--single] |\n"
+             "                   --toggle|--show|--hide launcher|spotlight|center|notifications |\n"
              "                   --osd volume-up|volume-down|volume-mute|brightness-up|brightness-down]\n");
 }
 
@@ -62,6 +63,7 @@ account_defaults(void)
   shell.voice = g_strdup("genz");
   shell.theme = g_strdup("dark");
   shell.web_url = NULL;
+  shell.api_origin = g_strdup("http://127.0.0.1:8780");
 }
 
 static void
@@ -77,25 +79,30 @@ on_activate(GtkApplication *app, gpointer u)
   surfaces_create();
   if (shell.greeter)
     return;
+  alfad_start();
   apps_init();
   toplevel_init();
   system_init();
   notify_init();
   control_own();
   polkit_agent_start();
-  alfad_start();
 }
 
 int
 main(int argc, char **argv)
 {
-  const char *mode = NULL, *arg = NULL;
+  const char *mode = NULL, *arg = NULL, *props = NULL;
+  gboolean single = FALSE;
   for (int i = 1; i < argc; i++) {
     const char *a = argv[i];
     if (a[0] == 0)
       continue;
     if (strcmp(a, "--greeter") == 0) {
       mode = "greeter";
+    } else if (strcmp(a, "--props") == 0 && i + 1 < argc) {
+      props = argv[++i];
+    } else if (strcmp(a, "--single") == 0) {
+      single = TRUE;
     } else if ((strcmp(a, "--app") == 0 || strcmp(a, "--toggle") == 0 || strcmp(a, "--show") == 0 ||
                 strcmp(a, "--hide") == 0 || strcmp(a, "--osd") == 0) &&
                i + 1 < argc) {
@@ -131,7 +138,7 @@ main(int argc, char **argv)
   /* The shell is a Wayland client only (layer-shell). */
   gdk_set_allowed_backends("wayland");
   if (mode != NULL && strcmp(mode, "app") == 0)
-    return appwin_run(arg, argc, argv);
+    return appwin_run(arg, props, single, argc, argv);
 
   if (!gtk_init_check(&argc, &argv) || !GDK_IS_WAYLAND_DISPLAY(gdk_display_get_default())) {
     g_printerr("nocap-shell: needs a Wayland session (no Wayland display found)\n");

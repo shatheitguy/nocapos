@@ -7,10 +7,25 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#define CSP                                                                                        \
-  "default-src 'self' nocap-shell:; img-src 'self' nocap-shell: data:; "                           \
-  "style-src 'self' nocap-shell: 'unsafe-inline'; font-src 'self' nocap-shell:; "                  \
-  "connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+/* Pages may run only their own scripts and reach only alfad on the loopback
+ * address (its API and live connections; NoCap apps' own local web pages in
+ * frames). Nothing else. */
+static char *
+csp(void)
+{
+  const char *api = shell.api_origin && *shell.api_origin ? shell.api_origin : "http://127.0.0.1:8780";
+  char *ws = g_str_has_prefix(api, "https://") ? g_strdup_printf("wss://%s", api + 8)
+                                               : g_strdup_printf("ws://%s", api + (g_str_has_prefix(api, "http://") ? 7 : 0));
+  char *p = g_strdup_printf("default-src 'self' nocap-shell:; script-src 'self' nocap-shell:; "
+                            "img-src 'self' nocap-shell: data: blob: %s; media-src 'self' nocap-shell: blob: %s; "
+                            "style-src 'self' nocap-shell: 'unsafe-inline'; font-src 'self' nocap-shell: data:; "
+                            "connect-src 'self' nocap-shell: %s %s; worker-src 'self' blob:; "
+                            "frame-src http://127.0.0.1:* https://127.0.0.1:*; object-src 'none'; base-uri 'none'; "
+                            "form-action 'none'",
+                            api, api, api, ws);
+  g_free(ws);
+  return p;
+}
 
 #define MAX_FILE (32 * 1024 * 1024)
 #define ICON_CACHE_MAX 512
@@ -62,7 +77,9 @@ finish(WebKitURISchemeRequest *req, GBytes *bytes, const char *mime)
   webkit_uri_scheme_response_set_content_type(resp, mime);
   webkit_uri_scheme_response_set_status(resp, 200, NULL);
   SoupMessageHeaders *h = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
-  soup_message_headers_append(h, "Content-Security-Policy", CSP);
+  char *policy = csp();
+  soup_message_headers_append(h, "Content-Security-Policy", policy);
+  g_free(policy);
   soup_message_headers_append(h, "X-Content-Type-Options", "nosniff");
   soup_message_headers_append(h, "Referrer-Policy", "no-referrer");
   webkit_uri_scheme_response_set_http_headers(resp, h);

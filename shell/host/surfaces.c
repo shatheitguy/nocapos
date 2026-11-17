@@ -1,5 +1,21 @@
-/* Layer-shell surfaces: native wallpaper plus one locked-down web view per
- * surface, all sharing one web process. */
+/* NoCap OS on the physical screen. The desktop is the same NoCap OS build
+ * as in the browser, from local files (the nocap-shell:// scheme), shown in
+ * locked-down web views that share one web process:
+ *
+ *   desktop  bottom layer, full screen: wallpaper, widgets, desktop menu
+ *   chrome   top layer, full screen and see-through: the menu bar, dock,
+ *            launcher, panels and notifications. Only the parts the page
+ *            reports (surface.input) take clicks; the rest go to the windows
+ *            below. Two invisible spacer surfaces keep maximized windows
+ *            clear of the menu bar and dock (surface.zones).
+ *   polkit   overlay: the admin password prompt
+ *   greeter  the sign-in screen (nocap-shell --greeter)
+ *   app      a normal window with one NoCap OS app (nocap-shell --app ID);
+ *            the page draws the title bar (the same one as in the browser)
+ *
+ * Nothing from the network loads: only the scheme's files and alfad on the
+ * loopback address (every other address goes to a dead proxy, and the CSP
+ * says the same). */
 #include "shell.h"
 
 #include <gtk-layer-shell.h>
@@ -7,32 +23,19 @@
 
 typedef struct {
   const char *name;
-  GtkLayerShellLayer layer;
-  gboolean top, bottom, left, right;
-  int width, height; /* -1 = stretched by anchors */
-  int zone;
+  gboolean layer; /* a layer-shell surface (else a normal window) */
+  GtkLayerShellLayer level;
   GtkLayerShellKeyboardMode keyboard;
-  gboolean on_demand;
-  int margin_bottom;
+  gboolean on_demand; /* hidden until asked for */
+  gboolean opaque;    /* paints the whole surface (else see-through) */
 } SurfaceConf;
 
 static const SurfaceConf conf[SURF_COUNT] = {
-  [SURF_BAR] = {"bar", GTK_LAYER_SHELL_LAYER_TOP, TRUE, FALSE, TRUE, TRUE, -1, 32, 32,
-                GTK_LAYER_SHELL_KEYBOARD_MODE_NONE, FALSE, 0},
-  [SURF_DOCK] = {"dock", GTK_LAYER_SHELL_LAYER_TOP, FALSE, TRUE, TRUE, TRUE, -1, 76, 76,
-                 GTK_LAYER_SHELL_KEYBOARD_MODE_NONE, FALSE, 0},
-  [SURF_LAUNCHER] = {"launcher", GTK_LAYER_SHELL_LAYER_OVERLAY, TRUE, TRUE, TRUE, TRUE, -1, -1, -1,
-                     GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, TRUE, 0},
-  [SURF_CENTER] = {"center", GTK_LAYER_SHELL_LAYER_OVERLAY, TRUE, TRUE, FALSE, TRUE, 380, -1, 0,
-                   GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND, TRUE, 0},
-  [SURF_BANNERS] = {"banners", GTK_LAYER_SHELL_LAYER_OVERLAY, TRUE, FALSE, FALSE, TRUE, 380, 1, 0,
-                    GTK_LAYER_SHELL_KEYBOARD_MODE_NONE, TRUE, 0},
-  [SURF_OSD] = {"osd", GTK_LAYER_SHELL_LAYER_OVERLAY, FALSE, TRUE, FALSE, FALSE, 260, 72, 0,
-                GTK_LAYER_SHELL_KEYBOARD_MODE_NONE, TRUE, 24},
-  [SURF_POLKIT] = {"polkit", GTK_LAYER_SHELL_LAYER_OVERLAY, TRUE, TRUE, TRUE, TRUE, -1, -1, -1,
-                   GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, TRUE, 0},
-  [SURF_GREETER] = {"greeter", GTK_LAYER_SHELL_LAYER_TOP, TRUE, TRUE, TRUE, TRUE, -1, -1, -1,
-                    GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, FALSE, 0},
+  [SURF_DESKTOP] = {"desktop", TRUE, GTK_LAYER_SHELL_LAYER_BOTTOM, GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND, FALSE, TRUE},
+  [SURF_CHROME] = {"chrome", TRUE, GTK_LAYER_SHELL_LAYER_TOP, GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND, FALSE, FALSE},
+  [SURF_POLKIT] = {"polkit", TRUE, GTK_LAYER_SHELL_LAYER_OVERLAY, GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, TRUE, FALSE},
+  [SURF_GREETER] = {"greeter", TRUE, GTK_LAYER_SHELL_LAYER_TOP, GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE, FALSE, TRUE},
+  [SURF_APP] = {"app", FALSE, 0, 0, FALSE, FALSE},
 };
 
 typedef struct {
@@ -41,21 +44,26 @@ typedef struct {
   WebKitWebView *view;
   gboolean want_visible;
   gboolean loaded;
+  gboolean shown_once;
   gboolean info_called;
   gboolean ready_printed;
-  guint hide_timer;
   guint restarts;
   gint64 restart_window;
+  /* the last pointer press on the view (window moves and resizes) */
+  double press_x, press_y;
+  guint press_button;
+  guint32 press_time;
 } Surface;
 
 static Surface surf[SURF_COUNT];
 static WebKitWebContext *web_ctx;
 static WebKitSettings *web_settings;
 static WebKitWebView *first_view;
-static GtkWidget *wallpaper_win;
+static GtkWidget *zone_win[4]; /* top, bottom, left, right */
 static guint replace_id;
 
 #define SHELL_PAGE_PREFIX "nocap-shell://shell/"
+#define BASE_COLOR "#050508"
 
 const char *
 surface_name(SurfaceId id)
@@ -107,6 +115,7 @@ reply_send(ShellReply *r, gboolean ok, JsonNode *data)
                                    r->id, ok ? "true" : "false", json);
     run_script(&surf[r->surface], script);
     secure_wipe(script, strlen(script));
+    secure_wipe(json, strlen(json));
     g_free(script);
     g_free(json);
   }
@@ -176,12 +185,14 @@ surfaces_info_called(SurfaceId id)
 /* ---------- show / hide ---------- */
 
 static void
-emit_visible(Surface *s, gboolean visible)
+present(Surface *s)
 {
-  JsonObject *o = json_object_new();
-  json_object_set_string_member(o, "name", conf[s->id].name);
-  json_object_set_boolean_member(o, "visible", visible);
-  shell_emit(SM_ALL, "surface.visible", jobj_node(o));
+  /* Never before the page has drawn once: no blank or white flash. */
+  if (!s->loaded)
+    return;
+  if (!gtk_widget_get_visible(s->win))
+    gtk_widget_show_all(s->win);
+  s->shown_once = TRUE;
 }
 
 void
@@ -191,31 +202,18 @@ surface_show(SurfaceId id)
     return;
   Surface *s = &surf[id];
   s->want_visible = TRUE;
-  if (!gtk_widget_get_visible(s->win)) {
-    gtk_widget_show_all(s->win);
-    emit_visible(s, TRUE);
-  }
-  if (conf[id].keyboard != GTK_LAYER_SHELL_KEYBOARD_MODE_NONE)
+  present(s);
+  if (conf[id].keyboard == GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE)
     gtk_widget_grab_focus(GTK_WIDGET(s->view));
 }
 
 void
 surface_hide(SurfaceId id)
 {
-  if (id >= SURF_COUNT || surf[id].win == NULL)
+  if (id >= SURF_COUNT || surf[id].win == NULL || !conf[id].on_demand)
     return;
-  Surface *s = &surf[id];
-  if (s->hide_timer) {
-    g_source_remove(s->hide_timer);
-    s->hide_timer = 0;
-  }
-  if (!conf[id].on_demand)
-    return; /* bar, dock and greeter always stay */
-  s->want_visible = FALSE;
-  if (gtk_widget_get_visible(s->win)) {
-    gtk_widget_hide(s->win);
-    emit_visible(s, FALSE);
-  }
+  surf[id].want_visible = FALSE;
+  gtk_widget_hide(surf[id].win);
 }
 
 void
@@ -233,35 +231,178 @@ surface_is_visible(SurfaceId id)
   return id < SURF_COUNT && surf[id].win != NULL && gtk_widget_get_visible(surf[id].win);
 }
 
-static gboolean
-hide_timeout(gpointer data)
-{
-  Surface *s = data;
-  s->hide_timer = 0;
-  surface_hide(s->id);
-  return G_SOURCE_REMOVE;
-}
+/* ---------- input region, zones, keyboard ---------- */
 
 void
-surface_show_for(SurfaceId id, guint ms)
+surface_set_input(SurfaceId id, JsonArray *rects, gboolean full)
 {
   if (id >= SURF_COUNT || surf[id].win == NULL)
     return;
-  surface_show(id);
-  Surface *s = &surf[id];
-  if (s->hide_timer)
-    g_source_remove(s->hide_timer);
-  s->hide_timer = g_timeout_add(ms, hide_timeout, s);
+  GdkWindow *gw = gtk_widget_get_window(surf[id].win);
+  if (gw == NULL)
+    return;
+  if (full) {
+    gdk_window_input_shape_combine_region(gw, NULL, 0, 0);
+    return;
+  }
+  cairo_region_t *region = cairo_region_create();
+  guint n = rects ? json_array_get_length(rects) : 0;
+  for (guint i = 0; i + 3 < n; i += 4) {
+    cairo_rectangle_int_t r = {(int)json_array_get_int_element(rects, i), (int)json_array_get_int_element(rects, i + 1),
+                               (int)json_array_get_int_element(rects, i + 2),
+                               (int)json_array_get_int_element(rects, i + 3)};
+    if (r.width > 0 && r.height > 0)
+      cairo_region_union_rectangle(region, &r);
+  }
+  gdk_window_input_shape_combine_region(gw, region, 0, 0);
+  cairo_region_destroy(region);
+}
+
+static void
+zone_set(int i, int size)
+{
+  if (zone_win[i] == NULL)
+    return;
+  GtkWindow *w = GTK_WINDOW(zone_win[i]);
+  gtk_layer_set_exclusive_zone(w, size);
+  if (i < 2)
+    gtk_widget_set_size_request(zone_win[i], -1, MAX(size, 1));
+  else
+    gtk_widget_set_size_request(zone_win[i], MAX(size, 1), -1);
+  if (size > 0)
+    gtk_widget_show_all(zone_win[i]);
+  else
+    gtk_widget_hide(zone_win[i]);
 }
 
 void
-surface_set_height(SurfaceId id, int height)
+surface_set_zones(int top, int bottom, int left, int right)
 {
-  if (id >= SURF_COUNT || surf[id].win == NULL || height < 1)
+  if (top >= 0)
+    zone_set(0, top);
+  if (bottom >= 0)
+    zone_set(1, bottom);
+  if (left >= 0)
+    zone_set(2, left);
+  if (right >= 0)
+    zone_set(3, right);
+}
+
+void
+surface_set_keyboard(SurfaceId id, const char *mode)
+{
+  if (id >= SURF_COUNT || surf[id].win == NULL || !conf[id].layer)
     return;
-  int w = conf[id].width > 0 ? conf[id].width : -1;
-  gtk_widget_set_size_request(surf[id].win, w, height);
-  gtk_window_resize(GTK_WINDOW(surf[id].win), w > 0 ? w : 1, height);
+  GtkLayerShellKeyboardMode m = GTK_LAYER_SHELL_KEYBOARD_MODE_ON_DEMAND;
+  if (g_strcmp0(mode, "none") == 0)
+    m = GTK_LAYER_SHELL_KEYBOARD_MODE_NONE;
+  else if (g_strcmp0(mode, "exclusive") == 0)
+    m = GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE;
+  gtk_layer_set_keyboard_mode(GTK_WINDOW(surf[id].win), m);
+  if (m != GTK_LAYER_SHELL_KEYBOARD_MODE_NONE)
+    gtk_widget_grab_focus(GTK_WIDGET(surf[id].view));
+}
+
+/* ---------- app window actions ---------- */
+
+static GdkWindowEdge
+edge_for(const char *a)
+{
+  if (strcmp(a, "resize-n") == 0)
+    return GDK_WINDOW_EDGE_NORTH;
+  if (strcmp(a, "resize-s") == 0)
+    return GDK_WINDOW_EDGE_SOUTH;
+  if (strcmp(a, "resize-e") == 0)
+    return GDK_WINDOW_EDGE_EAST;
+  if (strcmp(a, "resize-w") == 0)
+    return GDK_WINDOW_EDGE_WEST;
+  if (strcmp(a, "resize-ne") == 0)
+    return GDK_WINDOW_EDGE_NORTH_EAST;
+  if (strcmp(a, "resize-nw") == 0)
+    return GDK_WINDOW_EDGE_NORTH_WEST;
+  if (strcmp(a, "resize-se") == 0)
+    return GDK_WINDOW_EDGE_SOUTH_EAST;
+  return GDK_WINDOW_EDGE_SOUTH_WEST;
+}
+
+gboolean
+app_window_action(const char *action, GError **error)
+{
+  Surface *s = &surf[SURF_APP];
+  GtkWindow *w = s->win ? GTK_WINDOW(s->win) : NULL;
+  if (w == NULL || action == NULL) {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND, "no window");
+    return FALSE;
+  }
+  if (strcmp(action, "minimize") == 0)
+    gtk_window_iconify(w);
+  else if (strcmp(action, "maximize") == 0)
+    gtk_window_maximize(w);
+  else if (strcmp(action, "restore") == 0)
+    gtk_window_unmaximize(w);
+  else if (strcmp(action, "close") == 0)
+    gtk_window_close(w);
+  else if (strcmp(action, "fullscreen") == 0)
+    gtk_window_fullscreen(w);
+  else if (strcmp(action, "unfullscreen") == 0)
+    gtk_window_unfullscreen(w);
+  else if (strcmp(action, "move") == 0 || g_str_has_prefix(action, "resize-")) {
+    /* Moves and resizes start from the press that asked for them. */
+    if (s->press_button == 0) {
+      g_set_error(error, G_IO_ERROR, G_IO_ERROR_FAILED, "no pointer press");
+      return FALSE;
+    }
+    if (action[0] == 'm')
+      gtk_window_begin_move_drag(w, (gint)s->press_button, (gint)s->press_x, (gint)s->press_y, s->press_time);
+    else
+      gtk_window_begin_resize_drag(w, edge_for(action), (gint)s->press_button, (gint)s->press_x, (gint)s->press_y,
+                                   s->press_time);
+    s->press_button = 0;
+  } else {
+    g_set_error(error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT, "unknown action");
+    return FALSE;
+  }
+  return TRUE;
+}
+
+void
+app_window_title(const char *title)
+{
+  if (surf[SURF_APP].win != NULL && title != NULL)
+    gtk_window_set_title(GTK_WINDOW(surf[SURF_APP].win), *title ? title : "NoCap OS");
+}
+
+void
+app_window_props(const char *props)
+{
+  if (surf[SURF_APP].win == NULL)
+    return;
+  gtk_window_present(GTK_WINDOW(surf[SURF_APP].win));
+  if (props != NULL && *props)
+    shell_emit(SM(SURF_APP), "app.props", json_str_node(props));
+}
+
+static gboolean
+on_button_press(GtkWidget *w, GdkEventButton *ev, gpointer data)
+{
+  Surface *s = data;
+  s->press_x = ev->x_root;
+  s->press_y = ev->y_root;
+  s->press_button = ev->button;
+  s->press_time = ev->time;
+  return FALSE;
+}
+
+static gboolean
+on_window_state(GtkWidget *w, GdkEventWindowState *ev, gpointer data)
+{
+  JsonObject *o = json_object_new();
+  json_object_set_boolean_member(o, "maximized", (ev->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0);
+  json_object_set_boolean_member(o, "fullscreen", (ev->new_window_state & GDK_WINDOW_STATE_FULLSCREEN) != 0);
+  json_object_set_boolean_member(o, "focused", (ev->new_window_state & GDK_WINDOW_STATE_FOCUSED) != 0);
+  json_object_set_boolean_member(o, "tiled", (ev->new_window_state & GDK_WINDOW_STATE_TILED) != 0);
+  shell_emit(SM(SURF_APP), "window.state", jobj_node(o));
+  return FALSE;
 }
 
 /* ---------- monitors ---------- */
@@ -283,18 +424,16 @@ replace_all(gpointer unused)
   GdkMonitor *m = pick_monitor();
   if (m == NULL)
     return G_SOURCE_REMOVE; /* wait for monitor-added */
-  if (wallpaper_win != NULL) {
-    gtk_layer_set_monitor(GTK_WINDOW(wallpaper_win), m);
-    if (!gtk_widget_get_visible(wallpaper_win))
-      gtk_widget_show_all(wallpaper_win);
-  }
+  for (int i = 0; i < 4; i++)
+    if (zone_win[i] != NULL)
+      gtk_layer_set_monitor(GTK_WINDOW(zone_win[i]), m);
   for (int i = 0; i < SURF_COUNT; i++) {
     Surface *s = &surf[i];
-    if (s->win == NULL)
+    if (s->win == NULL || !conf[i].layer)
       continue;
     gtk_layer_set_monitor(GTK_WINDOW(s->win), m);
-    if (s->want_visible && !gtk_widget_get_visible(s->win))
-      gtk_widget_show_all(s->win);
+    if (s->want_visible)
+      present(s);
   }
   return G_SOURCE_REMOVE;
 }
@@ -332,9 +471,21 @@ on_decide_policy(WebKitWebView *v, WebKitPolicyDecision *d, WebKitPolicyDecision
     WebKitNavigationAction *a =
         webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(d));
     uri = webkit_uri_request_get_uri(webkit_navigation_action_get_request(a));
+    /* Downloads and links to elsewhere never navigate the shell away. */
+    if (uri != NULL && g_str_has_prefix(uri, SHELL_PAGE_PREFIX) &&
+        webkit_navigation_action_get_navigation_type(a) == WEBKIT_NAVIGATION_TYPE_LINK_CLICKED) {
+      webkit_policy_decision_ignore(d);
+      return TRUE;
+    }
   } else if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
-    uri = webkit_uri_request_get_uri(
-        webkit_response_policy_decision_get_request(WEBKIT_RESPONSE_POLICY_DECISION(d)));
+    WebKitResponsePolicyDecision *rd = WEBKIT_RESPONSE_POLICY_DECISION(d);
+    uri = webkit_uri_request_get_uri(webkit_response_policy_decision_get_request(rd));
+    /* Subresources (fetches to alfad on loopback) are checked by the CSP and
+     * the proxy; only the main page must be ours. */
+    if (!webkit_response_policy_decision_is_main_frame_main_resource(rd)) {
+      webkit_policy_decision_use(d);
+      return TRUE;
+    }
   }
   if (uri != NULL && g_str_has_prefix(uri, SHELL_PAGE_PREFIX))
     webkit_policy_decision_use(d);
@@ -350,9 +501,9 @@ on_permission(WebKitWebView *v, WebKitPermissionRequest *req, gpointer u)
   return TRUE;
 }
 
+/* NoCap OS draws its own menus; WebKit's never shows. */
 static gboolean
-on_context_menu(WebKitWebView *v, WebKitContextMenu *menu, GdkEvent *ev, WebKitHitTestResult *hit,
-                gpointer u)
+on_context_menu(WebKitWebView *v, WebKitContextMenu *menu, GdkEvent *ev, WebKitHitTestResult *hit, gpointer u)
 {
   return !shell.debug;
 }
@@ -384,9 +535,14 @@ on_load_changed(WebKitWebView *v, WebKitLoadEvent ev, gpointer data)
     s->info_called = FALSE;
   } else if (ev == WEBKIT_LOAD_FINISHED) {
     s->loaded = TRUE;
+    if (s->want_visible)
+      present(s);
     check_ready(s);
   }
 }
+
+static gboolean
+reload_surface(gpointer data);
 
 static gboolean
 on_load_failed(WebKitWebView *v, WebKitLoadEvent ev, char *uri, GError *err, gpointer data)
@@ -399,6 +555,14 @@ on_load_failed(WebKitWebView *v, WebKitLoadEvent ev, char *uri, GError *err, gpo
 static char *
 surface_uri(SurfaceId id)
 {
+  if (id == SURF_APP) {
+    char *app = g_uri_escape_string(shell.app_id ? shell.app_id : "", NULL, FALSE);
+    char *props = g_uri_escape_string(shell.app_props ? shell.app_props : "", NULL, FALSE);
+    char *u = g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=app&app=%s&props=%s", app, props);
+    g_free(app);
+    g_free(props);
+    return u;
+  }
   return g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=%s", conf[id].name);
 }
 
@@ -469,10 +633,12 @@ make_context(void)
   webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_set_spell_checking_enabled(ctx, FALSE);
 
-  /* Every http(s) load goes to a closed local port and fails. */
-  WebKitNetworkProxySettings *proxy = webkit_network_proxy_settings_new("http://127.0.0.1:9", NULL);
-  webkit_website_data_manager_set_network_proxy_settings(
-      webkit_web_context_get_website_data_manager(ctx), WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxy);
+  /* Every network load except alfad's loopback address goes to a closed
+   * local port and fails: nothing remote ever loads. */
+  const char *const direct[] = {"127.0.0.1", NULL};
+  WebKitNetworkProxySettings *proxy = webkit_network_proxy_settings_new("http://127.0.0.1:9", direct);
+  webkit_website_data_manager_set_network_proxy_settings(webkit_web_context_get_website_data_manager(ctx),
+                                                         WEBKIT_NETWORK_PROXY_MODE_CUSTOM, proxy);
   webkit_network_proxy_settings_free(proxy);
 
   if (g_strcmp0(g_getenv("NOCAP_SHELL_SANDBOX"), "1") == 0)
@@ -491,7 +657,7 @@ make_settings(void)
   WebKitSettings *st = webkit_settings_new();
   webkit_settings_set_enable_developer_extras(st, shell.debug);
   webkit_settings_set_javascript_can_open_windows_automatically(st, FALSE);
-  webkit_settings_set_javascript_can_access_clipboard(st, FALSE);
+  webkit_settings_set_javascript_can_access_clipboard(st, TRUE); /* copy/paste in NoCap apps */
   webkit_settings_set_allow_file_access_from_file_urls(st, FALSE);
   webkit_settings_set_allow_universal_access_from_file_urls(st, FALSE);
   webkit_settings_set_enable_write_console_messages_to_stdout(st, shell.debug);
@@ -499,11 +665,32 @@ make_settings(void)
   webkit_settings_set_enable_media_stream(st, FALSE);
   webkit_settings_set_enable_encrypted_media(st, FALSE);
   webkit_settings_set_enable_back_forward_navigation_gestures(st, FALSE);
-  webkit_settings_set_media_playback_requires_user_gesture(st, TRUE);
+  webkit_settings_set_media_playback_requires_user_gesture(st, FALSE);
+  webkit_settings_set_enable_smooth_scrolling(st, TRUE);
+  webkit_settings_set_hardware_acceleration_policy(st, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
 #if WEBKIT_CHECK_VERSION(2, 38, 0)
   webkit_settings_set_enable_webrtc(st, FALSE);
 #endif
   return st;
+}
+
+/* Native feel for the shell's own parts: no text selection or image and
+ * link dragging on the desktop and its chrome (NoCap apps keep selection in
+ * their content), no zoom. */
+static const char NATIVE_CSS[] =
+    "html[data-native-surface=desktop] *, html[data-native-surface=chrome] *"
+    " { -webkit-user-select: none; user-select: none; }"
+    "html[data-native-surface] input, html[data-native-surface] textarea,"
+    " html[data-native-surface] [contenteditable=true] { -webkit-user-select: text; user-select: text; }"
+    "html[data-native-surface] img, html[data-native-surface] a { -webkit-user-drag: none; }";
+
+static void
+add_native_css(WebKitUserContentManager *ucm)
+{
+  WebKitUserStyleSheet *ss = webkit_user_style_sheet_new(NATIVE_CSS, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+                                                         WEBKIT_USER_STYLE_LEVEL_USER, NULL, NULL);
+  webkit_user_content_manager_add_style_sheet(ucm, ss);
+  webkit_user_style_sheet_unref(ss);
 }
 
 static void
@@ -512,7 +699,8 @@ add_transparent_css(void)
   GtkCssProvider *css = gtk_css_provider_new();
   gtk_css_provider_load_from_data(css,
                                   "window.nocap-surface, window.nocap-surface > * {"
-                                  " background-color: transparent; }",
+                                  " background-color: transparent; }"
+                                  "window.nocap-opaque { background-color: " BASE_COLOR "; }",
                                   -1, NULL);
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(css),
                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -542,6 +730,77 @@ make_layer_window(const char *ns, GtkLayerShellLayer layer)
 }
 
 static void
+anchor_all(GtkWindow *w)
+{
+  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_TOP, TRUE);
+  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_BOTTOM, TRUE);
+  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
+  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_RIGHT, TRUE);
+}
+
+/* An invisible strip along one edge that only reserves space. */
+static GtkWidget *
+make_zone(int edge)
+{
+  static const char *const names[] = {"nocap-zone-top", "nocap-zone-bottom", "nocap-zone-left", "nocap-zone-right"};
+  GtkWidget *w = make_layer_window(names[edge], GTK_LAYER_SHELL_LAYER_BOTTOM);
+  GtkWindow *gw = GTK_WINDOW(w);
+  gboolean horizontal = edge < 2;
+  gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_TOP, edge != 1);
+  gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_BOTTOM, edge != 0);
+  gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_LEFT, edge != 3);
+  gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_RIGHT, edge != 2);
+  if (horizontal) {
+    gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
+    gtk_layer_set_anchor(gw, GTK_LAYER_SHELL_EDGE_RIGHT, TRUE);
+  }
+  gtk_layer_set_keyboard_mode(gw, GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
+  gtk_layer_set_exclusive_zone(gw, 0);
+  return w;
+}
+
+static void
+setup_view(Surface *s)
+{
+  WebKitUserContentManager *ucm = webkit_user_content_manager_new();
+  g_signal_connect(ucm, "script-message-received::nocap", G_CALLBACK(on_script_message), s);
+  webkit_user_content_manager_register_script_message_handler(ucm, "nocap");
+  add_native_css(ucm);
+
+  if (first_view == NULL)
+    s->view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", web_ctx, "settings", web_settings,
+                                           "user-content-manager", ucm, NULL));
+  else
+    s->view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "related-view", first_view, "settings",
+                                           web_settings, "user-content-manager", ucm, NULL));
+  g_object_unref(ucm);
+  if (first_view == NULL)
+    first_view = s->view;
+
+  GdkRGBA bg = {0, 0, 0, 0};
+  if (conf[s->id].opaque)
+    gdk_rgba_parse(&bg, BASE_COLOR);
+  webkit_web_view_set_background_color(s->view, &bg);
+  g_signal_connect(s->view, "decide-policy", G_CALLBACK(on_decide_policy), s);
+  g_signal_connect(s->view, "permission-request", G_CALLBACK(on_permission), s);
+  g_signal_connect(s->view, "context-menu", G_CALLBACK(on_context_menu), s);
+  g_signal_connect(s->view, "create", G_CALLBACK(on_create), s);
+  g_signal_connect(s->view, "show-notification", G_CALLBACK(on_block2), s);
+  g_signal_connect(s->view, "enter-fullscreen", G_CALLBACK(on_block1), s);
+  g_signal_connect(s->view, "print", G_CALLBACK(on_block2), s);
+  g_signal_connect(s->view, "load-changed", G_CALLBACK(on_load_changed), s);
+  g_signal_connect(s->view, "load-failed", G_CALLBACK(on_load_failed), s);
+  g_signal_connect(s->view, "web-process-terminated", G_CALLBACK(on_web_process_terminated), s);
+  g_signal_connect(s->view, "button-press-event", G_CALLBACK(on_button_press), s);
+  gtk_container_add(GTK_CONTAINER(s->win), GTK_WIDGET(s->view));
+  gtk_widget_show(GTK_WIDGET(s->view));
+
+  char *uri = surface_uri(s->id);
+  webkit_web_view_load_uri(s->view, uri);
+  g_free(uri);
+}
+
+static void
 create_surface(SurfaceId id)
 {
   const SurfaceConf *c = &conf[id];
@@ -549,137 +808,21 @@ create_surface(SurfaceId id)
   s->id = id;
 
   char *ns = g_strdup_printf("nocap-%s", c->name);
-  s->win = make_layer_window(ns, c->layer);
+  s->win = make_layer_window(ns, c->level);
   g_free(ns);
+  if (c->opaque)
+    gtk_style_context_add_class(gtk_widget_get_style_context(s->win), "nocap-opaque");
   GtkWindow *w = GTK_WINDOW(s->win);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_TOP, c->top);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_BOTTOM, c->bottom);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_LEFT, c->left);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_RIGHT, c->right);
-  gtk_layer_set_exclusive_zone(w, c->zone);
+  anchor_all(w);
+  gtk_layer_set_exclusive_zone(w, -1); /* full screen, under or over the zones */
   gtk_layer_set_keyboard_mode(w, c->keyboard);
-  if (c->margin_bottom)
-    gtk_layer_set_margin(w, GTK_LAYER_SHELL_EDGE_BOTTOM, c->margin_bottom);
-  gtk_widget_set_size_request(s->win, c->width > 0 ? c->width : -1, c->height > 0 ? c->height : -1);
-
-  WebKitUserContentManager *ucm = webkit_user_content_manager_new();
-  g_signal_connect(ucm, "script-message-received::nocap", G_CALLBACK(on_script_message), s);
-  webkit_user_content_manager_register_script_message_handler(ucm, "nocap");
-
-  if (first_view == NULL)
-    s->view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "web-context", web_ctx, "settings",
-                                           web_settings, "user-content-manager", ucm, NULL));
-  else
-    s->view = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW, "related-view", first_view,
-                                           "settings", web_settings, "user-content-manager", ucm,
-                                           NULL));
-  g_object_unref(ucm);
-  if (first_view == NULL)
-    first_view = s->view;
-
-  GdkRGBA clear = {0, 0, 0, 0};
-  webkit_web_view_set_background_color(s->view, &clear);
-  g_signal_connect(s->view, "decide-policy", G_CALLBACK(on_decide_policy), s);
-  g_signal_connect(s->view, "permission-request", G_CALLBACK(on_permission), s);
-  g_signal_connect(s->view, "context-menu", G_CALLBACK(on_context_menu), s);
-  g_signal_connect(s->view, "create", G_CALLBACK(on_create), s);
-  g_signal_connect(s->view, "run-file-chooser", G_CALLBACK(on_block2), s);
-  g_signal_connect(s->view, "show-notification", G_CALLBACK(on_block2), s);
-  g_signal_connect(s->view, "enter-fullscreen", G_CALLBACK(on_block1), s);
-  g_signal_connect(s->view, "print", G_CALLBACK(on_block2), s);
-  g_signal_connect(s->view, "load-changed", G_CALLBACK(on_load_changed), s);
-  g_signal_connect(s->view, "load-failed", G_CALLBACK(on_load_failed), s);
-  g_signal_connect(s->view, "web-process-terminated", G_CALLBACK(on_web_process_terminated), s);
-
-  gtk_container_add(GTK_CONTAINER(s->win), GTK_WIDGET(s->view));
-  gtk_widget_show(GTK_WIDGET(s->view));
-
-  char *uri = surface_uri(id);
-  webkit_web_view_load_uri(s->view, uri);
-  g_free(uri);
-
+  setup_view(s);
   s->want_visible = !c->on_demand;
-  if (s->want_visible)
-    gtk_widget_show_all(s->win);
-}
-
-/* ---------- wallpaper (native) ---------- */
-
-static GdkPixbuf *wp_src;
-static cairo_surface_t *wp_cache;
-static int wp_w, wp_h, wp_scale;
-
-static void
-wallpaper_load(void)
-{
-  const char *env = g_getenv("NOCAP_WALLPAPER");
-  const char *path = (env != NULL && *env) ? env : "/usr/share/backgrounds/nocapos/tide.jpg";
-  if (!g_file_test(path, G_FILE_TEST_IS_REGULAR))
-    return;
-  int w = 0, h = 0;
-  if (gdk_pixbuf_get_file_info(path, &w, &h) == NULL)
-    return;
-  GError *err = NULL;
-  if ((gint64)w * h > 7680 * 4320)
-    wp_src = gdk_pixbuf_new_from_file_at_scale(path, 7680, 4320, TRUE, &err);
-  else
-    wp_src = gdk_pixbuf_new_from_file(path, &err);
-  if (wp_src == NULL) {
-    g_warning("wallpaper %s: %s", path, err ? err->message : "unreadable");
-    g_clear_error(&err);
+  /* The chrome takes no clicks until the page says where its parts are. */
+  if (id == SURF_CHROME) {
+    gtk_widget_realize(s->win);
+    surface_set_input(id, NULL, FALSE);
   }
-}
-
-static gboolean
-wallpaper_draw(GtkWidget *w, cairo_t *cr, gpointer u)
-{
-  int W = gtk_widget_get_allocated_width(w);
-  int H = gtk_widget_get_allocated_height(w);
-  int sf = gtk_widget_get_scale_factor(w);
-  cairo_set_source_rgb(cr, 5 / 255.0, 5 / 255.0, 8 / 255.0);
-  cairo_paint(cr);
-  if (wp_src == NULL || W <= 0 || H <= 0)
-    return TRUE;
-
-  if (wp_cache == NULL || wp_w != W || wp_h != H || wp_scale != sf) {
-    g_clear_pointer(&wp_cache, cairo_surface_destroy);
-    int sw = gdk_pixbuf_get_width(wp_src), sh = gdk_pixbuf_get_height(wp_src);
-    int pw = W * sf, ph = H * sf;
-    double k = MAX((double)pw / sw, (double)ph / sh);
-    int dw = MAX(pw, (int)(sw * k + 0.999));
-    int dh = MAX(ph, (int)(sh * k + 0.999));
-    GdkPixbuf *scaled = gdk_pixbuf_scale_simple(wp_src, dw, dh, GDK_INTERP_BILINEAR);
-    if (scaled == NULL)
-      return TRUE;
-    GdkPixbuf *crop = gdk_pixbuf_new_subpixbuf(scaled, (dw - pw) / 2, (dh - ph) / 2, pw, ph);
-    wp_cache = gdk_cairo_surface_create_from_pixbuf(crop, sf, gtk_widget_get_window(w));
-    g_object_unref(crop);
-    g_object_unref(scaled);
-    wp_w = W;
-    wp_h = H;
-    wp_scale = sf;
-  }
-  cairo_set_source_surface(cr, wp_cache, 0, 0);
-  cairo_paint(cr);
-  return TRUE;
-}
-
-static void
-create_wallpaper(void)
-{
-  wallpaper_load();
-  wallpaper_win = make_layer_window("nocap-wallpaper", GTK_LAYER_SHELL_LAYER_BACKGROUND);
-  GtkWindow *w = GTK_WINDOW(wallpaper_win);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_TOP, TRUE);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_BOTTOM, TRUE);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_LEFT, TRUE);
-  gtk_layer_set_anchor(w, GTK_LAYER_SHELL_EDGE_RIGHT, TRUE);
-  gtk_layer_set_exclusive_zone(w, -1);
-  gtk_layer_set_keyboard_mode(w, GTK_LAYER_SHELL_KEYBOARD_MODE_NONE);
-  GtkWidget *area = gtk_drawing_area_new();
-  g_signal_connect(area, "draw", G_CALLBACK(wallpaper_draw), NULL);
-  gtk_container_add(GTK_CONTAINER(wallpaper_win), area);
-  gtk_widget_show_all(wallpaper_win);
 }
 
 /* ---------- setup ---------- */
@@ -695,12 +838,46 @@ surfaces_create(void)
   g_signal_connect(d, "monitor-added", G_CALLBACK(on_monitors_changed), NULL);
   g_signal_connect(d, "monitor-removed", G_CALLBACK(on_monitors_changed), NULL);
 
-  create_wallpaper();
   if (shell.greeter) {
     create_surface(SURF_GREETER);
     return;
   }
-  for (int i = 0; i < SURF_COUNT; i++)
-    if (i != SURF_GREETER)
-      create_surface(i);
+  for (int i = 0; i < 4; i++)
+    zone_win[i] = make_zone(i);
+  create_surface(SURF_DESKTOP);
+  create_surface(SURF_CHROME);
+  create_surface(SURF_POLKIT);
+}
+
+static gboolean
+on_app_delete(GtkWidget *w, GdkEvent *ev, gpointer u)
+{
+  return FALSE; /* closes; the application quits with its last window */
+}
+
+void
+surfaces_create_app(void)
+{
+  web_ctx = make_context();
+  web_settings = make_settings();
+  Surface *s = &surf[SURF_APP];
+  s->id = SURF_APP;
+  s->win = gtk_application_window_new(shell.app);
+  shell.app_window = s->win;
+  GtkWindow *w = GTK_WINDOW(s->win);
+  /* NoCap OS draws the title bar itself, the same one as in the browser. */
+  gtk_window_set_decorated(w, FALSE);
+  gtk_window_set_title(w, "NoCap OS");
+  gtk_window_set_icon_name(w, "nocapos");
+  gtk_window_set_default_size(w, 1100, 720);
+  GdkVisual *vis = gdk_screen_get_rgba_visual(gtk_widget_get_screen(s->win));
+  if (vis != NULL)
+    gtk_widget_set_visual(s->win, vis);
+  gtk_widget_set_app_paintable(s->win, TRUE);
+  add_transparent_css();
+  gtk_style_context_add_class(gtk_widget_get_style_context(s->win), "nocap-surface");
+  g_signal_connect(s->win, "delete-event", G_CALLBACK(on_app_delete), NULL);
+  g_signal_connect(s->win, "window-state-event", G_CALLBACK(on_window_state), NULL);
+  setup_view(s);
+  s->want_visible = TRUE;
 }

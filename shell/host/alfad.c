@@ -1,8 +1,10 @@
-/* alfad client: HTTP/1.1 over the local socket /run/nocapos/shell.sock
- * (alfad knows which Linux account is calling from the socket itself; a
- * per-session token from POST /v1/shell/session goes with every other
- * request). Runs in worker threads; results reach the main loop through
- * idle callbacks. alfad being away never breaks the shell. */
+/* alfad client: HTTP/1.1 over the local socket /run/nocapos/shell.sock.
+ * alfad knows which Linux account (and program) is calling from the socket
+ * itself and answers POST /v1/shell/session with that person's NoCap OS web
+ * session. The pages get the access token (session.get); the refresh token
+ * stays here and is traded for a new session before the old one ends
+ * (session.refresh). Runs in worker threads; results reach the main loop
+ * through GTask callbacks. alfad being away never breaks the shell. */
 #include "shell.h"
 
 #include <gio/gunixsocketaddress.h>
@@ -12,7 +14,7 @@
 #define MAX_BODY (4 * 1024 * 1024)
 
 static GMutex lock;
-static char *token; /* guarded by lock */
+static char *refresh_token; /* guarded by lock; never given to a page */
 
 typedef struct {
   int status;
@@ -42,14 +44,10 @@ http(const char *method, const char *path, const char *body, guint timeout_s, Ht
   if (c == NULL)
     return FALSE;
 
-  g_mutex_lock(&lock);
-  char *auth = token ? g_strdup_printf("X-NoCap-Session: %s\r\n", token) : g_strdup("");
-  g_mutex_unlock(&lock);
   gsize blen = body ? strlen(body) : 0;
-  char *req = g_strdup_printf("%s %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n%s"
+  char *req = g_strdup_printf("%s %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n"
                               "Content-Type: application/json\r\nContent-Length: %" G_GSIZE_FORMAT "\r\n\r\n",
-                              method, path, auth, blen);
-  g_free(auth);
+                              method, path, blen);
   GOutputStream *out = g_io_stream_get_output_stream(G_IO_STREAM(c));
   gsize w;
   gboolean ok = g_output_stream_write_all(out, req, strlen(req), &w, NULL, err) &&
@@ -142,197 +140,136 @@ str_member(JsonObject *o, const char *name)
   return json_node_get_string(n);
 }
 
-/* POST /v1/shell/session: a new token and the account's details. */
+/* POST /v1/shell/session: the person's web session (a fresh one, or the
+ * next one for the refresh token we hold). Returns the page's part. */
 static JsonObject *
-new_session(guint timeout_s, GError **err)
+fetch_session(gboolean refresh, guint timeout_s, GError **err)
 {
+  JsonObject *req = json_object_new();
   g_mutex_lock(&lock);
-  g_clear_pointer(&token, g_free);
+  if (refresh && refresh_token != NULL)
+    json_object_set_string_member(req, "refresh", refresh_token);
   g_mutex_unlock(&lock);
+  JsonNode *rn = jobj_node(req);
+  char *body = json_for_script(rn);
+  json_node_unref(rn);
   HttpResult r;
-  if (!http("POST", "/v1/shell/session", "{}", timeout_s, &r, err))
+  gboolean ok = http("POST", "/v1/shell/session", body, timeout_s, &r, err);
+  secure_wipe(body, strlen(body));
+  g_free(body);
+  if (!ok)
     return NULL;
   JsonObject *o = r.status == 200 ? parse_object(&r) : NULL;
-  if (o == NULL && err != NULL && *err == NULL)
-    g_set_error(err, G_IO_ERROR, G_IO_ERROR_FAILED, "alfad said %d", r.status);
+  int status = r.status;
+  secure_wipe(r.body, r.len);
   http_result_clear(&r);
-  const char *t = str_member(o, "token");
-  if (o != NULL && (t == NULL || strlen(t) < 16 || strlen(t) > 256)) {
-    json_object_unref(o);
-    g_set_error(err, G_IO_ERROR, G_IO_ERROR_FAILED, "no session token");
+  if (o == NULL) {
+    g_set_error(err, G_IO_ERROR, G_IO_ERROR_FAILED, "alfad said %d", status);
+    /* The refresh token ended: the next call starts over. */
+    if (status == 401) {
+      g_mutex_lock(&lock);
+      g_clear_pointer(&refresh_token, g_free);
+      g_mutex_unlock(&lock);
+    }
     return NULL;
   }
-  if (o != NULL) {
-    g_mutex_lock(&lock);
-    token = g_strdup(t);
-    g_mutex_unlock(&lock);
+  const char *access = str_member(o, "access_token"), *rt = str_member(o, "refresh_token");
+  const char *origin = str_member(o, "apiOrigin");
+  if (access == NULL || strlen(access) < 16 || origin == NULL ||
+      !(g_str_has_prefix(origin, "http://127.0.0.1:") || g_str_has_prefix(origin, "https://127.0.0.1:"))) {
+    json_object_unref(o);
+    g_set_error(err, G_IO_ERROR, G_IO_ERROR_FAILED, "alfad's answer isn't a desktop session");
+    return NULL;
+  }
+  g_mutex_lock(&lock);
+  if (rt != NULL) {
+    if (refresh_token != NULL)
+      secure_wipe(refresh_token, strlen(refresh_token));
+    g_free(refresh_token);
+    refresh_token = g_strdup(rt);
+  }
+  g_mutex_unlock(&lock);
+  /* The page never sees the refresh token. */
+  if (rt != NULL) {
+    secure_wipe((char *)rt, strlen(rt));
+    json_object_remove_member(o, "refresh_token");
   }
   return o;
 }
 
 /* ---------- main-loop side ---------- */
 
-static gboolean
-valid_choice(const char *v, const char *a, const char *b)
+static void
+apply_session(JsonObject *o)
 {
-  return g_strcmp0(v, a) == 0 || g_strcmp0(v, b) == 0;
-}
-
-static gboolean
-apply_session(gpointer data)
-{
-  JsonObject *o = data;
-  gboolean changed = FALSE;
-  const char *voice = str_member(o, "voice"), *theme = str_member(o, "theme");
-  const char *real = str_member(o, "realName"), *url = str_member(o, "webURL");
-  if (valid_choice(voice, "genz", "standard") && g_strcmp0(voice, shell.voice) != 0) {
-    g_free(shell.voice);
-    shell.voice = g_strdup(voice);
-    changed = TRUE;
-  }
-  if (valid_choice(theme, "dark", "light") && g_strcmp0(theme, shell.theme) != 0) {
-    g_free(shell.theme);
-    shell.theme = g_strdup(theme);
-    changed = TRUE;
-  }
+  const char *real = str_member(o, "realName"), *origin = str_member(o, "apiOrigin");
   if (real != NULL && *real && strlen(real) < 128 && g_strcmp0(real, shell.real_name) != 0) {
     g_free(shell.real_name);
     shell.real_name = g_strdup(real);
   }
-  if (url != NULL && (g_str_has_prefix(url, "https://127.0.0.1") || g_str_has_prefix(url, "http://127.0.0.1"))) {
-    g_free(shell.web_url);
-    shell.web_url = g_strdup(url);
+  if (origin != NULL && g_strcmp0(origin, shell.api_origin) != 0) {
+    g_free(shell.api_origin);
+    shell.api_origin = g_strdup(origin);
   }
   JsonNode *admin = json_object_get_member(o, "admin");
-  shell.admin = admin && JSON_NODE_HOLDS_VALUE(admin) && json_node_get_boolean(admin);
-  if (changed)
-    shell_settings_changed();
-  json_object_unref(o);
-  return G_SOURCE_REMOVE;
+  shell.admin = admin && JSON_NODE_HOLDS_VALUE(admin) && json_node_get_value_type(admin) == G_TYPE_BOOLEAN &&
+                json_node_get_boolean(admin);
 }
 
-static gboolean
-apply_items(gpointer data)
-{
-  JsonArray *items = data;
-  notify_merge_remote(items);
-  json_array_unref(items);
-  return G_SOURCE_REMOVE;
-}
+typedef struct {
+  gboolean refresh;
+  AlfadSessionCb cb;
+  gpointer data;
+} SessionJob;
 
-/* ---------- the long-poll loop (its own thread) ---------- */
-
-static gpointer
-poll_thread(gpointer u)
+static void
+session_thread(GTask *task, gpointer src, gpointer data, GCancellable *c)
 {
-  guint backoff = 5;
-  gint64 cursor = 0;
-  gboolean have_session = FALSE;
-  for (;;) {
-    GError *err = NULL;
-    if (!have_session) {
-      JsonObject *s = new_session(10, &err);
-      if (s == NULL) {
-        g_clear_error(&err);
-        g_usleep((gulong)backoff * G_USEC_PER_SEC);
-        backoff = MIN(backoff * 2, 60);
-        continue;
-      }
-      g_idle_add(apply_session, s);
-      have_session = TRUE;
-      backoff = 5;
-      cursor = 0;
-    }
-    char *path = g_strdup_printf("/v1/shell/notifications?after=%" G_GINT64_FORMAT "&wait=%d", cursor,
-                                 cursor == 0 ? 0 : 25);
-    HttpResult r;
-    gboolean ok = http("GET", path, NULL, 40, &r, &err);
-    g_free(path);
-    if (!ok) {
-      g_clear_error(&err);
-      have_session = FALSE;
-      g_usleep((gulong)backoff * G_USEC_PER_SEC);
-      backoff = MIN(backoff * 2, 60);
-      continue;
-    }
-    if (r.status == 401 || r.status == 403) {
-      http_result_clear(&r);
-      have_session = FALSE;
-      g_usleep(2 * G_USEC_PER_SEC);
-      continue;
-    }
-    JsonObject *o = r.status == 200 ? parse_object(&r) : NULL;
-    http_result_clear(&r);
-    if (o == NULL) {
-      g_usleep((gulong)backoff * G_USEC_PER_SEC);
-      backoff = MIN(backoff * 2, 60);
-      continue;
-    }
-    backoff = 5;
-    JsonNode *cn = json_object_get_member(o, "cursor");
-    if (cn && JSON_NODE_HOLDS_VALUE(cn) && json_node_get_value_type(cn) == G_TYPE_INT64)
-      cursor = MAX(json_node_get_int(cn), 1);
-    else
-      cursor = MAX(cursor, 1);
-    JsonNode *items = json_object_get_member(o, "items");
-    if (items && JSON_NODE_HOLDS_ARRAY(items))
-      g_idle_add(apply_items, json_array_ref(json_node_get_array(items)));
-    /* Voice/theme changes in Settings come with every reply. */
-    if (json_object_has_member(o, "voice") || json_object_has_member(o, "theme"))
-      g_idle_add(apply_session, json_object_ref(o));
-    json_object_unref(o);
+  SessionJob *j = data;
+  GError *err = NULL;
+  JsonObject *o = fetch_session(j->refresh, 10, &err);
+  if (o == NULL && j->refresh) {
+    g_clear_error(&err);
+    o = fetch_session(FALSE, 10, &err);
   }
-  return NULL;
+  if (o == NULL) {
+    g_message("alfad: %s", err ? err->message : "no answer");
+    g_clear_error(&err);
+    g_task_return_pointer(task, NULL, NULL);
+    return;
+  }
+  g_task_return_pointer(task, o, (GDestroyNotify)json_object_unref);
+}
+
+static void
+session_done(GObject *src, GAsyncResult *res, gpointer data)
+{
+  SessionJob *j = data;
+  JsonObject *o = g_task_propagate_pointer(G_TASK(res), NULL);
+  if (o != NULL)
+    apply_session(o);
+  if (j->cb)
+    j->cb(o, j->data);
+  if (o != NULL)
+    json_object_unref(o);
+  g_free(j);
+}
+
+void
+alfad_session(gboolean refresh, AlfadSessionCb cb, gpointer data)
+{
+  SessionJob *j = g_new0(SessionJob, 1);
+  j->refresh = refresh;
+  j->cb = cb;
+  j->data = data;
+  GTask *t = g_task_new(NULL, NULL, session_done, j);
+  g_task_set_task_data(t, j, NULL);
+  g_task_run_in_thread(t, session_thread);
+  g_object_unref(t);
 }
 
 void
 alfad_start(void)
 {
-  GThread *t = g_thread_new("alfad", poll_thread, NULL);
-  g_thread_unref(t);
-}
-
-JsonObject *
-alfad_session_sync(guint timeout_s)
-{
-  GError *err = NULL;
-  JsonObject *o = new_session(timeout_s, &err);
-  if (o == NULL) {
-    g_message("alfad: %s", err ? err->message : "no answer");
-    g_clear_error(&err);
-  }
-  return o;
-}
-
-static void
-mark_thread(GTask *task, gpointer src, gpointer data, GCancellable *c)
-{
-  char *body = data;
-  HttpResult r;
-  GError *err = NULL;
-  if (http("POST", "/v1/shell/notifications/read", body, 10, &r, &err))
-    http_result_clear(&r);
-  g_clear_error(&err);
-  g_task_return_boolean(task, TRUE);
-}
-
-void
-alfad_mark_read(JsonArray *ids, gboolean all)
-{
-  JsonObject *o = json_object_new();
-  if (all)
-    json_object_set_boolean_member(o, "all", TRUE);
-  else if (ids != NULL)
-    json_object_set_array_member(o, "ids", json_array_ref(ids));
-  else {
-    json_object_unref(o);
-    return;
-  }
-  JsonNode *node = jobj_node(o);
-  char *body = json_for_script(node);
-  json_node_unref(node);
-  GTask *t = g_task_new(NULL, NULL, NULL, NULL);
-  g_task_set_task_data(t, body, g_free);
-  g_task_run_in_thread(t, mark_thread);
-  g_object_unref(t);
+  alfad_session(FALSE, NULL, NULL);
 }

@@ -27,7 +27,7 @@ static gboolean
 emit_changed(gpointer u)
 {
   changed_id = 0;
-  shell_emit(SM(SURF_DOCK) | SM(SURF_BAR), "windows.changed", toplevel_list_json());
+  shell_emit(SM(SURF_CHROME), "windows.changed", toplevel_list_json());
   return G_SOURCE_REMOVE;
 }
 

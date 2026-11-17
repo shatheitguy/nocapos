@@ -14,6 +14,10 @@ shell_info_json(SurfaceId surface)
   json_object_set_string_member(o, "voice", shell.voice ? shell.voice : "genz");
   json_object_set_string_member(o, "theme", shell.theme ? shell.theme : "dark");
   json_object_set_string_member(o, "version", NOCAP_VERSION);
+  if (surface == SURF_APP) {
+    json_object_set_string_member(o, "app", shell.app_id ? shell.app_id : "");
+    json_object_set_string_member(o, "props", shell.app_props ? shell.app_props : "");
+  }
   return jobj_node(o);
 }
 
@@ -35,7 +39,7 @@ audio_reply(gboolean available, int volume, gboolean muted, gpointer data)
 static void
 audio_set_reply(gboolean available, int volume, gboolean muted, gpointer data)
 {
-  shell_emit(SM(SURF_CENTER) | SM(SURF_BAR) | SM(SURF_OSD), "audio.changed",
+  shell_emit(SM(SURF_CHROME), "audio.changed",
              audio_json(available, volume, muted));
   shell_reply_ok(data, audio_json(available, volume, muted));
 }
@@ -49,7 +53,7 @@ brightness_reply(gboolean available, int percent, gpointer data)
 static void
 brightness_set_reply(gboolean available, int percent, gpointer data)
 {
-  shell_emit(SM(SURF_CENTER) | SM(SURF_OSD), "brightness.changed", brightness_json(available, percent));
+  shell_emit(SM(SURF_CHROME), "brightness.changed", brightness_json(available, percent));
   shell_reply_ok(data, brightness_json(available, percent));
 }
 
@@ -62,31 +66,57 @@ done_reply(gboolean ok, const char *error, gpointer data)
     shell_reply_fail(data, error);
 }
 
-static SurfaceId
-named_surface(const BridgeCall *c)
-{
-  int id = surface_from_name(bridge_param_str(c, "name"));
-  return id < 0 ? SURF_COUNT : (SurfaceId)id;
-}
-
 static void
 reply_error(ShellReply *r, GError *err, const char *fallback)
 {
   shell_reply_fail(r, err != NULL ? err->message : fallback);
 }
 
+/* The page's part of the web session (never the refresh token). */
 static void
-open_nocapos(const char *app, ShellReply *r)
+session_reply(JsonObject *session, gpointer data)
 {
-  const char *argv[] = {shell.self_exe, "--app", app != NULL ? app : "home", NULL};
+  ShellReply *r = data;
+  if (session == NULL) {
+    shell_reply_fail(r, "no desktop session (is NoCapOS running?)");
+    return;
+  }
+  JsonObject *o = json_object_new();
+  static const char *const keep[] = {"access_token", "token_type", "expires_at", "apiOrigin",
+                                     "user",         "realName",   "admin",      "account", NULL};
+  for (int i = 0; keep[i] != NULL; i++) {
+    JsonNode *n = json_object_get_member(session, keep[i]);
+    if (n != NULL)
+      json_object_set_member(o, keep[i], json_node_copy(n));
+  }
+  shell_reply_ok(r, jobj_node(o));
+}
+
+/* NoCap OS apps open in windows of their own: another nocap-shell. */
+static void
+open_app(const BridgeCall *call, ShellReply *r)
+{
+  const char *app = bridge_param_str(call, "app");
+  const char *props = bridge_param_has(call, "props") ? bridge_param_str(call, "props") : "";
+  gboolean single = bridge_param_bool(call, "single", FALSE);
+  const char *argv[8];
+  int n = 0;
+  argv[n++] = shell.self_exe;
+  argv[n++] = "--app";
+  argv[n++] = app;
+  if (props != NULL && *props) {
+    argv[n++] = "--props";
+    argv[n++] = props;
+  }
+  if (single)
+    argv[n++] = "--single";
+  argv[n] = NULL;
   GError *err = NULL;
   if (spawn_detached(argv, &err))
     shell_reply_ok(r, NULL);
   else
-    reply_error(r, err, "couldn't open NoCapOS");
+    reply_error(r, err, "couldn't open the app");
   g_clear_error(&err);
-  surface_hide(SURF_CENTER);
-  surface_hide(SURF_LAUNCHER);
 }
 
 void
@@ -99,49 +129,34 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
   if (strcmp(m, "shell.info") == 0) {
     surfaces_info_called(surface);
     shell_reply_ok(r, shell_info_json(surface));
-  } else if (strcmp(m, "surface.show") == 0 || strcmp(m, "surface.hide") == 0 ||
-             strcmp(m, "surface.toggle") == 0) {
-    SurfaceId t = named_surface(call);
-    if (t >= SURF_COUNT) {
-      shell_reply_fail(r, "unknown surface");
-      return;
-    }
-    if (m[8] == 's')
-      surface_show(t);
-    else if (m[8] == 'h')
-      surface_hide(t);
-    else
-      surface_toggle(t);
+  } else if (strcmp(m, "session.get") == 0 || strcmp(m, "session.refresh") == 0) {
+    alfad_session(m[8] == 'r', session_reply, r);
+  } else if (strcmp(m, "surface.input") == 0) {
+    surface_set_input(surface, bridge_param_array(call, "rects"), bridge_param_bool(call, "full", FALSE));
     shell_reply_ok(r, NULL);
-  } else if (strcmp(m, "surface.size") == 0) {
-    int h = (int)bridge_param_int(call, "height", 0);
-    if (h <= 0) {
-      surface_hide(surface);
-    } else {
-      surface_set_height(surface, h);
-      if (!surface_is_visible(surface))
-        surface_show(surface);
-    }
+  } else if (strcmp(m, "surface.zones") == 0) {
+    surface_set_zones((int)bridge_param_int(call, "top", -1), (int)bridge_param_int(call, "bottom", -1),
+                      (int)bridge_param_int(call, "left", -1), (int)bridge_param_int(call, "right", -1));
     shell_reply_ok(r, NULL);
+  } else if (strcmp(m, "surface.keyboard") == 0) {
+    surface_set_keyboard(surface, bridge_param_str(call, "mode"));
+    shell_reply_ok(r, NULL);
+  } else if (strcmp(m, "ui.command") == 0) {
+    /* The desktop's menu (or an app) asks the chrome for a panel. */
+    JsonObject *o = json_object_new();
+    json_object_set_string_member(o, "name", bridge_param_str(call, "name"));
+    json_object_set_string_member(o, "action", "show");
+    shell_emit(SM(SURF_CHROME), "ui.command", jobj_node(o));
+    shell_reply_ok(r, NULL);
+  } else if (strcmp(m, "nocap.open") == 0) {
+    open_app(call, r);
   } else if (strcmp(m, "apps.list") == 0) {
     shell_reply_ok(r, apps_list_json());
   } else if (strcmp(m, "apps.launch") == 0) {
-    if (apps_launch(bridge_param_str(call, "id"), &err)) {
+    if (apps_launch(bridge_param_str(call, "id"), &err))
       shell_reply_ok(r, NULL);
-      surface_hide(SURF_LAUNCHER);
-    } else {
+    else
       reply_error(r, err, "couldn't open the app");
-    }
-  } else if (strcmp(m, "dock.get") == 0) {
-    shell_reply_ok(r, dock_get_json());
-  } else if (strcmp(m, "dock.set") == 0) {
-    JsonNode *res = dock_set(bridge_param_array(call, "pinned"), &err);
-    if (res != NULL) {
-      shell_emit(SM(SURF_DOCK) | SM(SURF_LAUNCHER), "dock.changed", json_node_copy(res));
-      shell_reply_ok(r, res);
-    } else {
-      reply_error(r, err, "couldn't save the dock");
-    }
   } else if (strcmp(m, "windows.list") == 0) {
     shell_reply_ok(r, toplevel_list_json());
   } else if (g_str_has_prefix(m, "windows.")) {
@@ -149,6 +164,14 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
       shell_reply_ok(r, NULL);
     else
       reply_error(r, err, "window action failed");
+  } else if (strcmp(m, "window.action") == 0) {
+    if (app_window_action(bridge_param_str(call, "action"), &err))
+      shell_reply_ok(r, NULL);
+    else
+      reply_error(r, err, "window action failed");
+  } else if (strcmp(m, "window.title") == 0) {
+    app_window_title(bridge_param_str(call, "title"));
+    shell_reply_ok(r, NULL);
   } else if (strcmp(m, "audio.get") == 0) {
     audio_get(audio_reply, r);
   } else if (strcmp(m, "audio.set") == 0) {
@@ -165,10 +188,8 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
     const char *action = bridge_param_str(call, "action");
     if (shell.greeter)
       greeter_power(action, r);
-    else {
-      surface_hide(SURF_CENTER);
+    else
       power_action(action, done_reply, r);
-    }
   } else if (strcmp(m, "notify.list") == 0) {
     shell_reply_ok(r, notify_list_json());
   } else if (strcmp(m, "notify.dismiss") == 0) {
@@ -187,8 +208,6 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
   } else if (strcmp(m, "notify.read") == 0) {
     notify_read(bridge_param_has(call, "id") ? bridge_param_str(call, "id") : NULL);
     shell_reply_ok(r, NULL);
-  } else if (strcmp(m, "nocapos.open") == 0) {
-    open_nocapos(bridge_param_has(call, "app") ? bridge_param_str(call, "app") : NULL, r);
   } else if (strcmp(m, "polkit.respond") == 0) {
     gboolean ok = polkit_respond(bridge_param_str(call, "cookie"), bridge_param_str(call, "password"), &err);
     bridge_param_wipe(call, "password");

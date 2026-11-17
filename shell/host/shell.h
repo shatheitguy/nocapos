@@ -13,14 +13,11 @@
 #endif
 
 typedef enum {
-  SURF_BAR,
-  SURF_DOCK,
-  SURF_LAUNCHER,
-  SURF_CENTER,
-  SURF_BANNERS,
-  SURF_OSD,
-  SURF_POLKIT,
-  SURF_GREETER,
+  SURF_DESKTOP, /* NoCap OS's desktop: wallpaper, widgets, icons (bottom layer) */
+  SURF_CHROME,  /* NoCap OS's menu bar, dock, launcher, panels (top layer) */
+  SURF_POLKIT,  /* the admin password prompt (overlay) */
+  SURF_GREETER, /* the sign-in screen */
+  SURF_APP,     /* one NoCap OS app in its own window (nocap-shell --app) */
   SURF_COUNT
 } SurfaceId;
 
@@ -43,7 +40,12 @@ typedef struct {
   char *voice;
   char *theme;
   char *web_url;
+  char *api_origin; /* alfad's loopback listener, e.g. http://127.0.0.1:8780 */
   gboolean admin;
+  /* --app mode: the NoCap OS app this window shows */
+  char *app_id;
+  char *app_props;
+  GtkWidget *app_window;
 } Shell;
 
 extern Shell shell;
@@ -67,9 +69,14 @@ void surface_show(SurfaceId id);
 void surface_hide(SurfaceId id);
 void surface_toggle(SurfaceId id);
 gboolean surface_is_visible(SurfaceId id);
-void surface_set_height(SurfaceId id, int height);
-void surface_show_for(SurfaceId id, guint ms); /* show, then hide after ms */
-void surfaces_info_called(SurfaceId id);       /* test-mode readiness */
+void surfaces_info_called(SurfaceId id); /* test-mode readiness */
+void surfaces_create_app(void);           /* --app mode: one app window */
+void surface_set_input(SurfaceId id, JsonArray *rects, gboolean full);
+void surface_set_zones(int top, int bottom, int left, int right);
+void surface_set_keyboard(SurfaceId id, const char *mode);
+gboolean app_window_action(const char *action, GError **error);
+void app_window_title(const char *title);
+void app_window_props(const char *props); /* a second launch asked for these */
 
 /* ---- uri scheme (scheme.c) ---- */
 void scheme_register(WebKitWebContext *ctx);
@@ -118,10 +125,9 @@ void notify_read(const char *id); /* NULL = all */
 void notify_merge_remote(JsonArray *items); /* items from alfad */
 
 /* ---- alfad client (alfad.c) ---- */
-typedef void (*AlfadSessionCb)(JsonObject *session, gpointer data);
+typedef void (*AlfadSessionCb)(JsonObject *session, gpointer data); /* session may be NULL */
 void alfad_start(void);
-JsonObject *alfad_session_sync(guint timeout_s); /* for --app; may return NULL */
-void alfad_mark_read(JsonArray *ids, gboolean all);
+void alfad_session(gboolean refresh, AlfadSessionCb cb, gpointer data);
 
 /* ---- polkit agent (polkit.c) ---- */
 void polkit_agent_start(void);
@@ -141,7 +147,8 @@ int control_client(const char *action, const char *arg);
 void control_osd(const char *what);
 
 /* ---- app windows (appwin.c) ---- */
-int appwin_run(const char *app, int argc, char **argv);
+int appwin_run(const char *app, const char *props, gboolean single, int argc, char **argv);
+gboolean app_id_valid(const char *id);
 
 /* ---- util (util.c) ---- */
 typedef void (*CmdCb)(char *output, gboolean success, gpointer data); /* output owned by callee */

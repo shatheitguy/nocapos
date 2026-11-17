@@ -14,7 +14,7 @@ static const char introspection[] =
     "<arg type='s' name='arg' direction='in'/></method>"
     "</interface></node>";
 
-static const char *const CONTROL_SURFACES[] = {"launcher", "center", "osd", NULL};
+static const char *const CONTROL_SURFACES[] = {"launcher", "spotlight", "center", "notifications", NULL};
 static const char *const OSD_ACTIONS[] = {"volume-up", "volume-down", "volume-mute", "brightness-up",
                                           "brightness-down", NULL};
 
@@ -36,8 +36,7 @@ osd_emit(const char *kind, int value, gboolean muted)
   json_object_set_string_member(o, "kind", kind);
   json_object_set_int_member(o, "value", value);
   json_object_set_boolean_member(o, "muted", muted);
-  shell_emit(SM(SURF_OSD), "osd.show", jobj_node(o));
-  surface_show_for(SURF_OSD, 1500);
+  shell_emit(SM(SURF_CHROME), "osd.show", jobj_node(o));
 }
 
 static void
@@ -45,7 +44,7 @@ audio_after(gboolean available, int volume, gboolean muted, gpointer data)
 {
   if (!available)
     return;
-  shell_emit(SM(SURF_CENTER) | SM(SURF_BAR) | SM(SURF_OSD), "audio.changed",
+  shell_emit(SM(SURF_CHROME), "audio.changed",
              audio_json(available, volume, muted));
   osd_emit("volume", volume, muted);
 }
@@ -67,7 +66,7 @@ brightness_after(gboolean available, int percent, gpointer data)
 {
   if (!available)
     return;
-  shell_emit(SM(SURF_CENTER) | SM(SURF_OSD), "brightness.changed", brightness_json(available, percent));
+  shell_emit(SM(SURF_CHROME), "brightness.changed", brightness_json(available, percent));
   osd_emit("brightness", percent, FALSE);
 }
 
@@ -111,13 +110,11 @@ on_method(GDBusConnection *c, const char *sender, const char *path, const char *
   } else if ((strcmp(action, "toggle") == 0 || strcmp(action, "show") == 0 ||
               strcmp(action, "hide") == 0) &&
              in_list(arg, CONTROL_SURFACES)) {
-    SurfaceId id = (SurfaceId)surface_from_name(arg);
-    if (action[0] == 't')
-      surface_toggle(id);
-    else if (action[0] == 's')
-      surface_show(id);
-    else
-      surface_hide(id);
+    /* NoCap OS's own launcher and panels, in the chrome surface. */
+    JsonObject *o = json_object_new();
+    json_object_set_string_member(o, "name", arg);
+    json_object_set_string_member(o, "action", action);
+    shell_emit(SM(SURF_CHROME), "ui.command", jobj_node(o));
   } else {
     g_dbus_method_invocation_return_error(inv, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "not allowed");
     return;

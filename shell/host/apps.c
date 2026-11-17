@@ -47,7 +47,7 @@ emit_changed(gpointer u)
 {
   changed_id = 0;
   apps_reload();
-  shell_emit(SM(SURF_LAUNCHER) | SM(SURF_DOCK), "apps.changed", jobj_node(json_object_new()));
+  shell_emit(SM(SURF_CHROME) | SM(SURF_DESKTOP), "apps.changed", jobj_node(json_object_new()));
   return G_SOURCE_REMOVE;
 }
 
@@ -220,6 +220,6 @@ dock_set(JsonArray *pinned, GError **error)
   json_object_set_array_member(o, "pinned", json_array_ref(json_node_get_array(node)));
   json_node_unref(node);
   /* Lets the other dock/launcher page refresh its pins. */
-  shell_emit(SM(SURF_LAUNCHER) | SM(SURF_DOCK), "apps.changed", jobj_node(json_object_new()));
+  shell_emit(SM(SURF_CHROME) | SM(SURF_DESKTOP), "apps.changed", jobj_node(json_object_new()));
   return jobj_node(o);
 }
