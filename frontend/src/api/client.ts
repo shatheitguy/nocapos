@@ -20,6 +20,20 @@ let expiresAt = 0;
 // (network blip, server restarting). The session is kept and retried.
 let refreshFailures = 0;
 const listeners = new Set<Listener>();
+// NoCap Desktop: the session comes from the NoCap Shell host (the person
+// signed in on the screen), and so does the next one; there is no refresh
+// cookie there.
+let sessionSource: (() => Promise<Session | null>) | null = null;
+
+/** NoCap Desktop: where sessions come from instead of the refresh cookie. */
+export function useSessionSource(fn: () => Promise<Session | null>) {
+  sessionSource = fn;
+}
+
+/** NoCap Desktop: start with a session the host handed over. */
+export function adoptSession(s: Session) {
+  setSession(s);
+}
 
 export function onSessionChange(fn: Listener): () => void {
   listeners.add(fn);
@@ -105,6 +119,28 @@ async function raw<T>(path: string, opts: RequestOptions = {}): Promise<ApiResul
 // Single-flight: the server revokes the whole session if a rotated refresh
 // token is replayed, so concurrent callers must share one refresh.
 export function refresh(): Promise<boolean> {
+  if (sessionSource) {
+    const source = sessionSource;
+    refreshing ??= source()
+      .then((s) => {
+        if (s) {
+          setSession(s);
+          return true;
+        }
+        refreshFailures++;
+        retryRefresh();
+        return false;
+      })
+      .catch(() => {
+        refreshFailures++;
+        retryRefresh();
+        return false;
+      })
+      .finally(() => {
+        refreshing = null;
+      });
+    return refreshing;
+  }
   refreshing ??= raw<Session>('/api/v1/auth/refresh', {
     method: 'POST',
     auth: false,
