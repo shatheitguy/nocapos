@@ -164,6 +164,123 @@ See also [Signing](#signing).
 
 apt is not used on the device: system packages only change with a release.
 
+Channels: **stable** sees full releases; **beta** also sees pre-releases
+(Glow Up > Update settings). Images record the channel they were built for.
+
+### Versions
+
+| Version | What |
+|---|---|
+| `0.14.0` | a NoCapOS release (tag `v0.14.0`) |
+| `0.14.0-s1`, `-s2`, ... | security refreshes of that release: the same NoCapOS, newer Debian fixes (tag `v0.14.0-s1`, never marked "latest", so script installs are unaffected) |
+| `0.15.0-beta.1` | a pre-release (beta channel) |
+
+Order: `0.14.0-beta.N` < `0.14.0` < `0.14.0-s1` < `0.14.0-s2` < `0.14.1`
+(`backend/internal/osimage`).
+
+### Security updates from Debian
+
+`.github/workflows/os-security.yml` runs every day (and by hand):
+
+1. It reads the package lists (`nocapos-<target>.packages.tsv`) of the
+   newest stable release with system images and compares them with Debian
+   13's security archive, `trixie-updates` and point releases
+   (`scripts/security-check.py`).
+2. When a package has a security fix, it rebuilds that same release (its
+   tag) from today's Debian snapshot, runs the QEMU tests (boot, update,
+   rollback, installer) and publishes `vX.Y.Z-sN` with the images, bundles
+   and a manifest marked `security`, listing each fixed package and its CVE
+   IDs from the Debian changelog.
+3. Glow Up shows it as a security update with those fixes. It installs when
+   the owner presses the button, or by itself at the chosen time when
+   "Install security updates automatically" is on (off by default).
+
+Bundles carry a block index: a device downloads only the blocks that changed
+(HTTP range requests), so a security refresh downloads far less than a full
+image.
+
+### What persists through an update
+
+See [What persists](#what-persists): the data partition is never touched by
+an update; `/etc` settings come back through `etc-sync`.
+
+## Cutting a release
+
+1. Bump `VERSION` in a pull request and merge it. The Release workflow
+   publishes the script-install files (tarballs, `install.sh`, APK) as
+   before.
+2. When it finishes, `os-release.yml` sees a release without system images,
+   builds them from that tag (`os.yml` with `release: true`: both targets,
+   all QEMU tests), signs the bundles, and attaches:
+   - `nocapos-pc.img.xz`, `nocapos-pc-usb.img.xz` (USB stick with the setup),
+     `nocapos-pi.img.xz`;
+   - `nocapos-pc.rugixb`, `nocapos-pi.rugixb` (update bundles);
+   - `nocapos-os.json` (the update manifest);
+   - `nocapos-<target>.packages.tsv` (what's inside).
+3. It refreshes the APT repository (release `apt`).
+
+A pre-release (beta) gets the same treatment and shows up on the beta
+channel. To redo a release's images: run "NoCapOS image release" by hand
+with `force`.
+
+## The installer
+
+The PC USB stick (`nocapos-pc-usb.img.xz`, made by `scripts/make-usb.sh`) is
+the PC image plus a flag on its startup partition: instead of NoCapOS it
+starts `nocapos-installer.service` (`backend/cmd/nocap-installer`, on
+`127.0.0.1:8790` only) and a kiosk session (`cage` + `nocap-kiosk`, a
+WebKitGTK window) showing the NoCap web UI's `/installer` page. It asks:
+
+1. Language & region (time zone and keyboard follow the region);
+2. Where NoCapOS goes (disk cards with what's on each disk now, the new
+   layout, "Lock my drive" with the security chip or a passphrase);
+3. The owner's account and the computer name;
+4. How NoCapOS is used: desktop + web access, desktop only, web only;
+5. Review ("Erase and install" needs "I understand" ticked);
+6. Installing, then "Restart now".
+
+It writes the A/B layout itself (the stick's own startup, boot and system
+partitions; an empty system B; a data partition filling the rest, with LUKS2
+when locked) and leaves the answers on the new data partition. NoCapOS's
+first start applies them (account, name, time zone, keyboard, usage) and
+destroys that file.
+
+The Raspberry Pi image needs no installer: flash it, and the first-run
+setup in the browser makes the owner's account and asks the same "How will
+you use NoCapOS?" question.
+
+### How NoCapOS is used
+
+| Mode | Screen | Other devices |
+|---|---|---|
+| Desktop + web access | NoCap Desktop | NoCapOS in the browser |
+| Desktop only | NoCap Desktop | kept out: connections from the network are closed on arrival; NoCapOS answers this machine only |
+| Web only | not started | NoCapOS in the browser |
+
+Switch any time in Settings > This Screen & Access.
+
+## NoCapOS APT repository
+
+NoCapOS's own packages (`nocapos-core`, `nocapos-image`, `nocapos-branding`,
+`nocapos-base`, `nocapos-installer`, later `nocap-shell`) are published as a
+flat, signed APT repository: the assets of the `apt` release.
+
+```
+deb [signed-by=/usr/share/keyrings/nocapos.gpg] https://github.com/shatheitguy/nocapos/releases/download/apt ./
+```
+
+Image installs never use it (they update by whole images). Script installs
+may later switch to it for `nocapos-core`; `deploy/install.sh` doesn't yet.
+
+## Image size
+
+The base PC system (squashfs) is about 2.5 GiB and the Pi system about
+3 GiB. The largest parts are the GPU/Wi-Fi firmware, the VM stack (qemu,
+libvirt, OVMF), Docker, ffmpeg and WebKitGTK. Follow-up: move the VM stack
+(and maybe Remote Desktop and Samba) into optional signed system extensions
+(systemd-sysext images built from the same snapshot), turned on from the UI
+the first time a feature is used.
+
 ## Signing
 
 Bundles are signed with X.509/CMS (Rugix). The owner adds three repository
@@ -191,6 +308,14 @@ openssl x509 -req -in signer.csr -CA root.crt -CAkey root.key -CAcreateserial -d
 
 Keep `root.key` offline; it is only needed to issue a new signing
 certificate.
+
+The APT repository is signed with OpenPGP:
+
+| Secret | What |
+|---|---|
+| `NOCAPOS_APT_SIGNING_KEY` | an armored private key without a passphrase (`gpg --quick-gen-key "NoCapOS APT" ed25519 sign never`, then `gpg --armor --export-secret-keys`) |
+
+Without it the repository is published unsigned, with a warning.
 
 ## Existing installs: a later one-time move
 
