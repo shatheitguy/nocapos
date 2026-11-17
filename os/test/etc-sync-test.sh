@@ -42,7 +42,7 @@ bash "$SYNC" save
 
 # A system update: fresh /etc from the new image, which adds a system
 # account (polkitd) and a group (render), and has no people.
-rm -rf "$T/etc"; mkdir -p "$T/etc"
+rm -rf "${T:?}/etc"; mkdir -p "$T/etc"
 cat >"$T/etc/passwd" <<'EOF'
 root:x:0:0:root:/root:/bin/bash
 messagebus:x:100:101::/nonexistent:/usr/sbin/nologin

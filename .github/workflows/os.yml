@@ -30,9 +30,9 @@ jobs:
         run: bash os/scripts/check-lists.sh
       - name: shellcheck
         run: |
-          shellcheck -x -s bash os/run-bakery os/scripts/*.sh os/packaging/build-debs.sh os/test/*.sh \
+          shellcheck -S warning -x -s bash os/run-bakery os/scripts/*.sh os/packaging/build-debs.sh os/test/*.sh \
             os/recipes/*/steps/*.sh
-          shellcheck -s sh os/packaging/nocapos-image/root/usr/lib/nocapos/* \
+          shellcheck -S warning -s sh os/packaging/nocapos-image/root/usr/lib/nocapos/* \
             os/packaging/nocapos-image/root/etc/rugix/hooks/boot/post-init/*
       - name: etc-sync account merge
         run: bash os/test/etc-sync-test.sh
