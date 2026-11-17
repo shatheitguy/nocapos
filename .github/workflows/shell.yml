@@ -1,0 +1,58 @@
+name: NoCap Shell programs
+
+# Builds NoCap Desktop's native programs (nocap-shell, nocap-lock) for every
+# release architecture, in a Debian container of that architecture, and
+# runs the bridge tests there. Used by the release, image and CI workflows.
+#   amd64, arm64: debian:bookworm (they then run on Debian 12 and 13,
+#                 Raspberry Pi OS and Ubuntu 24.04)
+#   armv7:        debian:trixie (32-bit ARM's 64-bit time ABI)
+# Each build is uploaded as the artifact nocap-shell-<arch>.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            image: debian:bookworm
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            image: debian:bookworm
+            platform: linux/arm64
+          - arch: armv7
+            runner: ubuntu-latest
+            image: debian:trixie
+            platform: linux/arm/v7
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Emulate 32-bit ARM
+        if: matrix.arch == 'armv7'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Build and test in ${{ matrix.image }} (${{ matrix.platform }})
+        run: |
+          docker run --rm --platform ${{ matrix.platform }} -v "$PWD:/src" -w /src docker.io/library/${{ matrix.image }} \
+            bash shell/scripts/build-release.sh /src/out/${{ matrix.arch }} "$(cat VERSION)"
+          sudo chown -R "$(id -u):$(id -g)" out
+          file out/${{ matrix.arch }}/* || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocap-shell-${{ matrix.arch }}
+          path: out/${{ matrix.arch }}/
+          if-no-files-found: error
