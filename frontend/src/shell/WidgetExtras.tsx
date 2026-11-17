@@ -7,8 +7,11 @@ import { MonthCalendar } from '../components/MonthCalendar';
 import { fmtBytes, fmtUptime } from '../lib/format';
 import { useClock, usePoll } from '../lib/hooks';
 import { useTimePrefs, zoned } from '../lib/time';
-import { openApp } from '../apps/meta';
-import { flushSaves, saveLater } from '../lib/saveLater';
+import { APPS, openApp } from '../apps/meta';
+import { NoteBody } from '../apps/notes/NoteParts';
+import { displayTitle, sortNotes } from '../apps/notes/noteDoc';
+import { useNotes } from '../apps/notes/notesStore';
+import { useT } from '../i18n';
 import { userKey } from '../state/prefs';
 import { useSystem } from '../state/system';
 
@@ -48,32 +51,76 @@ export function CalendarWidget() {
   );
 }
 
-// ---- Sticky note ----
+// ---- Sticky note: one of your Sticky Notes, live ----
 export function NotesWidget() {
-  const [text, setText] = useState('');
-  useEffect(() => {
-    flushSaves(); // a just-unmounted copy may still have a write queued
+  const t = useT();
+  const notes = useNotes((s) => s.notes);
+  const loaded = useNotes((s) => s.loaded);
+  const [chosen, setChosen] = useState<string | null>(() => {
     try {
-      setText(localStorage.getItem(userKey('alfa.notes')) ?? '');
+      return localStorage.getItem(userKey('alfa.notes.widget'));
+    } catch {
+      return null;
+    }
+  });
+  const choose = (id: string) => {
+    setChosen(id);
+    try {
+      localStorage.setItem(userKey('alfa.notes.widget'), id);
     } catch {
       /* ignore */
     }
-    return flushSaves;
-  }, []);
+  };
+  const live = sortNotes(
+    notes.filter((n) => n.trashed_at == null && !n.archived),
+    'edited',
+    true,
+  );
+  // The note you picked, else your first pinned or latest one.
+  const note = live.find((n) => n.id === chosen) ?? live[0];
+  const open = (id?: string) => openApp('notes', id ? { props: { note: id, at: String(Date.now()) } } : {});
+  const next = () => {
+    if (live.length < 2 || !note) return;
+    choose(live[(live.indexOf(note) + 1) % live.length].id);
+  };
+  const add = () => {
+    const n = useNotes.getState().create();
+    choose(n.id);
+    open(n.id);
+  };
   return (
-    <div className="widget glass notes-widget">
+    <div className="widget glass notes-widget nt-tint" data-color={note?.color ?? 'glass'}>
       <div className="widget-head">
-        <span><Icon name="pencil" size={14} /> Notes</span>
+        <span className="notes-widget-title">
+          <Icon name="stickyNote" size={14} /> {note ? displayTitle(note, 40) || t('notes.untitled') : APPS.notes.title}
+        </span>
+        <span className="notes-widget-acts">
+          {live.length > 1 && (
+            <button type="button" className="ne-btn" title={t('notes.widgetNext')} aria-label={t('notes.widgetNext')} onClick={next}>
+              <Icon name="swap" size={13} />
+            </button>
+          )}
+          <button type="button" className="ne-btn" title={t('notes.new')} aria-label={t('notes.new')} onClick={add}>
+            <Icon name="plus" size={13} />
+          </button>
+        </span>
       </div>
-      <textarea
-        value={text}
-        placeholder="Jot something down…"
-        onChange={(e) => {
-          const v = e.target.value;
-          setText(v);
-          saveLater(userKey('alfa.notes'), () => v, 300);
-        }}
-      />
+      {note ? (
+        <div
+          className="notes-widget-body"
+          role="button"
+          tabIndex={0}
+          onClick={() => open(note.id)}
+          onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && open(note.id)}
+          title={t('notes.openInApp')}
+        >
+          <NoteBody note={note.title.trim() ? note : { ...note, body: note.body.slice(1) }} tick />
+        </div>
+      ) : (
+        <button type="button" className="notes-widget-body empty muted" onClick={add}>
+          {loaded ? t('notes.widgetEmpty') : t('notes.loading')}
+        </button>
+      )}
     </div>
   );
 }
