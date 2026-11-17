@@ -343,9 +343,28 @@ run_job(Job *j)
   g_object_unref(t);
 }
 
+/* Only the people's own accounts the sign-in screen lists can sign in:
+ * never root or a system account. */
+static gboolean
+account_allowed(const char *username)
+{
+  struct passwd *pw = getpwnam(username);
+  if (pw == NULL || pw->pw_uid == 0 || pw->pw_uid < uid_min() || pw->pw_uid >= 60000)
+    return FALSE;
+  const char *sh = pw->pw_shell ? pw->pw_shell : "";
+  return sh[0] != 0 && !g_str_has_suffix(sh, "nologin") && !g_str_has_suffix(sh, "false");
+}
+
 void
 greeter_login(const char *username, ShellReply *r)
 {
+  if (!account_allowed(username)) {
+    JsonObject *o = json_object_new();
+    json_object_set_string_member(o, "state", "failed");
+    json_object_set_string_member(o, "message", "");
+    shell_reply_ok(r, jobj_node(o));
+    return;
+  }
   Job *j = g_new0(Job, 1);
   j->op = OP_LOGIN;
   j->username = g_strdup(username);

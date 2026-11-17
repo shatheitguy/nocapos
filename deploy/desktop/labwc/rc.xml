@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
-  NoCap Desktop: labwc settings for every account (written by NoCapOS;
-  replaced on updates). A person's own ~/.config/labwc/rc.xml wins.
+  NoCap Desktop: labwc settings for every account's session (written by
+  NoCapOS to /usr/share/nocapos/labwc; replaced on updates).
   Keys follow NoCap OS: Super opens the app launcher, Super+A the control
   center, Super+L locks, Alt+Tab switches windows, Super+arrows snap.
 -->

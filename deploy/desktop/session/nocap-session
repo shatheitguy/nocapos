@@ -1,7 +1,8 @@
 #!/bin/sh
 # NoCap Desktop: the session greetd starts for whoever signs in (installed
-# by NoCapOS to /usr/local/lib/nocapos/shell). labwc runs the windows; its
-# autostart (/etc/xdg/labwc/autostart) brings up NoCap Shell.
+# by NoCapOS to /usr/local/lib/nocapos/shell). labwc runs the windows with
+# NoCap Desktop's own settings (/usr/share/nocapos/labwc); its autostart
+# brings up NoCap Shell.
 #
 # Safety net: when the compositor can't start on this graphics hardware (it
 # ends within a few seconds), it's started again with software rendering,
@@ -16,7 +17,14 @@ export GDK_BACKEND="wayland,x11"
 export _JAVA_AWT_WM_NONREPARENTING=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 
+# Never as root: the desktop is a person's own session.
+if [ "$(id -u)" -eq 0 ]; then
+  echo "nocap-session: refusing to run as root" >&2
+  exit 1
+fi
+
 LIB=/usr/local/lib/nocapos/shell
+CONF=/usr/share/nocapos/labwc
 LABWC=labwc
 if ! command -v labwc >/dev/null 2>&1 && [ -x "$LIB/labwc" ]; then LABWC="$LIB/labwc"; fi
 
@@ -29,12 +37,14 @@ run() {
   start=$(date +%s)
   echo "== $(date) starting $LABWC ${WLR_RENDERER:+(renderer $WLR_RENDERER)}" >>"$LOG"
   if [ -n "$DBUS_SESSION_BUS_ADDRESS" ] || [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]; then
-    "$LABWC" >>"$LOG" 2>&1
+    "$LABWC" -C "$CONF" >>"$LOG" 2>&1
   else
-    dbus-run-session -- "$LABWC" >>"$LOG" 2>&1
+    dbus-run-session -- "$LABWC" -C "$CONF" >>"$LOG" 2>&1
   fi
   code=$?
   end=$(date +%s)
+  # The session's services end with it (the user manager outlives it).
+  systemctl --user stop nocap-session.target graphical-session.target >/dev/null 2>&1
   # A quick, failed exit: the compositor didn't start.
   [ "$code" -ne 0 ] && [ $((end - start)) -lt 15 ] && return 1
   return 0

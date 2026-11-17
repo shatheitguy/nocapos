@@ -47,13 +47,15 @@ desktop_family() {
 # module, and the libraries NoCap Shell's own programs use (GTK 3 with
 # layer-shell, WebKitGTK 4.1). Apps are the light ones every target has:
 # Thunar (files), foot (terminal), Mousepad (text), a web browser
-# (desk_install_browser). Debian 12 has no labwc: NoCapOS brings its own
-# build there, which needs wlroots 0.16 (libwlroots11).
+# (desk_install_browser). labwc comes from the distribution: Debian 13,
+# Raspberry Pi OS and Ubuntu 24.04 have it; Debian 12 and Ubuntu 22.04
+# don't, so NoCap Desktop needs Debian 13 there (desk_install_packages says
+# so; the rest of NoCapOS works as it is).
 desktop_packages() {
   case "$1" in
     debian | ubuntu)
       cat <<'EOF'
-labwc|libwlroots11
+labwc
 greetd
 xwayland
 wayvnc
@@ -98,7 +100,7 @@ libgbm1
 libpam-systemd
 ?firmware-amd-graphics
 ?firmware-misc-nonfree
-?wl-clipboard
+wl-clipboard
 ?xclip
 ?systemd-zram-generator|zram-tools
 EOF
@@ -135,7 +137,7 @@ flatpak
 mesa-dri-drivers
 mesa-libEGL
 mesa-libgbm
-?wl-clipboard
+wl-clipboard
 ?zram-generator
 EOF
       ;;
@@ -166,7 +168,7 @@ adwaita-icon-theme
 ttf-dejavu
 flatpak
 mesa
-?wl-clipboard
+wl-clipboard
 ?zram-generator
 EOF
       ;;
@@ -178,6 +180,21 @@ EOF
 # packages installed: nothing anyone saved goes away. The image builds
 # leave them out.
 OLD_DESKTOP_PACKAGES="gdm3 gdm gnome-shell gnome-session gnome-remote-desktop"
+
+# OLD_DISPLAY_MANAGERS: sign-in services that step aside for greetd (the
+# earlier versions' one and the distributions' own).
+OLD_DISPLAY_MANAGERS="gdm3.service gdm.service lightdm.service sddm.service lxdm.service slim.service xdm.service nodm.service"
+
+# shell_build_packages FAMILY: what building NoCap Shell's two programs on
+# the machine itself needs (the release bundle carries them built for
+# amd64, arm64 and armv7; this is the fallback when those can't run here).
+shell_build_packages() {
+  case "$1" in
+    debian | ubuntu) echo "make gcc pkg-config libgtk-3-dev libgtk-layer-shell-dev libwebkit2gtk-4.1-dev libjson-glib-dev libpolkit-agent-1-dev libwayland-dev wayland-protocols libxkbcommon-dev libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-dev|libgdk-pixbuf2.0-dev libpam0g-dev" ;;
+    fedora) echo "make gcc pkgconf-pkg-config gtk3-devel gtk-layer-shell-devel webkit2gtk4.1-devel json-glib-devel polkit-devel wayland-devel wayland-protocols-devel libxkbcommon-devel cairo-devel pango-devel gdk-pixbuf2-devel pam-devel" ;;
+    arch) echo "make gcc pkgconf gtk3 gtk-layer-shell webkit2gtk-4.1 json-glib polkit wayland wayland-protocols libxkbcommon cairo pango gdk-pixbuf2 pam" ;;
+  esac
+}
 
 # desktop_select FAMILY: picks the desktop's packages. stdin lists the
 # package names this distribution has (one per line). Prints the picks, one
@@ -508,26 +525,6 @@ config_txt_without() {
   awk -v want="$1" '{ s = $0; sub(/[ \t\r]+$/, "", s); if (s != want) print }'
 }
 
-# gdm_config ROOT: GDM's settings file on this distribution.
-gdm_config() {
-  local f
-  for f in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
-    if [ -f "$1$f" ]; then echo "$f"; return 0; fi
-  done
-  if [ -d "$1/etc/gdm3" ]; then echo /etc/gdm3/daemon.conf; else echo /etc/gdm/custom.conf; fi
-}
-
-# gdm_unit ROOT: GDM's systemd unit name.
-gdm_unit() {
-  local d u
-  for u in gdm3.service gdm.service; do
-    for d in /etc/systemd/system /usr/lib/systemd/system /lib/systemd/system; do
-      if [ -f "$1$d/$u" ] && [ ! -L "$1$d/$u" ]; then echo "$u"; return 0; fi
-    done
-  done
-  echo gdm.service
-}
-
 # nvidia_proprietary SYSROOT: the NVIDIA driver (not nouveau) is in use.
 nvidia_proprietary() { [ -d "$1/sys/module/nvidia_drm" ] || [ -d "$1/sys/module/nvidia" ]; }
 
@@ -568,13 +565,21 @@ config_txt_append() {
 #   /usr/local/lib/nocapos/shell     the programs (nocap-shell, nocap-lock,
 #                                    nocap-session, nocap-greeter-session)
 #   /usr/share/nocapos/shell         NoCap Shell's pages (local files only)
-#   /etc/xdg/labwc                   labwc settings for every account
+#   /usr/share/nocapos/labwc         labwc settings for every account's
+#                                    session (labwc -C: a person's own or a
+#                                    distribution's labwc settings never
+#                                    replace NoCap Desktop's)
+#   /usr/share/nocapos/greeter/labwc labwc settings for the sign-in screen
+#   /etc/systemd/user                the session's services (shell, idle lock)
 #   /usr/share/themes/NoCap          window decorations
 #   /etc/greetd/config.toml          the sign-in service
 
 NOCAP_SESSION=nocapos
 SHELL_LIB=/usr/local/lib/nocapos/shell
 SHELL_UI=/usr/share/nocapos/shell
+SHELL_CONF=/usr/share/nocapos/labwc
+GREETER_CONF=/usr/share/nocapos/greeter/labwc
+GREETD_CONF=/etc/greetd/config.toml
 NOCAP_WALLPAPER=/usr/share/backgrounds/nocapos/tide.jpg
 
 # render_session_desktop: /usr/share/wayland-sessions/nocapos.desktop (for
@@ -593,9 +598,10 @@ EOF
 }
 
 # greeter_user ROOT: greetd's own unprivileged account on this system
-# (Debian and Raspberry Pi OS: _greetd; others: greeter).
+# (Debian and Raspberry Pi OS: _greetd; Fedora: greetd; others: greeter).
 greeter_user() {
   if grep -qs '^_greetd:' "$1/etc/passwd"; then echo _greetd
+  elif grep -qs '^greetd:' "$1/etc/passwd"; then echo greetd
   elif grep -qs '^greeter:' "$1/etc/passwd"; then echo greeter
   else echo _greetd
   fi
@@ -720,24 +726,3 @@ org.freedesktop.impl.portal.Secret=gnome-keyring
 EOF
 }
 
-# ---------------------------------------------------------------- earlier desktops
-# gdm_config and gdm_unit (above) find what earlier versions set up, so an
-# update can move the screen off it.
-
-# ini_set SECTION KEY VALUE: reads an ini file (GDM's daemon.conf) on stdin
-# and prints it with KEY=VALUE in [SECTION]: a commented-out or existing
-# KEY line is replaced, else it's added at the end of that section; the
-# section is added if it's missing.
-ini_set() {
-  awk -v sec="[$1]" -v key="$2" -v val="$3" '
-    function emit() { if (insec && !done) { print key "=" val; done = 1 } }
-    { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); c = s; sub(/^#[ \t]*/, "", c) }
-    s ~ /^\[/ { emit(); insec = (s == sec); if (insec) seen = 1; print; next }
-    insec && index(c, key "=") == 1 {
-      if (!done) { print key "=" val; done = 1 }
-      next
-    }
-    { print }
-    END { emit(); if (!seen) { print ""; print sec; print key "=" val } }
-  '
-}
