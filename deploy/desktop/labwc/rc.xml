@@ -136,4 +136,9 @@
       <disableWhileTyping>yes</disableWhileTyping>
     </device>
   </libinput>
+  <!-- NoCap OS's own app windows draw their title bar themselves (the same
+       one as in the browser); every other app gets NoCap's decorations. -->
+  <windowRules>
+    <windowRule identifier="io.nocapos.App.*" serverDecoration="no" />
+  </windowRules>
 </labwc_config>

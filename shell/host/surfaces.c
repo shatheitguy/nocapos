@@ -167,8 +167,9 @@ check_ready(Surface *s)
     return;
   s->ready_printed = TRUE;
   g_print("nocap-shell: ready %s\n", conf[s->id].name);
+  /* Surfaces shown on demand (the admin prompt) load when first shown. */
   for (int i = 0; i < SURF_COUNT; i++)
-    if (surf[i].view != NULL && !surf[i].ready_printed)
+    if (surf[i].view != NULL && !surf[i].ready_printed && !conf[i].on_demand)
       return;
   g_print("nocap-shell: all ready\n");
 }
@@ -629,7 +630,22 @@ on_script_message(WebKitUserContentManager *ucm, WebKitJavascriptResult *res, gp
 static WebKitWebContext *
 make_context(void)
 {
-  WebKitWebContext *ctx = webkit_web_context_new_ephemeral();
+  /* The person's own NoCap OS keeps what it keeps in a browser (its local
+   * storage: wallpapers they added, window and widget state) in their home;
+   * the sign-in screen keeps nothing. */
+  WebKitWebContext *ctx;
+  if (shell.greeter) {
+    ctx = webkit_web_context_new_ephemeral();
+  } else {
+    char *data = g_build_filename(g_get_user_data_dir(), "nocapos", "shell", NULL);
+    char *cache = g_build_filename(g_get_user_cache_dir(), "nocapos", "shell", NULL);
+    WebKitWebsiteDataManager *dm =
+        webkit_website_data_manager_new("base-data-directory", data, "base-cache-directory", cache, NULL);
+    ctx = webkit_web_context_new_with_website_data_manager(dm);
+    g_object_unref(dm);
+    g_free(data);
+    g_free(cache);
+  }
   webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_set_spell_checking_enabled(ctx, FALSE);
 
@@ -667,7 +683,14 @@ make_settings(void)
   webkit_settings_set_enable_back_forward_navigation_gestures(st, FALSE);
   webkit_settings_set_media_playback_requires_user_gesture(st, FALSE);
   webkit_settings_set_enable_smooth_scrolling(st, TRUE);
-  webkit_settings_set_hardware_acceleration_policy(st, WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+  /* The graphics card draws the pages, except when the screen itself is
+   * drawn by the processor (the software rendering fallback): then WebKit
+   * paints in software too, which always works. */
+  const char *renderer = g_getenv("WLR_RENDERER");
+  gboolean software = g_strcmp0(renderer, "pixman") == 0 || g_strcmp0(g_getenv("LIBGL_ALWAYS_SOFTWARE"), "1") == 0 ||
+                      g_file_test("/etc/nocapos/desktop-software-rendering", G_FILE_TEST_EXISTS);
+  webkit_settings_set_hardware_acceleration_policy(
+      st, software ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
 #if WEBKIT_CHECK_VERSION(2, 38, 0)
   webkit_settings_set_enable_webrtc(st, FALSE);
 #endif

@@ -299,7 +299,7 @@ EOF
 # gtk-3.0/gtk.css get a NoCapOS block. It's a marked block, so a person's
 # own CSS around it stays as it is.
 
-NOCAP_RED=#e5383b
+NOCAP_RED=#e8232b
 ACCENT_BEGIN='/* NoCapOS accent: begin (kept up to date by NoCapOS) */'
 ACCENT_END='/* NoCapOS accent: end */'
 
@@ -323,10 +323,10 @@ $ACCENT_BEGIN
 @define-color theme_selected_fg_color #ffffff;
 @define-color accent_bg_color $NOCAP_RED;
 button.suggested-action, button.suggested-action:hover, button.suggested-action:active, button.suggested-action:checked {
-  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+  background-image: none; background-color: $NOCAP_RED; border-color: #b51b22; color: #ffffff;
 }
 switch:checked, progressbar progress, scale highlight, levelbar block.filled, check:checked, radio:checked, check:indeterminate, radio:indeterminate {
-  background-image: none; background-color: $NOCAP_RED; border-color: #b81f22; color: #ffffff;
+  background-image: none; background-color: $NOCAP_RED; border-color: #b51b22; color: #ffffff;
 }
 row:selected, .view:selected, iconview:selected, treeview.view:selected, flowboxchild:selected, entry selection, textview text selection, label selection, calendar:selected {
   background-color: $NOCAP_RED; color: #ffffff;

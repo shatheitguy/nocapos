@@ -233,7 +233,7 @@ session_thread(GTask *task, gpointer src, gpointer data, GCancellable *c)
     o = fetch_session(FALSE, 10, &err);
   }
   if (o == NULL) {
-    g_message("alfad: %s", err ? err->message : "no answer");
+    g_debug("alfad: %s", err ? err->message : "no answer");
     g_clear_error(&err);
     g_task_return_pointer(task, NULL, NULL);
     return;

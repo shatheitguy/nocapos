@@ -9,7 +9,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { startBridge } from '../deskshell/bridge';
 import '../styles/all';
 import './native.css';
-import { nativeSurface } from './platform';
+import { hostCall, nativeSurface } from './platform';
 
 startBridge(); // window.__nocap must exist before the host talks to the page
 
@@ -33,6 +33,8 @@ async function start() {
       </ErrorBoundary>
     </StrictMode>,
   );
+  // Tells the host this surface is up (its test mode waits for every one).
+  hostCall('shell.info').catch(() => undefined);
 }
 
 void start();
