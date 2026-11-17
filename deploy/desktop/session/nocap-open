@@ -1,0 +1,26 @@
+#!/bin/sh
+# NoCap Desktop: opens one of the desktop's own apps by role (keybindings
+# use it): files, terminal, editor, browser, screenshot.
+first() {
+  for c in "$@"; do
+    if command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
+  done
+  return 1
+}
+case "$1" in
+  files) app="$(first thunar pcmanfm-qt pcmanfm nautilus)" && exec "$app" ;;
+  terminal) app="$(first foot lxterminal xfce4-terminal x-terminal-emulator)" && exec "$app" ;;
+  editor) app="$(first mousepad gnome-text-editor gedit)" && exec "$app" ;;
+  browser) app="$(first firefox-esr firefox chromium chromium-browser x-www-browser)" && exec "$app" ;;
+  screenshot)
+    command -v grim >/dev/null 2>&1 || exit 1
+    dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")"
+    [ -d "$dir" ] || dir="$HOME"
+    mkdir -p "$dir/Screenshots" && dir="$dir/Screenshots"
+    f="$dir/Screenshot $(date '+%Y-%m-%d %H-%M-%S').png"
+    grim "$f" && command -v notify-send >/dev/null 2>&1 && notify-send -a NoCapOS -i camera-photo "Screenshot saved" "$(basename "$f")"
+    exit 0
+    ;;
+  *) echo "usage: nocap-open files|terminal|editor|browser|screenshot" >&2; exit 2 ;;
+esac
+exit 1
