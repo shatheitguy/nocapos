@@ -27,6 +27,37 @@ type SystemAccounts interface {
 // SetSystemAccounts switches sign-in to the host's accounts.
 func (s *Service) SetSystemAccounts(sa SystemAccounts) { s.sys = sa }
 
+// FirstAccounts is implemented by system accounts that can make the first
+// administrator on a machine with nobody on it yet: a freshly flashed
+// NoCapOS image, where the first-run setup makes the owner's account.
+type FirstAccounts interface {
+	// HasPeople reports whether any person's account (not root) exists.
+	HasPeople(ctx context.Context) (bool, error)
+	// CreateFirstAdmin makes an administrator account.
+	CreateFirstAdmin(ctx context.Context, username, fullName, password string) error
+}
+
+// SetFirstAccountOnSystem lets the first-run setup create the first
+// administrator as a system account when the machine has none (image
+// installs). Elsewhere a machine with system accounts always has someone.
+func (s *Service) SetFirstAccountOnSystem(on bool) { s.firstOnSystem = on }
+
+// setupSystem makes the first administrator as a system account.
+func (s *Service) setupSystem(ctx context.Context, username, password string, meta ClientMeta) (*Session, error) {
+	fa, ok := s.sys.(FirstAccounts)
+	if !ok || !s.firstOnSystem {
+		return nil, ErrSetupDone
+	}
+	if err := fa.CreateFirstAdmin(ctx, username, "", password); err != nil {
+		return nil, err
+	}
+	u, err := s.loginSystem(ctx, username, password)
+	if err != nil {
+		return nil, err
+	}
+	return s.startSession(ctx, u, meta)
+}
+
 // SystemAccountsEnabled reports whether sign-in uses the host's accounts.
 func (s *Service) SystemAccountsEnabled() bool { return s.sys != nil }
 
