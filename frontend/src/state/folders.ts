@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { useDesktopIcons } from './desktopIcons';
 import { moveBefore, replaceKey } from '../lib/launcherOrder';
+import { withoutRetired } from '../apps/retired';
 
 export interface AppFolder {
   id: string;
@@ -45,7 +46,7 @@ export function suggestName(apps: string[], titles: (id: string) => string | und
   const names = apps.map((id) => (titles(id) ?? '').toLowerCase());
   const all = (re: RegExp) => names.every((t) => re.test(t));
   if (all(/terminal|script|container|log|monitor|setting/)) return 'Tools';
-  if (all(/brave|browser|remote/)) return 'Internet';
+  if (all(/browser|remote/)) return 'Internet';
   if (all(/files|viewer|photo|media/)) return 'Files';
   return 'Folder';
 }
@@ -82,9 +83,13 @@ export const useFolders = create<FolderStore>((set, get) => {
       let order: string[] = [];
       try {
         const v = JSON.parse(localStorage.getItem(keyFor(userId)) ?? '[]');
-        if (Array.isArray(v)) folders = v.filter((f) => f && typeof f.id === 'string' && Array.isArray(f.apps));
+        if (Array.isArray(v))
+          folders = v
+            .filter((f) => f && typeof f.id === 'string' && Array.isArray(f.apps))
+            .map((f) => ({ ...f, apps: withoutRetired(f.apps) }))
+            .filter((f) => f.apps.length > 0);
         const o = JSON.parse(localStorage.getItem(orderKeyFor(userId)) ?? '[]');
-        if (Array.isArray(o)) order = o.filter((k) => typeof k === 'string');
+        if (Array.isArray(o)) order = withoutRetired(o.filter((k) => typeof k === 'string'));
       } catch {
         /* ignore */
       }

@@ -12,7 +12,7 @@ export interface AppMeta {
   tile: [string, string];
   size: { w: number; h: number };
   description: string;
-  /** At most one window (e.g. one shared Brave stream). */
+  /** At most one window. */
   single?: boolean;
   adminOnly?: boolean;
   /** Not listed in the launcher (opened by other apps). */
@@ -92,17 +92,6 @@ export const APPS: Record<string, AppMeta> = {
     tile: ['#ff9f43', '#ee5a24'],
     size: { w: 1040, h: 700 },
     description: 'Install, open and update self-hosted apps',
-    adminOnly: true,
-  },
-  browser: {
-    id: 'browser',
-    title: 'Brave',
-    icon: 'brave',
-    logo: '/app-icons/brave.svg',
-    tile: ['#fb542b', '#a52e12'],
-    size: { w: 1200, h: 780 },
-    description: 'Real Brave browser, installed on this system',
-    single: true,
     adminOnly: true,
   },
   nativeapp: {
