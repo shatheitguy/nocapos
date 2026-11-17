@@ -108,6 +108,20 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           bash os/test/qemu-test.sh
 
+      - name: Installer test in QEMU (USB stick, setup, install, first start)
+        run: |
+          sudo apt-get install -y -qq mtools >/dev/null
+          bash os/test/installer-test.sh
+
+      - name: Installer screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-screenshots
+          path: os/build/screenshots/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Sizes
         if: always()
         run: |

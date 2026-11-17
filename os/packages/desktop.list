@@ -40,4 +40,3 @@ libgbm1                    # GPU buffers for the compositor
 ?wl-clipboard              # shared clipboard with the browser (wl-paste)
 ?xclip                     # shared clipboard for X11 apps
 ?systemd-zram-generator    # compressed swap in RAM on small boards
-cage                       # the installer's full-screen session (USB installer only)
