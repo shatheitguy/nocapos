@@ -83,7 +83,7 @@
       <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open terminal" />
     </keybind>
     <keybind key="W-i">
-      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --app settings" />
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open settings" />
     </keybind>
     <keybind key="A-F4"><action name="Close" /></keybind>
     <keybind key="W-q"><action name="Close" /></keybind>

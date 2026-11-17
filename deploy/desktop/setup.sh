@@ -218,8 +218,8 @@ desk_install_shell() {
 }
 
 # desk_session_files FAMILY: the session's services, its entry for tools
-# that list sessions, the lock screen's password check, the portals, the
-# NoCapOS app entries and the dock's first apps.
+# that list sessions, the lock screen's password check and the portals
+# (installed apps open and save files through them).
 desk_session_files() {
   local family="$1" f
   # User services every account's session starts (nocap-session.target).
@@ -232,14 +232,8 @@ desk_session_files() {
   render_pam_lock "$family" >/etc/pam.d/nocap-lock
   mkdir -p /usr/share/xdg-desktop-portal
   render_portals_conf >/usr/share/xdg-desktop-portal/nocap-portals.conf
-  mkdir -p /usr/local/share/applications
-  for f in settings appstore; do
-    render_app_entry "$f" >"/usr/local/share/applications/nocapos-$f.desktop"
-  done
-  if has update-desktop-database; then update-desktop-database -q /usr/local/share/applications >/dev/null 2>&1 || true; fi
-  mkdir -p /etc/nocapos
-  # shellcheck disable=SC2046 # one desktop file name per line
-  json_list $(dock_apps "") >/etc/nocapos/dock-default.json
+  # Earlier builds of this desktop listed NoCapOS's apps as separate launchers.
+  rm -f /usr/local/share/applications/nocapos-settings.desktop /usr/local/share/applications/nocapos-appstore.desktop /etc/nocapos/dock-default.json
 }
 
 # desk_greetd FAMILY: the sign-in service shows NoCap's sign-in screen as
@@ -379,6 +373,36 @@ desk_remove_kiosk() {
   done
   if has update-desktop-database; then update-desktop-database -q /usr/local/share/applications >/dev/null 2>&1 || true; fi
   if [ "$(cat "$ETC/desktop-mode" 2>/dev/null)" = kiosk ]; then echo full >"$ETC/desktop-mode"; fi
+  desk_remove_old_browser
+  return 0
+}
+
+# desk_remove_old_browser: earlier versions installed a web browser
+# themselves (from its maker's package repository, for a streamed browser
+# app). NoCapOS ships no browser any more: when NoCapOS installed it (its
+# notes are in the data folder), the package, its repository and key, and
+# NoCapOS's launchers and policies for it go. Everyone's own browser
+# profile in their home folder stays. A browser someone installed
+# themselves is left alone.
+desk_remove_old_browser() {
+  local mine=0 f
+  for f in "$DATA"/brave.log "$DATA"/brave-run.sh "$DATA"/webapps/brave* "$DATA"/brave; do
+    if [ -e "$f" ]; then mine=1; break; fi
+  done
+  [ "$mine" -eq 1 ] || return 0
+  if has dpkg-query && dpkg-query -W -f='${Status}' brave-browser 2>/dev/null | grep -q 'ok installed'; then
+    info "Removing the web browser earlier NoCapOS versions installed (brave-browser); browser profiles in home folders stay"
+    DEBIAN_FRONTEND=noninteractive apt-get remove -y -q brave-browser >/dev/null 2>&1 || warn "brave-browser couldn't be removed; remove it with the package tool"
+  elif has rpm && rpm -q brave-browser >/dev/null 2>&1; then
+    info "Removing the web browser earlier NoCapOS versions installed (brave-browser); browser profiles in home folders stay"
+    dnf remove -y -q brave-browser >/dev/null 2>&1 || warn "brave-browser couldn't be removed; remove it with the package tool"
+  fi
+  if grep -qs 'brave-browser-apt-release.s3.brave.com' /etc/apt/sources.list.d/brave-browser-release.list; then
+    rm -f /etc/apt/sources.list.d/brave-browser-release.list /usr/share/keyrings/brave-browser-archive-keyring.gpg
+  fi
+  if grep -qs 'brave-browser-rpm-release' /etc/yum.repos.d/brave-browser.repo; then rm -f /etc/yum.repos.d/brave-browser.repo; fi
+  rm -f /etc/brave/policies/managed/nocapos.json /usr/local/share/applications/nocap-brave.desktop
+  rm -f "$DATA"/brave.log "$DATA"/brave-run.sh
   return 0
 }
 
@@ -508,19 +532,6 @@ desk_unlink_display_manager() {
   fi
 }
 
-# desk_install_browser: a web browser for the dock (a native app, like the
-# rest), unless one is installed already.
-desk_install_browser() { # $1 = manager
-  local p
-  for p in firefox-esr firefox chromium chromium-browser brave-browser google-chrome-stable; do
-    if has "$p"; then printf '    browser: %s\n' "$p"; return 0; fi
-  done
-  for p in firefox-esr firefox chromium chromium-browser; do
-    if pkg_available "$1" "$p" && pkg_install_lean "$1" "$p"; then printf '    browser: %s\n' "$p"; return 0; fi
-  done
-  warn "full desktop: no web browser could be installed; the dock goes without one"
-}
-
 # desk_restart_needed WHY: this machine has to restart for the screen to
 # show NoCap Desktop. Debian's /run/reboot-required is what Settings →
 # Software Update and the update result read (it's gone after the restart).
@@ -636,7 +647,6 @@ install_full_desktop() {
   info "Installing NoCap Desktop: the native desktop (sign-in screen, dock, apps; a few minutes)"
   pkg_refresh "$mgr" || true
   desk_install_packages "$family" "$mgr" || { warn "NoCap Desktop: the desktop's packages couldn't be installed; the screen is left as it is"; return 1; }
-  desk_install_browser "$mgr"
   desk_install_assets
   desk_install_shell "$mgr" "$family" || { warn "NoCap Desktop: NoCap Shell couldn't be installed; the screen is left as it is"; return 1; }
   desk_session_files "$family"

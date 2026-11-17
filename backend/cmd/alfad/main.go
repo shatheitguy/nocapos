@@ -343,6 +343,12 @@ func serve() error {
 				log.Warn("desktop clipboard socket not started", "path", api.ClipSocketPath, "err", err)
 			}
 		}()
+		// NoCap Shell: the web session for whoever is signed in on the screen.
+		go func() {
+			if err := srv.ServeShellSocket(ctx, api.ShellSocketPath); err != nil {
+				log.Warn("NoCap Shell socket not started", "path", api.ShellSocketPath, "err", err)
+			}
+		}()
 	}
 	if drives != nil {
 		go drives.Run(ctx) // after api.New, which subscribes to its changes
@@ -433,7 +439,7 @@ func startHTTPRedirect(addr string, httpsAddr net.Addr, srv *api.Server, log *sl
 func startDesktopListener(addr string, handler http.Handler, log *slog.Logger) *http.Server {
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.MarkLocalDesktop(handler),
+		Handler:           api.ShellCORS(api.MarkLocalDesktop(handler)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    64 << 10,

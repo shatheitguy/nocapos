@@ -37,140 +37,129 @@ desktop_family() {
   esac
 }
 
-# desktop_packages FAMILY: the desktop's packages, one per line. "a|b"
-# means the first of them the distribution has (newer names first, the
-# older ones after). A line starting with "?" is optional: the desktop
-# works without it. Installs skip "recommended" packages, so everything the
-# screen needs to light up is listed: the compositor (labwc) and Xwayland,
-# the Mesa drivers (with llvmpipe, the software renderer for VMs and boards
-# without a GPU driver), the sign-in service (greetd) and logind's PAM
-# module, and the libraries NoCap Shell's own programs use (GTK 3 with
-# layer-shell, WebKitGTK 4.1). Apps are the light ones every target has:
-# Thunar (files), foot (terminal), Mousepad (text), a web browser
-# (desk_install_browser). labwc comes from the distribution: Debian 13,
-# Raspberry Pi OS and Ubuntu 24.04 have it; Debian 12 and Ubuntu 22.04
-# don't, so NoCap Desktop needs Debian 13 there (desk_install_packages says
-# so; the rest of NoCapOS works as it is).
+# desktop_packages FAMILY: the packages NoCap Desktop itself needs, one per
+# line, each with the reason it's there. "a|b" means the first of them the
+# distribution has (newer names first). A line starting with "?" is
+# optional: the desktop works without it. There are no third-party default
+# apps: Files, Terminal, Text Editor, Photos, the players, Settings and the
+# App Store are NoCap OS's own, and a web browser or anything else comes
+# from the App Store (Flatpak) when someone wants one. Installs skip
+# "recommended" packages, so everything the screen needs to light up is
+# listed. labwc comes from the distribution: Debian 13, Raspberry Pi OS and
+# Ubuntu 24.04 have it; Debian 12 and Ubuntu 22.04 don't, so NoCap Desktop
+# needs Debian 13 there (desk_install_packages says so; the rest of NoCapOS
+# works as it is).
 desktop_packages() {
+  desktop_package_list "$1" | sed -e 's/[[:space:]]*#.*$//' -e '/^$/d'
+}
+
+desktop_package_list() {
   case "$1" in
     debian | ubuntu)
-      cat <<'EOF'
-labwc
-greetd
-xwayland
-wayvnc
-swayidle
-libgtk-3-0t64|libgtk-3-0
-libgtk-layer-shell0
-libwebkit2gtk-4.1-0
-libjson-glib-1.0-0
-libpolkit-agent-1-0
-libxkbcommon0
-libpangocairo-1.0-0
-libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0
-libpam0g
-polkitd|policykit-1
-xdg-desktop-portal-wlr
-xdg-desktop-portal-gtk
-xdg-user-dirs
-gnome-keyring
-libpam-gnome-keyring
-dbus-user-session
-pipewire
-wireplumber|pipewire-media-session
-?pipewire-pulse
-thunar|pcmanfm
-foot
-mousepad
-?ristretto
-?grim
-?libnotify-bin
-?brightnessctl
-adwaita-icon-theme
-fonts-dejavu-core
-?fonts-cantarell
-flatpak
-?libsecret-tools
-?guacd
-?libguac-client-rdp0|libguac-client-rdp
-?libguac-client-vnc0|libguac-client-vnc
-libgl1-mesa-dri
-libegl-mesa0
-libgbm1
-libpam-systemd
-?firmware-amd-graphics
-?firmware-misc-nonfree
-wl-clipboard
-?xclip
-?systemd-zram-generator|zram-tools
-EOF
+      cat <<'EOF2'
+labwc                                   # the compositor: windows, input, screens
+greetd                                  # the sign-in service (NoCap's sign-in screen runs in it)
+xwayland                                # apps that only speak X11 open in the session
+wayvnc                                  # "Open screen" in NoCapOS shows this screen in the browser
+swayidle                                # locks the screen when idle and before sleep
+libgtk-3-0t64|libgtk-3-0                # NoCap Shell's windows
+libgtk-layer-shell0                     # NoCap Shell's desktop, top bar and dock layers
+libwebkit2gtk-4.1-0                     # draws NoCap OS natively, from local files
+libjson-glib-1.0-0                      # NoCap Shell's checked messages
+libpolkit-agent-1-0                     # NoCap's admin password prompt
+libxkbcommon0                           # the lock screen's keyboard
+libpangocairo-1.0-0                     # the lock screen's text
+libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0  # the lock screen's wallpaper
+libpam0g                                # the lock screen's password check
+polkitd|policykit-1                     # who may do admin things
+xdg-desktop-portal                      # file open/save and screen sharing for installed apps
+xdg-desktop-portal-wlr                  # screen sharing and screenshots in labwc
+xdg-desktop-portal-gtk                  # the open/save dialog for installed apps
+xdg-user-dirs                           # Documents, Pictures, Downloads in each home
+gnome-keyring                           # the passwords installed apps save (unlocks at sign-in)
+libpam-gnome-keyring                    # unlocks it with the sign-in password
+dbus-user-session                       # each person's session bus and services
+pipewire                                # sound and screen capture
+wireplumber|pipewire-media-session      # connects sound devices
+?pipewire-pulse                         # sound for apps that use PulseAudio
+wl-clipboard                            # the clipboard shared with your phones
+?grim                                   # screenshots (the Print key)
+?brightnessctl                          # screen brightness on laptops
+adwaita-icon-theme                      # cursors and icons for installed apps
+fonts-dejavu-core                       # a font every app can fall back to
+flatpak                                 # the App Store's Linux apps
+?guacd                                  # "Open screen": the browser view (else a container)
+?libguac-client-vnc0|libguac-client-vnc # "Open screen": the VNC client inside it
+libgl1-mesa-dri                         # graphics drivers, with the software renderer
+libegl-mesa0                            # graphics drivers (EGL)
+libgbm1                                 # graphics buffers for the compositor
+libpam-systemd                          # a seat session for the screen
+?firmware-amd-graphics                  # AMD graphics firmware
+?firmware-misc-nonfree                  # Intel and other graphics firmware
+?systemd-zram-generator|zram-tools      # compressed swap on small machines
+EOF2
       ;;
     fedora)
-      cat <<'EOF'
-labwc
-greetd
-xorg-x11-server-Xwayland
-wayvnc
-swayidle
-gtk3
-gtk-layer-shell
-webkit2gtk4.1
-json-glib
-polkit
-xdg-desktop-portal-wlr
-xdg-desktop-portal-gtk
-xdg-user-dirs
-gnome-keyring
-pipewire
-wireplumber
-Thunar
-foot
-mousepad
-?grim
-?brightnessctl
-adwaita-icon-theme
-dejavu-sans-fonts
-flatpak
-?guacd
-?libguac-client-rdp
-?libguac-client-vnc
-mesa-dri-drivers
-mesa-libEGL
-mesa-libgbm
-wl-clipboard
-?zram-generator
-EOF
+      cat <<'EOF2'
+labwc                       # the compositor
+greetd                      # the sign-in service
+xorg-x11-server-Xwayland    # X11 apps
+wayvnc                      # "Open screen"
+swayidle                    # idle lock
+gtk3                        # NoCap Shell's windows
+gtk-layer-shell             # NoCap Shell's layers
+webkit2gtk4.1               # draws NoCap OS natively
+json-glib                   # NoCap Shell's messages
+polkit                      # admin prompts
+xdg-desktop-portal          # file dialogs for installed apps
+xdg-desktop-portal-wlr      # screen sharing
+xdg-desktop-portal-gtk      # open/save dialog
+xdg-user-dirs               # home folders
+gnome-keyring               # saved passwords
+pipewire                    # sound
+wireplumber                 # sound devices
+wl-clipboard                # shared clipboard
+?grim                       # screenshots
+?brightnessctl              # brightness
+adwaita-icon-theme          # cursors and icons
+dejavu-sans-fonts           # fallback font
+flatpak                     # App Store Linux apps
+?guacd                      # "Open screen"
+?libguac-client-vnc         # "Open screen"
+mesa-dri-drivers            # graphics drivers
+mesa-libEGL                 # graphics drivers
+mesa-libgbm                 # graphics buffers
+?zram-generator             # compressed swap
+EOF2
       ;;
     arch)
-      cat <<'EOF'
-labwc
-greetd
-xorg-xwayland
-wayvnc
-swayidle
-gtk3
-gtk-layer-shell
-webkit2gtk-4.1
-json-glib
-polkit
-xdg-desktop-portal-wlr
-xdg-desktop-portal-gtk
-xdg-user-dirs
-gnome-keyring
-pipewire
-wireplumber
-thunar
-foot
-mousepad
-?grim
-?brightnessctl
-adwaita-icon-theme
-ttf-dejavu
-flatpak
-mesa
-wl-clipboard
-?zram-generator
-EOF
+      cat <<'EOF2'
+labwc                       # the compositor
+greetd                      # the sign-in service
+xorg-xwayland               # X11 apps
+wayvnc                      # "Open screen"
+swayidle                    # idle lock
+gtk3                        # NoCap Shell's windows
+gtk-layer-shell             # NoCap Shell's layers
+webkit2gtk-4.1              # draws NoCap OS natively
+json-glib                   # NoCap Shell's messages
+polkit                      # admin prompts
+xdg-desktop-portal          # file dialogs for installed apps
+xdg-desktop-portal-wlr      # screen sharing
+xdg-desktop-portal-gtk      # open/save dialog
+xdg-user-dirs               # home folders
+gnome-keyring               # saved passwords
+pipewire                    # sound
+wireplumber                 # sound devices
+wl-clipboard                # shared clipboard
+?grim                       # screenshots
+?brightnessctl              # brightness
+adwaita-icon-theme          # cursors and icons
+ttf-dejavu                  # fallback font
+flatpak                     # App Store Linux apps
+mesa                        # graphics drivers
+?zram-generator             # compressed swap
+EOF2
       ;;
   esac
 }
@@ -666,51 +655,6 @@ pam_with_keyring() {
       }
     }
   '
-}
-
-# dock_apps ROOT: the dock's apps, one desktop file name per line, all
-# native: Files, the browser, the NoCapOS App Store, the terminal, Text
-# Editor and NoCapOS Settings (whichever of each this machine has under
-# ROOT; the NoCapOS ones always).
-dock_apps() {
-  local d="$1/usr/share/applications" a
-  first() { for a in "$@"; do if [ -f "$d/$a" ]; then echo "$a"; return 0; fi; done; return 0; }
-  first thunar.desktop Thunar.desktop pcmanfm.desktop
-  first firefox-esr.desktop firefox.desktop org.mozilla.firefox.desktop chromium.desktop chromium-browser.desktop
-  echo nocapos-appstore.desktop
-  first org.codeberg.dnkl.foot.desktop foot.desktop lxterminal.desktop
-  first org.xfce.mousepad.desktop mousepad.desktop
-  echo nocapos-settings.desktop
-}
-
-# json_list ITEM...: a JSON array of strings (items are desktop file names:
-# letters, digits, dots, dashes, underscores).
-json_list() {
-  local out="" i
-  for i in "$@"; do [ -n "$i" ] && out="$out, \"$i\""; done
-  printf '[%s]\n' "${out#, }"
-}
-
-# render_app_entry NAME: the NoCapOS apps in the launcher and dock
-# (nocapos-settings.desktop, nocapos-appstore.desktop).
-render_app_entry() {
-  local title comment icon
-  case "$1" in
-    settings) title="NoCapOS Settings"; comment="Settings for this NoCapOS machine"; icon=nocapos ;;
-    appstore) title="NoCapOS App Store"; comment="Apps for this NoCapOS machine"; icon=nocapos ;;
-    *) return 1 ;;
-  esac
-  cat <<EOF
-[Desktop Entry]
-# Written by NoCapOS.
-Type=Application
-Name=$title
-Comment=$comment
-Exec=$SHELL_LIB/nocap-shell --app $1
-Icon=$icon
-Categories=System;Settings;
-StartupWMClass=$1
-EOF
 }
 
 # render_portals_conf: which portal answers what in the NoCap session
