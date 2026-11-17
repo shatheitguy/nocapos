@@ -237,7 +237,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       {saverOn && !surface && <Screensaver kind={screensaver} onWake={() => setSaverOn(false)} />}
       {deskPart && (
         <>
-          {/* macOS-style desktop: wallpaper, the icons you put there, and floating widgets. */}
+          {/* The desktop: wallpaper, the icons you put there, and floating widgets. */}
           <div
             className="desktop-surface clean"
             data-drop="desktop"
