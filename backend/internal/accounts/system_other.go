@@ -22,6 +22,7 @@ func (s *System) Delete(context.Context, string, bool) error           { return 
 func (s *System) SetRole(context.Context, string, string) error        { return errors.New("unsupported") }
 func (s *System) SetPassword(context.Context, string, string) error    { return errors.New("unsupported") }
 func (s *System) SetDisabled(context.Context, string, bool) error      { return errors.New("unsupported") }
+func (s *System) SetFullName(context.Context, string, string) error    { return ErrUnsupported }
 func (s *System) Verify(context.Context, string, string) (bool, error) { return false, nil }
 func (s *System) RoleOf(context.Context, string) (string, bool, error) {
 	return "", false, ErrNotFound
