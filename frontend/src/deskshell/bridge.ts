@@ -4,9 +4,8 @@
 //   host → page: window.__nocap.reply(id, ok, data) and window.__nocap.event(name, payload)
 //
 // `createBridge` is plain logic (no DOM) so node can test it. `call` / `on`
-// use the page's one bridge: the real host when the WebKit message handler is
-// there, otherwise (a normal browser, for development) the mock host in
-// mock.ts, which is only ever loaded in that case.
+// use the page's one bridge: the host's WebKit message handler. Without the
+// host (a normal browser) every call is refused.
 
 export type Listener = (payload: unknown) => void;
 
@@ -124,30 +123,16 @@ interface ShellWindow {
 }
 
 let page: Bridge | null = null;
-let mocked = false;
-
-/** Whether the page runs without the host (a dev browser with the mock). */
-export const isMock = () => mocked;
 
 /** Sets up window.__nocap (once). Call it first thing on the page. */
 export function startBridge(): Bridge {
   if (page) return page;
   const w = window as unknown as ShellWindow;
   const host = w.webkit?.messageHandlers?.nocap;
-  if (host) {
-    page = createBridge((json) => host.postMessage(json));
-  } else {
-    // No host: queue messages until the mock host has loaded, then hand them over.
-    mocked = true;
-    let deliver: ((json: string) => void) | null = null;
-    const queue: string[] = [];
-    page = createBridge((json) => (deliver ? deliver(json) : queue.push(json)));
-    const bridge = page;
-    void import('./mock').then((m) => {
-      deliver = m.startMock(bridge);
-      for (const json of queue.splice(0)) deliver(json);
-    });
-  }
+  page = createBridge((json) => {
+    if (!host) throw new Error('no NoCap Shell host');
+    host.postMessage(json);
+  });
   const b = page;
   w.__nocap = { reply: (id, ok, data) => b.reply(id, ok, data), event: (name, payload) => b.event(name, payload) };
   return page;

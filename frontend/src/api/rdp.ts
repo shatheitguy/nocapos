@@ -1,4 +1,5 @@
 import { api } from './client';
+import { wsBase } from '../native/platform';
 
 export interface RdpEngineStatus {
   phase: 'idle' | 'preparing' | 'ready' | 'error';
@@ -27,6 +28,5 @@ export const rdpTicket = (req: RdpTicketRequest) =>
   api<{ ticket: string }>('/api/v1/rdp/ticket', { method: 'POST', body: req });
 
 export function rdpSocketURL(): string {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws/rdp`;
+  return `${wsBase()}/ws/rdp`;
 }

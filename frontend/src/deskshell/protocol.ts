@@ -2,8 +2,7 @@
 // of truth). Types only: pure helpers import these with `import type`, so they
 // still run under node for the unit tests.
 
-export type SurfaceName = 'bar' | 'dock' | 'launcher' | 'center' | 'banners' | 'osd' | 'polkit' | 'greeter';
-export const SURFACES: readonly SurfaceName[] = ['bar', 'dock', 'launcher', 'center', 'banners', 'osd', 'polkit', 'greeter'];
+export type SurfaceName = 'desktop' | 'chrome' | 'app' | 'polkit' | 'greeter';
 
 export type Voice = 'genz' | 'standard';
 export type Theme = 'dark' | 'light';
@@ -97,4 +96,3 @@ export interface GreeterReply {
 }
 
 export type PowerAction = 'lock' | 'logout' | 'suspend' | 'reboot' | 'poweroff';
-export type NocapApp = 'settings' | 'appstore' | 'files' | 'home';

@@ -15,6 +15,7 @@ import { WebAddressField } from './WebAddress';
 import { LinuxApps } from './LinuxApps';
 import { InstallEditor } from './InstallEditor';
 import { SystemUpdates, useSystemUpdates } from './SystemUpdates';
+import { serverHost } from '../native/platform';
 
 // App Store: two families of apps, each with Discover and Installed —
 // Docker apps (self-hosted, from the catalog, as containers with their own
@@ -949,7 +950,7 @@ function AppPage({
               <div className="ucard pad">
                 <WebAddressField
                   value={i.web_address ?? ''}
-                  automatic={i.web_address ? (i.web_port ? `http://${window.location.hostname}:${i.web_port}${app.web.path ?? '/'}` : null) : url}
+                  automatic={i.web_address ? (i.web_port ? `http://${serverHost()}:${i.web_port}${app.web.path ?? '/'}` : null) : url}
                   onSave={(u) => storeApi.setWebAddress(app.id, u)}
                   onSaved={onChanged}
                 />

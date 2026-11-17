@@ -23,7 +23,7 @@ import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
 import { watchNativeApps } from '../state/nativeApps';
-import { watchNotifications } from '../state/notifications';
+import { useNotifications, watchNotifications } from '../state/notifications';
 import { watchLink } from '../state/link';
 import { watchClipSync } from '../state/clipSync';
 import { watchSignins } from '../state/signins';
@@ -40,11 +40,23 @@ import { Shelf } from './Shelf';
 import { Toasts } from './Toasts';
 import { WidgetLayer } from './WidgetLayer';
 import { Window } from './Window';
+import { hostOn, hostSend, nativeSurface } from '../native/platform';
+import { mirrorWindows, watchChromeRegion } from '../native/chrome';
 
 // Shown once, so it's fetched only when needed.
 const Welcome = lazy(() => import('./Welcome').then((m) => ({ default: m.Welcome })));
 
+/**
+ * The desktop. In the browser it's all of it; on NoCap Desktop (the
+ * machine's own screen) the same component runs in two native surfaces:
+ * "desktop" (wallpaper, widgets, icons, the desktop menu) under the screen's
+ * windows, and "chrome" (menu bar, dock, launcher, search, panels,
+ * notifications) over them. Apps open in real windows of their own.
+ */
 export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
+  const surface = nativeSurface();
+  const deskPart = surface !== 'chrome';
+  const chromePart = surface !== 'desktop';
   // Ids only: each Window subscribes to its own state, so a drag doesn't
   // re-render the whole desktop.
   const windowIds = useWM(useShallow((s) => s.windows.map((w) => w.id)));
@@ -71,7 +83,9 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // Session lifetime: restore layouts, open the socket, stream metrics.
   useEffect(() => {
-    useWM.getState().restoreLayout(user.id);
+    // NoCap Desktop's chrome: the screen's real windows, the input region.
+    const offNative = surface === 'chrome' ? [mirrorWindows(), watchChromeRegion()] : [];
+    if (!surface) useWM.getState().restoreLayout(user.id);
     useWidgets.getState().restore(user.id);
     useDock.getState().restore(user.id);
     useDesktopIcons.getState().restore(user.id);
@@ -82,6 +96,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     void connect();
     const offStatus = onSocketStatus(sys.setOnline);
     return () => {
+      offNative.forEach((f) => f());
       offStatus();
       disconnect();
       useWM.getState().reset();
@@ -102,12 +117,14 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   }, [visible, user.id]);
 
   // System notifications (admins): updates, app problems, disk health, failed backups.
-  useEffect(() => (isAdmin ? watchNotifications() : undefined), [isAdmin, user.id]);
+  // On NoCap Desktop these run once, in the chrome (it shows them); the
+  // desktop's own clipboard agent shares the clipboard there.
+  useEffect(() => (isAdmin && chromePart ? watchNotifications() : undefined), [isAdmin, user.id, chromePart]);
   // NoCap Link, for everyone: the phone's notifications and the shared clipboard.
-  useEffect(() => watchLink(user.username), [user.id, user.username]);
-  useEffect(() => watchClipSync(), [user.id]);
+  useEffect(() => (chromePart ? watchLink(user.username) : undefined), [user.id, user.username, chromePart]);
+  useEffect(() => (surface ? undefined : watchClipSync()), [user.id, surface]);
   // Where you're signed in, and a heads-up when your account signs in somewhere else.
-  useEffect(() => watchSignins(user.id), [user.id]);
+  useEffect(() => (chromePart ? watchSignins(user.id) : undefined), [user.id, chromePart]);
 
   // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
   useEffect(() => {
@@ -123,7 +140,30 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   // Keyboard: Ctrl+Space opens universal search (the OS keeps the Win/Meta key).
   const toggleLauncher = useCallback(() => setLauncher((v) => !v), []);
+  // NoCap Desktop: the desktop surface asks the chrome for the launcher.
+  const openLauncher = useCallback(() => (surface === 'desktop' ? hostSend('ui.command', { name: 'launcher' }) : setLauncher(true)), [surface]);
   const spotlight = useSpotlight((s) => s.open);
+  // Keybindings and the desktop's menu (through the host) open the chrome's panels.
+  useEffect(() => {
+    if (surface !== 'chrome') return;
+    return hostOn('ui.command', (p) => {
+      const { name, action } = (p ?? {}) as { name?: string; action?: string };
+      if (name === 'launcher') {
+        useSpotlight.getState().set(false);
+        setLauncher((v) => (action === 'hide' ? false : action === 'show' ? true : !v));
+      } else if (name === 'spotlight') {
+        setLauncher(false);
+        if (action === 'hide') useSpotlight.getState().set(false);
+        else if (action === 'show') useSpotlight.getState().set(true);
+        else useSpotlight.getState().toggle();
+      } else if (name === 'notifications') {
+        const n = useNotifications.getState();
+        n.setCenter(action === 'show' ? true : action === 'hide' ? false : !n.centerOpen);
+      } else if (name === 'center') {
+        window.dispatchEvent(new CustomEvent('nocap:panel', { detail: { name, action: action ?? 'toggle' } }));
+      }
+    });
+  }, [surface]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.code === 'Space') {
@@ -140,6 +180,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const onLockRef = useRef(onLock);
   onLockRef.current = onLock;
   useEffect(() => {
+    // NoCap Desktop has the screen's own idle lock and screen blanking.
+    if (surface) return;
     const saverMs = screensaver !== 'off' ? saverDelay * 60_000 : 0;
     const lockMs = lockTimeout > 0 ? lockTimeout * 60_000 : 0;
     if (!saverMs && !lockMs) return;
@@ -165,7 +207,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       evs.forEach((e) => window.removeEventListener(e, bump));
       window.clearInterval(tick);
     };
-  }, [lockTimeout, screensaver, saverDelay]);
+  }, [lockTimeout, screensaver, saverDelay, surface]);
 
   const openWidgetEdit = () => useWidgets.getState().setEditing(true);
 
@@ -173,7 +215,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     const prefs = usePrefs.getState();
     const icons = useDesktopIcons.getState();
     return [
-      { label: tr('desk.addApps'), icon: 'plus', onClick: () => setLauncher(true) },
+      { label: tr('desk.addApps'), icon: 'plus', onClick: openLauncher },
       ...(icons.icons.length ? [{ label: tr('desk.cleanUp'), icon: 'launcher' as const, onClick: icons.cleanUp }] : []),
       { label: tr('desk.editWidgets'), icon: 'pencil', onClick: openWidgetEdit },
       {
@@ -181,7 +223,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
         icon: 'eye',
         onClick: () => prefs.set({ widgets: !widgets }),
       },
-      { label: tr('desk.openLaunchpad'), icon: 'launcher', onClick: () => setLauncher(true) },
+      { label: tr('desk.openLaunchpad'), icon: 'launcher', onClick: openLauncher },
       { label: tr('desk.wallpaper'), icon: 'image', onClick: () => openApp('settings', { props: { section: 'wallpaper' } }) },
       { label: tr('desk.settings'), icon: 'settings', onClick: () => openApp('settings', { props: { section: 'desktop' } }) },
     ];
@@ -189,69 +231,80 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
   return (
     <div className="desktop">
-      {saverOn && <Screensaver kind={screensaver} onWake={() => setSaverOn(false)} />}
-      {/* macOS-style desktop: wallpaper, the icons you put there, and floating widgets. */}
-      <div
-        className="desktop-surface clean"
-        data-drop="desktop"
-        onPointerDown={() => useWM.setState({ focused: null })}
-        onContextMenu={(e) => {
-          if (!compact && e.target === e.currentTarget) {
-            e.preventDefault();
-            setDeskMenu({ x: e.clientX, y: e.clientY });
-          }
-        }}
-      >
-        {widgets && compact && (
-          <ErrorBoundary title="Widgets" fallback="hidden">
-            <WidgetLayer username={user.username} compact />
+      {saverOn && !surface && <Screensaver kind={screensaver} onWake={() => setSaverOn(false)} />}
+      {deskPart && (
+        <>
+          {/* macOS-style desktop: wallpaper, the icons you put there, and floating widgets. */}
+          <div
+            className="desktop-surface clean"
+            data-drop="desktop"
+            onPointerDown={() => useWM.setState({ focused: null })}
+            onContextMenu={(e) => {
+              if (!compact && e.target === e.currentTarget) {
+                e.preventDefault();
+                setDeskMenu({ x: e.clientX, y: e.clientY });
+              }
+            }}
+          >
+            {widgets && compact && (
+              <ErrorBoundary title="Widgets" fallback="hidden">
+                <WidgetLayer username={user.username} compact />
+              </ErrorBoundary>
+            )}
+          </div>
+
+          {glass && !compact && !launcher && (
+            <ErrorBoundary title="Home header" fallback="hidden">
+              <HomeHeader username={user.username} />
+            </ErrorBoundary>
+          )}
+          {!compact && (
+            <ErrorBoundary title="Desktop icons" fallback="hidden">
+              <DesktopIcons isAdmin={isAdmin} />
+            </ErrorBoundary>
+          )}
+          {widgets && !compact && (
+            <ErrorBoundary title="Widgets" fallback="hidden">
+              <WidgetLayer username={user.username} compact={false} />
+            </ErrorBoundary>
+          )}
+        </>
+      )}
+
+      {/* On NoCap Desktop apps are real windows of their own. */}
+      {!surface && (
+        <div className="window-layer">
+          {windowIds.map((id) => (
+            <Window key={id} id={id} compact={compact} />
+          ))}
+        </div>
+      )}
+
+      {chromePart && (
+        <>
+          {menuBar && (
+            <ErrorBoundary title="Menu bar" fallback="hidden">
+              <MenuBar user={user} onLock={onLock} />
+            </ErrorBoundary>
+          )}
+          <ErrorBoundary title="Dock" fallback="hidden">
+            <Shelf user={user} onLauncher={toggleLauncher} onLock={onLock} showTray={!menuBar} />
           </ErrorBoundary>
-        )}
-      </div>
-
-      {glass && !compact && !launcher && (
-        <ErrorBoundary title="Home header" fallback="hidden">
-          <HomeHeader username={user.username} />
-        </ErrorBoundary>
+          {launcher && (
+            <ErrorBoundary title="Launchpad" fallback="hidden">
+              <Launcher isAdmin={isAdmin} onClose={() => setLauncher(false)} />
+            </ErrorBoundary>
+          )}
+          {spotlight && (
+            <ErrorBoundary title="Search" fallback="hidden">
+              <Spotlight isAdmin={isAdmin} onLock={onLock} />
+            </ErrorBoundary>
+          )}
+        </>
       )}
-      {!compact && (
-        <ErrorBoundary title="Desktop icons" fallback="hidden">
-          <DesktopIcons isAdmin={isAdmin} />
-        </ErrorBoundary>
-      )}
-      {widgets && !compact && (
-        <ErrorBoundary title="Widgets" fallback="hidden">
-          <WidgetLayer username={user.username} compact={false} />
-        </ErrorBoundary>
-      )}
-
-      <div className="window-layer">
-        {windowIds.map((id) => (
-          <Window key={id} id={id} compact={compact} />
-        ))}
-      </div>
-
-      {menuBar && (
-        <ErrorBoundary title="Menu bar" fallback="hidden">
-          <MenuBar user={user} onLock={onLock} />
-        </ErrorBoundary>
-      )}
-      <ErrorBoundary title="Dock" fallback="hidden">
-        <Shelf user={user} onLauncher={toggleLauncher} onLock={onLock} showTray={!menuBar} />
-      </ErrorBoundary>
-      {launcher && (
-        <ErrorBoundary title="Launchpad" fallback="hidden">
-          <Launcher isAdmin={isAdmin} onClose={() => setLauncher(false)} />
-        </ErrorBoundary>
-      )}
-      {spotlight && (
-        <ErrorBoundary title="Search" fallback="hidden">
-          <Spotlight isAdmin={isAdmin} onLock={onLock} />
-        </ErrorBoundary>
-      )}
-      {deskMenu && <ContextMenu x={deskMenu.x} y={deskMenu.y} items={deskMenuItems()} onClose={() => setDeskMenu(null)} />}
+      {deskPart && deskMenu && <ContextMenu x={deskMenu.x} y={deskMenu.y} items={deskMenuItems()} onClose={() => setDeskMenu(null)} />}
       <DragGhost />
-      {welcome && (
+      {welcome && chromePart && (
         <ErrorBoundary title="Welcome" fallback="hidden">
           <Suspense fallback={null}>
             <Welcome user={user} />
@@ -259,19 +312,23 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
         </ErrorBoundary>
       )}
       <ConfirmHost />
-      <PowerOverlay />
-      <ErrorBoundary title="Notifications" fallback="hidden">
-        <NotificationLayer />
-      </ErrorBoundary>
-      <ErrorBoundary title="Agent approvals" fallback="hidden">
-        <AgentApprovals />
-      </ErrorBoundary>
-      <ErrorBoundary title="Update notice" fallback="hidden">
-        <UpdateReady />
-      </ErrorBoundary>
-      <ErrorBoundary title="Toasts" fallback="hidden">
-        <Toasts />
-      </ErrorBoundary>
+      {chromePart && (
+        <>
+          <PowerOverlay />
+          <ErrorBoundary title="Notifications" fallback="hidden">
+            <NotificationLayer />
+          </ErrorBoundary>
+          <ErrorBoundary title="Agent approvals" fallback="hidden">
+            <AgentApprovals />
+          </ErrorBoundary>
+          <ErrorBoundary title="Update notice" fallback="hidden">
+            <UpdateReady />
+          </ErrorBoundary>
+          <ErrorBoundary title="Toasts" fallback="hidden">
+            <Toasts />
+          </ErrorBoundary>
+        </>
+      )}
     </div>
   );
 }
