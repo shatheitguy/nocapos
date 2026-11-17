@@ -40,4 +40,5 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   musicplayer: app(() => import('./MediaMusic').then((m) => m.MusicPlayerApp)),
   logs: app(() => import('./Logs').then((m) => m.Logs)),
   phone: app(() => import('./Phone').then((m) => m.Phone)),
+  notes: app(() => import('./notes/Notes').then((m) => m.Notes)),
 };

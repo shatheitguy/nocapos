@@ -39,6 +39,7 @@ import { Screensaver } from './Screensaver';
 import { Shelf } from './Shelf';
 import { Toasts } from './Toasts';
 import { WidgetLayer } from './WidgetLayer';
+import { useNotes, watchNotes } from '../apps/notes/notesStore';
 import { Window } from './Window';
 import { hostOn, hostSend, nativeSurface } from '../native/platform';
 import { mirrorWindows, watchChromeRegion } from '../native/chrome';
@@ -125,6 +126,8 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   useEffect(() => (surface ? undefined : watchClipSync()), [user.id, surface]);
   // Where you're signed in, and a heads-up when your account signs in somewhere else.
   useEffect(() => (chromePart ? watchSignins(user.id) : undefined), [user.id, chromePart]);
+  // Sticky Notes: kept in step for the app, the desktop stickies and the widget; reminders.
+  useEffect(() => watchNotes(), [user.id]);
 
   // NoCap Hub's desktop entries open straight into an app (App Store, Settings, Files).
   useEffect(() => {
@@ -268,6 +271,11 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
               <WidgetLayer username={user.username} compact={false} />
             </ErrorBoundary>
           )}
+          {!compact && (
+            <ErrorBoundary title="Sticky notes" fallback="hidden">
+              <StuckNotes />
+            </ErrorBoundary>
+          )}
         </>
       )}
 
@@ -331,4 +339,15 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
       )}
     </div>
   );
+}
+
+// Notes stuck to the desktop; their code loads once there's one to show.
+const DeskNotes = lazy(() => import('../apps/notes/DeskNotes').then((m) => ({ default: m.DeskNotes })));
+function StuckNotes() {
+  const any = useNotes((s) => s.notes.some((n) => n.desk && n.trashed_at == null && !n.archived));
+  return any ? (
+    <Suspense fallback={null}>
+      <DeskNotes />
+    </Suspense>
+  ) : null;
 }

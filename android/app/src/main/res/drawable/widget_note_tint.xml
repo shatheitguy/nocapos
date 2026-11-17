@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The note's tint over the glass (coloured by the widget). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:angle="300" android:startColor="#FFFFFFFF" android:endColor="#66FFFFFF" />
+    <corners android:radius="24dp" />
+</shape>
