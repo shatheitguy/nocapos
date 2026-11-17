@@ -20,7 +20,12 @@ KEY="$OS/test/key"
 SSH_PORT=2222 HTTPS_PORT=8443 HTTP_PORT=8080 BUNDLE_PORT=8000
 DISK_SIZE="${DISK_SIZE:-24G}"
 log() { printf '\n==> %s\n' "$*"; }
-fail() { printf '\nFAIL: %s\n' "$*" >&2; tail -n 80 "$WORK/serial.log" >&2 || true; exit 1; }
+fail() {
+  printf '\nFAIL: %s\n' "$*" >&2
+  echo "--- bundle server log" >&2; tail -n 20 "$WORK/http.log" >&2 || true
+  echo "--- serial" >&2; tail -n 60 "$WORK/serial.log" >&2 || true
+  exit 1
+}
 
 rm -rf "$WORK"; mkdir -p "$WORK"
 cp "$BUILD/pc-test.img" "$WORK/disk.img"
