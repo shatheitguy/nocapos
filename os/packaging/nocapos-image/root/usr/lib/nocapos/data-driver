@@ -21,9 +21,16 @@ is_luks() { command -v cryptsetup >/dev/null 2>&1 && cryptsetup isLuks "$DEV" 2>
 ask_passphrase() {
   # Up to three tries, on the splash when it's up.
   if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
-    plymouth ask-for-password --prompt="Enter the passphrase to unlock NoCapOS" \
-      --number-of-tries=3 --command="cryptsetup open --type luks2 --key-file=- $DEV $MAPPER"
-    return
+    tries=0
+    while [ "$tries" -lt 3 ]; do
+      tries=$((tries + 1))
+      pass="$(plymouth ask-for-password --prompt="Enter the passphrase to unlock NoCapOS")" || pass=""
+      if printf '%s' "$pass" | cryptsetup open --type luks2 --key-file=- "$DEV" "$MAPPER"; then
+        return 0
+      fi
+      plymouth display-message --text="That passphrase didn't work." 2>/dev/null || true
+    done
+    return 1
   fi
   tries=0
   while [ "$tries" -lt 3 ]; do
