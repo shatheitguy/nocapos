@@ -37,7 +37,11 @@ UFW_FILES="ufw/user.rules ufw/user6.rules ufw/ufw.conf default/ufw"
 
 ACCOUNTS="passwd group shadow gshadow"
 
-log() { echo "nocapos etc-sync: $*" >&2; }
+# Logged to the kernel log too: at boot this runs before the journal.
+log() {
+  echo "nocapos etc-sync: $*" >&2
+  if [ -w /dev/kmsg ]; then echo "nocapos etc-sync: $*" >/dev/kmsg 2>/dev/null || true; fi
+}
 
 # ---- accounts ------------------------------------------------------------
 
@@ -128,6 +132,8 @@ getent_group() { if grep -q "^$1:" "$ETC/group" 2>/dev/null; then echo "$1"; els
 # ---- files and folders ---------------------------------------------------
 
 restore() {
+  # /etc starts fresh at every boot: this marks "done for this boot".
+  : >"$ETC/.nocapos-etc-restored" 2>/dev/null || true
   [ -d "$STORE" ] || { log "nothing saved yet (first start)"; return 0; }
   restore_accounts
   for f in $FILES $UFW_FILES; do
@@ -151,7 +157,7 @@ restore() {
     mkdir -p "$(dirname "$ETC/$d")"
     cp -a "$src" "$ETC/$d"
   done
-  log "restored this machine's settings"
+  log "restored this machine's settings from $STORE"
 }
 
 save_file() {

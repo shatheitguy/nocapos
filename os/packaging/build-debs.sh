@@ -189,7 +189,7 @@ EOF
 set -e
 if [ "$1" = configure ]; then
   systemctl daemon-reload >/dev/null 2>&1 || true
-  systemctl enable nocapos-boot-check.service nocapos-etc-save.service nocapos-etc-changed.path >/dev/null 2>&1 || true
+  systemctl enable nocapos-boot-check.service nocapos-etc-save.service nocapos-etc-changed.path nocapos-etc-restore.service >/dev/null 2>&1 || true
 fi
 EOF
   cat >"$stage/DEBIAN/postrm" <<'EOF'
