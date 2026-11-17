@@ -11,7 +11,7 @@ import (
 )
 
 // liveConns tracks each person's open long-lived connections (desktop
-// WebSocket, terminals, remote desktops, the Brave stream), so that taking
+// WebSocket, terminals, remote desktops, app streams), so that taking
 // someone's rights away also ends what they already have open. Checking at
 // connect time alone would leave a demoted administrator's root terminal
 // running.

@@ -1231,36 +1231,18 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
   .clock-time { font-size: 52px; }
 }
 
-/* ============ Brave browser app ============ */
-.browser { display: flex; flex-direction: column; height: 100%; background: var(--surface-1); }
-.browser-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--glass-border); }
-.browser-nav { display: flex; gap: 2px; }
-.browser-nav button, .browser-ext { background: transparent; color: var(--text); padding: 6px; border-radius: 8px; }
-.browser-nav button:hover:not(:disabled), .browser-ext:hover:not(:disabled) { background: var(--surface-3); filter: none; }
-.browser-nav button:disabled, .browser-ext:disabled { opacity: 0.35; }
-.browser-url { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--surface-3); border-radius: 10px; padding: 7px 12px; color: var(--muted); }
-.browser-url input { flex: 1; background: transparent; border: 0; color: var(--text); font-size: 13px; outline: none; }
-.browser-view { position: relative; flex: 1; min-height: 0; background: #fff; }
-.browser-frame { width: 100%; height: 100%; border: 0; display: block; }
-.browser-blocked {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; text-align: center; padding: 24px; background: var(--surface-1); color: var(--text);
-}
-.browser-blocked p { max-width: 380px; }
-.browser-home {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 18px; background: radial-gradient(circle at 50% 30%, #2a1510, #130a08 70%); color: #fff; padding: 24px;
-}
-.brave-logo { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center;
-  background: linear-gradient(145deg, #fb542b, #a52e12); box-shadow: 0 14px 40px rgba(251, 84, 43, 0.4); }
-.browser-home h2 { margin: 0; font-size: 26px; letter-spacing: 0.5px; }
+/* ============ Streamed Linux apps ============ */
+.nstream { display: flex; flex-direction: column; height: 100%; background: var(--surface-1); }
+.nstream-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--glass-border); }
+.nstream-bar button { background: transparent; color: var(--text); padding: 6px; border-radius: 8px; }
+.nstream-bar button:hover:not(:disabled) { background: var(--surface-3); filter: none; }
+.nstream-bar button:disabled { opacity: 0.35; }
+.nstream-view { position: relative; flex: 1; min-height: 0; background: #fff; }
+.nstream-frame { width: 100%; height: 100%; border: 0; display: block; }
+.nstream-logo { width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center;
+  background: rgba(255,255,255,0.08); box-shadow: 0 14px 40px rgba(0,0,0,0.35); }
 .home-search { display: flex; align-items: center; gap: 10px; width: min(520px, 90%); background: rgba(255,255,255,0.1);
   border: 1px solid rgba(255,255,255,0.18); border-radius: 26px; padding: 12px 18px; color: rgba(255,255,255,0.7); }
-.home-search input { flex: 1; background: transparent; border: 0; color: #fff; font-size: 15px; outline: none; }
-.home-bookmarks { display: grid; grid-template-columns: repeat(auto-fit, 86px); gap: 14px; justify-content: center; max-width: 560px; }
-.home-bm { display: flex; flex-direction: column; align-items: center; gap: 7px; background: transparent; color: rgba(255,255,255,0.85); }
-.home-bm:hover { filter: none; transform: translateY(-2px); }
-.home-bm-ico { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 8px 20px rgba(0,0,0,0.35); }
 
 /* ============ Remote Desktop app ============ */
 .rdp { display: flex; flex-direction: column; height: 100%; }
@@ -1282,23 +1264,18 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
 .rdp-form .row-field { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
 .rdp-form input { background: var(--surface-3); border: 1px solid var(--glass-border); border-radius: 9px; padding: 9px 12px; color: var(--text); font-size: 13px; }
 
-/* ---- Brave container streamer ---- */
-.brave-badge { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #fb542b; }
-.browser-state { white-space: nowrap; }
-.brave-boot {
+/* ---- streamed app window ---- */
+.nstream-badge { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.nstream-state { white-space: nowrap; }
+.nstream-boot {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; text-align: center; padding: 30px; background: radial-gradient(circle at 50% 35%, #2a1510, #130a08 70%); color: #fff;
+  gap: 12px; text-align: center; padding: 30px; background: radial-gradient(circle at 50% 35%, #1b2130, #0b0e15 70%); color: #fff;
 }
-.brave-boot b { font-size: 17px; }
-.brave-boot p { max-width: 360px; }
-.brave-boot button { margin-top: 4px; }
-.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: #fb542b; animation: spin 0.8s linear infinite; }
+.nstream-boot b { font-size: 17px; }
+.nstream-boot p { max-width: 360px; }
+.nstream-boot button { margin-top: 4px; }
+.spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.18); border-top-color: var(--accent, #ff3b3b); animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-/* Linux apps reuse the Brave window, in neutral colours. */
-.native-stream .brave-badge { color: inherit; }
-.native-stream .brave-boot { background: radial-gradient(circle at 50% 35%, #1b2130, #0b0e15 70%); }
-.native-stream .brave-logo { background: rgba(255,255,255,0.08); box-shadow: 0 14px 40px rgba(0,0,0,0.35); }
-.native-stream .spinner { border-top-color: var(--accent, #7c8aa5); }
 
 /* ---- Remote Desktop (RDP via guacd) ---- */
 .rdp-head .spacer { flex: 1; }
@@ -1353,7 +1330,7 @@ button.danger.solid, .panel button.danger { background: color-mix(in srgb, var(-
   background: rgba(10, 14, 24, 0.82); border-radius: 999px; padding: 3px 10px;
 }
 body.app-dragging, body.app-dragging * { cursor: grabbing !important; user-select: none !important; }
-/* Embedded streams (Brave, RDP) would otherwise eat pointer events mid-drag. */
+/* Embedded streams (Linux apps, RDP) would otherwise eat pointer events mid-drag. */
 body.app-dragging iframe, body.app-dragging canvas { pointer-events: none !important; }
 .dock.drop-target { box-shadow: 0 0 0 2px var(--accent), var(--shadow-soft); }
 .dock-item.trash.drop-over .trash-icon { transform: var(--dock-lift) scale(1.18); background: linear-gradient(145deg, #ff6b6b, #c0392b); }
