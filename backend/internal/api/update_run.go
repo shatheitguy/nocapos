@@ -62,7 +62,8 @@ func (s *Server) updateResultPath() string {
 
 // canSelfUpdate: only a native install, running as root, can replace its own
 // binary and restart its own service.
-func (s *Server) canSelfUpdate() bool { return s.Config.SystemRoot }
+// An image install updates as a whole instead (os_update_handlers.go).
+func (s *Server) canSelfUpdate() bool { return s.Config.SystemRoot && !s.imageOS() }
 
 // updateLock is the content of update.running.
 type updateLock struct {
@@ -263,6 +264,10 @@ func (s *Server) versionSince() time.Time {
 }
 
 func (s *Server) systemUpdateRun(w http.ResponseWriter, r *http.Request) {
+	if s.imageOS() {
+		writeError(w, http.StatusConflict, "image_os", imageOSMessage)
+		return
+	}
 	if !s.canSelfUpdate() {
 		writeError(w, http.StatusConflict, "unsupported",
 			"Updating from here needs NoCapOS installed directly on Linux, running as root. "+
