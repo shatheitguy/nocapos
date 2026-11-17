@@ -229,6 +229,19 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Play the songs in a folder',
     hidden: true,
   },
+  notes: {
+    id: 'notes',
+    // "Brain Dump" / "Sticky Notes", in the voice in use.
+    get title() {
+      return tr('notes.appTitle');
+    },
+    icon: 'stickyNote',
+    tile: ['#ff5a5f', '#b3121a'],
+    size: { w: 1040, h: 700 },
+    description: 'Glass sticky notes with checklists and reminders, stuck to your desktop if you like',
+    single: true,
+    keywords: 'sticky notes stickies brain dump memo jot todo to-do checklist list reminder',
+  },
   // The id stays "phone" so older links, pins and desktop icons keep working.
   phone: {
     id: 'phone',
