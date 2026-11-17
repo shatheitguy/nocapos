@@ -141,22 +141,29 @@ func (s *Server) shellSession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ShellCORS lets NoCap Shell's pages (origin nocap-shell://shell) call the
-// API on the loopback listener with their bearer token. No cookies are
-// involved and no other origin gets anything.
+// ShellCORS serves NoCap Shell's pages (origin nocap-shell://shell) on the
+// loopback listener. Their HTTP requests come through the shell host, which
+// forwards them without an origin; their live connections (WebSockets) come
+// straight from the page, and need a ticket from an authenticated request
+// like any other, so the shell's origin is accepted for them here. No
+// cookies are involved, and no other origin gets anything new.
 func ShellCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Origin") != ShellOrigin {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			r.Header.Del("Origin")
+			next.ServeHTTP(w, r)
+			return
+		}
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", ShellOrigin)
 		h.Add("Vary", "Origin")
-		h.Set("Access-Control-Expose-Headers", "Content-Disposition, Content-Length, Content-Range, Content-Type, Retry-After, X-Total-Count")
 		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS")
-			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Range, X-Alfa-Request, X-Requested-With, X-File-Name, X-File-Size, X-Upload-Offset")
+			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Range, X-Alfa-Request")
 			h.Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
 			return

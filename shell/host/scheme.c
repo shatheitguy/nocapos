@@ -298,6 +298,130 @@ on_icon_theme_changed(GtkIconTheme *t, gpointer u)
     g_hash_table_remove_all(icon_cache);
 }
 
+/* ---------- alfad on the loopback address ----------
+ * The pages are NoCap OS's own build and ask for /api/..., /dav/... and
+ * /healthz as they do in a browser; those requests go on to alfad's
+ * loopback-only listener (shell.api_origin), headers, body and all, and
+ * the answer streams back. Nothing else is ever proxied. */
+
+static SoupSession *api_session;
+
+static gboolean
+api_path(const char *path)
+{
+  return path != NULL && (g_str_has_prefix(path, "/api/") || g_str_has_prefix(path, "/dav/") ||
+                          strcmp(path, "/healthz") == 0);
+}
+
+/* Request headers that go on to alfad (never the page's own origin or
+ * cookies: the session is the bearer token). */
+static gboolean
+forward_request_header(const char *name)
+{
+  static const char *const keep[] = {"Authorization", "Content-Type", "Range", "Accept", "Accept-Language",
+                                     "If-None-Match", "If-Modified-Since", "If-Range", "X-Alfa-Request",
+                                     "X-Requested-With", "Depth", "Destination", "Overwrite", NULL};
+  for (int i = 0; keep[i] != NULL; i++)
+    if (g_ascii_strcasecmp(name, keep[i]) == 0)
+      return TRUE;
+  return g_ascii_strncasecmp(name, "X-File-", 7) == 0 || g_ascii_strncasecmp(name, "X-Upload-", 9) == 0;
+}
+
+static gboolean
+forward_response_header(const char *name)
+{
+  static const char *const drop[] = {"Connection", "Keep-Alive", "Transfer-Encoding", "Set-Cookie",
+                                     "Content-Security-Policy", "Strict-Transport-Security", NULL};
+  for (int i = 0; drop[i] != NULL; i++)
+    if (g_ascii_strcasecmp(name, drop[i]) == 0)
+      return FALSE;
+  return TRUE;
+}
+
+typedef struct {
+  WebKitURISchemeRequest *req;
+  SoupMessage *msg;
+} ProxyJob;
+
+static void
+proxy_done(GObject *src, GAsyncResult *res, gpointer data)
+{
+  ProxyJob *j = data;
+  GError *err = NULL;
+  GInputStream *body = soup_session_send_finish(SOUP_SESSION(src), res, &err);
+  if (body == NULL) {
+    fail(j->req, G_IO_ERROR_HOST_UNREACHABLE, err ? err->message : "NoCapOS is not reachable");
+    g_clear_error(&err);
+  } else {
+    SoupMessageHeaders *in = soup_message_get_response_headers(j->msg);
+    goffset len = soup_message_headers_get_content_length(in);
+    WebKitURISchemeResponse *resp = webkit_uri_scheme_response_new(body, len > 0 ? len : -1);
+    webkit_uri_scheme_response_set_status(resp, soup_message_get_status(j->msg), soup_message_get_reason_phrase(j->msg));
+    const char *ct = soup_message_headers_get_content_type(in, NULL);
+    if (ct != NULL)
+      webkit_uri_scheme_response_set_content_type(resp, ct);
+    SoupMessageHeaders *out = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+    SoupMessageHeadersIter it;
+    const char *name, *value;
+    soup_message_headers_iter_init(&it, in);
+    while (soup_message_headers_iter_next(&it, &name, &value))
+      if (forward_response_header(name))
+        soup_message_headers_append(out, name, value);
+    webkit_uri_scheme_response_set_http_headers(resp, out);
+    webkit_uri_scheme_request_finish_with_response(j->req, resp);
+    g_object_unref(resp);
+    g_object_unref(body);
+  }
+  g_object_unref(j->msg);
+  g_object_unref(j->req);
+  g_free(j);
+}
+
+static void
+proxy_api(WebKitURISchemeRequest *req, const char *path, const char *query)
+{
+  const char *origin = shell.api_origin && *shell.api_origin ? shell.api_origin : "http://127.0.0.1:8780";
+  if (!(g_str_has_prefix(origin, "http://127.0.0.1:") || g_str_has_prefix(origin, "https://127.0.0.1:"))) {
+    fail(req, G_IO_ERROR_PERMISSION_DENIED, "not a loopback address");
+    return;
+  }
+  char *target = g_strdup_printf("%s%s%s%s", origin, path, query ? "?" : "", query ? query : "");
+  const char *method = webkit_uri_scheme_request_get_http_method(req);
+  SoupMessage *msg = soup_message_new(method ? method : "GET", target);
+  g_free(target);
+  if (msg == NULL) {
+    fail(req, G_IO_ERROR_INVALID_ARGUMENT, "bad request");
+    return;
+  }
+  SoupMessageHeaders *in = webkit_uri_scheme_request_get_http_headers(req);
+  SoupMessageHeaders *out = soup_message_get_request_headers(msg);
+  if (in != NULL) {
+    SoupMessageHeadersIter it;
+    const char *name, *value;
+    soup_message_headers_iter_init(&it, in);
+    while (soup_message_headers_iter_next(&it, &name, &value))
+      if (forward_request_header(name))
+        soup_message_headers_append(out, name, value);
+  }
+#if WEBKIT_CHECK_VERSION(2, 40, 0)
+  GInputStream *body = webkit_uri_scheme_request_get_http_body(req);
+  if (body != NULL) {
+    soup_message_set_request_body(msg, in ? soup_message_headers_get_content_type(in, NULL) : NULL, body, -1);
+    g_object_unref(body);
+  }
+#endif
+  if (api_session == NULL) {
+    api_session = soup_session_new();
+    soup_session_set_timeout(api_session, 0); /* long polls and downloads */
+    soup_session_set_idle_timeout(api_session, 60);
+    soup_session_set_proxy_resolver(api_session, NULL); /* straight to loopback */
+  }
+  ProxyJob *j = g_new0(ProxyJob, 1);
+  j->req = g_object_ref(req);
+  j->msg = msg;
+  soup_session_send_async(api_session, msg, G_PRIORITY_DEFAULT, NULL, proxy_done, j);
+}
+
 static void
 on_request(WebKitURISchemeRequest *req, gpointer u)
 {
@@ -309,7 +433,9 @@ on_request(WebKitURISchemeRequest *req, gpointer u)
   }
   const char *host = g_uri_get_host(g);
   const char *path = g_uri_get_path(g);
-  if (g_strcmp0(host, "shell") == 0)
+  if (g_strcmp0(host, "shell") == 0 && api_path(path) && !shell.greeter)
+    proxy_api(req, path, g_uri_get_query(g));
+  else if (g_strcmp0(host, "shell") == 0)
     serve_file(req, path ? path : "/");
   else if (g_strcmp0(host, "icon") == 0)
     serve_icon(req, path ? path : "", g_uri_get_query(g));
