@@ -208,7 +208,9 @@
   gap: 4px;
   padding: 18px 20px 12px;
   border-radius: 24px;
-  background: var(--note-wash) var(--surface);
+  background: var(--note-wash) var(--sheet-solid, var(--surface));
+  backdrop-filter: blur(40px) saturate(1.5);
+  -webkit-backdrop-filter: blur(40px) saturate(1.5);
   border: 1px solid var(--note-edge);
   box-shadow: var(--shadow-win);
   color: var(--tint-ink);
