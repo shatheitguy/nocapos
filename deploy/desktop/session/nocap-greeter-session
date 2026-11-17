@@ -8,6 +8,13 @@
 export XDG_CURRENT_DESKTOP=NoCap:wlroots
 export XDG_SESSION_TYPE=wayland
 export GDK_BACKEND=wayland
+[ "$(id -u)" -ne 0 ] || { echo "nocap-greeter-session: refusing to run as root" >&2; exit 1; }
+# The greeter account's home may not be writable: the web views keep their
+# cache in its runtime folder (in memory, gone at shutdown).
+RT="${XDG_RUNTIME_DIR:-/tmp}"
+if [ -z "${HOME:-}" ] || [ ! -w "$HOME" ]; then export HOME="$RT"; fi
+export XDG_CACHE_HOME="$RT/nocap-greeter/cache" XDG_DATA_HOME="$RT/nocap-greeter/data" XDG_CONFIG_HOME="$RT/nocap-greeter/config"
+mkdir -p "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" 2>/dev/null
 LIB=/usr/local/lib/nocapos/shell
 CONF=/usr/share/nocapos/greeter/labwc
 LABWC=labwc

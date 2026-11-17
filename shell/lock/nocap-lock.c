@@ -836,6 +836,12 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	signal(SIGPIPE, SIG_IGN);
 
+	/* The lock belongs to the signed-in person's own session. */
+	if (getuid() == 0 || geteuid() == 0) {
+		fputs("nocap-lock: refusing to run as root\n", stderr);
+		return 1;
+	}
+
 	if (single_instance() < 0) {
 		fprintf(stderr, "nocap-lock: already running\n");
 		return 3;
