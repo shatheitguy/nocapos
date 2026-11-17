@@ -1,0 +1,10 @@
+# Build outputs and Rugix Bakery's layer cache.
+/build/
+/.rugix/
+# Made by scripts/build.sh: NoCapOS's packages, the CI test key, the update
+# signing root certificate (added by the release workflow).
+/recipes/nocapos-os/debs/
+/recipes/nocapos-os/keys/
+/recipes/nocapos-test-access/files/
+/test/key
+/test/key.pub

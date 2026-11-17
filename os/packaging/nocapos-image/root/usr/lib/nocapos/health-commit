@@ -1,0 +1,73 @@
+#!/bin/sh
+# health-commit: after a system update, the new system boots once on trial.
+# This checks it: NoCapOS answers and its database is up (so its migrations
+# ran), and NoCap Desktop's sign-in screen started when this machine shows
+# one. All good: the new system becomes the default. Otherwise the machine
+# restarts into the previous system, which stayed the default, and NoCapOS
+# says so in Glow Up.
+#
+# A system that is already the default has nothing to prove: exit at once.
+set -u
+
+DATA="${NOCAP_DATA_DIR:-/var/lib/nocapos}"
+RESULT="$DATA/os-boot-check.json"
+HEALTH_URL="${NOCAP_HEALTH_URL:-http://127.0.0.1:8780/healthz}"
+TIMEOUT="${NOCAP_HEALTH_TIMEOUT:-300}"
+
+field() { sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p"; }
+image_version() { sed -n 's/^VERSION=//p' /usr/lib/nocapos/image-os 2>/dev/null | tr -d '"'; }
+
+info="$(rugix-ctrl system info --json 2>/dev/null | tr -d '\n ')"
+active="$(printf '%s' "$info" | field activeGroup)"
+default="$(printf '%s' "$info" | field defaultGroup)"
+if [ -z "$active" ] || [ "$active" = "$default" ]; then
+  exit 0
+fi
+
+version="$(image_version)"
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+write_result() {
+  mkdir -p "$DATA"
+  printf '{"ok":%s,"version":"%s","group":"%s","reason":"%s","checked_at":"%s"}\n' \
+    "$1" "$version" "$active" "$2" "$(now)" >"$RESULT.tmp" && mv -f "$RESULT.tmp" "$RESULT"
+  sync
+}
+
+echo "Checking the new system ($version, group $active) before keeping it"
+
+deadline=$(( $(date +%s) + TIMEOUT ))
+alfad_ok=0
+while [ "$(date +%s)" -lt "$deadline" ]; do
+  if curl -fsS --max-time 5 "$HEALTH_URL" 2>/dev/null | grep -q '"status":"ok"'; then
+    alfad_ok=1
+    break
+  fi
+  sleep 3
+done
+
+desktop_ok=1
+if [ "$alfad_ok" -eq 1 ] && systemctl is-enabled --quiet greetd.service 2>/dev/null; then
+  desktop_ok=0
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if systemctl is-active --quiet greetd.service; then desktop_ok=1; break; fi
+    if systemctl is-failed --quiet greetd.service; then break; fi
+    sleep 3
+  done
+fi
+
+if [ "$alfad_ok" -eq 1 ] && [ "$desktop_ok" -eq 1 ]; then
+  if rugix-ctrl system commit; then
+    write_result true ""
+    echo "The new system is healthy and is now the default"
+    exit 0
+  fi
+  reason="commit_failed"
+elif [ "$alfad_ok" -eq 0 ]; then
+  reason="nocapos_not_responding"
+else
+  reason="desktop_not_starting"
+fi
+
+write_result false "$reason"
+echo "The new system failed its check ($reason); going back to the previous one" >&2
+systemctl reboot

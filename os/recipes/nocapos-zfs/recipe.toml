@@ -1,0 +1,2 @@
+description = "build the ZFS module for the image's kernels, then remove the compiler"
+dependencies = ["nocapos-packages"]

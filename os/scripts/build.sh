@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# build.sh: one entry point for the NoCapOS image build (Linux with Docker).
+#   build.sh debs ARCH             NoCapOS's packages into build/debs/ARCH
+#                                  and the image recipe (amd64, arm64)
+#   build.sh image SYSTEM          build/SYSTEM.img       (pc, pi, pc-test)
+#   build.sh bundle SYSTEM         build/SYSTEM.rugixb + .hash
+#   build.sh test-key              a throwaway SSH key for the QEMU test
+#   build.sh sizes                 a size table of build/ (Markdown)
+# VERSION defaults to the repository's VERSION file.
+set -euo pipefail
+
+OS="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$OS/.." && pwd)"
+VERSION="${VERSION:-$(tr -d '[:space:]' <"$ROOT/VERSION")}"
+BUILD="$OS/build"
+mkdir -p "$BUILD"
+
+bakery() { (cd "$OS" && ./run-bakery "$@"); }
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  debs)
+    arch="${1:?arch}"
+    out="$BUILD/debs/$arch"
+    rm -rf "$out"
+    bash "$OS/packaging/build-debs.sh" "$VERSION" "$arch" "$out"
+    rm -rf "$OS/recipes/nocapos-os/debs"
+    mkdir -p "$OS/recipes/nocapos-os/debs"
+    cp "$out"/*.deb "$OS/recipes/nocapos-os/debs/"
+    ;;
+  image)
+    sys="${1:?system}"
+    bakery bake image "$sys" "build/$sys.img" --release-version "$VERSION" --release-id nocapos \
+      --param-file config/snapshot.toml
+    ;;
+  bundle)
+    sys="${1:?system}"
+    bakery bake bundle "$sys" "build/$sys.rugixb" --release-version "$VERSION" --release-id nocapos \
+      --param-file config/snapshot.toml
+    bash "$0" bundle-hash "$sys"
+    ;;
+  bundle-hash)
+    sys="${1:?system}"
+    bakery bundler hash "build/$sys.rugixb" | tail -n 1 | tr -d '[:space:]' >"$BUILD/$sys.hash"
+    echo "bundle hash: $(cat "$BUILD/$sys.hash")"
+    ;;
+  test-key)
+    rm -f "$OS/test/key" "$OS/test/key.pub"
+    ssh-keygen -q -t ed25519 -N '' -C nocapos-qemu-test -f "$OS/test/key"
+    mkdir -p "$OS/recipes/nocapos-test-access/files"
+    cp "$OS/test/key.pub" "$OS/recipes/nocapos-test-access/files/test-key.pub"
+    ;;
+  sizes)
+    echo "| File | Size |"
+    echo "|---|---|"
+    for f in "$BUILD"/*.img "$BUILD"/*.img.xz "$BUILD"/*.rugixb; do
+      [ -f "$f" ] || continue
+      printf '| %s | %s |\n' "$(basename "$f")" "$(du -h --apparent-size "$f" | cut -f1)"
+    done
+    ;;
+  *)
+    sed -n '2,10p' "$0"
+    exit 2
+    ;;
+esac

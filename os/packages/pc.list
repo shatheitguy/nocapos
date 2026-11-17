@@ -1,0 +1,10 @@
+# PC (x86_64, UEFI) only. Same format as common.list. The kernel and the
+# firmware come from Rugix's core/debian-grub-setup recipe
+# (linux-image-amd64, firmware-linux); they are listed here for the record.
+
+linux-image-amd64          # kernel (installed by core/debian-grub-setup)
+firmware-linux             # GPU, Wi-Fi and network firmware (installed by core/debian-grub-setup)
+?intel-microcode           # CPU security fixes on Intel
+?amd64-microcode           # CPU security fixes on AMD
+qemu-system-x86            # Virtual Desk: x86 VMs
+ovmf                       # Virtual Desk: UEFI for VMs (Windows 11)

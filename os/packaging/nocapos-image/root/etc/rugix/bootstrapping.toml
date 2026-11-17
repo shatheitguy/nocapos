@@ -1,0 +1,8 @@
+#:schema https://raw.githubusercontent.com/rugix/rugix/refs/heads/main/schemas/rugix-ctrl-bootstrapping.schema.json
+
+# First boot of a flashed image: Rugix makes the second system slot (B) and
+# the data partition, which fills the rest of the disk. Each system slot
+# holds one whole NoCapOS system; 6 GiB leaves room for it to grow.
+[layout]
+type = "default"
+system-size = "6GiB"

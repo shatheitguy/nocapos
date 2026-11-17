@@ -1,0 +1,51 @@
+# NoCapOS image build (Rugix Bakery). See README.md.
+#
+# Systems: what gets baked. Layers (layers/*.toml) stack recipes
+# (recipes/*/) like image layers; Bakery caches every layer, so a change to
+# NoCapOS itself only rebuilds the small top layer.
+#
+#   trixie        Debian 13 from snapshot.debian.org (root layer)
+#   pc-base       + kernel, firmware, system packages, ZFS module (x86_64)
+#   pi-base       + Raspberry Pi kernels and firmware, packages, ZFS module
+#   pc, pi        + NoCapOS packages, branding, read-only system setup
+#   pc-test*      CI only: adds SSH for the QEMU test (never released)
+
+# PC: x86_64 with UEFI. GPT, Rugix's GRUB boot flow (A/B).
+[systems.pc]
+layer = "pc"
+architecture = "amd64"
+target = "generic-grub-efi"
+
+[systems.pc.options.use-squashfs]
+
+# Raspberry Pi 4, 5, CM4, CM5 (arm64). MBR, the firmware's tryboot (A/B).
+[systems.pi]
+layer = "pi"
+architecture = "arm64"
+target = "rpi-tryboot"
+
+[systems.pi.options.use-squashfs]
+
+# CI only: the PC system plus SSH, booted in QEMU by test/qemu-test.sh.
+[systems.pc-test]
+layer = "pc-test"
+architecture = "amd64"
+target = "generic-grub-efi"
+
+[systems.pc-test.options.use-squashfs]
+
+# CI only: the "next version" the test updates to (adds a marker file).
+[systems.pc-test-next]
+layer = "pc-test-next"
+architecture = "amd64"
+target = "generic-grub-efi"
+
+[systems.pc-test-next.options.use-squashfs]
+
+# CI only: a version whose health check fails, to test the automatic rollback.
+[systems.pc-test-broken]
+layer = "pc-test-broken"
+architecture = "amd64"
+target = "generic-grub-efi"
+
+[systems.pc-test-broken.options.use-squashfs]

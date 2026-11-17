@@ -1,0 +1,83 @@
+#!/bin/sh
+# data-driver: Rugix's data partition driver for NoCapOS (see
+# /etc/rugix/system.toml). Rugix runs it at boot, before systemd:
+#   data-driver format DEVICE MOUNTPOINT   first boot: a fresh ext4 "data"
+#   data-driver mount  DEVICE MOUNTPOINT   every boot
+#   data-driver wipe   DEVICE MOUNTPOINT   factory reset
+# The installer's "Lock my drive" puts LUKS2 under the data filesystem. It
+# opens with the TPM2 chip when one was enrolled, else it asks for the
+# passphrase on the boot splash (or the console).
+set -eu
+
+ACTION="${1:-}"
+DEV="${2:-${RUGIX_DATA_DEVICE:-}}"
+MNT="${3:-${RUGIX_DATA_MOUNT_POINT:-}}"
+MAPPER=nocap-data
+
+[ -n "$DEV" ] && [ -n "$MNT" ] || { echo "usage: data-driver format|mount|wipe DEVICE MOUNTPOINT" >&2; exit 2; }
+
+is_luks() { command -v cryptsetup >/dev/null 2>&1 && cryptsetup isLuks "$DEV" 2>/dev/null; }
+
+ask_passphrase() {
+  # Up to three tries, on the splash when it's up.
+  if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+    plymouth ask-for-password --prompt="Enter the passphrase to unlock NoCapOS" \
+      --number-of-tries=3 --command="cryptsetup open --type luks2 --key-file=- $DEV $MAPPER"
+    return
+  fi
+  tries=0
+  while [ "$tries" -lt 3 ]; do
+    tries=$((tries + 1))
+    printf '\n  NoCapOS is locked. Enter the passphrase to unlock it: ' >/dev/console
+    stty -echo </dev/console 2>/dev/null || true
+    IFS= read -r pass </dev/console || pass=""
+    stty echo </dev/console 2>/dev/null || true
+    printf '\n' >/dev/console
+    if printf '%s' "$pass" | cryptsetup open --type luks2 --key-file=- "$DEV" "$MAPPER"; then
+      return 0
+    fi
+    printf '  That passphrase did not work.\n' >/dev/console
+  done
+  return 1
+}
+
+open_luks() {
+  modprobe dm_mod 2>/dev/null || true
+  modprobe dm_crypt 2>/dev/null || true
+  [ -e "/dev/mapper/$MAPPER" ] && return 0
+  if cryptsetup luksDump "$DEV" 2>/dev/null | grep -q 'systemd-tpm2'; then
+    if cryptsetup open --token-only "$DEV" "$MAPPER" 2>/dev/null; then
+      return 0
+    fi
+    echo "The security chip didn't unlock the drive; asking for the passphrase." >&2
+  fi
+  ask_passphrase
+}
+
+case "$ACTION" in
+  format)
+    mkfs.ext4 -q -F -L data "$DEV"
+    ;;
+  mount)
+    mkdir -p "$MNT"
+    if is_luks; then
+      open_luks
+      mount -t ext4 -o noatime "/dev/mapper/$MAPPER" "$MNT"
+    else
+      mount -t ext4 -o noatime "$DEV" "$MNT"
+    fi
+    ;;
+  wipe)
+    umount "$MNT" 2>/dev/null || true
+    if is_luks; then
+      cryptsetup close "$MAPPER" 2>/dev/null || true
+      cryptsetup erase -q "$DEV" || true
+    fi
+    wipefs -a -q "$DEV"
+    mkfs.ext4 -q -F -L data "$DEV"
+    ;;
+  *)
+    echo "data-driver: unknown action $ACTION" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,6 @@
+# Installed while the image is built and removed before it is sealed. Same
+# format as common.list.
+
+dkms                       # builds the ZFS module for the image's kernel
+zfs-dkms                   # ZFS module source
+build-essential            # compiler for the ZFS module

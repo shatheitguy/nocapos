@@ -1,0 +1,4 @@
+# CI only: the "next version" for the update test.
+parent = "pc-test"
+
+recipes = ["nocapos-test-next"]

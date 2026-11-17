@@ -1,0 +1,3 @@
+description = "seal the image: no apt sources, caches, logs or build tools"
+# After core/pkg-cleanup (-900k): the very last thing in the layer.
+priority = -1_000_000
