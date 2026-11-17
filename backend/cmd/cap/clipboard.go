@@ -4,9 +4,9 @@ package main
 // session as a user service (nocapos-clipboard.service) and keeps the
 // desktop's real clipboard in step with the person's other devices through
 // alfad's local socket: copy on the phone, then Ctrl+V in any desktop app,
-// and the other way round. Wayland compositors with the data-control
-// protocol use wl-paste/wl-copy; everything else (Xorg, and GNOME on
-// Wayland through Xwayland, which shares one clipboard) uses xclip.
+// and the other way round. NoCap Desktop's compositor (labwc) has the
+// data-control protocol, so wl-paste/wl-copy reach its clipboard; X11
+// sessions use xclip.
 
 import (
 	"bufio"
@@ -201,7 +201,7 @@ func (wlTool) write(_ context.Context, c localClip) error {
 	return feed(c.data, "wl-copy", "--type", t)
 }
 
-// ---------- X11 (Xorg, or Xwayland under GNOME) ----------
+// ---------- X11 (Xorg, or Xwayland sharing one clipboard) ----------
 
 type xTool struct{ every time.Duration }
 
@@ -372,7 +372,7 @@ func have(cmd string) bool { _, err := exec.LookPath(cmd); return err == nil }
 func pickTool(ctx context.Context) (clipTool, error) {
 	if os.Getenv("WAYLAND_DISPLAY") != "" && have("wl-paste") && have("wl-copy") {
 		// Only compositors with the data-control protocol let a background
-		// program watch the clipboard; GNOME doesn't, so check first.
+		// program watch the clipboard; not every one has it, so check first.
 		wctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		err := wlTool{}.watch(wctx, make(chan struct{}, 1))
 		cancel()

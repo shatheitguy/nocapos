@@ -1,4 +1,5 @@
 import { api } from './client';
+import { wsBase } from '../native/platform';
 import type { RemoteOptions, RemoteProtocol } from '../apps/remote/rdModel';
 
 export interface RdpEngineStatus {
@@ -67,6 +68,5 @@ export const savedComputers = {
 };
 
 export function rdpSocketURL(): string {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws/rdp`;
+  return `${wsBase()}/ws/rdp`;
 }

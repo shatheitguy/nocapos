@@ -1,0 +1,8 @@
+# NoCap Desktop session (written by NoCapOS). Started by labwc's autostart;
+# brings up the shell, the idle lock and everything that runs with a
+# graphical sign-in (graphical-session.target: the clipboard agent, ...).
+[Unit]
+Description=NoCap Desktop session
+BindsTo=graphical-session.target
+Wants=nocap-shell.service nocap-idle.service nocapos-accent.service xdg-desktop-autostart.target
+Before=graphical-session.target

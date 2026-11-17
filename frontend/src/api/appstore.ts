@@ -1,6 +1,7 @@
 import { api } from './client';
 import type { IconName } from '../components/Icon';
 import type { ContainerSpec } from './docker';
+import { serverHost } from '../native/platform';
 
 export interface StoreJob {
   id: string;
@@ -97,7 +98,7 @@ export const storeApi = {
 export function appURL(a: StoreApp): string | null {
   if (a.installed?.web_url) return a.installed.web_url;
   if (!a.installed?.web_port) return null;
-  return `http://${window.location.hostname}:${a.installed.web_port}${a.web?.path ?? '/'}`;
+  return `http://${serverHost()}:${a.installed.web_port}${a.web?.path ?? '/'}`;
 }
 
 export function openStoreApp(a: StoreApp) {

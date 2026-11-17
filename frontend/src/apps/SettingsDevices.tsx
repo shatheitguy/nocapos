@@ -12,6 +12,7 @@ import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
 import { ClipboardSettings } from './SettingsClipboard';
 import { ReceivedSettings } from './SettingsReceived';
+import { serverOrigin } from '../native/platform';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
 // of your limit, a card per device (model, app, battery, address, NoCap Link
@@ -609,7 +610,7 @@ export function LinkSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const server = window.location.origin;
+  const server = serverOrigin();
   const copyServer = () => void navigator.clipboard?.writeText(server).then(() => toast('success', tr('ld.serverCopied')));
 
   let body;

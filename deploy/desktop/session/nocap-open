@@ -1,0 +1,18 @@
+#!/bin/sh
+# NoCap Desktop: opens one of NoCap OS's own apps in its own window
+# (keybindings use it): files, terminal, editor, settings, appstore; and
+# takes a screenshot (screenshot).
+SHELL_BIN=/usr/libexec/nocapos/nocap-shell
+case "$1" in
+  files | terminal | settings) exec "$SHELL_BIN" --app "$1" ;;
+  appstore) exec "$SHELL_BIN" --app appcenter ;;
+  editor) exec "$SHELL_BIN" --app files ;; # text files open from Files
+  screenshot)
+    command -v grim >/dev/null 2>&1 || exit 1
+    dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")"
+    [ -d "$dir" ] || dir="$HOME"
+    mkdir -p "$dir/Screenshots" && dir="$dir/Screenshots"
+    exec grim "$dir/Screenshot $(date '+%Y-%m-%d %H-%M-%S').png"
+    ;;
+  *) echo "usage: nocap-open files|terminal|editor|settings|appstore|screenshot" >&2; exit 2 ;;
+esac

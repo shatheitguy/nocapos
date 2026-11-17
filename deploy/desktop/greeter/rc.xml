@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- NoCap Desktop's sign-in screen (labwc for the greeter account only;
+     written by NoCapOS). No keybindings: only the sign-in screen runs. -->
+<labwc_config>
+  <core><decoration>server</decoration></core>
+  <theme><name>NoCap</name></theme>
+  <keyboard>
+    <repeatRate>25</repeatRate>
+    <repeatDelay>600</repeatDelay>
+  </keyboard>
+  <mouse>
+    <context name="Root">
+      <mousebind button="Left" action="Press" />
+      <mousebind button="Right" action="Press" />
+      <mousebind button="Middle" action="Press" />
+    </context>
+  </mouse>
+  <libinput>
+    <device category="touchpad"><tap>yes</tap></device>
+  </libinput>
+</labwc_config>

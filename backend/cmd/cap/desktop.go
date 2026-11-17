@@ -68,7 +68,7 @@ func cmdDesktop(ctx context.Context, out io.Writer, d desktopTool, root bool, ar
 		if err := d.ResetFallback(ctx); err != nil {
 			return err
 		}
-		fmt.Fprintln(out, "Back to the normal setup (Wayland, hardware rendering); the sign-in screen restarted.")
+		fmt.Fprintln(out, "Back to the normal setup (hardware rendering); the sign-in screen restarted.")
 		return nil
 	}
 	return fmt.Errorf("unknown option %q; usage: cap desktop status|repair|diagnose|reset-fallback", args[0])
