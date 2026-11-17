@@ -132,6 +132,8 @@ getent_group() { if grep -q "^$1:" "$ETC/group" 2>/dev/null; then echo "$1"; els
 # ---- files and folders ---------------------------------------------------
 
 restore() {
+  # /etc starts fresh at every boot: this marks "done for this boot".
+  : >"$ETC/.nocapos-etc-restored" 2>/dev/null || true
   [ -d "$STORE" ] || { log "nothing saved yet (first start)"; return 0; }
   restore_accounts
   for f in $FILES $UFW_FILES; do
