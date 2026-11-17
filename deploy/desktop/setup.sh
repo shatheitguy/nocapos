@@ -272,7 +272,7 @@ EOF
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
 
-# desk_old_autologin: the account the earlier sign-in screen (GDM) signed in
+# desk_old_autologin: the account the earlier sign-in screen signed in
 # automatically, if any.
 desk_old_autologin() {
   local f
@@ -469,8 +469,8 @@ desk_identity() {
   fi
 }
 
-# Other sign-in services (GDM on earlier versions, lightdm on Raspberry Pi
-# OS, sddm, ...) step aside for greetd: disabled, and Debian's record of the
+# Other sign-in services (the earlier versions' one, a distribution's own)
+# step aside for greetd: disabled, and Debian's record of the
 # display manager says greetd, so a later package update doesn't bring them
 # back. One that has the screen right now keeps it until NoCapOS can switch
 # without signing anyone out (DESK_DM_SWITCHED says so; apply_desktop_mode
