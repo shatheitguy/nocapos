@@ -403,7 +403,14 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
         val signins: List<SigninAlert> = emptyList(),
         /** A pending "mirror my screen" ask from NoCap OS (its id), if any. */
         val mirror: String? = null,
+        /** Your Sticky Notes changed somewhere: fetch them again. */
+        val notes: Boolean = false,
+        /** Sticky Notes reminders that came due. */
+        val reminders: List<NoteReminder> = emptyList(),
     )
+
+    /** A note's reminder came due (title and the note's first line). */
+    data class NoteReminder(val id: Long, val noteId: String, val title: String, val text: String)
 
     internal val poll: OkHttpClient by lazy { http.newBuilder().readTimeout(45, TimeUnit.SECONDS).build() }
 

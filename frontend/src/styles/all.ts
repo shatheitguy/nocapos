@@ -19,6 +19,7 @@ import './notifications.css';
 import './users.css';
 import './shield.css';
 import './phone.css';
+import './notes.css';
 import '../themes.css';
 import '../glass.css';
 // After the themes: Photos is always dark glass and keeps its own button styles.

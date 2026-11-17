@@ -43,7 +43,7 @@ export const WIDGETS: WidgetDef[] = [
   { type: 'clock', name: 'Clock & greeting', icon: 'auto', min: { w: 150, h: 80 }, max: { w: 560, h: 260 }, default: { w: 320, h: 150 } },
   { type: 'analog', name: 'Analog clock', icon: 'auto', min: { w: 100, h: 100 }, max: { w: 320, h: 320 }, default: { w: 180, h: 180 } },
   { type: 'calendar', name: 'Calendar', icon: 'calendar', min: { w: 200, h: 200 }, max: { w: 420, h: 360 }, default: { w: 280, h: 250 } },
-  { type: 'notes', name: 'Notes', icon: 'pencil', min: { w: 150, h: 100 }, max: { w: 480, h: 400 }, default: { w: 280, h: 220 } },
+  { type: 'notes', name: 'Sticky note', nameKey: 'notes.widgetName', icon: 'stickyNote', min: { w: 150, h: 100 }, max: { w: 480, h: 400 }, default: { w: 280, h: 220 } },
   { type: 'system', name: 'System monitor', icon: 'monitor', min: { w: 160, h: 120 }, max: { w: 520, h: 420 }, default: { w: 320, h: 250 } },
   { type: 'storage', name: 'Storage', icon: 'disk', min: { w: 160, h: 100 }, max: { w: 520, h: 320 }, default: { w: 320, h: 170 } },
   { type: 'network', name: 'Network', icon: 'network', min: { w: 160, h: 90 }, max: { w: 520, h: 260 }, default: { w: 320, h: 150 } },
