@@ -56,6 +56,7 @@ type Deps struct {
 	Streams   *webapps.Streams    // native Linux apps streamed into windows
 	Native    *nativeapps.Service // Linux apps from Flathub
 	Guacd     *rdp.Guacd
+	Secrets   Sealer // seals saved passwords (nil: none are kept)
 	Accounts  accounts.Directory
 	Scripts   *scripts.Runner
 	AppStore  *appstore.Manager
@@ -338,6 +339,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/rdp/status", s.admin(s.rdpStatus))
 	mux.Handle("POST /api/v1/rdp/ticket", s.admin(s.rdpTicket))
 	mux.HandleFunc("GET /ws/rdp", s.rdpConnect)
+	s.rdpSavedRoutes(mux)
 
 	// Files: everyone with the desktop. Admins see every location; others
 	// their home and the shared folders they may use (checked per request).

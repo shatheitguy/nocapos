@@ -325,7 +325,7 @@ func serve() error {
 
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
-		Files: fsvc, AI: aiSvc, Terminal: termSvc, Streams: appStreams, Native: nativeApps, Guacd: guacd, Accounts: dir, Version: version,
+		Files: fsvc, AI: aiSvc, Terminal: termSvc, Streams: appStreams, Native: nativeApps, Guacd: guacd, Secrets: box, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 		FileIndex: fileIndex,
 		Photos:    photoLib,
