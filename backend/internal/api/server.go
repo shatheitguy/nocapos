@@ -107,6 +107,7 @@ type Server struct {
 	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
 	pulls            pullJobs        // image downloads in progress
 	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
+	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -154,6 +155,9 @@ func New(ctx context.Context, d Deps) *Server {
 	go s.advertiseLink(ctx)
 	go s.advertiseBLE(ctx) // and over Bluetooth (link_discovery.go)
 	s.versionSince()       // note when this version first ran (stale update results go by it)
+	if d.Store != nil {
+		go s.notesLoop(ctx) // Sticky Notes reminders and old trash
+	}
 	return s
 }
 
@@ -205,7 +209,8 @@ func (s *Server) Handler() http.Handler {
 	s.deviceRoutes(mux)
 	s.mirrorRoutes(mux)
 	s.receivedRoutes(mux)
-	s.linkRoutes(mux) // NoCap Link sync, NoCap OS's side
+	s.linkRoutes(mux)  // NoCap Link sync, NoCap OS's side
+	s.notesRoutes(mux) // Sticky Notes, on the web and the phone
 	// Where each account is signed in; sign-in alerts; ending sessions.
 	s.sessionRoutes(mux)
 
