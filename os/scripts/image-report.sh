@@ -22,12 +22,13 @@ while read -r start size; do
 done <"$tmp/parts"
 [ -n "$found" ] || { echo "no squashfs system partition found in $img"; exit 1; }
 
-sq_bytes="$(unsquashfs -s "$tmp/part" | sed -n 's/^Filesystem size \([0-9.]*\) Kbytes.*/\1/p' | cut -d. -f1)"
+sq_bytes="$(unsquashfs -s "$tmp/part" | sed -n 's/^Filesystem size \([0-9]*\) bytes.*/\1/p')"
+[ -n "$sq_bytes" ] || sq_bytes="$(stat -c %s "$tmp/part")"
 unsquashfs -q -n -d "$tmp/root" "$tmp/part" usr/share/nocapos/packages.tsv >/dev/null
 cp "$tmp/root/usr/share/nocapos/packages.tsv" "$out"
 raw="$(unsquashfs -lls "$tmp/part" 2>/dev/null | awk '$3 ~ /^[0-9]+$/ && $1 ~ /^-/ {s += $3} END {printf "%d", s / 1048576}')"
 echo "| Part | Size |"
 echo "|---|---|"
-echo "| System (squashfs, compressed) | $((sq_bytes / 1024)) MiB |"
+echo "| System (squashfs, compressed) | $((sq_bytes / 1048576)) MiB |"
 echo "| System (unpacked files) | ${raw} MiB |"
 echo "| Packages | $(wc -l <"$out") |"
