@@ -14,7 +14,8 @@ debs=("${RECIPE_DIR}"/debs/*.deb)
 [ "${#debs[@]}" -gt 0 ] || { echo "no NoCapOS packages in ${RECIPE_DIR}/debs (run scripts/build.sh)" >&2; exit 1; }
 mkdir -p /tmp/nocapos-debs
 cp "${debs[@]}" /tmp/nocapos-debs/
-apt-get install -y --no-install-recommends /tmp/nocapos-debs/*.deb
+# NoCapOS's own files replace the stock ones (the banner, os-release).
+apt-get install -y --no-install-recommends -o Dpkg::Options::=--force-confnew /tmp/nocapos-debs/*.deb
 rm -rf /tmp/nocapos-debs
 VERSION="$(dpkg-query -W -f='${Version}' nocapos-core)"
 
