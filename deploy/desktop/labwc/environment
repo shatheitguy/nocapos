@@ -1,0 +1,7 @@
+# NoCap Desktop: environment for every account's session (written by
+# NoCapOS; replaced on updates).
+XDG_CURRENT_DESKTOP=NoCap:wlroots
+XCURSOR_THEME=Adwaita
+XCURSOR_SIZE=24
+GTK_THEME=Adwaita:dark
+QT_QPA_PLATFORMTHEME=gtk3

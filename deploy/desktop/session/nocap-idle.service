@@ -1,0 +1,12 @@
+# NoCap Desktop: locks the screen after 10 minutes without input and
+# before the machine sleeps (written by NoCapOS).
+[Unit]
+Description=NoCap Desktop idle lock
+PartOf=graphical-session.target
+ConditionPathExists=/usr/bin/swayidle
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/swayidle -w timeout 600 '/usr/local/lib/nocapos/shell/nocap-lock-start' before-sleep '/usr/local/lib/nocapos/shell/nocap-lock-start' lock '/usr/local/lib/nocapos/shell/nocap-lock-start'
+Restart=on-failure
+RestartSec=5

@@ -1,0 +1,139 @@
+<?xml version="1.0"?>
+<!--
+  NoCap Desktop: labwc settings for every account (written by NoCapOS;
+  replaced on updates). A person's own ~/.config/labwc/rc.xml wins.
+  Keys follow NoCap OS: Super opens the app launcher, Super+A the control
+  center, Super+L locks, Alt+Tab switches windows, Super+arrows snap.
+-->
+<labwc_config>
+  <core>
+    <decoration>server</decoration>
+    <gap>0</gap>
+    <adaptiveSync>no</adaptiveSync>
+    <reuseOutputMode>yes</reuseOutputMode>
+  </core>
+
+  <placement>
+    <policy>center</policy>
+  </placement>
+
+  <theme>
+    <name>NoCap</name>
+    <icon>Adwaita</icon>
+    <titlebar>
+      <layout>icon:iconify,max,close</layout>
+      <showTitle>yes</showTitle>
+    </titlebar>
+    <cornerRadius>10</cornerRadius>
+    <keepBorder>yes</keepBorder>
+    <dropShadows>yes</dropShadows>
+    <font place="ActiveWindow"><name>sans</name><size>10</size><weight>bold</weight></font>
+    <font place="InactiveWindow"><name>sans</name><size>10</size><weight>bold</weight></font>
+    <font place="MenuItem"><name>sans</name><size>10</size></font>
+    <font place="OnScreenDisplay"><name>sans</name><size>10</size></font>
+  </theme>
+
+  <windowSwitcher show="yes" preview="yes" outlines="yes" allWorkspaces="no">
+    <fields>
+      <field content="icon" width="5%" />
+      <field content="title" width="95%" />
+    </fields>
+  </windowSwitcher>
+
+  <snapping>
+    <range>10</range>
+    <overlay enabled="yes" />
+    <topMaximize>yes</topMaximize>
+  </snapping>
+
+  <focus>
+    <followMouse>no</followMouse>
+    <raiseOnFocus>no</raiseOnFocus>
+  </focus>
+
+  <desktops number="1" />
+
+  <keyboard>
+    <default />
+    <repeatRate>25</repeatRate>
+    <repeatDelay>600</repeatDelay>
+    <!-- The launcher: Super on its own, or Super+Space. -->
+    <keybind key="Super_L" onRelease="yes">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle launcher" />
+    </keybind>
+    <keybind key="W-space">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle launcher" />
+    </keybind>
+    <keybind key="W-a">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle center" />
+    </keybind>
+    <keybind key="W-n">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --toggle center" />
+    </keybind>
+    <keybind key="W-l">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-lock" />
+    </keybind>
+    <keybind key="W-e">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open files" />
+    </keybind>
+    <keybind key="C-A-t">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open terminal" />
+    </keybind>
+    <keybind key="W-t">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open terminal" />
+    </keybind>
+    <keybind key="W-i">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --app settings" />
+    </keybind>
+    <keybind key="A-F4"><action name="Close" /></keybind>
+    <keybind key="W-q"><action name="Close" /></keybind>
+    <keybind key="W-Up"><action name="ToggleMaximize" /></keybind>
+    <keybind key="W-Down"><action name="Iconify" /></keybind>
+    <keybind key="W-Left"><action name="SnapToEdge" direction="left" /></keybind>
+    <keybind key="W-Right"><action name="SnapToEdge" direction="right" /></keybind>
+    <keybind key="A-Tab"><action name="NextWindow" /></keybind>
+    <keybind key="A-S-Tab"><action name="PreviousWindow" /></keybind>
+    <keybind key="XF86AudioRaiseVolume">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-up" />
+    </keybind>
+    <keybind key="XF86AudioLowerVolume">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-down" />
+    </keybind>
+    <keybind key="XF86AudioMute">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd volume-mute" />
+    </keybind>
+    <keybind key="XF86MonBrightnessUp">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd brightness-up" />
+    </keybind>
+    <keybind key="XF86MonBrightnessDown">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-shell --osd brightness-down" />
+    </keybind>
+    <keybind key="Print">
+      <action name="Execute" command="/usr/local/lib/nocapos/shell/nocap-open screenshot" />
+    </keybind>
+  </keyboard>
+
+  <mouse>
+    <default />
+    <!-- The desktop itself: no menu of its own (the launcher and the
+         NoCap menu in the top bar have everything). -->
+    <context name="Root">
+      <mousebind button="Left" action="Press" />
+      <mousebind button="Right" action="Press" />
+      <mousebind button="Middle" action="Press" />
+    </context>
+    <context name="Title">
+      <mousebind button="Left" action="DoubleClick">
+        <action name="ToggleMaximize" />
+      </mousebind>
+    </context>
+  </mouse>
+
+  <libinput>
+    <device category="touchpad">
+      <naturalScroll>yes</naturalScroll>
+      <tap>yes</tap>
+      <disableWhileTyping>yes</disableWhileTyping>
+    </device>
+  </libinput>
+</labwc_config>
