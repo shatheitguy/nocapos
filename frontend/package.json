@@ -25,6 +25,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.49.1",
     "@types/guacamole-common-js": "^1.5.5",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.1.0",

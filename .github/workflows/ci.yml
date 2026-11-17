@@ -98,3 +98,35 @@ jobs:
           name: shell-smoke
           path: smoke/out/
           if-no-files-found: ignore
+
+  # NoCap Desktop shows the same NoCap OS as the browser: the menu bar, dock,
+  # launcher, Control Center and notification center are compared pixel by
+  # pixel between the two builds (frontend/e2e/parity.spec.ts).
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build both and compare
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx vite build
+          npx vite build --config vite.shell.config.ts
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore
