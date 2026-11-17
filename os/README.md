@@ -195,7 +195,7 @@ certificate.
 ## Existing installs: a later one-time move
 
 Script installs (Debian or Raspberry Pi OS plus `deploy/install.sh`)
-owner's Pi) stay as they are: Glow Up updates them with the install script,
+stay as they are: Glow Up updates them with the install script,
 as today. A later, one-time move to the image OS, keeping data:
 
 1. Glow Up offers "Move to NoCapOS (image)" only when the machine qualifies
