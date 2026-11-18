@@ -1,0 +1,11 @@
+#:schema https://raw.githubusercontent.com/rugix/rugix/refs/heads/main/schemas/rugix-ctrl-system.schema.json
+
+# NoCapOS: the data partition is plain ext4, or ext4 inside LUKS2 when the
+# installer's "Lock my drive" was on. One driver handles both, so the same
+# signed system image works on every install. Rugix runs each script with
+# the partition's device and mount point.
+[data-partition.driver]
+type = "custom"
+format-script = "/usr/lib/nocapos/data-format"
+mount-script = "/usr/lib/nocapos/data-mount"
+wipe-script = "/usr/lib/nocapos/data-wipe"

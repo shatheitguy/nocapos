@@ -1,0 +1,4 @@
+#!/bin/sh
+# Rugix boot hook (after the data partition and the overlay are set up,
+# before systemd starts): put this machine's saved settings back into /etc.
+exec /usr/lib/nocapos/etc-sync restore

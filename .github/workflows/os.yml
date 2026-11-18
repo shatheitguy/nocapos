@@ -1,0 +1,231 @@
+name: NoCapOS image
+
+# The image-based NoCapOS (os/): builds the PC and Raspberry Pi images and
+# their update bundles, boots the PC image in QEMU and runs the update and
+# rollback test. See os/README.md.
+on:
+  pull_request:
+    paths: ['os/**', '.github/workflows/os.yml']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: os-${{ github.ref }}-${{ inputs.release && 'release' || 'build' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lists:
+    name: Package lists and scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every package has a reason
+        run: bash os/scripts/check-lists.sh
+      - name: shellcheck
+        run: |
+          shellcheck -S warning -x -s bash os/run-bakery os/scripts/*.sh os/packaging/build-debs.sh os/test/*.sh \
+            os/recipes/*/steps/*.sh
+          shellcheck -S warning -s sh os/packaging/nocapos-image/root/usr/lib/nocapos/* \
+            os/packaging/nocapos-image/root/etc/rugix/hooks/boot/post-init/*
+      - name: etc-sync account merge
+        run: bash os/test/etc-sync-test.sh
+
+  pc:
+    name: PC image (x86_64) + QEMU test
+    needs: lists
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af >/dev/null
+          df -h /
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Web UI
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund && npm run build && npm run build:shell
+
+      - name: NoCapOS packages (amd64)
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          bash os/scripts/build.sh debs amd64
+          ls -la os/build/debs/amd64
+
+      - name: Layer cache
+        uses: actions/cache@v4
+        with:
+          path: os/.rugix/layers
+          key: rugix-pc-${{ hashFiles('os/rugix-bakery.toml', 'os/layers/**', 'os/recipes/**', 'os/packages/**', 'os/config/**', 'os/scripts/resolve-packages.sh') }}
+          restore-keys: rugix-pc-
+
+      - name: File times from git (so Bakery reuses unchanged layers)
+        run: bash os/scripts/git-mtimes.sh os
+
+      - name: Update signing root
+        env:
+          ROOT_CERT: ${{ secrets.NOCAPOS_UPDATE_ROOT_CERT }}
+        run: bash os/scripts/signing.sh root
+
+      - name: Build PC image and bundle
+        run: |
+          bash os/scripts/build.sh image pc
+          bash os/scripts/build.sh bundle pc
+
+      - name: Build the test images
+        run: |
+          bash os/scripts/build.sh test-key
+          bash os/scripts/build.sh image pc-test
+          bash os/scripts/build.sh bundle pc-test-next
+          bash os/scripts/build.sh bundle pc-test-broken
+
+      - name: QEMU test (boot, NoCapOS on :443/:80, A->B update, rollback)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 ovmf >/dev/null
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          bash os/test/qemu-test.sh
+
+      - name: Sizes
+        if: always()
+        run: |
+          {
+            echo "### PC image sizes"
+            bash os/scripts/build.sh sizes
+            echo
+            echo "System (squashfs) and what's inside:"
+            bash os/scripts/image-report.sh os/build/pc.img || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Serial log
+        if: failure()
+        run: tail -n 300 os/build/qemu/serial.log || true
+
+      - name: Sign and compress for release
+        if: inputs.release
+        env:
+          SIGNING_KEY: ${{ secrets.NOCAPOS_UPDATE_SIGNING_KEY }}
+          SIGNING_CERT: ${{ secrets.NOCAPOS_UPDATE_SIGNING_CERT }}
+        run: |
+          bash os/scripts/signing.sh sign os/build/pc.rugixb
+          bash os/scripts/build.sh bundle-hash pc
+          xz -T0 -6 -k os/build/pc.img
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.release
+        with:
+          name: os-pc
+          path: |
+            os/build/pc.img.xz
+            os/build/pc.rugixb
+            os/build/pc.hash
+            os/build/pc.packages.tsv
+          if-no-files-found: ignore
+          retention-days: 7
+
+  pi:
+    name: Raspberry Pi image (arm64)
+    needs: lists
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost || true
+          df -h /
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Web UI
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund && npm run build && npm run build:shell
+
+      - name: NoCapOS packages (arm64)
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          bash os/scripts/build.sh debs arm64
+
+      - name: Layer cache
+        uses: actions/cache@v4
+        with:
+          path: os/.rugix/layers
+          key: rugix-pi-${{ hashFiles('os/rugix-bakery.toml', 'os/layers/**', 'os/recipes/**', 'os/packages/**', 'os/config/**', 'os/scripts/resolve-packages.sh') }}
+          restore-keys: rugix-pi-
+
+      - name: File times from git
+        run: bash os/scripts/git-mtimes.sh os
+
+      - name: Update signing root
+        env:
+          ROOT_CERT: ${{ secrets.NOCAPOS_UPDATE_ROOT_CERT }}
+        run: bash os/scripts/signing.sh root
+
+      - name: Build Raspberry Pi image and bundle
+        run: |
+          bash os/scripts/build.sh image pi
+          bash os/scripts/build.sh bundle pi
+
+      - name: Sizes
+        if: always()
+        run: |
+          {
+            echo "### Raspberry Pi image sizes"
+            bash os/scripts/build.sh sizes
+            bash os/scripts/image-report.sh os/build/pi.img || true
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Sign and compress for release
+        if: inputs.release
+        env:
+          SIGNING_KEY: ${{ secrets.NOCAPOS_UPDATE_SIGNING_KEY }}
+          SIGNING_CERT: ${{ secrets.NOCAPOS_UPDATE_SIGNING_CERT }}
+        run: |
+          bash os/scripts/signing.sh sign os/build/pi.rugixb
+          bash os/scripts/build.sh bundle-hash pi
+          xz -T0 -6 -k os/build/pi.img
+
+      - uses: actions/upload-artifact@v4
+        if: inputs.release
+        with:
+          name: os-pi
+          path: |
+            os/build/pi.img.xz
+            os/build/pi.rugixb
+            os/build/pi.hash
+            os/build/pi.packages.tsv
+          if-no-files-found: ignore
+          retention-days: 7

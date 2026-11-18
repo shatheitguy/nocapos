@@ -1,0 +1,42 @@
+# NoCap Desktop: what the machine's own screen runs (greetd, labwc and NoCap
+# Shell). The same list as deploy/desktop/lib.sh (desktop_package_list,
+# debian) uses for script installs, without third-party apps: no file
+# manager, terminal, editor, image viewer, browser or games. NoCap Desktop's
+# own programs come in the nocap-desktop package. Same format as common.list.
+
+labwc                                   # the compositor: windows, input, screens
+greetd                                  # the sign-in service (NoCap's sign-in screen runs in it)
+xwayland                                # apps that only speak X11 open in the session
+wayvnc                                  # "Open screen" in NoCapOS shows this screen in the browser
+swayidle                                # locks the screen when idle and before sleep
+libgtk-3-0t64|libgtk-3-0                # NoCap Shell's windows
+libgtk-layer-shell0                     # NoCap Shell's desktop, top bar and dock layers
+libwebkit2gtk-4.1-0                     # draws NoCap OS natively, from local files; the installer screen
+libjson-glib-1.0-0                      # NoCap Shell's checked messages
+libpolkit-agent-1-0                     # NoCap's admin password prompt
+libxkbcommon0                           # the lock screen's keyboard
+libpangocairo-1.0-0                     # the lock screen's text
+libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0  # the lock screen's wallpaper
+libpam0g                                # the lock screen's password check
+polkitd|policykit-1                     # who may do admin things
+xdg-desktop-portal                      # file open/save and screen sharing for installed apps
+xdg-desktop-portal-wlr                  # screen sharing and screenshots in labwc
+xdg-desktop-portal-gtk                  # the open/save dialog for installed apps
+xdg-user-dirs                           # Documents, Pictures, Downloads in each home
+gnome-keyring                           # the passwords installed apps save (unlocks at sign-in)
+libpam-gnome-keyring                    # unlocks it with the sign-in password
+dbus-user-session                       # each person's session bus and services
+pipewire                                # sound and screen capture
+wireplumber|pipewire-media-session      # connects sound devices
+?pipewire-pulse                         # sound for apps that use PulseAudio
+wl-clipboard                            # the clipboard shared with your phones
+?grim                                   # screenshots (the Print key)
+?brightnessctl                          # screen brightness on laptops
+adwaita-icon-theme                      # cursors and icons for installed apps
+fonts-dejavu-core                       # a font every app can fall back to
+libgl1-mesa-dri                         # graphics drivers, with the software renderer
+libegl-mesa0                            # graphics drivers (EGL)
+libgbm1                                 # graphics buffers for the compositor
+?firmware-amd-graphics                  # AMD graphics firmware
+?firmware-misc-nonfree                  # Intel and other graphics firmware
+?systemd-zram-generator|zram-tools      # compressed swap on small machines

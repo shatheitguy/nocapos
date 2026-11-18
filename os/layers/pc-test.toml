@@ -1,0 +1,5 @@
+# CI only, never released: the PC system plus SSH with a throwaway key, so
+# test/qemu-test.sh can drive updates inside the VM.
+parent = "pc"
+
+recipes = ["nocapos-test-access"]
