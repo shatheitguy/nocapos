@@ -77,8 +77,13 @@ func TestPartPathAndLayout(t *testing.T) {
 			t.Errorf("PartPath(%s) = %s, want %s", in, got, want)
 		}
 	}
-	s := SfdiskScript()
-	if strings.Count(s, "type=") != 6 || !strings.Contains(s, "label: gpt") || !strings.Contains(s, "size=6GiB") {
+	dump := "label: gpt\nlabel-id: 0D3E1D2B-1111-4222-8333-944455556666\ndevice: /dev/vda\nunit: sectors\n\n/dev/vda1 : start=2048, size=524288, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, uuid=AAAAAAAA-0000-4000-8000-000000000001\n/dev/vda4 : start=1574912, size=5283340, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, uuid=651BBEAF-D642-554F-A00F-368956ED0B6C\n"
+	ids := ParseSfdiskDump(dump)
+	s := SfdiskScript(ids)
+	if strings.Count(s, "type=") != 6 || !strings.Contains(s, "label: gpt") || !strings.Contains(s, "size=6GiB") ||
+		!strings.Contains(s, "label-id: 0D3E1D2B-1111-4222-8333-944455556666") ||
+		!strings.Contains(s, "name=\"NoCapOS system A\", uuid=651BBEAF-D642-554F-A00F-368956ED0B6C") ||
+		strings.Contains(s, "system B\", uuid") {
 		t.Errorf("layout:\n%s", s)
 	}
 	l := NewLayout(500 << 30)

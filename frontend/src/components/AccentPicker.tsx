@@ -1,46 +1,55 @@
-import { UI_THEMES, WALLPAPERS, usePrefs } from '../state/prefs';
-
-const PRESETS = ['#2dd4bf', '#60a5fa', '#818cf8', '#a78bfa', '#f472b6', '#ef4444', '#fb923c', '#f59e0b', '#84cc16', '#34d399'];
+import { UI_THEMES, WALLPAPERS, shownWallpaper, usePrefs, wallpaperSrc } from '../state/prefs';
+import { ensurePalette, useWallPalette, wallChoices } from '../state/wallPalette';
+import { useT } from '../i18n';
 
 /**
- * Accent color. Empty pref = automatic: in Glass it matches the wallpaper,
- * in the other themes it's the theme's own color. A preset or the color well
- * overrides it (in the FUI themes that recolors the neon too).
+ * Accent color: three colors taken from the current wallpaper, then a color
+ * picker for anything else. The first one is automatic (empty pref): it
+ * follows the wallpaper when it changes (in Glass; the other themes use their
+ * own color). Built-in wallpapers lead with their own accent.
  */
 export function AccentPicker({ compact = false }: { compact?: boolean }) {
+  const t = useT();
   const accent = usePrefs((s) => s.accent);
   const uiTheme = usePrefs((s) => s.uiTheme);
   const wallpaper = usePrefs((s) => s.wallpaper);
   const set = usePrefs((s) => s.set);
+  const wallId = shownWallpaper(wallpaper);
+  const colors = useWallPalette((s) => s.byId[wallId]);
+  if (!colors) ensurePalette(wallId, wallpaperSrc(wallId));
   const glass = uiTheme === 'glass';
-  const wall = WALLPAPERS.find((w) => w.id === wallpaper);
-  const auto = (glass && wall ? wall.accent : undefined) ?? UI_THEMES.find((t) => t.id === uiTheme)?.accent ?? UI_THEMES[0].accent;
+  const builtIn = WALLPAPERS.find((w) => w.id === wallId)?.accent;
+  const choices = wallChoices(builtIn, colors);
+  const themeColor = UI_THEMES.find((x) => x.id === uiTheme)?.accent ?? UI_THEMES[0].accent;
+  // The automatic choice: the wallpaper's main color in Glass, else the theme's.
+  const auto = (glass ? choices[0] : undefined) ?? themeColor;
+  // The others: the remaining wallpaper colors (all three outside Glass would
+  // be four with the theme color, so keep it to three circles).
+  const rest = (glass ? choices.slice(1) : choices).filter((c) => c.toLowerCase() !== auto.toLowerCase()).slice(0, 2);
   const current = accent || auto;
-  const autoLabel = glass ? 'Match wallpaper' : 'Theme color';
-  const custom = !!accent && !PRESETS.includes(accent.toLowerCase());
+  const picked = (c: string) => accent.toLowerCase() === c.toLowerCase();
+  const custom = !!accent && !rest.some(picked);
 
   if (compact) {
     return (
       <div className="accent-picker compact">
-        <label className="accent-well" style={{ background: current }} title="Pick an accent color">
-          <input type="color" value={current} aria-label="Accent color" onChange={(e) => set({ accent: e.target.value })} />
+        <label className="accent-well" style={{ background: current }} title={t('pz.accentPick')}>
+          <input type="color" value={current} aria-label={t('pz.accent')} onChange={(e) => set({ accent: e.target.value })} />
         </label>
       </div>
     );
   }
   return (
-    <div className="accent-picker accent-choices" role="radiogroup" aria-label="Accent color">
-      <button type="button" role="radio" aria-checked={!accent} className={`accent-auto ${!accent ? 'on' : ''}`}
-        title={autoLabel} onClick={() => set({ accent: '' })}>
-        <span className="accent-dot" style={{ background: auto }} />
-        {autoLabel}
-      </button>
-      {PRESETS.map((c) => (
-        <button key={c} type="button" role="radio" aria-checked={accent.toLowerCase() === c} aria-label={c}
-          className={`accent-swatch ${accent.toLowerCase() === c ? 'on' : ''}`} style={{ background: c }} onClick={() => set({ accent: c })} />
+    <div className="accent-picker accent-choices" role="radiogroup" aria-label={t('pz.accent')}>
+      <button type="button" role="radio" aria-checked={!accent} className={`accent-swatch auto ${!accent ? 'on' : ''}`}
+        style={{ background: auto }} title={glass ? t('pz.accentMatch') : t('pz.accentTheme')} aria-label={glass ? t('pz.accentMatch') : t('pz.accentTheme')}
+        onClick={() => set({ accent: '' })} />
+      {rest.map((c) => (
+        <button key={c} type="button" role="radio" aria-checked={picked(c)} aria-label={t('pz.accentFromWall')} title={t('pz.accentFromWall')}
+          className={`accent-swatch ${picked(c) ? 'on' : ''}`} style={{ background: c }} onClick={() => set({ accent: c })} />
       ))}
-      <label className={`accent-well ${custom ? 'on' : ''}`} style={{ background: custom ? current : undefined }} title="Pick any color">
-        <input type="color" value={current} aria-label="Custom accent color" onChange={(e) => set({ accent: e.target.value })} />
+      <label className={`accent-well ${custom ? 'on' : ''}`} style={{ background: custom ? current : undefined }} title={t('pz.accentPick')}>
+        <input type="color" value={current} aria-label={t('pz.accentPick')} onChange={(e) => set({ accent: e.target.value })} />
       </label>
     </div>
   );

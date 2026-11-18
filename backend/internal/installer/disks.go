@@ -5,6 +5,7 @@ package installer
 
 import (
 	"encoding/json"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -314,19 +315,55 @@ func PartPath(disk string, n int) string {
 	return disk + strconv.Itoa(n)
 }
 
+// SourceIDs are the stick's partition table and partition IDs. The boot
+// files name the system partition by its ID (root=PARTUUID=...), so the new
+// drive's partitions 1-4 keep the stick's.
+type SourceIDs struct {
+	LabelID string
+	UUIDs   map[int]string // partition number -> PARTUUID
+}
+
+var (
+	labelIDRe = regexp.MustCompile(`(?m)^label-id:\s*([0-9A-Fa-f-]{36})\s*$`)
+	partRe    = regexp.MustCompile(`(?m)^\S*?(\d+)\s*:.*\buuid=([0-9A-Fa-f-]{36})`)
+)
+
+// ParseSfdiskDump reads `sfdisk -d` output.
+func ParseSfdiskDump(dump string) SourceIDs {
+	ids := SourceIDs{UUIDs: map[int]string{}}
+	if m := labelIDRe.FindStringSubmatch(dump); m != nil {
+		ids.LabelID = m[1]
+	}
+	for _, m := range partRe.FindAllStringSubmatch(dump, -1) {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			ids.UUIDs[n] = m[2]
+		}
+	}
+	return ids
+}
+
 // SfdiskScript is the new partition table: Rugix's PC layout with the data
-// partition filling the rest of the disk.
-func SfdiskScript() string {
-	return strings.Join([]string{
-		"label: gpt",
-		"size=256MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=\"NoCapOS startup\"",
-		"size=256MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS boot A\"",
-		"size=256MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS boot B\"",
-		"size=6GiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS system A\"",
+// partition filling the rest of the disk, keeping the stick's IDs.
+func SfdiskScript(src SourceIDs) string {
+	uuid := func(n int) string {
+		if u := src.UUIDs[n]; u != "" {
+			return ", uuid=" + u
+		}
+		return ""
+	}
+	lines := []string{"label: gpt"}
+	if src.LabelID != "" {
+		lines = append(lines, "label-id: "+src.LabelID)
+	}
+	return strings.Join(append(lines,
+		"size=256MiB, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B, name=\"NoCapOS startup\""+uuid(1),
+		"size=256MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS boot A\""+uuid(2),
+		"size=256MiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS boot B\""+uuid(3),
+		"size=6GiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS system A\""+uuid(4),
 		"size=6GiB, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS system B\"",
 		"type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=\"NoCapOS data\"",
 		"",
-	}, "\n")
+	), "\n")
 }
 
 // NewLayout is the "after" bar for a disk: startup, system, your stuff.
