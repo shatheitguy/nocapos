@@ -1751,6 +1751,17 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
   border-bottom: 1px solid var(--glass-border); color: var(--text); font-size: 13px;
 }
 .menubar .spacer { flex: 1; }
+/* A maximized front window: the menu bar slides up out of the way and
+   peeks back when the pointer reaches the top edge (or while in use). */
+.menubar { transition: transform 0.22s cubic-bezier(0.22, 0.8, 0.3, 1); }
+.menubar-hot { position: absolute; top: 0; left: 0; right: 0; height: 6px; z-index: 100002; }
+:root[data-menubar-auto] .menubar { transform: translateY(-100%); box-shadow: none; }
+:root[data-menubar-auto] .menubar-hot:hover + .menubar,
+:root[data-menubar-auto] .menubar:hover,
+:root[data-menubar-auto] .menubar:focus-within,
+:root[data-menubar-auto] .menubar:has([aria-expanded='true']) { transform: none; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+:root[data-reduce-motion] .menubar { transition: none; }
+@media (prefers-reduced-motion: reduce) { .menubar { transition: none; } }
 .mb-brand { background: transparent; padding: 2px 6px; border-radius: 6px; }
 .mb-brand .brand-mark { width: 20px; height: 20px; font-size: 12px; border-radius: 6px; }
 .mb-brand:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 10%, transparent); filter: none; }

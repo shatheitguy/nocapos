@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { Icon } from '../components/Icon';
 import { AppIcon } from '../components/AppTile';
 import { useViewport, WindowShownContext } from '../lib/hooks';
-import { usePrefs, workArea } from '../state/prefs';
+import { useMenubarAuto, usePrefs, workArea } from '../state/prefs';
 import { effectiveRect, flushLayout, useWM, type Rect, type WinState } from '../state/windows';
 import { hostSend, nativeSurface } from '../native/platform';
 
@@ -28,6 +28,8 @@ export const Window = memo(function Window({ id, compact }: { id: string; compac
   // Maximized/snapped rects depend on the viewport and the dock's edge.
   useViewport();
   usePrefs((s) => `${s.dockPosition}:${s.dockSize}:${s.dockAutoHide}:${s.titleButtons}:${s.lingo}`);
+  useMenubarAuto((s) => s.on); // the menu bar slid away: maximized windows get its height
+
   return win ? <WindowFrame win={win} compact={compact} /> : null;
 });
 
