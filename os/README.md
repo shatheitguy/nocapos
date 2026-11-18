@@ -80,7 +80,7 @@ NoCapOS's own components are Debian packages, built by
 | `nocapos-image` | image-only: data partition driver, what persists, `etc-sync`, the post-update health check |
 | `nocapos-branding` | `os-release` (`ID=nocapos`, `ID_LIKE=debian`), `lsb-release`, console banner, boot splash |
 | `nocapos-base` | metapackage: depends on exactly `packages/*.list` |
-| `nocap-shell` | NoCap Desktop's own programs: packaged when `NOCAP_SHELL_DIST` points at NoCap Desktop's build output (hook in `build-debs.sh`) |
+| `nocap-desktop` | NoCap Desktop: `nocap-shell` and `nocap-lock` (built from `shell/` in a Debian 13 container), NoCap Shell's pages (`npm run build:shell`) and `deploy/desktop`; its postinst runs the same setup steps as a script install (`packaging/nocap-desktop/setup-image.sh`) |
 
 Build locally (Linux with Docker, privileged containers):
 
