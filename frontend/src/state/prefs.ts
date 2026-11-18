@@ -5,6 +5,7 @@ import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
 import { cleanDefaults } from '../lib/openWith';
+import { cleanLayout, EMPTY_LAYOUT, type SidebarLayout } from '../lib/sidebarOrder';
 
 export { isCustomWallpaper };
 
@@ -119,6 +120,7 @@ export interface PrefValues {
   language: LanguageId;
   lingo: Lingo; // Gen Z or Standard wording
   openWith: Record<string, string>; // file type ("jpg") → the app Files opens it with
+  filesSidebar: SidebarLayout; // the Files sidebar's order and hidden places
 
   welcomeDone: boolean; // the first-start welcome was finished or skipped
   welcomeStep: number; // where the welcome was left, to pick up there
@@ -174,6 +176,7 @@ export const DEFAULT_PREFS: PrefValues = {
   language: 'en',
   lingo: 'genz',
   openWith: {},
+  filesSidebar: EMPTY_LAYOUT,
 
   welcomeDone: false,
   welcomeStep: 0,
@@ -319,6 +322,7 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
     if (out.wallpaper && !BUILT_IN_IDS.includes(out.wallpaper) && !isCustomWallpaper(out.wallpaper)) delete out.wallpaper;
     if (out.lingo && !LINGOS.includes(out.lingo)) delete out.lingo;
     if ('openWith' in out) out.openWith = cleanDefaults(out.openWith);
+    if ('filesSidebar' in out) out.filesSidebar = cleanLayout(out.filesSidebar);
     // One-time move to the Glass look (people can switch back in Appearance).
     if (!raw.glass1 && out.uiTheme === 'classic') delete out.uiTheme;
     // The old on/off switch becomes the far end of the Transparency slider.
