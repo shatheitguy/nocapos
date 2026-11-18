@@ -5,6 +5,7 @@ import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
 import { cleanDefaults } from '../lib/openWith';
+import { ensurePalette, forgetPalette, paletteFor } from './wallPalette';
 
 export { isCustomWallpaper };
 
@@ -430,8 +431,14 @@ export function deleteCustomWallpaper(id: string) {
     /* storage unavailable */
   }
   writeWallList(customWallpapers().filter((w) => w.id !== id));
+  forgetPalette(id);
   const p = usePrefs.getState();
   if (p.wallpaper === id) p.set({ wallpaper: WALLPAPERS[0].id });
+}
+
+/** A picture of the wallpaper small enough to sample its colors. */
+export function wallpaperSrc(id: string): string {
+  return isCustomWallpaper(id) ? (loadCustomWallpaper(id) ?? '') : `/wallpapers/${id}-thumb.jpg`;
 }
 
 /** The wallpaper that's really shown: the chosen one, or the first built-in when it's gone. */
@@ -492,7 +499,11 @@ export function applyPrefs(p: PrefValues) {
   else root.dataset.theme = p.theme;
   const wallId = shownWallpaper(p.wallpaper);
   const wall = WALLPAPERS.find((w) => w.id === wallId);
-  root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wall ? wall.accent : ui.accent));
+  // Glass matches the wallpaper: a built-in's own accent, or the main color
+  // sampled from your own picture (worked out once, then re-applied).
+  if (ui.id === 'glass') ensurePalette(wallId, wallpaperSrc(wallId), () => applyPrefs(usePrefs.getState()));
+  const wallAccent = wall?.accent ?? paletteFor(wallId)?.[0];
+  root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wallAccent ? wallAccent : ui.accent));
   root.toggleAttribute('data-grid', ui.id === 'cyberdeck' && p.fxGrid);
 
   const d = effectiveDock(p);
