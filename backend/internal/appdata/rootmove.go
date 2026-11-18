@@ -250,6 +250,48 @@ func (mv *Mover) rootUsers(ctx context.Context, root string) ([]rootUser, error)
 	return out, nil
 }
 
+// StopApps stops the running apps that use the App data folder (for a
+// consistent backup); restart starts them again.
+func (mv *Mover) StopApps(ctx context.Context) (func(), error) {
+	users, err := mv.rootUsers(ctx, filepath.Clean(mv.Root(ctx)))
+	if err != nil {
+		return func() {}, err
+	}
+	stopped := []string{}
+	stacks := map[string]bool{}
+	restart := func() {
+		bg := context.WithoutCancel(ctx)
+		for p := range stacks {
+			_ = mv.Stacks.RunWait(bg, p, "start")
+		}
+		for _, id := range stopped {
+			_ = mv.engine.StartContainer(bg, id)
+		}
+	}
+	for _, u := range users {
+		d, err := mv.engine.InspectContainer(ctx, u.id)
+		if err != nil || !d.Running {
+			continue
+		}
+		if u.project != "" {
+			if !stacks[u.project] {
+				if err := mv.Stacks.RunWait(ctx, u.project, "stop"); err != nil {
+					restart()
+					return func() {}, err
+				}
+				stacks[u.project] = true
+			}
+			continue
+		}
+		if err := mv.engine.StopContainer(ctx, u.id, 30*time.Second); err != nil {
+			restart()
+			return func() {}, err
+		}
+		stopped = append(stopped, u.id)
+	}
+	return restart, nil
+}
+
 // RemoveOldRoot deletes the old copy left by a move of the App data folder.
 func (mv *Mover) RemoveOldRoot(ctx context.Context) error {
 	if j := mv.Job(); j != nil && !j.Done {
