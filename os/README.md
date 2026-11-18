@@ -99,6 +99,17 @@ bash os/scripts/build.sh bundle pc       # os/build/pc.rugixb + pc.hash
 - **Legacy BIOS PCs**: not supported by the image (Rugix's PC boot flow is
   UEFI). Every PC from the last decade boots UEFI.
 
+## Boot
+
+From power-on to the sign-in screen nothing but NoCap shows: the PC's
+GRUB runs Rugix's A/B selection silently (`boot/pc/grub.cfg`, written onto
+the startup partition by `scripts/build.sh image`), the kernel boots quietly
+(`quiet splash loglevel=3`, NoCap console colours), and the NoCap boot
+splash (Plymouth) runs until NoCap Desktop's sign-in screen. Holding
+**Shift** while the PC starts shows the boot menu: NoCapOS, the other system
+(once), firmware settings, restart. The Pi's firmware rainbow is turned
+off, and the splash is the first thing it shows.
+
 ## Disk layout
 
 PC (GPT):
