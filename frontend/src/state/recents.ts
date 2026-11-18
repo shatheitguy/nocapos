@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { userKey } from './prefs';
+import { withoutRetired } from '../apps/retired';
 
 const KEY = 'alfa.recents';
 const MAX = 4;
@@ -7,7 +8,7 @@ const MAX = 4;
 function load(): string[] {
   try {
     const v = JSON.parse(localStorage.getItem(userKey(KEY)) ?? '[]');
-    return Array.isArray(v) ? v.slice(0, MAX) : [];
+    return Array.isArray(v) ? withoutRetired(v).slice(0, MAX) : [];
   } catch {
     return [];
   }

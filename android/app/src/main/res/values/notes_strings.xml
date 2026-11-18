@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notes_label">Sticky Notes</string>
+    <string name="w_note">Sticky note</string>
+    <string name="w_note_desc">Your pinned note from NoCapOS, on your home screen</string>
+</resources>

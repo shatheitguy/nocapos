@@ -23,14 +23,14 @@ type Session struct {
 	UID     int
 	Type    string // wayland | x11
 	Display string // X display (x11 sessions)
-	// Greeter: the sign-in screen's own session (GDM's account).
+	// Greeter: the sign-in screen's own session (greetd's account).
 	Greeter bool
 }
 
 var (
 	sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 	userNameRe  = regexp.MustCompile(`^[a-z_][a-z0-9_.-]*[$]?$`)
-	// GDM's own accounts: gdm, Debian-gdm, gdm-greeter-2 (GNOME 49).
+	// Sign-in screens' own accounts: _greetd, greetd, greeter.
 	greeterNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 	xDisplayRe    = regexp.MustCompile(`^:\d{1,4}(\.\d+)?$`)
 )
@@ -62,7 +62,7 @@ func SessionFromProps(id string, p map[string]string) (Session, bool) {
 	if s.Type != "wayland" && s.Type != "x11" {
 		return Session{}, false
 	}
-	if !userNameRe.MatchString(s.User) || len(s.User) > 32 || s.User == "nocap-desktop" || s.User == "gdm" || s.User == "Debian-gdm" {
+	if !userNameRe.MatchString(s.User) || len(s.User) > 32 || s.User == "nocap-desktop" || greeterAccounts[s.User] {
 		return Session{}, false
 	}
 	if s.Display != "" && !xDisplayRe.MatchString(s.Display) {
@@ -71,8 +71,13 @@ func SessionFromProps(id string, p map[string]string) (Session, bool) {
 	return s, true
 }
 
+// greeterAccounts are sign-in screens' own accounts, never a person's.
+var greeterAccounts = map[string]bool{"_greetd": true, "greetd": true, "greeter": true, "gdm": true, "Debian-gdm": true}
+
 // ScreenSessionFromProps is SessionFromProps that also takes the sign-in
-// screen's own session (Class=greeter: GDM's account, never root).
+// screen's own session (Class=greeter: greetd's account, never root).
+// greetd doesn't say which kind of session its greeter runs; it's always a
+// Wayland one here (labwc), so a tty type counts as Wayland.
 func ScreenSessionFromProps(id string, p map[string]string) (Session, bool) {
 	if p["Class"] != "greeter" {
 		return SessionFromProps(id, p)
@@ -83,6 +88,9 @@ func ScreenSessionFromProps(id string, p map[string]string) (Session, bool) {
 		return Session{}, false
 	}
 	s.UID = uid
+	if s.Type == "tty" || s.Type == "unspecified" || s.Type == "" {
+		s.Type = "wayland"
+	}
 	if (s.Type != "wayland" && s.Type != "x11") || !greeterNameRe.MatchString(s.User) || len(s.User) > 32 {
 		return Session{}, false
 	}
@@ -127,8 +135,13 @@ func (d *Desktop) ScreenSession(ctx context.Context) (Session, bool) {
 	return ScreenSessionFromProps(id, p)
 }
 
-// FindSessionEnv reads the environment of the GNOME Shell that runs uid's
-// session (the one whose XDG_SESSION_ID is sessionID when it says), from
+// sessionPrograms are the processes whose environment describes a NoCap
+// Desktop session: NoCap Shell (started with the session's Wayland display
+// and bus), then the compositor.
+var sessionPrograms = []string{"nocap-shell", "labwc"}
+
+// FindSessionEnv reads the environment of the session's own programs for
+// uid (the one whose XDG_SESSION_ID is sessionID when it says), from
 // procRoot (normally /proc). Empty when there's none.
 func FindSessionEnv(procRoot string, uid int, sessionID string) map[string]string {
 	entries, err := os.ReadDir(procRoot)
@@ -136,13 +149,23 @@ func FindSessionEnv(procRoot string, uid int, sessionID string) map[string]strin
 		return nil
 	}
 	var found map[string]string
+	foundRank := len(sessionPrograms)
 	for _, e := range entries {
 		if _, err := strconv.Atoi(e.Name()); err != nil {
 			continue
 		}
 		dir := filepath.Join(procRoot, e.Name())
 		comm, err := os.ReadFile(filepath.Join(dir, "comm"))
-		if err != nil || strings.TrimSpace(string(comm)) != "gnome-shell" || procUID(filepath.Join(dir, "status")) != uid {
+		if err != nil || procUID(filepath.Join(dir, "status")) != uid {
+			continue
+		}
+		rank := -1
+		for i, p := range sessionPrograms {
+			if strings.TrimSpace(string(comm)) == p {
+				rank = i
+			}
+		}
+		if rank < 0 {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(dir, "environ"))
@@ -155,11 +178,11 @@ func FindSessionEnv(procRoot string, uid int, sessionID string) map[string]strin
 				env[k] = v
 			}
 		}
-		if env["XDG_SESSION_ID"] == sessionID {
+		if env["XDG_SESSION_ID"] == sessionID && env["WAYLAND_DISPLAY"] != "" {
 			return env
 		}
-		if found == nil {
-			found = env
+		if found == nil || rank < foundRank {
+			found, foundRank = env, rank
 		}
 	}
 	return found
@@ -223,7 +246,7 @@ func (d *Desktop) screenEnv(s Session) map[string]string {
 		}
 		xa := found["XAUTHORITY"]
 		if !safePath(xa) {
-			xa = filepath.ToSlash(filepath.Join(rt, "gdm", "Xauthority"))
+			xa = filepath.ToSlash(filepath.Join(rt, "Xauthority"))
 		}
 		env["XAUTHORITY"] = xa
 	}
@@ -320,32 +343,6 @@ func (d *Desktop) WatchSession(ctx context.Context, envFile string) {
 
 // ---- automatic sign-in ----
 
-// ParseAutologin reads GDM's [daemon] AutomaticLoginEnable/AutomaticLogin.
-func ParseAutologin(conf string) (bool, string) {
-	on, who, inDaemon := false, "", false
-	for _, line := range strings.Split(conf, "\n") {
-		s := strings.TrimSpace(line)
-		if strings.HasPrefix(s, "[") {
-			inDaemon = s == "[daemon]"
-			continue
-		}
-		if !inDaemon || strings.HasPrefix(s, "#") {
-			continue
-		}
-		k, v, ok := strings.Cut(s, "=")
-		if !ok {
-			continue
-		}
-		switch strings.TrimSpace(k) {
-		case "AutomaticLoginEnable":
-			on = strings.EqualFold(strings.TrimSpace(v), "true")
-		case "AutomaticLogin":
-			who = strings.TrimSpace(v)
-		}
-	}
-	return on && who != "", who
-}
-
 // SetINIKey sets key=value in [section] of an ini file's text: an existing
 // or commented-out key line is replaced, else the line is added at the end
 // of the section; a missing section is added at the end.
@@ -409,11 +406,11 @@ var LookupUID = func(name string) (int, error) {
 	return strconv.Atoi(u.Uid)
 }
 
-// SetAutologin turns the sign-in screen's automatic sign-in on (for
-// username) or off. It takes effect the next time the sign-in screen starts.
+// SetAutologin turns automatic sign-in on (for username) or off: greetd
+// opens that person's desktop once, when the machine starts.
 func (d *Desktop) SetAutologin(username string, on bool) error {
 	c := d.conf()
-	if !d.Native || !c.Full || c.GDMConf == "" {
+	if !d.Native || !c.Full {
 		return ErrDesktopUnavailable
 	}
 	if on {
@@ -421,17 +418,11 @@ func (d *Desktop) SetAutologin(username string, on bool) error {
 		if err != nil || uid < 1000 || !userNameRe.MatchString(username) || len(username) > 32 {
 			return ErrNotLinuxUser
 		}
+	} else {
+		username = ""
 	}
-	b, err := d.readFile(c.GDMConf)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if _, err := d.readGreetd(); err != nil {
 		return err
 	}
-	conf := string(b)
-	if on {
-		conf = SetINIKey(conf, "daemon", "AutomaticLoginEnable", "true")
-		conf = SetINIKey(conf, "daemon", "AutomaticLogin", username)
-	} else {
-		conf = SetINIKey(conf, "daemon", "AutomaticLoginEnable", "false")
-	}
-	return d.writeFile(c.GDMConf, []byte(conf), 0o644)
+	return d.writeFile(d.greetdConf(), []byte(GreetdConfig(d.greeterUser(), username)), 0o644)
 }

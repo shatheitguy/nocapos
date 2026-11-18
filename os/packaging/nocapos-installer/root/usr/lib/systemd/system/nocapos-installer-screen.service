@@ -25,6 +25,10 @@ StandardOutput=journal
 Environment=XDG_SESSION_TYPE=wayland
 Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
 Environment=WEBKIT_DISABLE_COMPOSITING_MODE=1
+# The kiosk only ever shows the local setup page (it refuses to navigate
+# anywhere else), and runs as root on the stick, where the web process
+# sandbox can't start.
+Environment=WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
 
 [Install]
 WantedBy=multi-user.target

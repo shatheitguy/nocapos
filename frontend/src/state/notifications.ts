@@ -16,7 +16,7 @@ export type NoticeLevel = 'info' | 'success' | 'warning' | 'error';
 export interface Notice {
   id: number;
   key: string;
-  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'device' | 'agent' | 'security' | 'test';
+  kind: 'update' | 'app_update' | 'app_error' | 'storage' | 'backup' | 'device' | 'agent' | 'security' | 'test' | 'note';
   level: NoticeLevel;
   title: string;
   body?: string;
@@ -82,6 +82,9 @@ interface Store {
   _reset: () => void;
 }
 
+/** Notifications made in this browser (Sticky Notes reminders) have negative ids. */
+const isServerId = (id: number) => id > 0;
+
 export const useNotifications = create<Store>((set, get) => ({
   items: [],
   unread: 0,
@@ -89,7 +92,7 @@ export const useNotifications = create<Store>((set, get) => ({
   centerOpen: false,
   load: async () => {
     const r = await notifyApi.list();
-    if (r.ok) set({ items: r.data.items, unread: r.data.unread });
+    if (r.ok) set({ items: [...get().items.filter((n) => !isServerId(n.id)), ...r.data.items], unread: r.data.unread });
   },
   dismissBanner: (id) => set({ banners: get().banners.filter((b) => b.id !== id) }),
   setCenter: (open) => {
@@ -100,13 +103,14 @@ export const useNotifications = create<Store>((set, get) => ({
     if (!ids.length) return;
     const now = new Date().toISOString();
     set({ items: get().items.map((n) => (n.read_at ? n : { ...n, read_at: now })), unread: Math.max(0, get().unread - ids.length) });
-    void notifyApi.read({ ids }).then((r) => r.ok && set({ unread: r.data.unread }));
+    const server = ids.filter(isServerId);
+    if (server.length) void notifyApi.read({ ids: server }).then((r) => r.ok && set({ unread: r.data.unread }));
   },
   remove: (id) => get().removeMany([id]),
   removeMany: (ids) => {
     const gone = new Set(ids);
     set({ items: get().items.filter((n) => !gone.has(n.id)), banners: get().banners.filter((b) => !gone.has(b.id)) });
-    for (const id of ids) void notifyApi.remove(id);
+    for (const id of ids) if (isServerId(id)) void notifyApi.remove(id);
   },
   clear: () => {
     set({ items: [], banners: [], unread: 0 });
@@ -149,6 +153,16 @@ function arrived(n: Notice) {
   useNotifications.setState({ banners: [...useNotifications.getState().banners, n].slice(-MAX_BANNERS) });
 }
 
+/**
+ * Shows a notification made here rather than on the server (a Sticky Notes
+ * reminder for this person): a banner, a sound, and a place in the center
+ * until it's cleared or the page reloads. Its id must be negative.
+ */
+export function showLocalNotice(n: Notice) {
+  arrived(n);
+  useNotifications.setState({ unread: useNotifications.getState().unread + 1 });
+}
+
 let syncTimer: number | undefined;
 
 /** Load the list and follow new notifications; returns a stop function. */
@@ -185,7 +199,7 @@ export function openNotice(n: Notice) {
       items: s.items.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)),
       unread: Math.max(0, s.unread - 1),
     });
-    void notifyApi.read({ ids: [n.id] });
+    if (isServerId(n.id)) void notifyApi.read({ ids: [n.id] });
   }
 }
 

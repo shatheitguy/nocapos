@@ -3,12 +3,9 @@ package hostaccess
 import (
 	"context"
 	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"os"
@@ -31,45 +28,33 @@ import (
 //
 // alfad follows seat0's active session and attaches a screen server to it:
 //
-//   - Wayland sessions (the sign-in screen and people's desktops):
-//     GNOME's own remote desktop daemon, run inside that session as its
-//     owner (the sign-in screen's gdm account or the person) in mirror
-//     mode, over RDP. GNOME's system-wide remote sign-in isn't used: it
-//     opens a separate session instead of showing the monitor.
-//   - X11 sessions (Xorg, e.g. with NVIDIA's driver): x11vnc on that
-//     session's display, over VNC.
+//   - Wayland sessions (NoCap's sign-in screen and people's desktops, both
+//     labwc): wayvnc, run inside that session as its owner (greetd's
+//     account or the person). It listens on a Unix socket in a folder only
+//     that account (and root) can open; alfad puts the VNC password in
+//     front of it (screenProxy) on 127.0.0.1.
+//   - X11 sessions: x11vnc on that session's display, over VNC.
 //
 // When the screen's session changes (someone signs in or out), the old
 // server stops and the browser window reconnects to the new one on its own.
-// Each start gets a new random password and certificate, so nobody who
-// could read one session's files can use them on the next. Both servers
-// listen on 127.0.0.1 only (install.sh's remote guard drops other
-// connections to those ports), and NoCapOS's Remote Desktop engine (guacd)
-// connects over loopback. Secrets reach programs in files, never in their
-// arguments.
+// Each start gets a new random password, so nobody who could read one
+// session's files can use it on the next. The VNC port is on 127.0.0.1 only
+// (install.sh's remote guard drops other connections to it), and NoCapOS's
+// Remote Desktop engine (guacd) connects over loopback. Secrets reach
+// programs in files, never in their arguments.
 
-// Ports on 127.0.0.1.
-const (
-	ScreenRDPPort = 3391 // the screen, Wayland sessions
-	ScreenVNCPort = 5906 // the screen, X11 sessions
-)
+// ScreenVNCPort is where guacd connects, on 127.0.0.1.
+const ScreenVNCPort = 5906
 
 // ScreenUnit is the transient unit the screen server runs in.
 const ScreenUnit = "nocapos-screen.service"
 
-// ScreenDir holds the screen server's settings, password and certificate.
+// ScreenDir holds the screen server's settings and socket.
 const ScreenDir = "/run/nocapos/screen"
-
-// GNOME's remote desktop daemon, wherever this distribution keeps it.
-var grdDaemons = []string{
-	"/usr/libexec/gnome-remote-desktop-daemon",
-	"/usr/lib/gnome-remote-desktop-daemon",
-	"/usr/lib/gnome-remote-desktop/gnome-remote-desktop-daemon",
-}
 
 // RemoteTarget is what guacd connects to.
 type RemoteTarget struct {
-	Protocol string // rdp | vnc
+	Protocol string // vnc
 	Port     int
 	Username string
 	Password string
@@ -94,6 +79,7 @@ type screenMirror struct {
 	mu     sync.Mutex
 	key    string // session ID/type it shows ("" = none)
 	target RemoteTarget
+	proxy  io.Closer // the password in front of wayvnc
 }
 
 func (d *Desktop) lookPath(name string) bool {
@@ -133,23 +119,30 @@ func (d *Desktop) waitPort(port int, max time.Duration) error {
 	}
 }
 
-func (d *Desktop) grdDaemon() string {
-	for _, p := range grdDaemons {
-		if d.exists(p) {
-			return p
-		}
+// waitSocket waits up to max for a Unix socket to appear.
+func (d *Desktop) waitSocket(p string, max time.Duration) error {
+	if d.WaitSocket != nil {
+		return d.WaitSocket(p, max)
 	}
-	return ""
+	deadline := time.Now().Add(max)
+	for {
+		if st, err := os.Stat(p); err == nil && st.Mode()&os.ModeSocket != 0 {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return errors.New("the desktop's remote screen didn't start")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func (d *Desktop) remoteSupported(mode string) bool {
-	return mode == ModeFull && (d.grdDaemon() != "" || d.lookPath("x11vnc"))
+	return mode == ModeFull && (d.lookPath("wayvnc") || d.lookPath("x11vnc"))
 }
 
 const pwChars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-// randomPassword is letters and digits only, so it needs no quoting in
-// GVariant text or key files.
+// randomPassword is letters and digits only.
 func randomPassword(n int) string {
 	b := make([]byte, n)
 	max := big.NewInt(int64(len(pwChars)))
@@ -161,33 +154,6 @@ func randomPassword(n int) string {
 		b[i] = pwChars[v.Int64()]
 	}
 	return string(b)
-}
-
-// newTLSPair is a fresh self-signed certificate for the screen server
-// (guacd is told to accept it: the connection never leaves this machine).
-func newTLSPair() (certPEM, keyPEM []byte, err error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, nil, err
-	}
-	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "NoCap Desktop", Organization: []string{"NoCapOS"}},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().AddDate(10, 0, 0),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{"localhost"},
-		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
-	if err != nil {
-		return nil, nil, err
-	}
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	return certPEM, keyPEM, nil
 }
 
 // Account is a Linux account's numbers and home.
@@ -235,51 +201,36 @@ func (d *Desktop) run(ctx context.Context, name string, args ...string) error {
 	return nil
 }
 
-// GRDSettings renders the key file GNOME's remote desktop daemon reads its
-// settings from (GSETTINGS_BACKEND=keyfile): RDP on port, mirroring the
-// monitor, with input. These never touch the person's own GNOME settings
-// (their own screen sharing stays as they set it). Keys an older GNOME
-// doesn't have are ignored.
-func GRDSettings(port int, certPath, keyPath string) string {
-	return fmt.Sprintf(`# NoCap Desktop's screen server (written by NoCapOS)
-[org/gnome/desktop/remote-desktop/rdp]
-enable=true
-port=%d
-negotiate-port=false
-view-only=false
-screen-share-mode='mirror-primary'
-tls-cert='%s'
-tls-key='%s'
-
-[org/gnome/desktop/remote-desktop/vnc]
-enable=false
-`, port, certPath, keyPath)
-}
-
-// GRDCredentials renders the daemon's credentials file (GVariant text).
-func GRDCredentials(username, password string) string {
-	return fmt.Sprintf("[RDP]\ncredentials={'username': <'%s'>, 'password': <'%s'>}\n", username, password)
-}
-
 // screenUnitArgs are systemd-run's options for the screen server unit.
 func screenUnitArgs() []string {
 	return []string{"--unit=" + strings.TrimSuffix(ScreenUnit, ".service"), "--collect", "--quiet", "--property=KillMode=mixed"}
 }
 
-// mirrorWayland runs GNOME's remote desktop daemon inside session s (as its
-// owner, on its D-Bus), with settings, password and certificate of its own.
+// WayvncArgs is the screen server's command line for a session: its own
+// (empty) settings file, so a person's own wayvnc settings never apply, the
+// pointer drawn into the picture, and a Unix socket instead of a port.
+func WayvncArgs(dir string) []string {
+	return []string{"wayvnc", "--config=" + path.Join(dir, "config"), "--render-cursor", "--unix-socket", path.Join(dir, "vnc.sock")}
+}
+
+// mirrorWayland runs wayvnc inside session s (as its owner) and puts the
+// password in front of it on 127.0.0.1.
 func (d *Desktop) mirrorWayland(ctx context.Context, s Session, env map[string]string) (RemoteTarget, error) {
-	daemon := d.grdDaemon()
-	if daemon == "" {
+	if !d.lookPath("wayvnc") {
 		return RemoteTarget{}, ErrNoRemoteTool
 	}
 	a, err := d.account(s.User)
 	if err != nil {
 		return RemoteTarget{}, fmt.Errorf("the screen's account %s: %w", s.User, err)
 	}
+	wl := env["WAYLAND_DISPLAY"]
+	if wl == "" {
+		wl = waylandSocket(env["XDG_RUNTIME_DIR"])
+	}
+	if !waylandRe.MatchString(wl) {
+		return RemoteTarget{}, errors.New("the screen's Wayland display isn't known")
+	}
 	dir := path.Join(ScreenDir, strconv.Itoa(s.UID))
-	conf, data := path.Join(dir, "config"), path.Join(dir, "data")
-	settingsDir, credsDir := path.Join(conf, "glib-2.0", "settings"), path.Join(data, "gnome-remote-desktop")
 	// A fresh folder every time (never one the session's owner could have
 	// changed): /run/nocapos/screen is root's, the folder in it theirs.
 	if d.WriteFile == nil {
@@ -288,56 +239,60 @@ func (d *Desktop) mirrorWayland(ctx context.Context, s Session, env map[string]s
 	if err := d.mkdir(ScreenDir, 0o755); err != nil {
 		return RemoteTarget{}, err
 	}
-	for _, p := range []string{dir, settingsDir, credsDir} {
-		if err := d.mkdir(p, 0o700); err != nil {
-			return RemoteTarget{}, err
-		}
-	}
-	certPEM, keyPEM, err := newTLSPair()
-	if err != nil {
+	if err := d.mkdir(dir, 0o700); err != nil {
 		return RemoteTarget{}, err
 	}
-	pw := randomPassword(32)
-	certPath, keyPath := path.Join(dir, "tls.crt"), path.Join(dir, "tls.key")
-	files := []struct {
-		p    string
-		b    string
-		mode os.FileMode
-	}{
-		{certPath, string(certPEM), 0o644},
-		{keyPath, string(keyPEM), 0o600},
-		{path.Join(settingsDir, "keyfile"), GRDSettings(ScreenRDPPort, certPath, keyPath), 0o600},
-		{path.Join(credsDir, "credentials.ini"), GRDCredentials("nocap", pw), 0o600},
+	conf := path.Join(dir, "config")
+	if err := d.writeFile(conf, []byte("# NoCap Desktop's screen server (written by NoCapOS)\n"), 0o600); err != nil {
+		return RemoteTarget{}, err
 	}
-	for _, f := range files {
-		if err := d.writeFile(f.p, []byte(f.b), f.mode); err != nil {
-			return RemoteTarget{}, err
-		}
-	}
-	for _, p := range []string{dir, conf, path.Join(conf, "glib-2.0"), settingsDir, data, credsDir, certPath, keyPath, files[2].p, files[3].p} {
+	for _, p := range []string{dir, conf} {
 		_ = d.chown(p, a.UID, a.GID)
 	}
-	// Screen capture goes through the session's PipeWire.
-	_ = d.run(ctx, "systemctl", "--user", "--machine="+s.User+"@.host", "start", "pipewire.service", "wireplumber.service")
 	args := append(screenUnitArgs(), "--uid="+s.User,
 		"--setenv=XDG_RUNTIME_DIR="+env["XDG_RUNTIME_DIR"],
-		"--setenv=DBUS_SESSION_BUS_ADDRESS="+env["DBUS_SESSION_BUS_ADDRESS"],
+		"--setenv=WAYLAND_DISPLAY="+wl,
 		"--setenv=HOME="+dir,
-		"--setenv=XDG_CONFIG_HOME="+conf,
-		"--setenv=XDG_DATA_HOME="+data,
-		"--setenv=GSETTINGS_BACKEND=keyfile",
 	)
-	if w := env["WAYLAND_DISPLAY"]; w != "" {
-		args = append(args, "--setenv=WAYLAND_DISPLAY="+w)
-	}
-	args = append(args, daemon, "--headless")
+	args = append(args, WayvncArgs(dir)...)
 	if err := d.run(ctx, "systemd-run", args...); err != nil {
 		return RemoteTarget{}, err
 	}
-	if err := d.waitPort(ScreenRDPPort, 20*time.Second); err != nil {
+	sock := path.Join(dir, "vnc.sock")
+	if err := d.waitSocket(sock, 15*time.Second); err != nil {
 		return RemoteTarget{}, fmt.Errorf("%w (see: journalctl -u %s)", err, ScreenUnit)
 	}
-	return RemoteTarget{Protocol: "rdp", Port: ScreenRDPPort, Username: "nocap", Password: pw}, nil
+	pw := randomPassword(8) // VNC passwords are 8 characters
+	closer, err := d.serveScreen("127.0.0.1:"+strconv.Itoa(ScreenVNCPort), pw, sock)
+	if err != nil {
+		return RemoteTarget{}, err
+	}
+	d.mirror.proxy = closer
+	return RemoteTarget{Protocol: "vnc", Port: ScreenVNCPort, Password: pw}, nil
+}
+
+// serveScreen puts the password in front of wayvnc's socket on addr.
+func (d *Desktop) serveScreen(addr, password, sock string) (io.Closer, error) {
+	if d.ServeScreen != nil {
+		return d.ServeScreen(addr, password, sock)
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("the screen's port: %w", err)
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				_ = ProxyVNC(c, password, func() (net.Conn, error) { return net.DialTimeout("unix", sock, 5*time.Second) })
+			}()
+		}
+	}()
+	return ln, nil
 }
 
 // mirrorX11 runs x11vnc on session s's X display.
@@ -378,6 +333,10 @@ func sessionKey(s Session) string { return s.ID + "/" + s.Type }
 
 // stopMirrorLocked stops the screen server (d.mirror.mu held).
 func (d *Desktop) stopMirrorLocked(ctx context.Context) {
+	if d.mirror.proxy != nil {
+		_ = d.mirror.proxy.Close()
+		d.mirror.proxy = nil
+	}
 	_, _ = d.Run(ctx, "systemctl", "stop", ScreenUnit)
 	_, _ = d.Run(ctx, "systemctl", "reset-failed", ScreenUnit)
 	d.mirror.key, d.mirror.target = "", RemoteTarget{}
@@ -411,7 +370,7 @@ func (d *Desktop) showSession(ctx context.Context, s Session) (RemoteTarget, err
 		t, err = d.mirrorWayland(ctx, s, env)
 	}
 	if err != nil {
-		_, _ = d.Run(ctx, "systemctl", "stop", ScreenUnit)
+		d.stopMirrorLocked(ctx)
 		return RemoteTarget{}, err
 	}
 	t.Session, t.SignIn = s.ID, s.Greeter

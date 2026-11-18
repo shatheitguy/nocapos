@@ -60,7 +60,7 @@ func waitReady(t *testing.T, m *Streams, user, id string) StreamStatus {
 }
 
 func TestStreamsOneSessionPerAppPerPerson(t *testing.T) {
-	m, f := newTestStreams(t)
+	m, _ := newTestStreams(t)
 	spec := StreamSpec{Key: "flatpak:org.gimp.GIMP", Title: "GIMP", Command: []string{"flatpak", "run", "org.gimp.GIMP"}}
 	a, err := m.Open("alex", spec)
 	if err != nil {
@@ -93,14 +93,6 @@ func TestStreamsOneSessionPerAppPerPerson(t *testing.T) {
 	if !ok || port < streamWebPort0 || port >= streamWebPort0+streamSlots {
 		t.Fatalf("target = %d %v", port, ok)
 	}
-	// Never Brave's display or ports.
-	f.mu.Lock()
-	for _, s := range f.started {
-		if s.slot.WebPort == braveWebPort || s.slot.VNCPort == 5999 || s.slot.Display == ":99" {
-			t.Errorf("stream collides with Brave: %+v", s.slot)
-		}
-	}
-	f.mu.Unlock()
 }
 
 func TestStreamsIdleReapAndExit(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 
 	"alfaos/alfad/internal/auth"
@@ -59,6 +60,23 @@ type Directory interface {
 	SetRole(ctx context.Context, username, role string) error
 	SetPassword(ctx context.Context, username, password string) error
 	SetDisabled(ctx context.Context, username string, disabled bool) error
+	// SetFullName changes the person's display name. ErrUnsupported where
+	// the directory keeps no names.
+	SetFullName(ctx context.Context, username, fullName string) error
+}
+
+// ErrUnsupported means this kind of account directory can't do that.
+var ErrUnsupported = errors.New("not supported for this kind of account")
+
+// ValidFullName rejects names the system account database can't store.
+func ValidFullName(n string) error {
+	if len(n) > 128 {
+		return errors.New("the name is too long (128 characters at most)")
+	}
+	if strings.ContainsAny(n, ":,=\n\r\x00") {
+		return errors.New("names can't contain : , = or line breaks")
+	}
+	return nil
 }
 
 // Linux login names (what useradd accepts by default on Debian/Fedora).
@@ -172,3 +190,5 @@ func (d *appDir) SetDisabled(ctx context.Context, username string, disabled bool
 	}
 	return d.st.SetDisabled(ctx, u.ID, disabled)
 }
+
+func (d *appDir) SetFullName(context.Context, string, string) error { return ErrUnsupported }

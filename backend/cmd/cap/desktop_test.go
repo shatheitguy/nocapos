@@ -19,7 +19,7 @@ func (f *fakeDesk) Health(context.Context) hostaccess.DesktopHealth { return f.h
 
 func (f *fakeDesk) Repair(context.Context) (hostaccess.RepairResult, error) {
 	f.repaired = true
-	return hostaccess.RepairResult{Actions: []string{"sign-in screen starts at boot", "restarted gdm3.service"}, Health: hostaccess.DesktopHealth{Status: "starting"}}, nil
+	return hostaccess.RepairResult{Actions: []string{"sign-in screen starts at boot", "restarted greetd.service"}, Health: hostaccess.DesktopHealth{Status: "starting"}}, nil
 }
 
 func (f *fakeDesk) Diagnostics(context.Context) string { return "===== NoCap Desktop health =====\n" }
@@ -48,7 +48,7 @@ func TestCmdDesktop(t *testing.T) {
 		}
 	}
 	out.Reset()
-	if err := cmdDesktop(ctx, &out, d, true, []string{"repair"}); err != nil || !d.repaired || !strings.Contains(out.String(), "done: restarted gdm3.service") {
+	if err := cmdDesktop(ctx, &out, d, true, []string{"repair"}); err != nil || !d.repaired || !strings.Contains(out.String(), "done: restarted greetd.service") {
 		t.Fatalf("repair = %v %s", err, out.String())
 	}
 	out.Reset()

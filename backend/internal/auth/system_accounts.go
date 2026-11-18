@@ -132,3 +132,28 @@ func (s *Service) checkSystemUser(ctx context.Context, u *store.User, now time.T
 	}
 	return nil
 }
+
+// ScreenSession starts a web session for a host account that is signed in
+// on the machine's own screen (NoCap Desktop): its sign-in screen already
+// checked the password with the system, so there's no password step here.
+// The NoCapOS record is created on first use, as at a first web sign-in.
+func (s *Service) ScreenSession(ctx context.Context, username string, meta ClientMeta) (*Session, error) {
+	if s.sys == nil {
+		return nil, ErrNoAccount
+	}
+	role, disabled, err := s.sys.RoleOf(ctx, username)
+	if err != nil {
+		return nil, err
+	}
+	if disabled {
+		return nil, ErrInvalidCredentials
+	}
+	u, err := s.syncSystemUser(ctx, username, role)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.desktopAllowed(ctx, u); err != nil {
+		return nil, err
+	}
+	return s.startSession(ctx, u, meta)
+}

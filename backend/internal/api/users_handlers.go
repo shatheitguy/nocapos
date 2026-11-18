@@ -177,6 +177,7 @@ type updateUserRequest struct {
 	Disabled *bool   `json:"disabled"`
 	Password *string `json:"password"`
 	Access   *string `json:"access"`
+	FullName *string `json:"full_name"`
 }
 
 func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,10 +189,12 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r.Context())
 	ctx := r.Context()
 	self := name == me.Username
-	if self && (req.Role != nil && *req.Role != store.RoleAdmin || req.Disabled != nil && *req.Disabled) {
-		writeError(w, http.StatusBadRequest, "self", "You can't demote or disable your own account — ask another administrator to do it.")
+	if self && req.Disabled != nil && *req.Disabled {
+		writeError(w, http.StatusBadRequest, "self", "You can't disable your own account — ask another administrator to do it.")
 		return
 	}
+	// Stepping down from administrator yourself is allowed while another
+	// administrator remains (checked just below).
 	if (req.Role != nil && *req.Role != store.RoleAdmin || req.Disabled != nil && *req.Disabled) && s.lastAdmin(r, name) {
 		writeError(w, http.StatusBadRequest, "last_admin", "This is the only administrator. Make someone else an administrator first, then come back.")
 		return
@@ -199,6 +202,17 @@ func (s *Server) usersUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	switch {
+	case req.FullName != nil:
+		if verr := accounts.ValidFullName(strings.TrimSpace(*req.FullName)); verr != nil {
+			writeError(w, http.StatusBadRequest, "bad_request", verr.Error())
+			return
+		}
+		err = s.Accounts.SetFullName(ctx, name, *req.FullName)
+		if errors.Is(err, accounts.ErrUnsupported) {
+			writeError(w, http.StatusBadRequest, "unsupported", "Names can't be changed on this system.")
+			return
+		}
+		s.audit(r, me.ID, "user.name", name, err == nil, errText(err))
 	case req.Role != nil:
 		if *req.Role == store.RoleAdmin {
 			// Administrators always have the desktop.

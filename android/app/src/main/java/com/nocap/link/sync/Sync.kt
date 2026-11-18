@@ -237,6 +237,9 @@ object Sync {
 
     private suspend fun handle(ctx: Context, ev: NoCapApi.Events) {
         if (ev.signins.isNotEmpty()) Signins.deliver(ctx, ev.signins, live = true)
+        // Sticky Notes: changed elsewhere (the widget and the open screen follow), and reminders.
+        if (ev.notes) runCatching { com.nocap.link.notes.NotesStore.refresh(ctx) }
+        for (r in ev.reminders.takeLast(5)) com.nocap.link.notes.NoteReminders.show(ctx, r)
         if (wantsNotices()) {
             val last = Prefs.lastNotice
             for (n in ev.notices.filter { it.id > last }.sortedBy { it.id }.takeLast(5)) {

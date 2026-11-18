@@ -9,6 +9,7 @@ import { AppIcon } from '../components/AppTile';
 import { useViewport, WindowShownContext } from '../lib/hooks';
 import { usePrefs, workArea } from '../state/prefs';
 import { effectiveRect, flushLayout, useWM, type Rect, type WinState } from '../state/windows';
+import { hostSend, nativeSurface } from '../native/platform';
 
 const MIN_W = 360;
 const MIN_H = 240;
@@ -60,13 +61,20 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
   const dragRef = useRef<{ px: number; py: number; x: number; y: number; restored: boolean } | null>(null);
   const meta = APPS[win.appId];
   const Body = APP_COMPONENTS[win.appId];
+  // NoCap Desktop: this window is a real window of its own; the page fills
+  // it and the compositor moves and resizes it.
+  const native = nativeSurface() === 'app';
   // Phones: every window fills the screen, whatever size it had on a desktop.
-  const r = compact ? { x: 0, y: 0, ...workArea() } : effectiveRect(win);
+  const r = native ? { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight } : compact ? { x: 0, y: 0, ...workArea() } : effectiveRect(win);
   const tiled = compact || win.maximized || win.snap !== null;
 
   // ---- move ----
   const onTitleDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest('button')) return;
+    if (native) {
+      hostSend('window.action', { action: 'move' });
+      return;
+    }
     wm.focus(win.id);
     if (compact) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -108,6 +116,10 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
   const onResizeDown = (dir: Dir) => (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    if (native) {
+      hostSend('window.action', { action: `resize-${dir}` });
+      return;
+    }
     wm.focus(win.id);
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
@@ -158,8 +170,8 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
     <>
       {preview && <div className={`snap-preview snap-${preview}`} />}
       <section
-        className={`window ${focused ? 'focused' : ''} ${tiled ? 'tiled' : ''} ${win.minimized ? 'minimized' : ''}`}
-        style={{ left: r.x, top: r.y, width: r.w, height: r.h, zIndex: win.z }}
+        className={`window ${focused ? 'focused' : ''} ${tiled ? 'tiled' : ''} ${win.minimized && !native ? 'minimized' : ''}${native ? ' native-window' : ''}`}
+        style={native ? undefined : { left: r.x, top: r.y, width: r.w, height: r.h, zIndex: win.z }}
         onPointerDownCapture={() => !focused && wm.focus(win.id)}
         role="dialog"
         aria-label={win.title}

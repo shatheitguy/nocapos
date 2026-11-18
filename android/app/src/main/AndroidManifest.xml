@@ -361,6 +361,19 @@
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
         </service>
+        <!-- Sticky Notes: your NoCapOS notes on the phone, and a home-screen widget. -->
+        <activity
+            android:name=".notes.NotesActivity"
+            android:exported="false"
+            android:label="@string/notes_label"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.nocap.link.notes"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.NoCap" />
+        <receiver android:name=".notes.NoteAppWidget" android:exported="false" android:label="@string/w_note">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_note" />
+        </receiver>
         <receiver android:name=".shield.ShieldWidget" android:exported="false" android:label="@string/w_shield">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/appwidget_shield" />

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n';
 import { AccountPanel } from './AccountPanel';
 import { TransfersButton } from './Transfers';
@@ -41,6 +41,15 @@ export function MenuBar({ user, onLock }: { user: User; onLock: () => void }) {
   const isAdmin = user.role === 'admin';
   const hasPhone = useLink((s) => s.phones.length > 0);
   const t = useT();
+  // NoCap Desktop's keybindings open the Control Center from outside.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ name?: string; action?: string }>).detail;
+      if (d?.name === 'center') setCcOpen((v) => (d.action === 'show' ? true : d.action === 'hide' ? false : !v));
+    };
+    window.addEventListener('nocap:panel', on);
+    return () => window.removeEventListener('nocap:panel', on);
+  }, []);
 
 
   return (
