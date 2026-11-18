@@ -134,7 +134,11 @@ echo "hostname, account, home and data kept; nothing else"
 # ---- 4. A -> B update ----------------------------------------------------------
 log "Update A -> B"
 hash_next="$(cat "$BUILD/pc-test-next.hash")"
-vssh "rugix-ctrl update install --reboot no --bundle-hash '$hash_next' http://10.0.2.2:$BUNDLE_PORT/pc-test-next.rugixb" | tail -n 3
+curl -sS -o /dev/null -w "host: %{http_code}\n" -r 0-0 "http://127.0.0.1:$BUNDLE_PORT/pc-test-next.rugixb" || fail "the bundle server doesn't answer"
+vssh "curl -sS -o /dev/null -w 'VM: %{http_code}\n' -r 0-0 http://10.0.2.2:$BUNDLE_PORT/pc-test-next.rugixb" || fail "the VM can't reach the bundle server"
+vssh "rugix-ctrl update install --reboot no --bundle-hash '$hash_next' http://10.0.2.2:$BUNDLE_PORT/pc-test-next.rugixb" >"$WORK/install.log" 2>&1 ||
+  { tail -n 20 "$WORK/install.log"; fail "the update didn't install"; }
+tail -n 3 "$WORK/install.log"
 vssh 'rugix-ctrl system reboot --spare' || true
 wait_vm_exit 180; start_vm; wait_ssh 600 || fail "no SSH after the update"
 [ "$(marker)" = next ] || fail "the new system didn't boot"
@@ -149,7 +153,8 @@ echo "updated to B, health check passed, kept as default"
 # ---- 5. a broken update rolls back --------------------------------------------
 log "Broken update rolls back by itself"
 hash_broken="$(cat "$BUILD/pc-test-broken.hash")"
-vssh "rugix-ctrl update install --reboot no --bundle-hash '$hash_broken' http://10.0.2.2:$BUNDLE_PORT/pc-test-broken.rugixb" | tail -n 3
+vssh "rugix-ctrl update install --reboot no --bundle-hash '$hash_broken' http://10.0.2.2:$BUNDLE_PORT/pc-test-broken.rugixb" >"$WORK/install2.log" 2>&1 ||
+  { tail -n 20 "$WORK/install2.log"; fail "the broken update didn't install"; }
 vssh 'rugix-ctrl system reboot --spare' || true
 wait_vm_exit 180; start_vm
 # The trial system boots, its health check fails (NoCapOS never answers) and
