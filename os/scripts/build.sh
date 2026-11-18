@@ -51,6 +51,14 @@ case "$cmd" in
       --param-file config/snapshot.toml
     # Bakery leaves it in build/SYSTEM/system.img.
     cp --sparse=always "$BUILD/$sys/system.img" "$BUILD/$sys.img"
+    # PC: the silent, NoCap boot (os/boot/pc/grub.cfg) on the startup partition.
+    case "$sys" in
+      pc*)
+        command -v mcopy >/dev/null || sudo apt-get install -y -qq mtools >/dev/null
+        start="$(sfdisk -d "$BUILD/$sys.img" | awk -F'[=,]' '/^[^ ]*1 :/ {gsub(/ /,""); print $2}')"
+        mcopy -o -i "$BUILD/$sys.img@@$((start * 512))" "$OS/boot/pc/grub.cfg" ::rugpi/grub.cfg
+        ;;
+    esac
     ;;
   bundle)
     sys="${1:?system}"
