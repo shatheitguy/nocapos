@@ -149,6 +149,9 @@ func (h *Host) Install(ctx context.Context, tool string) error {
 	if !ok {
 		return bad("unknown tool %q", tool)
 	}
+	if syspkg.ImageOS() {
+		return bad("%s", syspkg.ImageOSReason)
+	}
 	if tool == "zfs" && syspkg.Manager() != "apt" {
 		return bad("%s", ZFSUnsupportedHelp)
 	}

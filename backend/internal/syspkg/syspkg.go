@@ -21,8 +21,22 @@ type Names map[string][]string
 
 func has(bin string) bool { _, err := exec.LookPath(bin); return err == nil }
 
-// Manager returns the package manager in use, or "".
+// ImageMarker is present on NoCapOS image installs (os/), where the system
+// is read-only and only ever updates as a whole: no package manager use.
+var ImageMarker = "/usr/lib/nocapos/image-os"
+
+// ImageOS reports whether NoCapOS runs from a NoCapOS system image.
+func ImageOS() bool { _, err := os.Stat(ImageMarker); return err == nil }
+
+// ImageOSReason is why packages can't be installed on an image install.
+const ImageOSReason = "On NoCapOS, system packages come with NoCapOS's own updates (Glow Up), never one by one."
+
+// Manager returns the package manager in use, or "" (always "" on an image
+// install).
 func Manager() string {
+	if ImageOS() {
+		return ""
+	}
 	for _, m := range []struct{ name, bin string }{{"apt", "apt-get"}, {"dnf", "dnf"}, {"dnf", "yum"}, {"pacman", "pacman"}, {"zypper", "zypper"}, {"apk", "apk"}} {
 		if has(m.bin) {
 			return m.name
