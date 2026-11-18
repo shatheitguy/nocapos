@@ -1,0 +1,83 @@
+# Packages in every NoCapOS image (PC and Raspberry Pi).
+#
+# One package per line, then "#" and the NoCapOS feature that uses it. A
+# package without a reason does not belong in the image: scripts/check-lists.sh
+# (run in CI) fails on such a line.
+#   name            required
+#   a|b             the first of them the snapshot has
+#   ?name           optional: installed when the snapshot has it
+# Recommends are never installed. The kernel, its firmware and the boot
+# files come from the target's own list (pc.list, pi.list); the NoCap
+# Desktop's packages are in desktop.list.
+
+# ---- base system
+systemd                    # service manager: runs NoCapOS and everything it manages
+systemd-sysv               # makes systemd the init that Rugix hands over to
+systemd-timesyncd          # clock sync: HTTPS, two-factor codes and update checks need the right time
+udev                       # device manager: disks, USB drives, screens
+dbus                       # system bus: NetworkManager, logind, polkit, flatpak
+libpam-systemd             # user sessions: terminals as your own user, NoCap Desktop sign-in
+kmod                       # loads kernel modules (ZFS, WireGuard, KVM)
+initramfs-tools            # builds the boot image with the splash screen
+tzdata                     # Settings > Date & Time
+ca-certificates            # HTTPS to GitHub (Glow Up), app stores and cloud backups
+sudo                       # admins run admin commands from their own terminal
+procps                     # Activity (ps, free) and the health check
+iproute2                   # network status in Settings (ip, ss)
+pciutils                   # Hardware page (lspci): GPU passthrough and driver hints
+util-linux                 # Storage (lsblk, findmnt, wipefs, sfdisk, mount)
+fdisk                      # Storage and the Rugix first-boot partitioning (sfdisk)
+gdisk                      # Storage: new disks get a GPT table (sgdisk)
+e2fsprogs                  # data partition and ext4 disks (mkfs.ext4, resize2fs)
+dosfstools                 # FAT disks and USB sticks (mkfs.vfat)
+exfatprogs                 # exFAT USB drives
+ntfs-3g                    # NTFS disks from Windows PCs
+cryptsetup                 # "Lock my drive": LUKS2 on the data partition
+systemd-cryptsetup         # TPM2 unlock token for "Lock my drive"
+?tpm2-tools                # TPM2 checks when locking the drive
+curl                       # downloads in app installs and the health check
+zstd                       # backup and export archives
+xz-utils                   # compressed downloads
+gzip                       # backup and export archives
+
+# ---- network
+network-manager            # Settings > Network and Wi-Fi (nmcli)
+wpasupplicant              # Wi-Fi sign-in for NetworkManager
+?wireless-regdb            # legal Wi-Fi channels per country
+avahi-daemon               # http://nocap.local and finding devices on the network
+avahi-utils                # publishing NoCapOS and app addresses (avahi-publish)
+libnss-mdns                # *.local names resolve on the server too
+ufw                        # Shield firewall
+wireguard-tools            # NoCap Link VPN (wg)
+cifs-utils                 # Network drives (SMB) in Files
+nfs-common                 # Network drives (NFS) in Files
+samba                      # Sharing: folders shared to Windows, macOS and phones
+?wsdd2|wsdd                # shared folders show up in Windows' Network view
+
+# ---- storage
+zfsutils-linux             # Storage pools (ZFS); the module is built into the image
+smartmontools              # Disk health (smartctl)
+?hdparm                    # Disk sleep settings
+mergerfs                   # Storage: pooled folders across disks
+?snapraid                  # Storage: parity protection for pooled disks
+rclone                     # Cloud import and cloud backups
+restic                     # Backups
+
+# ---- apps and media
+docker.io                  # App Store apps (Docker)
+docker-compose             # App Store stacks (docker compose)
+flatpak                    # Native apps from Flathub
+ffmpeg                     # Photos and Media: video thumbnails and streaming
+?guacd                     # Remote Desktop in the browser (RDP/VNC gateway)
+?libguac-client-rdp0|libguac-client-rdp # Remote Desktop: RDP connections
+?libguac-client-vnc0|libguac-client-vnc # Remote Desktop: VNC and this screen in the browser
+
+# ---- virtual machines (planned to move to an optional system extension)
+qemu-utils                 # Virtual Desk: disk images (qemu-img)
+libvirt-daemon-system      # Virtual Desk: runs VMs
+libvirt-clients            # Virtual Desk: virsh
+swtpm                      # Virtual Desk: TPM for Windows 11 VMs
+swtpm-tools                # Virtual Desk: sets up the VM TPM
+
+# ---- boot splash
+plymouth                   # NoCap boot splash (logo and loading animation)

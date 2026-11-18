@@ -107,6 +107,7 @@ type Server struct {
 	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
 	pulls            pullJobs        // image downloads in progress
 	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
+	osImg            *osState        // image install: whole-system updates (nil on a script install)
 	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
 }
 
@@ -155,6 +156,7 @@ func New(ctx context.Context, d Deps) *Server {
 	go s.advertiseLink(ctx)
 	go s.advertiseBLE(ctx) // and over Bluetooth (link_discovery.go)
 	s.versionSince()       // note when this version first ran (stale update results go by it)
+	s.initOSImage(ctx)     // image install: Glow Up updates the whole system (os_update_handlers.go)
 	if d.Store != nil {
 		go s.notesLoop(ctx) // Sticky Notes reminders and old trash
 	}
@@ -235,6 +237,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/system/update/packages/repair", s.admin(s.sysPkgRepair))
 	mux.Handle("GET /api/v1/system/update/all", s.admin(s.systemUpdateAllStatus))
 	mux.Handle("POST /api/v1/system/update/all", s.admin(s.systemUpdateAll))
+	// Image installs: the whole system updates as one image (A/B).
+	mux.Handle("GET /api/v1/system/os", s.admin(s.osGet))
+	mux.Handle("POST /api/v1/system/os/install", s.admin(s.osInstall))
+	mux.Handle("POST /api/v1/system/os/restart", s.admin(s.osRestart))
+	mux.Handle("POST /api/v1/system/os/dismiss", s.admin(s.osDismiss))
+	mux.Handle("PUT /api/v1/system/os/settings", s.admin(s.osSettingsSet))
 	// Host control: network radios and power (admin only, audited).
 	mux.Handle("GET /api/v1/system/network", s.admin(s.networkState))
 	mux.Handle("POST /api/v1/system/network", s.admin(s.networkSet))

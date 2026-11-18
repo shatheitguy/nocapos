@@ -1,0 +1,28 @@
+[Unit]
+Description=NoCapOS
+Documentation=https://github.com/shatheitguy/nocapos
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Runs as root on purpose: NoCapOS manages this whole machine (accounts,
+# network, power, storage, a host terminal, apps). Every such action is
+# admin-only inside NoCapOS and recorded in its audit log.
+EnvironmentFile=/etc/nocapos/nocapos.env
+ExecStart=/usr/bin/nocapos serve
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65536
+KillMode=mixed
+TimeoutStopSec=20
+
+PrivateTmp=yes
+ProtectKernelModules=no
+ProtectKernelLogs=yes
+ProtectClock=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

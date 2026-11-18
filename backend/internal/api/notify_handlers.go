@@ -191,6 +191,9 @@ func (s *Server) watchUpdates(ctx context.Context) {
 }
 
 func (s *Server) checkNoCapOSUpdate(ctx context.Context) {
+	if s.imageOS() {
+		return // osAutoLoop checks system images instead
+	}
 	info := checkRelease(ctx, s.Version)
 	if info.Error != "" {
 		return

@@ -1,0 +1,7 @@
+description = "Debian snapshot sources, no recommends, no docs or man pages"
+# After core/pkg-update (900k), before core/rugix-ctrl (700k) installs
+# anything, so every package after this follows these rules.
+priority = 850_000
+
+[parameters]
+snapshot = { default = "20261115T000000Z" }
