@@ -74,15 +74,20 @@ finish(WebKitURISchemeRequest *req, GBytes *bytes, const char *mime)
   GInputStream *stream = g_memory_input_stream_new_from_bytes(bytes);
 #if WEBKIT_CHECK_VERSION(2, 36, 0)
   WebKitURISchemeResponse *resp = webkit_uri_scheme_response_new(stream, (gint64)len);
-  webkit_uri_scheme_response_set_content_type(resp, mime);
   webkit_uri_scheme_response_set_status(resp, 200, NULL);
   SoupMessageHeaders *h = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
+  /* The content type goes in the header set too: setting the headers
+   * replaces the response's headers, and on newer WebKit (2.54) that drops
+   * a type set before. With nosniff, a stylesheet without its type is
+   * thrown away, and the page waits for it forever (an empty screen). */
+  soup_message_headers_set_content_type(h, mime, NULL);
   char *policy = csp();
   soup_message_headers_append(h, "Content-Security-Policy", policy);
   g_free(policy);
   soup_message_headers_append(h, "X-Content-Type-Options", "nosniff");
   soup_message_headers_append(h, "Referrer-Policy", "no-referrer");
   webkit_uri_scheme_response_set_http_headers(resp, h);
+  webkit_uri_scheme_response_set_content_type(resp, mime);
   webkit_uri_scheme_request_finish_with_response(req, resp);
   g_object_unref(resp);
 #else
@@ -358,8 +363,6 @@ proxy_done(GObject *src, GAsyncResult *res, gpointer data)
     WebKitURISchemeResponse *resp = webkit_uri_scheme_response_new(body, len > 0 ? len : -1);
     webkit_uri_scheme_response_set_status(resp, soup_message_get_status(j->msg), soup_message_get_reason_phrase(j->msg));
     const char *ct = soup_message_headers_get_content_type(in, NULL);
-    if (ct != NULL)
-      webkit_uri_scheme_response_set_content_type(resp, ct);
     SoupMessageHeaders *out = soup_message_headers_new(SOUP_MESSAGE_HEADERS_RESPONSE);
     SoupMessageHeadersIter it;
     const char *name, *value;
@@ -367,7 +370,14 @@ proxy_done(GObject *src, GAsyncResult *res, gpointer data)
     while (soup_message_headers_iter_next(&it, &name, &value))
       if (forward_response_header(name))
         soup_message_headers_append(out, name, value);
-    webkit_uri_scheme_response_set_http_headers(resp, out);
+    /* After the headers: setting them drops a type set before (see finish). */
+    if (ct != NULL) {
+      soup_message_headers_set_content_type(out, ct, NULL);
+      webkit_uri_scheme_response_set_http_headers(resp, out);
+      webkit_uri_scheme_response_set_content_type(resp, ct);
+    } else {
+      webkit_uri_scheme_response_set_http_headers(resp, out);
+    }
     webkit_uri_scheme_request_finish_with_response(j->req, resp);
     g_object_unref(resp);
     g_object_unref(body);
