@@ -1,0 +1,8 @@
+description = "the system packages NoCapOS uses (packages/*.list)"
+dependencies = ["nocapos-sources"]
+# After the target's kernel setup (core/debian-grub-setup at 0,
+# core/rpi-debian-setup at 100k).
+priority = -100
+
+[parameters]
+target = { default = "pc" }

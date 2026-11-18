@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Runs Rugix Bakery (the image builder) in its container, pinned to an exact
+# release and image digest so every build uses the same tool.
+#   ./run-bakery bake image pc build/pc.img
+# Based on the run-bakery script Rugix ships (Apache-2.0 / MIT).
+set -euo pipefail
+
+RUGIX_BAKERY_VERSION="v0.9.5"
+RUGIX_BAKERY_DIGEST="sha256:eb93fe3509cd9ba5cf8a2e5f9b2f99fd5b7d678515e12393e907d958a82a2a2c"
+RUGIX_BAKERY_IMAGE="${RUGIX_BAKERY_IMAGE:-ghcr.io/rugix/rugix-bakery:${RUGIX_BAKERY_VERSION}@${RUGIX_BAKERY_DIGEST}}"
+DOCKER="${DOCKER:-docker}"
+RUGIX_CACHE_VOLUME="${RUGIX_CACHE_VOLUME:-rugix-build-cache}"
+
+cd "$(dirname "$0")"
+
+"$DOCKER" pull --quiet "$RUGIX_BAKERY_IMAGE" >/dev/null
+if ! "$DOCKER" volume inspect "$RUGIX_CACHE_VOLUME" >/dev/null 2>&1; then
+  "$DOCKER" volume create "$RUGIX_CACHE_VOLUME" >/dev/null
+fi
+
+flags=(--rm --privileged -v "$RUGIX_CACHE_VOLUME:/run/rugix/bakery/cache")
+if [ -t 0 ] && [ -t 1 ]; then flags+=(-it); fi
+
+exec "$DOCKER" run "${flags[@]}" \
+  -v "$(pwd)":/project \
+  -v "$(pwd)":/run/rugix/bakery/context \
+  -e "RUGIX_HOST_PROJECT_DIR=$(pwd)" \
+  -e "RUGIX_BAKERY_IMAGE=$RUGIX_BAKERY_IMAGE" \
+  -e "RUGIX_DEV=false" \
+  "$RUGIX_BAKERY_IMAGE" \
+  "$@"

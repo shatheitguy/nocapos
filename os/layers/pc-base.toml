@@ -1,0 +1,16 @@
+# x86_64 base: kernel + firmware (Rugix's GRUB setup), the system packages
+# and the ZFS module built for exactly this kernel.
+parent = "trixie"
+
+recipes = [
+    "nocapos-sources",
+    "core/debian-grub-setup",
+    "nocapos-packages",
+    "nocapos-zfs",
+]
+
+[parameters."core/rugix-ctrl"]
+version = "v1.4.0"
+
+[parameters.nocapos-packages]
+target = "pc"

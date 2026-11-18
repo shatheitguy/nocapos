@@ -1,0 +1,17 @@
+[Unit]
+Description=NoCapOS: put this machine's settings back (if the boot hook didn't)
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target systemd-sysusers.service nocapos-etc-save.service
+# The Rugix boot hook normally did it already, before systemd started.
+ConditionPathExists=!/etc/.nocapos-etc-restored
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/etc-sync restore
+ExecStart=-/usr/bin/hostname -F /etc/hostname
+ExecStart=-/usr/bin/systemctl daemon-reload
+
+[Install]
+WantedBy=sysinit.target
