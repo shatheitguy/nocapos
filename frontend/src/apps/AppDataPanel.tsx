@@ -158,6 +158,18 @@ export function AppDataMoves({
   );
 }
 
+/** The apps still on Docker volumes, live (Containers app). Hidden when there are none. */
+export function AppDataBanner({ onChanged }: { onChanged?: () => void }) {
+  const { data, started } = useAppData();
+  const done = data?.job?.done;
+  useEffect(() => {
+    if (done) onChanged?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+  if (!data?.available || !data.state) return null;
+  return <AppDataMoves candidates={data.candidates ?? []} job={data.job} root={data.state.root} onStarted={started} />;
+}
+
 /** Settings → Containers → App data. */
 export function AppDataSettings() {
   const t = useT();
