@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { Choice, Row, Section, Toggle } from './Personalize';
 import { HowToConnect, MySmbCard, SmbStatusCard } from './SmbStatus';
+import { serverOrigin } from '../native/platform';
 
 // Files → File Sharing: shared folders and who may use them, how they're
 // offered on the network (SMB and WebDAV), and people's private homes.
@@ -106,7 +107,7 @@ function NetworkStatus({ data, onChanged }: { data: SharesOverview; onChanged: (
       )}
       <Toggle
         label="Share over WebDAV (phones, the internet)"
-        hint={`At ${window.location.origin}/dav/ — each person sees their home and the folders they may use.`}
+        hint={`At ${serverOrigin()}/dav/ — each person sees their home and the folders they may use.`}
         checked={data.webdav}
         onChange={(on) => void run(netApi.setProtocols({ webdav: on }), on ? tr('files.share.webdavOn') : tr('files.share.webdavOff')).then(onChanged)}
       />

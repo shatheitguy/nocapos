@@ -1,0 +1,8 @@
+# NoCap red in this account's GTK apps (written by NoCapOS).
+[Unit]
+Description=NoCapOS accent for apps
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/nocapos/desktop/nocapos-accent

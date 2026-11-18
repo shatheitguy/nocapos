@@ -46,11 +46,14 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
 done
 
 desktop_ok=1
-if [ "$alfad_ok" -eq 1 ] && systemctl is-enabled --quiet greetd.service 2>/dev/null; then
+# The machine shows NoCap Desktop when display-manager.service (greetd) is
+# linked and the system boots to the graphical target.
+if [ "$alfad_ok" -eq 1 ] && [ -L /etc/systemd/system/display-manager.service ] &&
+  [ "$(systemctl get-default 2>/dev/null)" = graphical.target ]; then
   desktop_ok=0
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    if systemctl is-active --quiet greetd.service; then desktop_ok=1; break; fi
-    if systemctl is-failed --quiet greetd.service; then break; fi
+    if systemctl is-active --quiet display-manager.service; then desktop_ok=1; break; fi
+    if systemctl is-failed --quiet display-manager.service; then break; fi
     sleep 3
   done
 fi

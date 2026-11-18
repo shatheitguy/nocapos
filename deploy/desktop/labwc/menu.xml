@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- NoCap Desktop: the window menu (written by NoCapOS; replaced on updates). -->
+<openbox_menu>
+  <menu id="client-menu">
+    <item label="Minimize"><action name="Iconify" /></item>
+    <item label="Maximize"><action name="ToggleMaximize" /></item>
+    <item label="Move"><action name="Move" /></item>
+    <item label="Resize"><action name="Resize" /></item>
+    <item label="Always on top"><action name="ToggleAlwaysOnTop" /></item>
+    <separator />
+    <item label="Close"><action name="Close" /></item>
+  </menu>
+  <menu id="root-menu" />
+</openbox_menu>

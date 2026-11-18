@@ -76,6 +76,8 @@ type linkUser struct {
 	phones    map[string]*phoneState // live state by device id
 	actions   []phoneAction          // asked of the phones, oldest first
 	carries   []linkCarry            // "Open on NoCap" from the phones, oldest first
+	notesSeq  int64                  // when their Sticky Notes last changed
+	reminders []noteReminder         // Sticky Notes reminders that came due, oldest first
 }
 
 // linkHub holds everyone's synced state and the event sequence the
@@ -153,6 +155,11 @@ func (h *linkHub) user(uid string) *linkUser {
 		i++
 	}
 	u.carries = u.carries[i:]
+	i = 0
+	for i < len(u.reminders) && u.reminders[i].At.Before(cut) {
+		i++
+	}
+	u.reminders = u.reminders[i:]
 	return u
 }
 
@@ -307,10 +314,14 @@ type linkEvents struct {
 	Actions   []phoneAction         `json:"actions"`
 	// Mirror: NoCap OS asks this phone to share its screen (see mirror_handlers.go).
 	Mirror *mirror.Ask `json:"mirror,omitempty"`
+	// Notes: their Sticky Notes changed (fetch them again); Reminders: ones that came due.
+	Notes     bool           `json:"notes,omitempty"`
+	Reminders []noteReminder `json:"reminders,omitempty"`
 }
 
 func (e linkEvents) empty() bool {
-	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0 && len(e.Signins) == 0 && len(e.Actions) == 0
+	return len(e.Notices) == 0 && len(e.Clipboard) == 0 && len(e.Dismissed) == 0 && len(e.Signins) == 0 && len(e.Actions) == 0 &&
+		!e.Notes && len(e.Reminders) == 0
 }
 
 // events is what one phone hasn't seen since after. Call with mu held.
@@ -344,6 +355,12 @@ func (h *linkHub) events(uid, deviceID string, admin, images bool, after int64) 
 	for _, a := range u.actions {
 		if a.ID > after && a.DeviceID == deviceID {
 			out.Actions = append(out.Actions, a)
+		}
+	}
+	out.Notes = u.notesSeq > after
+	for _, r := range u.reminders {
+		if r.ID > after {
+			out.Reminders = append(out.Reminders, r)
 		}
 	}
 	return out

@@ -34,7 +34,6 @@ var updateSteps = []struct {
 	{"Installing /", "install", 58}, // "Installing /usr/local/bin/nocapos"
 	{"Kept the previous version", "install", 64},
 	{"Waiting for NoCapOS", "restart", 72},
-	{"Installing Brave", "restart", 86},
 	{"NoCapOS is running.", "restart", 97},
 }
 

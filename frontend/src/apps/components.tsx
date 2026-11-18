@@ -17,7 +17,6 @@ const app = (load: () => Promise<AppBody>) =>
 
 export const APP_COMPONENTS: Record<string, AppBody> = {
   assistant: app(() => import('./assistant/Assistant').then((m) => m.Assistant)),
-  browser: app(() => import('./Browser').then((m) => m.Browser)),
   nativeapp: app(() => import('./NativeAppWindow').then((m) => m.NativeAppWindow)),
   backups: app(() => import('./Backups').then((m) => m.Backups)),
   remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
@@ -40,4 +39,5 @@ export const APP_COMPONENTS: Record<string, AppBody> = {
   musicplayer: app(() => import('./MediaMusic').then((m) => m.MusicPlayerApp)),
   logs: app(() => import('./Logs').then((m) => m.Logs)),
   phone: app(() => import('./Phone').then((m) => m.Phone)),
+  notes: app(() => import('./notes/Notes').then((m) => m.Notes)),
 };

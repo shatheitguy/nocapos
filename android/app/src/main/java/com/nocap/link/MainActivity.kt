@@ -639,6 +639,7 @@ class MainActivity : ComponentActivity() {
         HeartbeatWorker.cancel(this)
         Sync.start(this) // not linked anymore: stops the link service
         DesktopActivity.forget()
+        com.nocap.link.notes.NotesStore.clear(this) // your notes stay on the server, not on an unlinked phone
         serverIcons.clear()
         outdated = null
         refresh()
@@ -650,6 +651,13 @@ class MainActivity : ComponentActivity() {
         if (app != null) i.putExtra(DesktopActivity.EXTRA_OPEN, app)
         if (section != null) i.putExtra(DesktopActivity.EXTRA_SECTION, section)
         runCatching { startActivity(i) }.onFailure { toast = friendly(it) }
+    }
+
+    /** Sticky Notes on the phone. */
+    fun openNotes() {
+        if (vault.link == null) { screen = Screen.LinkForm(); return }
+        runCatching { startActivity(Intent(this, com.nocap.link.notes.NotesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { toast = friendly(it) }
     }
 
     /** Opens NoCap AI once, however fast it's tapped. */

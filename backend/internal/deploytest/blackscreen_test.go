@@ -1,39 +1,19 @@
 package deploytest
 
-// Tests for the parts of lib.sh/setup.sh that keep the screen from going
-// black: the sign-in screen's dconf profile, the Raspberry Pi's KMS driver,
-// the packages the screen needs, the boot link, and every shell script
-// parsing at all.
+// Tests for the parts of lib.sh/setup.sh and the session files that keep
+// the screen from going black: the Raspberry Pi's KMS driver, the packages
+// the screen needs, the boot link, the session scripts' software rendering
+// fallback, the labwc and systemd files, and every shell script parsing.
 
 import (
+	"encoding/xml"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
-
-func TestGDMProfile(t *testing.T) {
-	// Debian keeps the greeter's defaults in /var/lib/gdm3: kept, with
-	// NoCapOS's database before them.
-	deb := "user-db:user\nfile-db:/var/lib/gdm3/greeter-dconf-defaults\n"
-	if got := lib(t, deb, "render_gdm_profile"); got != "user-db:user\nsystem-db:gdm\nfile-db:/var/lib/gdm3/greeter-dconf-defaults\n" {
-		t.Errorf("debian profile:\n%s", got)
-	}
-	// Already there: unchanged.
-	done := "user-db:user\nsystem-db:gdm\nfile-db:/usr/share/gdm/greeter-dconf-defaults\n"
-	if got := lib(t, done, "render_gdm_profile"); got != done {
-		t.Errorf("unchanged profile:\n%s", got)
-	}
-	// No distribution profile: upstream's.
-	if got := lib(t, "", "render_gdm_profile"); got != done {
-		t.Errorf("default profile:\n%s", got)
-	}
-	// No file-db at all: added at the end.
-	if got := lib(t, "user-db:user\r\n", "render_gdm_profile"); got != "user-db:user\nsystem-db:gdm\n" {
-		t.Errorf("no file-db:\n%q", got)
-	}
-}
 
 func TestPiKMS(t *testing.T) {
 	for cfg, missing := range map[string]bool{
@@ -59,13 +39,13 @@ func TestPiKMS(t *testing.T) {
 }
 
 // Installs skip recommended packages: what the screen needs to light up
-// (GL drivers with the software renderer, Xorg for GDM's fallback, logind's
-// PAM module) must be listed, and required, everywhere.
+// (GL drivers with the software renderer, logind's PAM module, the
+// compositor and the sign-in service) must be listed, and required.
 func TestScreenPackages(t *testing.T) {
 	for family, want := range map[string][]string{
-		"debian": {"xserver-xorg-core", "libgl1-mesa-dri", "libegl-mesa0", "libgbm1", "libpam-systemd", "xwayland"},
-		"fedora": {"xorg-x11-server-Xorg", "mesa-dri-drivers", "mesa-libEGL"},
-		"arch":   {"xorg-server", "mesa"},
+		"debian": {"labwc", "greetd", "libgl1-mesa-dri", "libegl-mesa0", "libgbm1", "libpam-systemd", "xwayland"},
+		"fedora": {"labwc", "greetd", "mesa-dri-drivers", "mesa-libEGL"},
+		"arch":   {"labwc", "greetd", "mesa"},
 	} {
 		lines := "\n" + lib(t, "", "desktop_packages", family)
 		for _, w := range want {
@@ -85,8 +65,8 @@ func readRepo(t *testing.T, rel string) string {
 	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
-// "systemctl enable gdm3" does nothing on Debian (no [Install] section):
-// switching the desktop on must make the display-manager.service link.
+// Switching the desktop on makes the display-manager.service link to
+// greetd (an earlier display manager's link is in the way of "enable").
 func TestDesktopOnLinksTheDisplayManager(t *testing.T) {
 	setup := readRepo(t, "deploy/desktop/setup.sh")
 	start := strings.Index(setup, "apply_desktop_mode() {")
@@ -100,18 +80,94 @@ func TestDesktopOnLinksTheDisplayManager(t *testing.T) {
 		t.Errorf("full mode doesn't link the display manager:\n%s", full)
 	}
 	if !strings.Contains(body[strings.Index(body, "off)"):], "desk_unlink_display_manager") {
-		t.Error("off mode leaves GDM's link")
+		t.Error("off mode leaves the link")
 	}
-	if !strings.Contains(setup, `ln -sfn "$path" "$link"`) {
-		t.Error("desk_link_display_manager doesn't make the link")
+	if !strings.Contains(setup, `ln -sfn "$path" "$link"`) || !strings.Contains(setup, "DESK_DM=greetd.service") {
+		t.Error("desk_link_display_manager doesn't make the greetd link")
 	}
-	// The old profile with Debian's missing file-db is never written again.
-	if strings.Contains(setup, `printf 'user-db:user\nsystem-db:gdm\nfile-db:`) {
-		t.Error("setup.sh still writes the fixed sign-in screen profile")
+	// Someone signed in on the earlier desktop is never signed out by an update.
+	if !strings.Contains(full, "desk_screen_in_use") {
+		t.Error("the switch doesn't check for a signed-in screen")
+	}
+	// The earlier desktop's packages are never removed by NoCapOS.
+	if regexp.MustCompile(`apt-get (remove|purge)[^\n]*(gdm|gnome)`).MatchString(setup) {
+		t.Error("setup.sh removes the earlier desktop's packages")
+	}
+	// No third-party default apps or browser.
+	for _, never := range []string{"desk_install_browser", "firefox", "thunar", "mousepad"} {
+		if strings.Contains(setup, never) {
+			t.Errorf("setup.sh still has %q", never)
+		}
 	}
 }
 
-// Every shell script the installer, uninstaller and images run parses.
+// The session scripts: never as root, NoCap Desktop's own labwc settings,
+// and software rendering when the compositor can't start (no black screen).
+func TestSessionScripts(t *testing.T) {
+	for _, s := range []string{"deploy/desktop/session/nocap-session", "deploy/desktop/session/nocap-greeter-session"} {
+		src := readRepo(t, s)
+		for _, want := range []string{"WLR_RENDERER=pixman", "/etc/nocapos/desktop-software-rendering", "-C \"$CONF\"", "refusing to run as root"} {
+			if !strings.Contains(src, want) {
+				t.Errorf("%s lacks %q", s, want)
+			}
+		}
+	}
+	if !strings.Contains(readRepo(t, "deploy/desktop/session/nocap-session"), "CONF=/usr/share/nocapos/labwc") {
+		t.Error("the session doesn't use NoCap Desktop's labwc settings")
+	}
+	if !strings.Contains(readRepo(t, "deploy/desktop/session/nocap-greeter-session"), "nocap-shell --greeter") {
+		t.Error("the sign-in screen isn't NoCap's")
+	}
+	// The programs every file points at are the ones setup.sh installs.
+	setup := readRepo(t, "deploy/desktop/setup.sh") + readRepo(t, "deploy/desktop/lib.sh")
+	for _, f := range []string{"deploy/desktop/labwc/rc.xml", "deploy/desktop/labwc/autostart", "deploy/desktop/session/nocap-shell.service", "deploy/desktop/session/nocap-idle.service", "deploy/desktop/session/nocap-lock-start", "deploy/desktop/session/nocap-open"} {
+		for _, m := range regexp.MustCompile(`/usr/libexec/nocapos/([a-z-]+)`).FindAllStringSubmatch(readRepo(t, f), -1) {
+			prog := m[1]
+			if prog != "nocap-shell" && prog != "nocap-lock" && !strings.Contains(setup, prog) {
+				t.Errorf("%s runs %s, which setup.sh doesn't install", f, prog)
+			}
+		}
+	}
+	for _, unit := range []string{"nocap-session.target", "nocap-shell.service", "nocap-idle.service", "nocapos-accent.service"} {
+		if !strings.Contains(setup, unit) {
+			t.Errorf("setup.sh doesn't install %s", unit)
+		}
+		if !strings.Contains(readRepo(t, "deploy/desktop/uninstall-desktop.sh"), unit) {
+			t.Errorf("uninstall-desktop.sh leaves %s", unit)
+		}
+	}
+	if !strings.Contains(readRepo(t, "deploy/desktop/session/nocap-session.target"), "nocap-shell.service") {
+		t.Error("the session target doesn't start NoCap Shell")
+	}
+}
+
+// labwc's settings are XML: a broken file means a session without them.
+func TestLabwcFiles(t *testing.T) {
+	for _, f := range []string{"deploy/desktop/labwc/rc.xml", "deploy/desktop/labwc/menu.xml", "deploy/desktop/greeter/rc.xml"} {
+		d := xml.NewDecoder(strings.NewReader(readRepo(t, f)))
+		for {
+			_, err := d.Token()
+			if err != nil {
+				if err.Error() != "EOF" {
+					t.Errorf("%s: %v", f, err)
+				}
+				break
+			}
+		}
+	}
+	rc := readRepo(t, "deploy/desktop/labwc/rc.xml")
+	for _, want := range []string{"--toggle launcher", "nocap-lock", "<theme>", "<name>NoCap</name>", "SnapToEdge"} {
+		if !strings.Contains(rc, want) {
+			t.Errorf("rc.xml lacks %q", want)
+		}
+	}
+	// NoCap OS's app windows draw their own title bar.
+	if !strings.Contains(rc, `identifier="io.nocapos.App.*"`) || !strings.Contains(rc, `serverDecoration="no"`) {
+		t.Error("rc.xml lets labwc decorate NoCap OS's app windows")
+	}
+}
+
+// Every shell script the installer, uninstaller, session and images run parses.
 func TestShellScriptsParse(t *testing.T) {
 	bash, err := exec.LookPath("bash")
 	if err != nil {
@@ -121,10 +177,14 @@ func TestShellScriptsParse(t *testing.T) {
 	scripts := []string{
 		"deploy/install.sh", "deploy/uninstall.sh",
 		"deploy/desktop/lib.sh", "deploy/desktop/setup.sh", "deploy/desktop/uninstall-desktop.sh",
-		"deploy/desktop/gdm-theme", "deploy/desktop/remote-guard", "deploy/desktop/nocapos-accent", "deploy/desktop/os-release-sync",
+		"deploy/desktop/remote-guard", "deploy/desktop/nocapos-accent", "deploy/desktop/os-release-sync",
+		"deploy/desktop/session/nocap-session", "deploy/desktop/session/nocap-greeter-session",
+		"deploy/desktop/session/nocap-lock-start", "deploy/desktop/session/nocap-open", "deploy/desktop/labwc/autostart",
 		"image/common/layer.sh", "image/common/stage-overlay.sh",
 		"image/common/rootfs/usr/lib/nocapos/image/desktop-packages.sh",
+		"image/common/rootfs/usr/lib/nocapos/image/desktop-brand.sh",
 		"image/common/rootfs/usr/lib/nocapos/image/firstboot.sh",
+		"scripts/package.sh", "shell/scripts/build-release.sh",
 	}
 	for _, s := range scripts {
 		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(s)))

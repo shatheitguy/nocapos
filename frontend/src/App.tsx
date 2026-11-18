@@ -11,6 +11,9 @@ import { resumeRememberedUpdate, resumeRunningUpdate } from './state/update';
 import { installUiFeedback, playCue } from './lib/uiSound';
 import { applyPrefs, resetPrefs, restorePrefs, usePrefs } from './state/prefs';
 import { useRecents } from './state/recents';
+import { hostSend, nativeSurface } from './native/platform';
+import { nativeSignIn } from './native/session';
+import { NativeAppWindow } from './native/AppWindow';
 
 type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string; lockedUserId?: string } | { kind: 'desktop'; user: User };
 
@@ -52,6 +55,15 @@ export function App() {
         return { kind: 'auth', mode: 'login' };
       });
     });
+    // NoCap Desktop: the person signed in on the screen already; the shell
+    // host hands this surface their session.
+    if (nativeSurface()) {
+      void nativeSignIn().then((ok) => {
+        const u = getUser();
+        setPhase(ok && u ? { kind: 'desktop', user: u } : { kind: 'auth', mode: 'login' });
+      });
+      return off;
+    }
     void (async () => {
       if (await setupRequired()) {
         setPhase({ kind: 'auth', mode: 'setup' });
@@ -104,20 +116,28 @@ export function App() {
   // Lock = end the server session but keep the username and window layout,
   // so unlocking requires the password and restores the desktop as it was.
   const lock = async () => {
+    // NoCap Desktop: the screen's own lock screen (the session stays).
+    if (nativeSurface()) {
+      hostSend('power.action', { action: 'lock' });
+      return;
+    }
     const u = phase.kind === 'desktop' ? phase.user : undefined;
     setPhase({ kind: 'auth', mode: 'locked', lockedUser: u?.username, lockedUserId: u?.id });
     await logout();
   };
 
   let screen;
-  if (phase.kind === 'boot') screen = <div className="boot"><Logo size={110} /></div>;
+  if (phase.kind === 'boot') screen = nativeSurface() ? null : <div className="boot"><Logo size={110} /></div>;
   else if (phase.kind === 'auth') screen = <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} lockedUserId={phase.lockedUserId} />;
+  else if (nativeSurface() === 'app') screen = <NativeAppWindow />;
   else screen = <Desktop user={phase.user} onLock={() => void lock()} />;
+  // On NoCap Desktop the update screen and network notice show once, on the chrome.
+  const once = !nativeSurface() || nativeSurface() === 'chrome';
   return (
     <>
       {screen}
-      <UpdateOverlay />
-      <NetConfirm />
+      {once && <UpdateOverlay />}
+      {once && <NetConfirm />}
     </>
   );
 }

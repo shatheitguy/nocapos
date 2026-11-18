@@ -9,6 +9,8 @@ import sys
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
+    # Keep-alive, like a real download server: Rugix reuses connections.
+    protocol_version = "HTTP/1.1"
     def send_head(self):
         path = self.translate_path(self.path)
         if not os.path.isfile(path):
@@ -52,8 +54,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             left -= len(chunk)
         self._remaining = None
 
-    def log_message(self, fmt, *args):
-        pass
 
 
 if __name__ == "__main__":
