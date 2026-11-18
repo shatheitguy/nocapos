@@ -274,9 +274,13 @@ may later switch to it for `nocapos-core`; `deploy/install.sh` doesn't yet.
 
 ## Image size
 
-The base PC system (squashfs) is about 2.5 GiB and the Pi system about
-3 GiB. The largest parts are the GPU/Wi-Fi firmware, the VM stack (qemu,
-libvirt, OVMF), Docker, ffmpeg and WebKitGTK. Follow-up: move the VM stack
+Measured in CI (PC, NoCapOS 0.14.0 with NoCap Desktop): the system
+partition (squashfs, compressed) is about 870 MiB and holds about 2.6 GiB
+of files (about 820 packages); a full update bundle is about 935 MB, and
+the raw disk image about 3.3 GB before compression. The largest parts are
+the GPU/Wi-Fi firmware, the kernel modules, the VM stack (qemu, libvirt,
+OVMF), Docker, ffmpeg, Mesa and WebKitGTK. The Pi system is similar.
+Follow-up: move the VM stack
 (and maybe Remote Desktop and Samba) into optional signed system extensions
 (systemd-sysext images built from the same snapshot), turned on from the UI
 the first time a feature is used.
