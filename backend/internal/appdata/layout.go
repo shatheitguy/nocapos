@@ -128,6 +128,11 @@ var hostFiles = map[string]bool{
 // core OS folder, not NoCapOS's own files), plus a few well-known host
 // files. It need not exist yet.
 func CheckBind(src string, protected []string, dockerRoot string) error {
+	// The well-known host files are links on many systems (/etc/localtime
+	// points into /usr/share/zoneinfo), so they're matched as written.
+	if hostFiles[filepath.ToSlash(filepath.Clean(strings.TrimSpace(src)))] {
+		return nil
+	}
 	clean, err := absClean(src)
 	if err != nil {
 		return err
