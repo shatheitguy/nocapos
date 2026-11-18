@@ -147,10 +147,23 @@ log "Booting the installed drive"
 qemu "$WORK/vars-installed.fd" -drive "file=$WORK/target.qcow2,format=qcow2,if=virtio"
 # The prompt comes up a while into the boot; type until NoCapOS is reachable
 # (the data partition driver allows three tries).
-for try in 1 2 3; do
-  sleep 50
+restarts=0
+for try in 1 2 3 4; do
+  # Wait for the prompt; the machine may restart once on its first start.
+  t=0
+  while [ "$t" -lt 50 ]; do
+    if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+      cp "$WORK/serial.log" "$WORK/serial-boot$restarts.log" 2>/dev/null || true
+      restarts=$((restarts + 1))
+      [ "$restarts" -le 1 ] || fail "the installed drive keeps restarting"
+      echo "the installed drive restarted by itself; starting it again"
+      qemu "$WORK/vars-installed.fd" -drive "file=$WORK/target.qcow2,format=qcow2,if=virtio"
+      t=0
+    fi
+    sleep 5; t=$((t + 5))
+  done
   if vssh true 2>/dev/null; then break; fi
-  if [ "$try" = 1 ]; then shot 05-unlock; fi
+  shot "05-unlock-$try"
   for k in n o c a p minus t e s t minus p a s s p h r a s e ret; do qmp key "$k" >/dev/null; done
 done
 wait_ssh 900
