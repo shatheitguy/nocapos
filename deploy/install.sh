@@ -861,10 +861,11 @@ enable_host_services() {
 }
 
 # ---------------------------------------------------------------- NoCap Desktop
-# NoCap Desktop is a native desktop on this machine's own monitor: NoCapOS's
-# GDM sign-in with the machine's Linux accounts, then the NoCapOS session
-# (GNOME Shell with NoCapOS's look and native apps). There is no web UI on
-# the screen. Turned on and off from Settings → General → NoCap Desktop.
+# NoCap Desktop is NoCap OS itself on this machine's own monitor, running
+# natively: NoCap's sign-in screen (greetd) with the machine's Linux
+# accounts, then the session (labwc for the windows, NoCap Shell showing the
+# same NoCap OS as in the browser, its apps in their own windows). Turned on
+# and off from Settings → General → NoCap Desktop.
 # The helpers ship in the bundle's desktop/ folder.
 
 display_connected() { grep -qsx connected /sys/class/drm/*/status; }

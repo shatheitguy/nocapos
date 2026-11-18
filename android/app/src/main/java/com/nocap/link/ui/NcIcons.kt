@@ -99,6 +99,10 @@ object NcIcons {
         "plus" to "M12 5v14M5 12h14",
         "brain" to "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 2 4 2.5 2.5 0 0 0 5 .5V5a2 2 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-2 4 2.5 2.5 0 0 1-5 .5",
         "pencil" to "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+        // Sticky Notes (as on the web)
+        "stickyNote" to "M5 4h14v10l-6 6H5zM13 20v-6h6M8.5 9h7M8.5 12.5h4",
+        "checklist" to "M3.5 6.5l1.8 1.8L8.5 5M3.5 13.5l1.8 1.8 3.2-3.3M11 7h9.5M11 14h9.5M11 19.5h6",
+        "undo" to "M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11",
         "menu" to "M4 6h16M4 12h16M4 18h16",
         "eject" to "M12 5l7 8H5zM5 18h14",
         "rewind" to "M3 12a9 9 0 1 0 2.6-6.4L3 8M3 3v5h5M12 7.5V12l3 2",

@@ -1,7 +1,7 @@
 // Package nativeapps installs desktop Linux apps from Flathub (system-wide
 // Flatpak) and opens them: as a real window on the server's own screen when
 // the local NoCap Desktop session is running, otherwise streamed into a
-// NoCapOS window the way Brave is.
+// NoCapOS window.
 //
 // Only when NoCapOS runs natively as root on Linux; elsewhere every call
 // reports a friendly "unsupported". Commands are argv slices, never shell

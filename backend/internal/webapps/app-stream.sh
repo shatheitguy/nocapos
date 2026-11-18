@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # NoCapOS — a native app (or a whole desktop) on its own virtual display,
-# streamed to the web desktop the same way Brave is (Xvfb + x11vnc +
+# streamed to the web desktop (Xvfb + x11vnc +
 # noVNC/websockify, loopback only).
 #
 #   app-stream.sh app <app argv…>   one app, maximized, with a window manager

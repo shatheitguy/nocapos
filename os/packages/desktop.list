@@ -1,42 +1,42 @@
-# NoCap Desktop: what the server's own screen runs (labwc + NoCap Shell).
-# Same format as common.list. Only the libraries and services NoCap Shell's
-# own programs use: no third-party apps (no file manager, terminal, editor,
-# image viewer, browser or games). NoCap's own desktop apps come from the
-# nocap-shell / nocap-desktop packages.
+# NoCap Desktop: what the machine's own screen runs (greetd, labwc and NoCap
+# Shell). The same list as deploy/desktop/lib.sh (desktop_package_list,
+# debian) uses for script installs, without third-party apps: no file
+# manager, terminal, editor, image viewer, browser or games. NoCap Desktop's
+# own programs come in the nocap-desktop package. Same format as common.list.
 
-labwc                      # NoCap Desktop's compositor
-greetd                     # NoCap Desktop's sign-in screen
-xwayland                   # older (X11) apps on NoCap Desktop
-wayvnc                     # this screen in the browser (Remote view)
-swayidle                   # screen blanking and lock on idle
-libgtk-3-0t64|libgtk-3-0   # NoCap Shell's programs (GTK 3)
-libgtk-layer-shell0        # NoCap Shell's top bar, dock and launcher
-libwebkit2gtk-4.1-0        # NoCap Shell's web views and the installer screen
-libjson-glib-1.0-0         # NoCap Shell talks to NoCapOS (JSON)
-libpolkit-agent-1-0        # NoCap Shell's password prompts
-libxkbcommon0              # keyboard layouts
-libpangocairo-1.0-0        # text drawing in NoCap Shell
-libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0 # images in NoCap Shell
-polkitd                    # admin prompts on NoCap Desktop
-xdg-desktop-portal-wlr     # screen sharing and screenshots for apps
-xdg-desktop-portal-gtk     # file pickers for Flatpak apps
-xdg-user-dirs              # Desktop, Downloads, Pictures folders for each account
-gnome-keyring              # saved passwords for apps
-libpam-gnome-keyring       # unlocks saved passwords at sign-in
-dbus-user-session          # per-account session bus
-pipewire                   # sound and screen sharing
-wireplumber                # sound device handling
-?pipewire-pulse            # sound for apps that speak PulseAudio
-?grim                      # screenshots
-?libnotify-bin             # notifications from scripts
-?brightnessctl             # brightness keys on laptops
-adwaita-icon-theme         # icons for GTK apps
-fonts-dejavu-core          # default fonts
-?fonts-cantarell           # NoCap Shell's UI font fallback
-?libsecret-tools           # saved passwords from scripts
-libgl1-mesa-dri            # GPU drivers (and the software renderer for VMs)
-libegl-mesa0               # GPU drivers for Wayland
-libgbm1                    # GPU buffers for the compositor
-?wl-clipboard              # shared clipboard with the browser (wl-paste)
-?xclip                     # shared clipboard for X11 apps
-?systemd-zram-generator    # compressed swap in RAM on small boards
+labwc                                   # the compositor: windows, input, screens
+greetd                                  # the sign-in service (NoCap's sign-in screen runs in it)
+xwayland                                # apps that only speak X11 open in the session
+wayvnc                                  # "Open screen" in NoCapOS shows this screen in the browser
+swayidle                                # locks the screen when idle and before sleep
+libgtk-3-0t64|libgtk-3-0                # NoCap Shell's windows
+libgtk-layer-shell0                     # NoCap Shell's desktop, top bar and dock layers
+libwebkit2gtk-4.1-0                     # draws NoCap OS natively, from local files; the installer screen
+libjson-glib-1.0-0                      # NoCap Shell's checked messages
+libpolkit-agent-1-0                     # NoCap's admin password prompt
+libxkbcommon0                           # the lock screen's keyboard
+libpangocairo-1.0-0                     # the lock screen's text
+libgdk-pixbuf-2.0-0|libgdk-pixbuf2.0-0  # the lock screen's wallpaper
+libpam0g                                # the lock screen's password check
+polkitd|policykit-1                     # who may do admin things
+xdg-desktop-portal                      # file open/save and screen sharing for installed apps
+xdg-desktop-portal-wlr                  # screen sharing and screenshots in labwc
+xdg-desktop-portal-gtk                  # the open/save dialog for installed apps
+xdg-user-dirs                           # Documents, Pictures, Downloads in each home
+gnome-keyring                           # the passwords installed apps save (unlocks at sign-in)
+libpam-gnome-keyring                    # unlocks it with the sign-in password
+dbus-user-session                       # each person's session bus and services
+pipewire                                # sound and screen capture
+wireplumber|pipewire-media-session      # connects sound devices
+?pipewire-pulse                         # sound for apps that use PulseAudio
+wl-clipboard                            # the clipboard shared with your phones
+?grim                                   # screenshots (the Print key)
+?brightnessctl                          # screen brightness on laptops
+adwaita-icon-theme                      # cursors and icons for installed apps
+fonts-dejavu-core                       # a font every app can fall back to
+libgl1-mesa-dri                         # graphics drivers, with the software renderer
+libegl-mesa0                            # graphics drivers (EGL)
+libgbm1                                 # graphics buffers for the compositor
+?firmware-amd-graphics                  # AMD graphics firmware
+?firmware-misc-nonfree                  # Intel and other graphics firmware
+?systemd-zram-generator|zram-tools      # compressed swap on small machines

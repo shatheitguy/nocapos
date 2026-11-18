@@ -59,6 +59,7 @@ export const usersApi = {
   setPassword: (name: string, password: string) => api(path(name), { method: 'PATCH', body: { password } }),
   remove: (name: string, removeHome: boolean) => api(path(name) + (removeHome ? '?remove_home=1' : ''), { method: 'DELETE' }),
   setAccess: (name: string, access: 'desktop' | 'files') => api(path(name), { method: 'PATCH', body: { access } }),
+  setFullName: (name: string, full_name: string) => api(path(name), { method: 'PATCH', body: { full_name } }),
   avatarPath: (name: string) => path(name) + '/avatar',
 };
 
