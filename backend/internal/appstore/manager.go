@@ -3,16 +3,19 @@ package appstore
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"net"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"alfaos/alfad/internal/appdata"
 	"alfaos/alfad/internal/docker"
 	"alfaos/alfad/internal/store"
 )
@@ -75,6 +78,30 @@ type Manager struct {
 	// drops its reservation, so a port is always either reserved or saved.
 	portMu   sync.Mutex
 	reserved map[int]string // web ports picked by installs that haven't finished yet
+
+	// dataRoot is the App data folder ("" = keep data in Docker volumes,
+	// as apps were installed before it existed).
+	dataRoot func(ctx context.Context) string
+}
+
+// SetAppData makes new installs keep their data in the App data folder
+// (<root>/<app>/<volume>) instead of Docker volumes.
+func (m *Manager) SetAppData(root func(ctx context.Context) string) { m.dataRoot = root }
+
+// root is the App data folder for an app stored the given way ("" = volumes).
+func (m *Manager) root(ctx context.Context, storage string) string {
+	if storage != store.StorageFolders || m.dataRoot == nil {
+		return ""
+	}
+	return m.dataRoot(ctx)
+}
+
+// newStorage is how a new install keeps its data.
+func (m *Manager) newStorage(ctx context.Context) string {
+	if m.dataRoot != nil && m.dataRoot(ctx) != "" {
+		return store.StorageFolders
+	}
+	return store.StorageVolumes
 }
 
 func NewManager(apps []App, engine Engine, db Store) *Manager {
@@ -112,6 +139,8 @@ type Installed struct {
 	Containers      []ContainerState `json:"containers"`
 	Credentials     *Credentials     `json:"credentials,omitempty"`
 	InstalledAt     time.Time        `json:"installed_at"`
+	// Storage: "bind" = folders in App data, "volume" = Docker volumes.
+	Storage string `json:"storage"`
 	// Filled in by the API: where "Open" goes when it isn't this server's
 	// address + WebPort (an admin's own address, or a macvlan/ipvlan IP).
 	WebURL     string `json:"web_url,omitempty"`
@@ -126,7 +155,7 @@ func (m *Manager) Status(ctx context.Context) (map[string]*Installed, error) {
 	}
 	out := map[string]*Installed{}
 	for id, row := range rows {
-		in := &Installed{Version: row.Version, WebPort: row.WebPort, InstalledAt: row.InstalledAt, Status: "missing"}
+		in := &Installed{Version: row.Version, WebPort: row.WebPort, InstalledAt: row.InstalledAt, Status: "missing", Storage: row.Storage}
 		if a, ok := m.byID[id]; ok {
 			in.UpdateAvailable = a.Version != row.Version
 			if a.Credentials != nil {
@@ -310,7 +339,7 @@ func (m *Manager) InstallWith(ctx context.Context, id string, edits map[string]d
 		return "", err
 	}
 	return m.start(id, "install", func(ctx context.Context, j *job) error {
-		row := &store.InstalledApp{ID: id, Version: a.Version, Secrets: map[string]string{}}
+		row := &store.InstalledApp{ID: id, Version: a.Version, Secrets: map[string]string{}, Storage: m.newStorage(ctx)}
 		if a.Web != nil {
 			port, err := m.freeWebPort(ctx, id)
 			if err != nil {
@@ -335,6 +364,9 @@ func (m *Manager) InstallWith(ctx context.Context, id string, edits map[string]d
 			m.removeContainers(context.Background(), id)
 			_ = m.engine.RemoveNetwork(context.Background(), netName(id))
 			m.removeVolumes(context.Background(), a)
+			if root := m.root(ctx, row.Storage); root != "" {
+				_ = appdata.RemoveAppDir(root, id)
+			}
 			return err
 		}
 		return m.db.SaveInstalledApp(ctx, row)
@@ -366,8 +398,8 @@ func (m *Manager) Update(ctx context.Context, id string, onDone func(error)) (st
 	}, onDone)
 }
 
-// Uninstall removes the app's containers and network; its data volumes only
-// when deleteData is set.
+// Uninstall removes the app's containers and network; its data (volumes and
+// its App data folder) only when deleteData is set.
 func (m *Manager) Uninstall(ctx context.Context, id string, deleteData bool, onDone func(error)) (string, error) {
 	a, err := m.App(id)
 	if err != nil {
@@ -383,6 +415,13 @@ func (m *Manager) Uninstall(ctx context.Context, id string, deleteData bool, onD
 		if deleteData {
 			j.set("Deleting app data…", 70)
 			m.removeVolumesOf(ctx, a)
+			if m.dataRoot != nil {
+				if root := m.dataRoot(ctx); root != "" {
+					if err := appdata.RemoveAppDir(root, id); err != nil {
+						return fmt.Errorf("delete its App data folder: %w", err)
+					}
+				}
+			}
 			// Saved changes go with the data (they may point at its folders).
 			_ = m.db.DeleteAppOverrides(ctx, id)
 		}
@@ -482,9 +521,10 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 	if err != nil {
 		return err
 	}
+	root := m.root(ctx, row.Storage)
 	for i, s := range a.Services {
 		j.set(fmt.Sprintf("Starting %s…", s.Name), 85+10*i/len(a.Services))
-		cfg := catalogConfig(a, s, row, gen)
+		cfg := catalogConfig(a, s, row, gen, root)
 		name := containerName(a.ID, s.Name)
 		var extra []docker.NetLink
 		if ov, ok := overrides[s.Name]; ok {
@@ -506,6 +546,9 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 				row.WebPort = webPortOf(cfg, a.Web.Port)
 			}
 		}
+		if err := m.prepareFolders(ctx, root, cfg); err != nil {
+			return fmt.Errorf("make %s's folders: %w", s.Name, err)
+		}
 		id, err := m.engine.CreateContainer(ctx, name, cfg)
 		if err != nil {
 			return fmt.Errorf("create %s: %w", s.Name, err)
@@ -523,7 +566,9 @@ func (m *Manager) createAll(ctx context.Context, a *App, row *store.InstalledApp
 }
 
 // catalogConfig is a service's container exactly as the catalog describes it.
-func catalogConfig(a *App, s Service, row *store.InstalledApp, gen func() string) docker.CreateConfig {
+// root is the App data folder its volumes become folders in ("" = Docker
+// volumes).
+func catalogConfig(a *App, s Service, row *store.InstalledApp, gen func() string, root string) docker.CreateConfig {
 	cfg := docker.CreateConfig{
 		Image:  s.Image,
 		Labels: map[string]string{LabelApp: a.ID, LabelService: s.Name, "nocapos.version": a.Version},
@@ -556,13 +601,125 @@ func catalogConfig(a *App, s Service, row *store.InstalledApp, gen func() string
 		cfg.HostConfig.PortBindings[key] = append(cfg.HostConfig.PortBindings[key], docker.PortBinding{HostPort: strconv.Itoa(host)})
 	}
 	for _, v := range s.Volumes {
-		cfg.HostConfig.Mounts = append(cfg.HostConfig.Mounts, docker.MountSpec{Type: "volume", Source: volumeName(a.ID, v.Name), Target: v.Path, ReadOnly: v.ReadOnly})
+		mt := catalogMount(a, v, root)
+		cfg.HostConfig.Mounts = append(cfg.HostConfig.Mounts, docker.MountSpec{Type: mt.Type, Source: mt.Source, Target: mt.Target, ReadOnly: mt.ReadOnly})
 	}
 	if len(a.Services) > 1 {
 		cfg.HostConfig.NetworkMode = netName(a.ID)
 		cfg.NetworkingConfig = &docker.NetworkingConfig{EndpointsConfig: map[string]docker.EndpointConfig{netName(a.ID): {Aliases: []string{s.Name}}}}
 	}
 	return cfg
+}
+
+// catalogMount is where a catalog volume goes: the folder
+// <root>/<app>/<volume> in App data, or (root "") the Docker volume
+// nocap-<app>-<volume> as before. The catalog format is unchanged.
+func catalogMount(a *App, v Volume, root string) docker.SpecMount {
+	if root != "" {
+		return docker.SpecMount{Type: "bind", Source: filepath.ToSlash(appdata.VolumeDir(root, a.ID, v.Name)), Target: v.Path, ReadOnly: v.ReadOnly}
+	}
+	return docker.SpecMount{Type: "volume", Source: volumeName(a.ID, v.Name), Target: v.Path, ReadOnly: v.ReadOnly}
+}
+
+// imageUser is how the engine reports the user an image runs as.
+type imageUser interface {
+	ImageUser(ctx context.Context, ref string) (string, error)
+}
+
+// prepareFolders makes the App data folders a container is given (Docker
+// won't make missing ones), owned by the app's PUID/PGID when it sets them,
+// else by the user its image runs as.
+func (m *Manager) prepareFolders(ctx context.Context, root string, cfg docker.CreateConfig) error {
+	if root == "" {
+		return nil
+	}
+	uid, gid := -1, -1
+	env := map[string]string{}
+	for _, kv := range cfg.Env {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	if n, err := strconv.Atoi(env["PUID"]); err == nil && n >= 0 {
+		uid = n
+	}
+	if n, err := strconv.Atoi(env["PGID"]); err == nil && n >= 0 {
+		gid = n
+	}
+	if uid < 0 {
+		if iu, ok := m.engine.(imageUser); ok {
+			if u, err := iu.ImageUser(ctx, cfg.Image); err == nil {
+				uid, gid = parseUser(u, gid)
+			}
+		}
+	}
+	for _, mt := range cfg.HostConfig.Mounts {
+		if mt.Type != "bind" || !appdata.Under(filepath.FromSlash(mt.Source), root) {
+			continue
+		}
+		if err := appdata.EnsureDir(root, filepath.FromSlash(mt.Source), uid, gid); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// parseUser reads an image's "uid[:gid]" (names can't be looked up from
+// here and are left to root).
+func parseUser(u string, gid int) (int, int) {
+	name, group, _ := strings.Cut(u, ":")
+	uid, err := strconv.Atoi(name)
+	if err != nil || uid < 0 {
+		return -1, gid
+	}
+	if g, err := strconv.Atoi(group); err == nil && g >= 0 {
+		return uid, g
+	}
+	if gid < 0 {
+		gid = uid
+	}
+	return uid, gid
+}
+
+// Rebind updates an app after its data moved: its saved changes use the new
+// folders, and with folders set, updates keep its data in App data.
+func (m *Manager) Rebind(ctx context.Context, appID string, remap func(docker.SpecMount) docker.SpecMount, folders bool) error {
+	raw, err := m.db.AppOverrides(ctx, appID)
+	if err != nil {
+		return err
+	}
+	for svc, js := range raw {
+		var ov Override
+		if err := json.Unmarshal([]byte(js), &ov); err != nil {
+			return err
+		}
+		changed := false
+		for i, mt := range ov.Mounts {
+			if n := remap(mt); n != mt {
+				ov.Mounts[i], changed = n, true
+			}
+		}
+		if !changed {
+			continue
+		}
+		b, err := json.Marshal(ov)
+		if err != nil {
+			return err
+		}
+		if err := m.db.SaveAppOverride(ctx, appID, svc, string(b)); err != nil {
+			return err
+		}
+	}
+	if folders {
+		row, err := m.db.InstalledApp(ctx, appID)
+		if err != nil {
+			return nil // not an installed App Store app
+		}
+		if row.Storage != store.StorageFolders {
+			row.Storage = store.StorageFolders
+			return m.db.SaveInstalledApp(ctx, row)
+		}
+	}
+	return nil
 }
 
 func sortedKeys(m map[string]string) []string {

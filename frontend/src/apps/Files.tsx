@@ -24,7 +24,10 @@ import {
 } from '../api/files';
 import { ContextMenu, Dialog, type DialogSpec, type MenuEntry } from '../components/Dialog';
 import { Bar } from '../components/Charts';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
+import { AppIcon } from '../components/AppTile';
+import { APPDATA_ROOT, appDataApi, sizeText } from '../api/appdata';
+import { AppDataMoves, useAppData } from './AppDataPanel';
 import { fmtBytes } from '../lib/format';
 import { usePoll } from '../lib/hooks';
 import { toast } from '../state/toasts';
@@ -119,6 +122,8 @@ interface Item {
   /** App data: the app the folder belongs to, and where it is on this server. */
   app?: string;
   source?: string;
+  /** App data: the app's icon. */
+  appIcon?: { icon: IconName; tile: [string, string]; logo?: string; logo_mono?: boolean };
 }
 
 const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:') && r.kind !== 'share' && r.kind !== 'homes';
@@ -469,7 +474,8 @@ function FilePane({
     setLoading(true);
     setNote(null);
     if (special === 'appdata') {
-      const r = await fileApi.appData();
+      // One folder per app in the App data folder, with its icon and size.
+      const r = await appDataApi.overview();
       setLoading(false);
       if (!r.ok) {
         setListError(r.error ?? 'Couldn’t load');
@@ -478,14 +484,17 @@ function FilePane({
       }
       setListError(null);
       setNote(r.data.available ? null : t('files.appdata.off'));
-      const list: Item[] = [];
-      for (const a of r.data.apps) {
-        for (const f of a.folders) {
-          appDataNames.set(f.id, `${a.name} · ${f.target}`);
-          if (f.blocked) continue;
-          list.push({ key: f.id, root: f.id, path: '/', entry: { name: f.target, dir: true, size: 0, mod_time: '', mode: '', perm: 0 }, app: a.name, source: f.source });
-        }
-      }
+      appDataNames.set(APPDATA_ROOT, t('files.appdata.title'));
+      const list: Item[] = (r.data.folders ?? []).map((f) => ({
+        key: `${APPDATA_ROOT}:${f.name}`,
+        root: APPDATA_ROOT,
+        path: '/' + f.name,
+        entry: { name: f.title, dir: true, size: Math.max(0, f.size), mod_time: '', mode: '', perm: 0 },
+        app: f.title,
+        source: `${sizeText(f.size)} · ${f.path}`,
+        appIcon: { icon: (f.icon as IconName) || 'appData', tile: f.tile ?? ['#7a7f8c', '#555a66'], logo: f.logo, logo_mono: f.logo_mono },
+      }));
+      list.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
       setItems(list);
       setSelected((sel) => new Set([...sel].filter((k) => list.some((i) => i.key === k))));
       return;
@@ -1156,9 +1165,7 @@ function FilePane({
   const groups: { title: string | null; list: Item[] }[] =
     special === 'recents' && sort.key === 'name' && sort.asc
       ? ['Today', 'This week', 'Earlier'].map((t) => ({ title: t, list: shown.filter((i) => ageGroup(i.entry.mod_time) === t) })).filter((g) => g.list.length)
-      : special === 'appdata'
-        ? [...new Set(shown.map((i) => i.app ?? ''))].map((a) => ({ title: a, list: shown.filter((i) => (i.app ?? '') === a) }))
-        : [{ title: null, list: shown }];
+      : [{ title: null, list: shown }];
 
   const thumb = (i: Item, size: number) => {
     const kind = fileKind(i.entry.name, i.entry.dir);
@@ -1173,6 +1180,7 @@ function FilePane({
           </span>
         </span>
       );
+    if (i.appIcon) return <AppIcon app={i.appIcon} size={Math.round(size * 0.8)} />;
     return <FileGlyph name={i.entry.name} dir={i.entry.dir} size={size} shared={i.entry.dir && i.root === root && sharedPaths.has(i.path)} />;
   };
 
@@ -1337,6 +1345,7 @@ function FilePane({
         onPointerCancel={onPanePointerUp}
         {...dnd}
       >
+        {special === 'appdata' && <AppDataBanner onChanged={() => void reload()} />}
         {listError ? (
           <EmptyState icon="alert" title="Couldn't open this folder" text={listError}>
             <button type="button" className="pill ghost" onClick={() => navigate('/')}>
@@ -1538,6 +1547,22 @@ function EmptyState({ icon, glyph, title, text, children }: { icon?: 'search' | 
       <b>{title}</b>
       <p className="muted">{text}</p>
       {children && <div className="empty-actions">{children}</div>}
+    </div>
+  );
+}
+
+/** Files → App data: apps still on Docker volumes, with "Move to App data folder". */
+function AppDataBanner({ onChanged }: { onChanged: () => void }) {
+  const { data, started } = useAppData();
+  const done = data?.job?.done;
+  useEffect(() => {
+    if (done) onChanged();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+  if (!data?.available || !data.state) return null;
+  return (
+    <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
+      <AppDataMoves candidates={data.candidates ?? []} job={data.job} root={data.state.root} onStarted={started} />
     </div>
   );
 }
