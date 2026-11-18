@@ -10,10 +10,10 @@ import (
 
 // InstalledApp is an app installed from the App Store catalog.
 type InstalledApp struct {
-	ID          string
-	Version     string
-	WebPort     int
-	Secrets     map[string]string
+	ID      string
+	Version string
+	WebPort int
+	Secrets map[string]string
 	// Storage is how its data is kept: StorageFolders (in the App data
 	// folder) or StorageVolumes (Docker volumes, apps installed before).
 	Storage     string
