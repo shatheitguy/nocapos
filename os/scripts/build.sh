@@ -15,7 +15,15 @@ VERSION="${VERSION:-$(tr -d '[:space:]' <"$ROOT/VERSION")}"
 BUILD="$OS/build"
 mkdir -p "$BUILD"
 
-bakery() { (cd "$OS" && ./run-bakery "$@"); }
+# Bakery runs as root in its container: its files become this user's again.
+bakery() {
+  local rc=0
+  (cd "$OS" && ./run-bakery "$@") || rc=$?
+  if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1; then
+    sudo -n chown -R "$(id -u):$(id -g)" "$BUILD" 2>/dev/null || true
+  fi
+  return "$rc"
+}
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
