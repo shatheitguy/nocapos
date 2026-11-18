@@ -9,6 +9,7 @@ import { toast } from '../state/toasts';
 import { missing } from '../lib/settingsKit';
 import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
 import { confirmChange, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
+import { ImageGlowUp, type OSStatus } from './GlowUpImage';
 
 // Settings → Glow Up: one place for every update. One check looks at
 // NoCapOS and the system's packages together, one summary says what's
@@ -111,7 +112,7 @@ async function waitJob(id: string) {
   }
 }
 
-export function SoftwareUpdate() {
+function ScriptGlowUp() {
   const t = useT();
   const [u, setU] = useState<UpdateInfo | null>(null);
   const [sys, setSys] = useState<SysStatus | null>(null);
@@ -457,4 +458,16 @@ export function SoftwareUpdate() {
       )}
     </div>
   );
+}
+
+/** Glow Up: whole-system updates on an image install, else the script
+ *  install's NoCapOS + system packages view. */
+export function SoftwareUpdate() {
+  const [os, setOs] = useState<OSStatus | null | undefined>(undefined);
+  useEffect(() => {
+    void api<OSStatus>('/api/v1/system/os').then((r) => setOs(r.ok && !missing(r) ? r.data : null));
+  }, []);
+  if (os === undefined) return <div className="stack settings-page"><span className="spinner" /></div>;
+  if (os?.image) return <ImageGlowUp initial={os} />;
+  return <ScriptGlowUp />;
 }

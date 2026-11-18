@@ -92,6 +92,10 @@ type updateAllReq struct {
 }
 
 func (s *Server) systemUpdateAll(w http.ResponseWriter, r *http.Request) {
+	if s.imageOS() {
+		writeError(w, http.StatusConflict, "image_os", imageOSMessage)
+		return
+	}
 	var req updateAllReq
 	if r.ContentLength > 0 && !decodeJSON(w, r, &req) {
 		return

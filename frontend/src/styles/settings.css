@@ -345,3 +345,8 @@ button.set-row-link:active:not(:disabled) { transform: none; }
 .person-sessions-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
 .person-sessions-head b { font-weight: 600; }
 .person-sessions .settings-row { padding-left: 0; padding-right: 0; border: 0; }
+
+/* Glow Up on an image install: how much of the new system is written. */
+.gi-progress { flex: 1 0 100%; position: relative; height: 22px; border-radius: 11px; background: color-mix(in srgb, var(--text) 8%, transparent); overflow: hidden; }
+.gi-progress-fill { height: 100%; border-radius: 11px; background: var(--accent); transition: width 0.6s ease; }
+.gi-progress span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
