@@ -17,7 +17,7 @@ import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { useWidgets } from '../state/widgets';
 import { ConfirmHost } from '../components/ConfirmHost';
-import { compactSize, hasMenuBar } from '../state/prefs';
+import { applyPrefs, compactSize, hasMenuBar, useMenubarAuto } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
@@ -71,6 +71,18 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const vp = useViewport();
   const compact = compactSize(vp.w, vp.h);
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
+  // The front window is maximized: the menu bar slides away (dock stays).
+  const frontMaxed = useWM((s) => {
+    let top: (typeof s.windows)[number] | undefined;
+    for (const w of s.windows) if (!w.minimized && (!top || w.z > top.z)) top = w;
+    return !!top?.maximized;
+  });
+  const menubarAuto = menuBar && frontMaxed;
+  useEffect(() => {
+    if (useMenubarAuto.getState().on === menubarAuto) return;
+    useMenubarAuto.setState({ on: menubarAuto });
+    applyPrefs(usePrefs.getState());
+  }, [menubarAuto]);
   const [launcher, setLauncher] = useState(false);
   const [saverOn, setSaverOn] = useState(false);
   const [deskMenu, setDeskMenu] = useState<{ x: number; y: number } | null>(null);
@@ -290,6 +302,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
       {chromePart && (
         <>
+          {menuBar && menubarAuto && <div className="menubar-hot" aria-hidden="true" />}
           {menuBar && (
             <ErrorBoundary title="Menu bar" fallback="hidden">
               <MenuBar user={user} onLock={onLock} />
