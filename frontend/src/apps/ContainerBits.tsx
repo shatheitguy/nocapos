@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon';
 import { fmtUptime } from '../lib/format';
 import { useT } from '../i18n';
 import { openApp } from './meta';
+import { serverHost } from '../native/platform';
 
 // Small pieces shared by the Containers app's list and container page.
 
@@ -18,7 +19,7 @@ export function stateTone(state: string) {
 export function containerLink(c: Pick<Container, 'web_url' | 'ports'>): string | null {
   if (c.web_url) return c.web_url;
   const p = c.ports.find((x) => x.public && (x.protocol === 'tcp' || !x.protocol));
-  return p ? `http://${window.location.hostname}:${p.public}/` : null;
+  return p ? `http://${serverHost()}:${p.public}/` : null;
 }
 
 export function uptime(c: Container): string | null {
@@ -59,7 +60,7 @@ export function PortLinks({ c, max = 4 }: { c: Container; max?: number }) {
     <span className="ct-ports">
       {ports.slice(0, max).map((p) =>
         p.protocol === 'tcp' ? (
-          <a key={`${p.public}/${p.protocol}`} className="ct-port" href={`http://${window.location.hostname}:${p.public}/`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('ctr.openPort', { port: p.public })}>
+          <a key={`${p.public}/${p.protocol}`} className="ct-port" href={`http://${serverHost()}:${p.public}/`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={t('ctr.openPort', { port: p.public })}>
             {p.public}→{p.private}
           </a>
         ) : (

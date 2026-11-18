@@ -16,7 +16,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  shell:
+    uses: ./.github/workflows/shell.yml
+
   release:
+    needs: shell
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,8 +50,15 @@ jobs:
         id: version
         run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nocap-shell-*
+          path: shell-bins
+
       - name: Build bundles
-        run: bash scripts/package.sh "${{ steps.version.outputs.version }}"
+        run: |
+          for a in amd64 arm64 armv7; do mv "shell-bins/nocap-shell-$a" "shell-bins/$a"; chmod 755 shell-bins/$a/*; done
+          NOCAP_SHELL_BINS="$PWD/shell-bins" bash scripts/package.sh "${{ steps.version.outputs.version }}"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2

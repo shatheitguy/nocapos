@@ -1,0 +1,31 @@
+/* NoCap Desktop: NoCap OS on the machine's own screen (see native/platform.ts).
+   The same styles as in the browser, plus only what a native surface needs. */
+
+/* The chrome surface is see-through: the screen's windows show below the
+   menu bar, dock and panels, and the wallpaper is the desktop surface's. */
+html[data-native-surface='chrome'],
+html[data-native-surface='chrome'] body,
+html[data-native-surface='chrome'] .desktop {
+  background: transparent !important;
+}
+html[data-native-surface='chrome'] .desktop-surface { display: none; }
+
+/* An app's own window: the page is the window, drawn the same as in the
+   browser; around its rounded corners the screen shows through. */
+html[data-native-surface='app'],
+html[data-native-surface='app'] body {
+  background: transparent !important;
+  overflow: hidden;
+}
+html[data-native-surface='app'] .window.native-window {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+}
+html[data-native-surface='app'] .window.native-window.tiled { border-radius: 0; }
+
+/* Native surfaces never scroll as a page or show a loading state. */
+html[data-native-surface='desktop'],
+html[data-native-surface='chrome'] { overflow: hidden; }

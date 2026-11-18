@@ -1,0 +1,15 @@
+# NoCap Shell: the top bar, dock, launcher, notifications and control
+# center of NoCap Desktop (written by NoCapOS). Restarted if it stops; the
+# screen lock is separate and stays locked if the shell restarts.
+[Unit]
+Description=NoCap Shell
+PartOf=graphical-session.target
+After=graphical-session-pre.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/nocapos/nocap-shell
+Restart=always
+RestartSec=2

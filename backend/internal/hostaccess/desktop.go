@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -17,10 +18,11 @@ import (
 
 // ---- NoCap Desktop ----
 //
-// NoCap Desktop is what the server's own monitor shows: a native desktop
-// (NoCapOS's GDM sign-in with the machine's Linux accounts, then the
-// NoCapOS session: GNOME Shell with NoCapOS's look and native apps), or,
-// when it's off, the text console. There is no web UI on the screen.
+// NoCap Desktop is what the server's own monitor shows: NoCap OS itself,
+// running natively (NoCap's sign-in screen in greetd with the machine's
+// Linux accounts, then the session: labwc for the windows and NoCap Shell
+// showing the same NoCap OS as in the browser, with its apps in real
+// windows), or, when it's off, the text console.
 
 // Modes.
 const (
@@ -60,9 +62,9 @@ func ExecInputRunner(ctx context.Context, stdin []byte, name string, args ...str
 
 // DesktopConf is install.sh's record of the full desktop.
 type DesktopConf struct {
-	Full    bool
-	DMUnit  string // gdm3.service | gdm.service
-	GDMConf string // GDM's settings file
+	Full       bool
+	DMUnit     string // greetd.service
+	GreetdConf string // greetd's settings file
 }
 
 var unitRe = regexp.MustCompile(`^[A-Za-z0-9@._-]+\.service$`)
@@ -85,14 +87,14 @@ func ParseDesktopConf(s string) DesktopConf {
 			if unitRe.MatchString(v) {
 				c.DMUnit = v
 			}
-		case "GDM_CONF":
+		case "GREETD_CONF":
 			if strings.HasPrefix(v, "/etc/") && !strings.Contains(v, "..") {
-				c.GDMConf = path.Clean(v)
+				c.GreetdConf = path.Clean(v)
 			}
 		}
 	}
 	if c.Full && c.DMUnit == "" {
-		c.DMUnit = "gdm.service"
+		c.DMUnit = DefaultDMUnit
 	}
 	return c
 }
@@ -123,6 +125,10 @@ type Desktop struct {
 	// SessionWait: how long RemoteView waits for the screen to have a
 	// session (0 = 15 seconds).
 	SessionWait time.Duration
+	// WaitSocket and ServeScreen: the screen server's socket and the
+	// password in front of it (real when nil).
+	WaitSocket  func(path string, timeout time.Duration) error
+	ServeScreen func(addr, password, socket string) (io.Closer, error)
 	// Now, Remove and Symlink: the clock and file changes (real when nil).
 	Now     func() time.Time
 	Remove  func(string) error
@@ -232,9 +238,8 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 	}
 	st.Available = true
 	c := d.conf()
-	// On: GDM is what graphical.target starts. Debian's gdm3.service has
-	// no [Install] section, so is-enabled says "static" there; the
-	// display-manager.service link is what counts.
+	// On: the sign-in service is what graphical.target starts (the
+	// display-manager.service link is what counts).
 	if d.systemctl(ctx, "is-enabled", c.DMUnit) == "enabled" || d.linkedUnit(ctx) == c.DMUnit {
 		st.Mode = ModeFull
 		st.Active = d.systemctl(ctx, "is-active", c.DMUnit) == "active"
@@ -247,11 +252,10 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 			st.SessionUser = s.User
 		}
 	}
-	if c.GDMConf != "" {
-		st.AutologinSupported = true
-		if b, err := d.readFile(c.GDMConf); err == nil {
-			st.Autologin, st.AutologinUser = ParseAutologin(string(b))
-		}
+	st.AutologinSupported = true
+	if conf, err := d.readGreetd(); err == nil {
+		st.AutologinUser = GreetdAutologin(conf)
+		st.Autologin = st.AutologinUser != ""
 	}
 	st.Remote = st.Active && d.remoteSupported(st.Mode)
 	h := d.Health(ctx)
@@ -301,7 +305,7 @@ func (d *Desktop) SetMode(ctx context.Context, mode string) error {
 	}
 	c := d.conf()
 	if mode == ModeFull {
-		// "enable" can't do it on Debian (no [Install] in gdm3.service).
+		// The link, not "enable": an earlier display manager's may be in the way.
 		if err := d.linkDisplayManager(ctx, c.DMUnit); err != nil {
 			return err
 		}

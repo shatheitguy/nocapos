@@ -1,4 +1,5 @@
 import { getUser, logout } from '../api/client';
+import { hostCall, isNative } from '../native/platform';
 import { layoutKeyFor, useWM } from '../state/windows';
 
 /**
@@ -15,6 +16,11 @@ export async function logOutClean(): Promise<void> {
     } catch {
       /* storage unavailable */
     }
+  }
+  // NoCap Desktop: signing out ends the session on the screen itself.
+  if (isNative()) {
+    await hostCall('power.action', { action: 'logout' }).catch(() => undefined);
+    return;
   }
   await logout();
 }

@@ -1,4 +1,5 @@
 import { api } from './client';
+import { wsBase } from '../native/platform';
 
 export interface TerminalInfo {
   host_available: boolean;
@@ -32,8 +33,7 @@ export function openTerminal(
   ticket: string,
   handlers: { onData: (text: string) => void; onClose: (reason: string) => void; onOpen: () => void },
 ): TerminalSocket {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${proto}://${location.host}/ws/terminal?ticket=${encodeURIComponent(ticket)}`);
+  const ws = new WebSocket(`${wsBase()}/ws/terminal?ticket=${encodeURIComponent(ticket)}`);
   ws.binaryType = 'arraybuffer';
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();

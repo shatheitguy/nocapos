@@ -66,10 +66,10 @@ func main() {
 	case "version":
 		fmt.Println(version)
 	case "install-brave":
-		// Used by install.sh: the same install Brave's first launch does.
-		err = webapps.InstallNative(context.Background(), os.Stdout)
+		// Installers from earlier versions call this; what it installed is
+		// gone, so there's nothing to do.
 	default:
-		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version|reset-password <user>|install-brave]\n")
+		fmt.Fprintf(os.Stderr, "usage: alfad [serve|healthcheck|version|reset-password <user>]\n")
 		os.Exit(2)
 	}
 	if err != nil {
@@ -223,11 +223,16 @@ func serve() error {
 	// Host terminal is offered on Linux native/host-mounted runs; off by default
 	// in a container (where "host" would just be the container).
 	termSvc := terminal.NewService(dc, cfg.AllowHostTerminal)
-	braveMgr := webapps.NewBrave(log, cfg.DataDir)
-	defer braveMgr.Close()
 	appStreams := webapps.NewStreams(log, cfg.DataDir)
 	defer appStreams.Close()
 	go appStreams.Run(ctx)
+	// Earlier versions' streamed web browser: removed once, where NoCapOS set it up.
+	go webapps.OldBrowserCleanup(ctx, log, cfg.DataDir, func(ctx context.Context, name string) error {
+		if err := dc.Ping(ctx); err != nil {
+			return err
+		}
+		return dc.RemoveContainer(ctx, name)
+	})
 	nativeApps := nativeapps.New(cfg.DataDir, appStreams)
 	guacd := rdp.NewGuacd(log, dc, cfg.GuacdAddr)
 
@@ -320,7 +325,7 @@ func serve() error {
 
 	srv := api.New(ctx, api.Deps{
 		Config: cfg, Log: log, Store: st, Auth: svc, Docker: dc, Sampler: sampler,
-		Files: fsvc, AI: aiSvc, Terminal: termSvc, Brave: braveMgr, Streams: appStreams, Native: nativeApps, Guacd: guacd, Accounts: dir, Version: version,
+		Files: fsvc, AI: aiSvc, Terminal: termSvc, Streams: appStreams, Native: nativeApps, Guacd: guacd, Secrets: box, Accounts: dir, Version: version,
 		Scripts: scripts.NewRunner(cfg.AllowHostTerminal), AppStore: appMgr,
 		FileIndex: fileIndex,
 		Photos:    photoLib,
@@ -341,6 +346,12 @@ func serve() error {
 		go func() {
 			if err := srv.ServeClipSocket(ctx, api.ClipSocketPath); err != nil {
 				log.Warn("desktop clipboard socket not started", "path", api.ClipSocketPath, "err", err)
+			}
+		}()
+		// NoCap Shell: the web session for whoever is signed in on the screen.
+		go func() {
+			if err := srv.ServeShellSocket(ctx, api.ShellSocketPath); err != nil {
+				log.Warn("NoCap Shell socket not started", "path", api.ShellSocketPath, "err", err)
 			}
 		}()
 	}
@@ -433,7 +444,7 @@ func startHTTPRedirect(addr string, httpsAddr net.Addr, srv *api.Server, log *sl
 func startDesktopListener(addr string, handler http.Handler, log *slog.Logger) *http.Server {
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.MarkLocalDesktop(handler),
+		Handler:           api.ShellCORS(api.MarkLocalDesktop(handler)),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    64 << 10,
