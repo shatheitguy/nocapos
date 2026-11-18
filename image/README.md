@@ -148,13 +148,16 @@ them as unavailable, the same as on any Debian 13 install).
   after every kernel update. ZFS's licence note is accepted
   non-interactively.
 - the full NoCap Desktop (`desktop-packages.sh`, the installer's own list
-  from `deploy/desktop/lib.sh`), a web browser and `gnome-remote-desktop`.
+  from `deploy/desktop/lib.sh`): labwc, greetd, wayvnc and the libraries
+  NoCap Shell uses. No third-party default apps or browser.
 
-**NoCap Desktop.** It gets NoCapOS's look and is switched on at build time
+**NoCap Desktop.** It is put in place and switched on at build time
 (`desktop-brand.sh`, the same steps as the installer's
-`install_full_desktop`): sign-in screen theme, wallpaper, dark theme and
-red accent, NoCapOS session, dock, GDM at boot. So the live session and the
-first start of an installed system go straight to the NoCapOS sign-in
+`install_full_desktop`): NoCap Shell's programs and pages, the session,
+greetd with NoCap's sign-in screen at boot. The desktop on the screen is the
+same NoCap OS as in the browser, running natively, with its apps in their
+own windows. The live session signs its user in straight away with the
+"Install NoCapOS" app; an installed system starts at the NoCapOS sign-in
 screen. Turn it off in Settings, or set `NOCAP_FIRSTBOOT_ARGS="--no-desktop"`
 for a headless server.
 
@@ -212,7 +215,9 @@ no pinning or holds; only the distribution's package sources; automatic
 security updates on; the NoCapOS branding files are owned by no package and
 os-release is diverted; `zfs version`, `ufw --version`, `virsh --version`,
 `docker --version` (and more) work; `dkms status` shows ZFS built for every
-kernel in the image; GDM and the NoCapOS session are on; the guacd archive
+kernel in the image; greetd with NoCap's sign-in screen, labwc and NoCap
+Shell (its programs run, with every library) are there and on, and no
+earlier desktop packages are; the guacd archive
 passes `zstd -t`, lists a `manifest.json` tagged `guacamole/guacd:<tag>`
 for the image's architecture and its load service is enabled (where a
 Docker daemon runs, it is also `docker load`ed). The PC build also

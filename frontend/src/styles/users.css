@@ -428,3 +428,8 @@ button.ug-pick > svg { color: var(--muted); flex: none; }
   text-transform: none !important; letter-spacing: 0.02em !important;
 }
 :root[data-ui='cyberdeck'] .ug-hero::after { opacity: 1; box-shadow: 0 0 10px var(--glow); }
+
+/* Profile section in the edit sheet */
+.ug-profile { display: flex; flex-direction: column; gap: 14px; }
+.ug-profile-photo { display: flex; align-items: center; gap: 14px; }
+.ug-profile-photo-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { netApi, type HealthItem, type MySMB, type SMBHealth } from '../api/netdrive';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
+import { serverHost, serverOrigin } from '../native/platform';
 
 // Files → File Sharing: is SMB actually reachable? A status card with the
 // addresses to use (or exactly what's wrong, with a Fix button), turning SMB
@@ -20,7 +21,7 @@ function CopyAddr({ text }: { text: string }) {
 
 /** The server's name to type: its host name, else the address the browser used. */
 export function smbHost(h: SMBHealth | null): string {
-  return h?.host || window.location.hostname;
+  return h?.host || serverHost();
 }
 
 /** SMB health: live (with addresses) or what's wrong, with fixes. */
@@ -143,7 +144,7 @@ export function HowToConnect({ health, example, webdav }: { health: SMBHealth | 
     rows.push({ icon: 'desktop', who: 'Mac', how: 'Finder → Go → Connect to Server (⌘K)', addr: `smb://${host}/${share}` });
     rows.push({ icon: 'linux', who: 'Linux', how: 'Files → Other Locations → Connect to Server', addr: `smb://${host}/${share}` });
   }
-  if (webdav) rows.push({ icon: 'phone', who: 'Phones & tablets', how: 'Any WebDAV app, or your file manager’s “Connect to server”', addr: `${window.location.origin}/dav/${encodeURIComponent(share)}/` });
+  if (webdav) rows.push({ icon: 'phone', who: 'Phones & tablets', how: 'Any WebDAV app, or your file manager’s “Connect to server”', addr: `${serverOrigin()}/dav/${encodeURIComponent(share)}/` });
   if (rows.length === 0) return null;
   return (
     <div className="smb-howto">

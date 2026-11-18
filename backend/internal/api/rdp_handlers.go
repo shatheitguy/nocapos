@@ -70,16 +70,21 @@ func (s *Server) rdpStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 type rdpTicketRequest struct {
-	Hostname   string `json:"hostname"`
-	Port       int    `json:"port"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
-	Domain     string `json:"domain"`
-	Security   string `json:"security"`
-	IgnoreCert bool   `json:"ignore_cert"`
-	Width      int    `json:"width"`
-	Height     int    `json:"height"`
-	DPI        int    `json:"dpi"`
+	Protocol string `json:"protocol"` // rdp (default) | vnc
+	Hostname string `json:"hostname"`
+	Port     int    `json:"port"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Domain   string `json:"domain"`
+	// ConnectionID: a saved computer whose remembered passwords fill in
+	// the ones left empty here.
+	ConnectionID    string `json:"connection_id"`
+	GatewayPassword string `json:"gateway_password"`
+	Width           int    `json:"width"`
+	Height          int    `json:"height"`
+	rdpOptions
+	// Earlier clients sent these at the top level.
+	DPI int `json:"dpi"`
 }
 
 func (s *Server) rdpTicket(w http.ResponseWriter, r *http.Request) {
@@ -87,31 +92,49 @@ func (s *Server) rdpTicket(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
+	if req.Protocol == "" {
+		req.Protocol = "rdp"
+	}
 	req.Hostname = strings.TrimSpace(req.Hostname)
-	if req.Hostname == "" || len(req.Hostname) > 253 || strings.ContainsAny(req.Hostname, " /\\") {
+	switch {
+	case !validProtocol(req.Protocol):
+		writeError(w, http.StatusBadRequest, "bad_request", "protocol must be rdp or vnc")
+		return
+	case !validHost(req.Hostname):
 		writeError(w, http.StatusBadRequest, "bad_request", "enter a valid host name or IP address")
 		return
-	}
-	if req.Port < 0 || req.Port > 65535 {
+	case req.Port < 0 || req.Port > 65535:
 		writeError(w, http.StatusBadRequest, "bad_request", "invalid port")
 		return
 	}
-	switch req.Security {
-	case "", "any", "nla", "tls", "rdp":
-	default:
-		writeError(w, http.StatusBadRequest, "bad_request", "security must be any, nla, tls or rdp")
+	if msg := req.rdpOptions.check(); msg != "" {
+		writeError(w, http.StatusBadRequest, "bad_request", msg)
 		return
 	}
-	req.Width, req.Height = clampRange(req.Width, 640, 7680, 1280), clampRange(req.Height, 480, 4320, 800)
-	req.DPI = clampRange(req.DPI, 48, 384, 96)
-
 	uid := userFrom(r.Context()).ID
-	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: rdp.Params{
-		Hostname: req.Hostname, Port: req.Port, Username: req.Username, Password: req.Password,
-		Domain: req.Domain, Security: req.Security, IgnoreCert: req.IgnoreCert,
-		Width: req.Width, Height: req.Height, DPI: req.DPI,
-	}})
-	s.audit(r, uid, "rdp.open", req.Hostname, true, "")
+	if req.ConnectionID != "" {
+		c, err := s.Store.RemoteConn(r.Context(), uid, req.ConnectionID)
+		if err != nil {
+			s.remoteConnError(w, r, err)
+			return
+		}
+		if req.Password == "" {
+			req.Password = s.openSecret(c.PasswordEnc)
+		}
+		if req.GatewayPassword == "" {
+			req.GatewayPassword = s.openSecret(c.GatewayEnc)
+		}
+		_ = s.Store.TouchRemoteConn(r.Context(), uid, c.ID, time.Now().UnixMilli())
+	}
+	width, height := clampRange(req.Width, 640, 7680, 1280), clampRange(req.Height, 480, 4320, 800)
+	params := req.rdpOptions.params(req.Protocol, req.Hostname, req.Port, req.Username, req.Password, req.Domain,
+		req.GatewayPassword, width, height)
+	if req.Scale == 0 && req.DPI != 0 {
+		params.DPI = clampRange(req.DPI, 48, 384, 96)
+	}
+
+	id := s.rdpTickets.issue(rdpTicket{userID: uid, session: sessionFrom(r.Context()), params: params})
+	s.audit(r, uid, "rdp.open", req.Protocol+"://"+req.Hostname, true, "")
 	writeJSON(w, http.StatusOK, map[string]any{"ticket": id, "expires_in": int(rdpTicketTTL.Seconds())})
 }
 

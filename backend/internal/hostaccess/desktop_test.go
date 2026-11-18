@@ -3,6 +3,7 @@ package hostaccess
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,7 +27,12 @@ type fakeHost struct {
 	linked  string // what display-manager.service points at
 	target  string // systemctl get-default
 	removed []string
+	proxies []string // the screen proxy's "password socket" per start
 }
+
+type closerFunc func() error
+
+func (c closerFunc) Close() error { return c() }
 
 func newFakeHost() *fakeHost {
 	return &fakeHost{files: map[string]string{}, enabled: map[string]bool{}, active: map[string]bool{}, tools: map[string]bool{}, failRun: map[string]bool{}, open: map[int]bool{}}
@@ -73,13 +79,9 @@ func (f *fakeHost) run(_ context.Context, name string, args ...string) ([]byte, 
 	case name == "loginctl" && args[0] == "show-session":
 		return []byte(f.session), nil
 	case name == "systemctl" && args[0] == "stop" && args[1] == ScreenUnit:
-		f.open[ScreenRDPPort], f.open[ScreenVNCPort] = false, false
-	case name == "systemd-run" && strings.Contains(line, "--unit=nocapos-screen "):
-		if strings.Contains(line, " x11vnc ") {
-			f.open[ScreenVNCPort] = true
-		} else {
-			f.open[ScreenRDPPort] = true
-		}
+		f.open[ScreenVNCPort] = false
+	case name == "systemd-run" && strings.Contains(line, "--unit=nocapos-screen ") && strings.Contains(line, " x11vnc "):
+		f.open[ScreenVNCPort] = true
 	}
 	return nil, nil
 }
@@ -123,6 +125,20 @@ func (f *fakeHost) desktop() *Desktop {
 			delete(f.files, p)
 			return nil
 		},
+		WaitSocket: func(p string, _ time.Duration) error {
+			if !strings.HasPrefix(p, ScreenDir+"/") || !strings.HasSuffix(p, "/vnc.sock") {
+				return errors.New("unexpected socket " + p)
+			}
+			return nil
+		},
+		ServeScreen: func(addr, password, socket string) (io.Closer, error) {
+			if addr != "127.0.0.1:5906" {
+				return nil, errors.New("not loopback: " + addr)
+			}
+			f.open[ScreenVNCPort] = true
+			f.proxies = append(f.proxies, password+" "+socket)
+			return closerFunc(func() error { f.open[ScreenVNCPort] = false; return nil }), nil
+		},
 		Dial: func(addr string, _ time.Duration) error {
 			for p, ok := range f.open {
 				if ok && strings.HasSuffix(addr, ":"+strconv.Itoa(p)) {
@@ -134,16 +150,16 @@ func (f *fakeHost) desktop() *Desktop {
 	}
 }
 
-const fullConf = "# NoCap Desktop\nFULL=1\nDM_UNIT=gdm3.service\nGDM_CONF=/etc/gdm3/daemon.conf\n"
+const fullConf = "# NoCap Desktop\nFULL=1\nDM_UNIT=greetd.service\nGREETD_CONF=/etc/greetd/config.toml\nSHELL=nocap\n"
 
 func TestParseDesktopConf(t *testing.T) {
 	c := ParseDesktopConf(fullConf)
-	if !c.Full || c.DMUnit != "gdm3.service" || c.GDMConf != "/etc/gdm3/daemon.conf" {
+	if !c.Full || c.DMUnit != "greetd.service" || c.GreetdConf != "/etc/greetd/config.toml" {
 		t.Fatalf("conf = %+v", c)
 	}
 	// Anything that doesn't look like a unit or a file under /etc is dropped.
-	c = ParseDesktopConf("FULL=1\nDM_UNIT=gdm; rm -rf /\nGDM_CONF=/tmp/../etc/shadow\n")
-	if c.DMUnit != "gdm.service" || c.GDMConf != "" {
+	c = ParseDesktopConf("FULL=1\nDM_UNIT=gdm; rm -rf /\nGREETD_CONF=/tmp/../etc/shadow\n")
+	if c.DMUnit != "greetd.service" || c.GreetdConf != "" {
 		t.Fatalf("unsafe values kept: %+v", c)
 	}
 	if ParseDesktopConf("").Full {
@@ -165,8 +181,8 @@ func TestModeCommands(t *testing.T) {
 		conf DesktopConf
 		want string
 	}{
-		{ModeFull, c, "set-default graphical.target | enable --force gdm3.service | restart gdm3.service"},
-		{ModeOff, c, "disable --now gdm3.service | set-default multi-user.target | --no-block start getty@tty1.service"},
+		{ModeFull, c, "set-default graphical.target | enable --force greetd.service | restart greetd.service"},
+		{ModeOff, c, "disable --now greetd.service | set-default multi-user.target | --no-block start getty@tty1.service"},
 		// There is no web full screen mode any more.
 		{"kiosk", c, ""},
 	} {
@@ -187,8 +203,8 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	}
 
 	f.files[DesktopConfPath] = fullConf
-	f.files["/etc/gdm3/daemon.conf"] = "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=sam\n"
-	f.enabled["gdm3.service"], f.active["gdm3.service"] = true, true
+	f.files["/etc/greetd/config.toml"] = GreetdConfig("_greetd", "sam")
+	f.enabled["greetd.service"], f.active["greetd.service"] = true, true
 	f.session = "Name=sam\nUser=1000\nType=wayland\nClass=user\nRemote=no\nState=active\n"
 	st := d.State(context.Background())
 	if !st.Available || st.Mode != ModeFull || !st.Active || !st.Enabled || st.SessionUser != "sam" {
@@ -205,7 +221,7 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 	if err := d.SetMode(context.Background(), ModeOff); err != nil {
 		t.Fatal(err)
 	}
-	want := "systemctl disable --now gdm3.service|systemctl show display-manager.service -p Id --value|systemctl set-default multi-user.target|systemctl --no-block start getty@tty1.service"
+	want := "systemctl disable --now greetd.service|systemctl show display-manager.service -p Id --value|systemctl set-default multi-user.target|systemctl --no-block start getty@tty1.service"
 	if got := strings.Join(f.calls, "|"); got != want {
 		t.Fatalf("calls = %s", got)
 	}
@@ -220,13 +236,13 @@ func TestDesktopStateAndSetMode(t *testing.T) {
 
 	// The on/off switch: on is the native desktop.
 	f.calls = nil
-	if err := d.Set(context.Background(), true); err != nil || !strings.Contains(strings.Join(f.calls, "|"), "enable --force gdm3.service") {
+	if err := d.Set(context.Background(), true); err != nil || !strings.Contains(strings.Join(f.calls, "|"), "enable --force greetd.service") {
 		t.Fatalf("Set(true) = %v, %v", err, f.calls)
 	}
 
 	// A failing step stops the switch and says which.
 	f.failRun["enable --force"] = true
-	if err := d.SetMode(context.Background(), ModeFull); err == nil || !strings.Contains(err.Error(), "enable --force gdm3.service") {
+	if err := d.SetMode(context.Background(), ModeFull); err == nil || !strings.Contains(err.Error(), "enable --force greetd.service") {
 		t.Fatalf("failure = %v", err)
 	}
 
@@ -287,32 +303,36 @@ func TestSyncSessionEnv(t *testing.T) {
 	}
 }
 
-func TestSetINIKeyAndAutologin(t *testing.T) {
-	debian := "# GDM configuration storage\n[daemon]\n# Uncomment the line below to force the login screen to use Xorg\n#WaylandEnable=false\n\n# Enabling automatic login\n#  AutomaticLoginEnable = true\n#  AutomaticLogin = user1\n\n[security]\n\n[xdmcp]\n"
-	on := SetINIKey(SetINIKey(debian, "daemon", "AutomaticLoginEnable", "true"), "daemon", "AutomaticLogin", "sam")
-	if a, who := ParseAutologin(on); !a || who != "sam" {
-		t.Fatalf("on:\n%s", on)
+func TestSetINIKey(t *testing.T) {
+	conf := "# settings\n[daemon]\n#Key=old\n\n[security]\n"
+	got := SetINIKey(conf, "daemon", "Key", "new")
+	if !strings.Contains(got, "[daemon]\nKey=new\n") || !strings.Contains(got, "[security]") || strings.Count(got, "Key=") != 1 {
+		t.Fatalf("set:\n%s", got)
 	}
-	if !strings.Contains(on, "[security]") || strings.Count(on, "AutomaticLogin=") != 1 {
-		t.Fatalf("on:\n%s", on)
-	}
-	off := SetINIKey(on, "daemon", "AutomaticLoginEnable", "false")
-	if a, _ := ParseAutologin(off); a {
-		t.Fatalf("off:\n%s", off)
-	}
-	// No [daemon] yet (Fedora's custom.conf can be empty).
-	if got := SetINIKey("", "daemon", "AutomaticLoginEnable", "false"); got != "[daemon]\nAutomaticLoginEnable=false\n" {
+	if got := SetINIKey("", "daemon", "Key", "x"); got != "[daemon]\nKey=x\n" {
 		t.Fatalf("empty: %q", got)
 	}
-	// Keys in another section don't count.
-	if a, _ := ParseAutologin("[security]\nAutomaticLoginEnable=true\nAutomaticLogin=x\n"); a {
-		t.Fatal("wrong section counted")
+}
+
+func TestGreetdAutologin(t *testing.T) {
+	on := GreetdConfig("_greetd", "sam")
+	if GreetdAutologin(on) != "sam" || GreetdGreeterUser(on) != "_greetd" || !strings.Contains(on, "command = \""+greeterCmd+"\"") ||
+		!strings.Contains(on, "[initial_session]\ncommand = \""+sessionCmd+"\"") {
+		t.Fatalf("on:\n%s", on)
+	}
+	off := GreetdConfig("greeter", "")
+	if GreetdAutologin(off) != "" || strings.Contains(off, "initial_session") || GreetdGreeterUser(off) != "greeter" {
+		t.Fatalf("off:\n%s", off)
+	}
+	// The user line of another section doesn't count; odd names don't either.
+	if GreetdAutologin("[default_session]\nuser = \"sam\"\n") != "" || GreetdAutologin("[initial_session]\nuser = \"../x\"\n") != "" {
+		t.Fatal("wrong section or name counted")
 	}
 
 	f := newFakeHost()
 	d := f.desktop()
 	f.files[DesktopConfPath] = fullConf
-	f.files["/etc/gdm3/daemon.conf"] = debian
+	f.files["/etc/greetd/config.toml"] = GreetdConfig("_greetd", "")
 	old := LookupUID
 	defer func() { LookupUID = old }()
 	LookupUID = func(n string) (int, error) {
@@ -324,7 +344,7 @@ func TestSetINIKeyAndAutologin(t *testing.T) {
 	if err := d.SetAutologin("sam", true); err != nil {
 		t.Fatal(err)
 	}
-	if a, who := ParseAutologin(f.files["/etc/gdm3/daemon.conf"]); !a || who != "sam" {
+	if GreetdAutologin(f.files["/etc/greetd/config.toml"]) != "sam" {
 		t.Fatal("autologin not written")
 	}
 	if err := d.SetAutologin("admin", true); !errors.Is(err, ErrNotLinuxUser) {
@@ -333,23 +353,27 @@ func TestSetINIKeyAndAutologin(t *testing.T) {
 	if err := d.SetAutologin("sam", false); err != nil {
 		t.Fatal(err)
 	}
-	if a, _ := ParseAutologin(f.files["/etc/gdm3/daemon.conf"]); a {
-		t.Fatal("autologin still on")
+	if g := f.files["/etc/greetd/config.toml"]; GreetdAutologin(g) != "" || GreetdGreeterUser(g) != "_greetd" {
+		t.Fatalf("autologin still on: %q", g)
 	}
 }
 
 const (
 	samSession     = "Name=sam\nUser=1000\nType=wayland\nClass=user\nRemote=no\nState=active\n"
-	greeterSession = "Name=Debian-gdm\nUser=116\nType=wayland\nClass=greeter\nRemote=no\nState=active\n"
+	greeterSession = "Name=_greetd\nUser=116\nType=tty\nClass=greeter\nRemote=no\nState=active\n"
 )
 
 func fullHost() (*fakeHost, *Desktop) {
 	f := newFakeHost()
 	d := f.desktop()
 	f.files[DesktopConfPath] = fullConf
-	f.enabled["gdm3.service"], f.active["gdm3.service"] = true, true
-	f.files["/usr/libexec/gnome-remote-desktop-daemon"] = ""
-	f.tools["x11vnc"] = true
+	f.enabled["greetd.service"], f.active["greetd.service"] = true, true
+	f.tools["wayvnc"], f.tools["x11vnc"], f.tools["labwc"], f.tools["Xwayland"] = true, true, true, true
+	for _, p := range []string{ShellLibDir + "/nocap-shell", ShellLibDir + "/nocap-lock", sessionCmd, greeterCmd, ShellUIDir + "/shell.html"} {
+		f.files[p] = ""
+	}
+	f.files[sessionFilePath] = SessionDesktop()
+	f.files[GreetdConfPath] = GreetdConfig("_greetd", "")
 	d.SessionWait = time.Millisecond
 	d.ProcRoot = "/nonexistent"
 	return f, d
@@ -358,13 +382,14 @@ func fullHost() (*fakeHost, *Desktop) {
 func TestScreenSessionFromProps(t *testing.T) {
 	g := ParseLoginctlProps(greeterSession)
 	s, ok := ScreenSessionFromProps("c1", g)
-	if !ok || !s.Greeter || s.User != "Debian-gdm" || s.UID != 116 {
+	// greetd's greeter session says "tty": it's the Wayland sign-in screen.
+	if !ok || !s.Greeter || s.User != "_greetd" || s.UID != 116 || s.Type != "wayland" {
 		t.Fatalf("greeter = %+v %v", s, ok)
 	}
 	if _, ok := SessionFromProps("c1", g); ok {
 		t.Fatal("the sign-in screen isn't a person's session")
 	}
-	for name, change := range map[string][2]string{"root": {"User", "0"}, "tty": {"Type", "tty"}, "remote": {"Remote", "yes"}, "bad": {"Name", "../x"}} {
+	for name, change := range map[string][2]string{"root": {"User", "0"}, "mir": {"Type", "mir"}, "remote": {"Remote", "yes"}, "bad": {"Name", "../x"}} {
 		p := ParseLoginctlProps(greeterSession)
 		p[change[0]] = change[1]
 		if _, ok := ScreenSessionFromProps("c1", p); ok {
@@ -385,17 +410,18 @@ func TestFindSessionEnv(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(dir, "status"), []byte("Name:\t"+comm+"\nUid:\t"+strconv.Itoa(uid)+"\t"+strconv.Itoa(uid)+"\t0\t0\n"), 0o644)
 		_ = os.WriteFile(filepath.Join(dir, "environ"), []byte(strings.Join(env, "\x00")+"\x00"), 0o644)
 	}
-	proc("10", "bash", 1000, "XDG_SESSION_ID=3")
-	proc("11", "gnome-shell", 1001, "XDG_SESSION_ID=3")
-	proc("12", "gnome-shell", 1000, "XDG_SESSION_ID=2", "DISPLAY=:1")
-	proc("13", "gnome-shell", 1000, "XDG_SESSION_ID=3", "DISPLAY=:0", "XAUTHORITY=/run/user/1000/gdm/Xauthority")
+	proc("10", "bash", 1000, "XDG_SESSION_ID=3", "WAYLAND_DISPLAY=wayland-9")
+	proc("11", "nocap-shell", 1001, "XDG_SESSION_ID=3", "WAYLAND_DISPLAY=wayland-1")
+	proc("12", "labwc", 1000, "XDG_SESSION_ID=2")
+	proc("13", "nocap-shell", 1000, "XDG_SESSION_ID=3", "WAYLAND_DISPLAY=wayland-0", "XDG_RUNTIME_DIR=/run/user/1000")
 	_ = os.MkdirAll(filepath.Join(root, "self"), 0o755)
 	env := FindSessionEnv(root, 1000, "3")
-	if env["DISPLAY"] != ":0" || env["XAUTHORITY"] != "/run/user/1000/gdm/Xauthority" {
+	if env["WAYLAND_DISPLAY"] != "wayland-0" || env["XDG_RUNTIME_DIR"] != "/run/user/1000" {
 		t.Fatalf("env = %v", env)
 	}
-	if env := FindSessionEnv(root, 1000, "9"); env["DISPLAY"] == "" {
-		t.Fatal("any shell of the account when no session matches")
+	// No session matches: NoCap Shell's environment before the compositor's.
+	if env := FindSessionEnv(root, 1000, "9"); env["WAYLAND_DISPLAY"] != "wayland-0" {
+		t.Fatalf("any session program of the account when no session matches: %v", env)
 	}
 	if env := FindSessionEnv(root, 1002, "3"); env != nil {
 		t.Fatalf("other account: %v", env)
@@ -417,38 +443,33 @@ func TestRemoteViewFollowsTheScreen(t *testing.T) {
 		}
 	}
 
-	// Nobody signed in: the sign-in screen, as GDM's account.
+	// Nobody signed in: the sign-in screen, as greetd's account.
+	rt := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(rt, "116"), 0o755)
+	_ = os.WriteFile(filepath.Join(rt, "116", "wayland-1"), nil, 0o600)
+	_ = os.MkdirAll(filepath.Join(rt, "1000"), 0o755)
+	_ = os.WriteFile(filepath.Join(rt, "1000", "wayland-0"), nil, 0o600)
+	d.RuntimeRoot = rt
 	f.session = greeterSession
 	tgt, err := d.RemoteView(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tgt.Protocol != "rdp" || tgt.Port != ScreenRDPPort || !tgt.SignIn || tgt.Username != "nocap" || len(tgt.Password) != 32 {
+	if tgt.Protocol != "vnc" || tgt.Port != ScreenVNCPort || !tgt.SignIn || len(tgt.Password) != 8 {
 		t.Fatalf("target = %+v", tgt)
 	}
 	noArgv(tgt.Password)
 	joined := strings.Join(f.calls, "\n")
 	for _, want := range []string{
-		"systemd-run --unit=nocapos-screen --collect --quiet --property=KillMode=mixed --uid=Debian-gdm --setenv=XDG_RUNTIME_DIR=/run/user/116 --setenv=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/116/bus",
-		"--setenv=GSETTINGS_BACKEND=keyfile",
-		"/usr/libexec/gnome-remote-desktop-daemon --headless",
+		"systemd-run --unit=nocapos-screen --collect --quiet --property=KillMode=mixed --uid=_greetd --setenv=XDG_RUNTIME_DIR=" + filepath.ToSlash(filepath.Join(rt, "116")) + " --setenv=WAYLAND_DISPLAY=wayland-1",
+		"wayvnc --config=/run/nocapos/screen/116/config --render-cursor --unix-socket /run/nocapos/screen/116/vnc.sock",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)
 		}
 	}
-	creds := f.files["/run/nocapos/screen/116/data/gnome-remote-desktop/credentials.ini"]
-	if !strings.Contains(creds, "'password': <'"+tgt.Password+"'>") {
-		t.Fatalf("credentials = %q", creds)
-	}
-	kf := f.files["/run/nocapos/screen/116/config/glib-2.0/settings/keyfile"]
-	for _, want := range []string{"[org/gnome/desktop/remote-desktop/rdp]", "port=3391", "view-only=false", "screen-share-mode='mirror-primary'", "tls-key='/run/nocapos/screen/116/tls.key'"} {
-		if !strings.Contains(kf, want) {
-			t.Errorf("settings missing %q:\n%s", want, kf)
-		}
-	}
-	if !strings.Contains(f.files["/run/nocapos/screen/116/tls.key"], "PRIVATE KEY") {
-		t.Fatal("no TLS key")
+	if len(f.proxies) != 1 || f.proxies[0] != tgt.Password+" /run/nocapos/screen/116/vnc.sock" {
+		t.Fatalf("proxy = %v", f.proxies)
 	}
 
 	// Still the sign-in screen: the same server.
@@ -497,7 +518,7 @@ func TestRemoteViewFollowsTheScreen(t *testing.T) {
 		t.Fatalf("x11 target = %+v", tgt3)
 	}
 	noArgv(tgt3.Password)
-	if !strings.Contains(strings.Join(f.calls, "\n"), "x11vnc -display :1 -auth /run/user/1000/gdm/Xauthority -localhost -rfbport 5906") {
+	if !strings.Contains(strings.Join(f.calls, "\n"), "x11vnc -display :1 -auth "+filepath.ToSlash(filepath.Join(rt, "1000", "Xauthority"))+" -localhost -rfbport 5906") {
 		t.Fatalf("calls = %v", f.calls)
 	}
 	if f.files["/run/nocapos/screen/vnc.pass"] != tgt3.Password+"\n" {

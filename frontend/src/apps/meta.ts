@@ -3,6 +3,7 @@ import type { IconName } from '../components/Icon';
 import { useRecents } from '../state/recents';
 import { useWM } from '../state/windows';
 import { tr } from '../i18n';
+import { hostSend, isNative } from '../native/platform';
 
 export interface AppMeta {
   id: string;
@@ -12,7 +13,7 @@ export interface AppMeta {
   tile: [string, string];
   size: { w: number; h: number };
   description: string;
-  /** At most one window (e.g. one shared Brave stream). */
+  /** At most one window. */
   single?: boolean;
   adminOnly?: boolean;
   /** Not listed in the launcher (opened by other apps). */
@@ -94,17 +95,6 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Install, open and update self-hosted apps',
     adminOnly: true,
   },
-  browser: {
-    id: 'browser',
-    title: 'Brave',
-    icon: 'brave',
-    logo: '/app-icons/brave.svg',
-    tile: ['#fb542b', '#a52e12'],
-    size: { w: 1200, h: 780 },
-    description: 'Real Brave browser, installed on this system',
-    single: true,
-    adminOnly: true,
-  },
   nativeapp: {
     id: 'nativeapp',
     title: 'Linux app',
@@ -120,7 +110,8 @@ export const APPS: Record<string, AppMeta> = {
     icon: 'desktop',
     tile: ['#2f6bff', '#1b3f9e'],
     size: { w: 1080, h: 700 },
-    description: 'Connect to Windows and Linux PCs over RDP',
+    description: 'Connect to other computers over RDP or VNC',
+    keywords: 'rdp vnc remote desktop computer pc',
     adminOnly: true,
   },
   nocapdesktop: {
@@ -229,6 +220,19 @@ export const APPS: Record<string, AppMeta> = {
     description: 'Play the songs in a folder',
     hidden: true,
   },
+  notes: {
+    id: 'notes',
+    // "Brain Dump" / "Sticky Notes", in the voice in use.
+    get title() {
+      return tr('notes.appTitle');
+    },
+    icon: 'stickyNote',
+    tile: ['#ff5a5f', '#b3121a'],
+    size: { w: 1040, h: 700 },
+    description: 'Glass sticky notes with checklists and reminders, stuck to your desktop if you like',
+    single: true,
+    keywords: 'sticky notes stickies brain dump memo jot todo to-do checklist list reminder',
+  },
   // The id stays "phone" so older links, pins and desktop icons keep working.
   phone: {
     id: 'phone',
@@ -275,6 +279,15 @@ export interface OpenOptions {
 export function openApp(appId: string, opts: OpenOptions = {}) {
   const meta = APPS[appId];
   if (!meta) return;
+  // NoCap Desktop: every app gets a real window of its own on the screen.
+  // One window per app unless another is asked for; opening it again brings
+  // it to the front (with the new props, e.g. a Settings section).
+  if (isNative()) {
+    const props = opts.props ? JSON.stringify(opts.props) : undefined;
+    hostSend('nocap.open', { app: appId, ...(props && props.length <= 8192 ? { props } : {}), single: !!meta.single || !opts.newWindow });
+    if (!meta.hidden) useRecents.getState().push(appId);
+    return;
+  }
   const wm = useWM.getState();
   const mine = wm.windows.filter((w) => w.appId === appId);
 

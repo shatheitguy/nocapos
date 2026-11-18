@@ -316,7 +316,7 @@ func TestAptRepairNeverRemovesWithoutAsking(t *testing.T) {
 	f := newFakeSys(t)
 	f.write("broken", "linux-headers-rpi-2712\n")
 	f.write("fix-removes", "")
-	out, _ := f.run(`pkg_install_group apt desktop lean gdm3 fonts-dejavu-core || echo GROUP-FAILED; pkg_summary`)
+	out, _ := f.run(`pkg_install_group apt desktop lean labwc fonts-dejavu-core || echo GROUP-FAILED; pkg_summary`)
 	if f.read("removed") != "" {
 		t.Fatal("removed a package without asking")
 	}
@@ -328,7 +328,7 @@ func TestAptRepairNeverRemovesWithoutAsking(t *testing.T) {
 		"| E: Unmet dependencies. Try 'apt --fix-broken install'",
 		"GROUP-FAILED",
 		"Some packages didn't install.",
-		"desktop: gdm3 fonts-dejavu-core (the package system is broken: E: Unmet dependencies.",
+		"desktop: labwc fonts-dejavu-core (the package system is broken: E: Unmet dependencies.",
 		"Settings → Glow Up → Update everything")
 	if !strings.Contains(f.read("log"), "--no-remove") {
 		t.Error("the repair should run with --no-remove")
@@ -413,7 +413,7 @@ pkg_summary`)
 func TestInstalledDespiteAnotherPackagesError(t *testing.T) {
 	f := newFakeSys(t)
 	f.write("blocker", "zfs-dkms")
-	out, err := f.run(`pkg_install_group apt desktop lean gdm3 gnome-shell && echo GROUP-OK; pkg_summary`)
+	out, err := f.run(`pkg_install_group apt desktop lean labwc greetd && echo GROUP-OK; pkg_summary`)
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
