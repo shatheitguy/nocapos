@@ -444,7 +444,6 @@ function LanguageStep({ d, set, t }: StepProps) {
           <span>{t("in.region")}</span>
           <select
             value={d.region}
-            autoFocus
             onChange={(e) => {
               const r = REGIONS.find((x) => x.id === e.target.value)!;
               set({ region: r.id, zone: r.zone, keyboard: r.keyboard });
