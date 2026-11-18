@@ -1,6 +1,8 @@
 name: OS images
 
-# Builds the NoCapOS OS images from a published NoCapOS release:
+# Builds the NoCapOS OS images from this checkout's NoCapOS bundle (built
+# here exactly as the release workflow builds it, NoCap Desktop's native
+# programs included), so an image can be tried before its release:
 #   nocapos-<version>-amd64.iso          PC: live NoCap Desktop + graphical and text installers (Debian base, live-build)
 #   nocapos-<version>-rpi-arm64.img.xz   Raspberry Pi: SD card image (pi-gen, arm64)
 # Each run uploads them as workflow artifacts. On a published release (or a
@@ -61,8 +63,52 @@ jobs:
           echo "attach=$attach" >>"$GITHUB_OUTPUT"
           echo "Building images for NoCapOS $version (attach to release: $attach)"
 
+  shell:
+    uses: ./.github/workflows/shell.yml
+
+  # The release bundles (scripts/package.sh) for amd64 and arm64.
+  bundle:
+    needs: [meta, shell]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nocap-shell-*
+          path: shell-bins
+
+      - name: Build the bundles
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          for a in amd64 arm64 armv7; do mv "shell-bins/nocap-shell-$a" "shell-bins/$a"; chmod 755 shell-bins/$a/*; done
+          NOCAP_SHELL_BINS="$PWD/shell-bins" bash scripts/package.sh "$VERSION"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: |
+            dist/nocapos-linux-amd64.tar.gz
+            dist/nocapos-linux-arm64.tar.gz
+            dist/SHA256SUMS
+          compression-level: 0
+          if-no-files-found: error
+
   amd64:
-    needs: meta
+    needs: [meta, bundle]
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
@@ -79,13 +125,18 @@ jobs:
           sudo mkdir -p /mnt/nocap-live
           df -h / /mnt
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: bundle
+
       - name: Build the ISO (live-build in debian:trixie)
         env:
           VERSION: ${{ needs.meta.outputs.version }}
         run: |
           docker run --rm --privileged \
             -v "$GITHUB_WORKSPACE:/src" -v /mnt/nocap-live:/build \
-            -e NOCAP_WORK=/build/work -e VERSION \
+            -e NOCAP_WORK=/build/work -e VERSION -e NOCAP_DIST=/src/bundle \
             -w /src docker.io/library/debian:trixie \
             bash -c 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
                        live-build debootstrap curl ca-certificates cpio skopeo zstd python3 python3-pil python3-yaml fonts-dejavu-core \
@@ -110,7 +161,7 @@ jobs:
           if-no-files-found: ignore
 
   rpi:
-    needs: meta
+    needs: [meta, bundle]
     # Native arm64 runner: pi-gen builds without CPU emulation.
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 180
@@ -128,9 +179,15 @@ jobs:
       - name: Build tools
         run: sudo apt-get update -q && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends skopeo zstd
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: bundle
+
       - name: Build the Raspberry Pi image (pi-gen)
         env:
           VERSION: ${{ needs.meta.outputs.version }}
+          NOCAP_DIST: ${{ github.workspace }}/bundle
         run: bash image/rpi/build.sh "$VERSION" out
 
       - uses: actions/upload-artifact@v4

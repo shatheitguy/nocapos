@@ -55,9 +55,10 @@ fi
 systemctl enable nocapos.service nocapos-boot-check.service nocapos-etc-save.service \
   nocapos-etc-changed.path nocapos-etc-restore.service NetworkManager.service avahi-daemon.service \
   systemd-timesyncd.service docker.service
-# NoCap Desktop's sign-in screen starts once NoCap Shell is in the image
-# (the nocap-shell package); until then the screen shows the console banner.
-if ! dpkg-query -W -f='${Status}' nocap-shell 2>/dev/null | grep -q 'ok installed'; then
+# NoCap Desktop (the nocap-desktop package) links greetd as the display
+# manager and boots to graphical.target; without it the screen shows the
+# console banner.
+if ! dpkg-query -W -f='${Status}' nocap-desktop 2>/dev/null | grep -q 'ok installed'; then
   systemctl disable greetd.service 2>/dev/null || true
 fi
 # systemd-networkd and NetworkManager must not both manage the network.
@@ -71,6 +72,9 @@ flatten_units() {
   [ -d "$etc" ] || return 0
   while IFS= read -r -d '' p; do
     rel="${p#"$etc"/}"
+    # What the screen shows is this machine's own choice (Settings > This
+    # Screen & Access changes these two links): they stay in /etc.
+    case "$rel" in display-manager.service | default.target | greetd.service.d/*) continue ;; esac
     dst="$lib/$rel"
     mkdir -p "$(dirname "$dst")"
     if [ -e "$dst" ] || [ -L "$dst" ]; then rm -f "$p"; else mv "$p" "$dst"; fi

@@ -103,15 +103,16 @@ func TestDesktopFamily(t *testing.T) {
 	}
 }
 
+// NoCap Desktop is NoCap OS's own: the compositor, the sign-in service and
+// what NoCap Shell and the screen need. No third-party default apps (Files,
+// Terminal, Text Editor, Photos, Settings and the App Store are NoCap OS's
+// own), no web browser, nothing from the earlier desktop.
 func TestDesktopPackages(t *testing.T) {
-	// Never the full GNOME meta packages (games, office, ...), never
-	// NetworkManager (it would take over a server's network), never the
-	// distribution's branding packages.
-	banned := regexp.MustCompile(`(^|[|?])(gnome|gnome-core|task-gnome-desktop|ubuntu-desktop|gnome-games|aisleriot|network-manager|NetworkManager|desktop-base|ubuntu-wallpapers|yaru-theme-gtk|libreoffice\S*|evolution|totem|rhythmbox)($|\|)`)
+	banned := regexp.MustCompile(`(^|[|?])(gdm3?|gnome-shell|gnome-session|gnome-remote-desktop|nautilus|gnome-console|gnome-terminal|task-gnome-desktop|thunar|Thunar|pcmanfm|foot|mousepad|ristretto|firefox(-esr)?|chromium(-browser)?|brave-browser|lightdm|sddm|network-manager|NetworkManager|desktop-base|libreoffice\S*|x11vnc|xclip|dconf-cli)($|\|)`)
 	required := map[string][]string{
-		"debian": {"gdm3", "gnome-session", "gnome-shell", "gnome-control-center", "nautilus", "gnome-console|gnome-terminal", "gnome-text-editor|gedit", "loupe|eog", "papers|evince", "file-roller", "gnome-system-monitor", "xdg-desktop-portal-gnome", "flatpak", "?gnome-software", "?gnome-software-plugin-flatpak", "?gnome-shell-extension-dashtodock|gnome-shell-extension-ubuntu-dock", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire", "dconf-cli", "libsecret-tools"},
-		"fedora": {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire"},
-		"arch":   {"gdm", "gnome-shell", "gnome-session", "nautilus", "flatpak", "gnome-remote-desktop", "x11vnc", "?wl-clipboard", "?xclip", "pipewire"},
+		"debian": {"labwc", "greetd", "xwayland", "wayvnc", "swayidle", "libgtk-3-0t64|libgtk-3-0", "libgtk-layer-shell0", "libwebkit2gtk-4.1-0", "libjson-glib-1.0-0", "libpolkit-agent-1-0", "libpam0g", "xdg-desktop-portal", "xdg-desktop-portal-wlr", "xdg-desktop-portal-gtk", "wl-clipboard", "pipewire", "flatpak", "libgl1-mesa-dri", "libpam-systemd"},
+		"fedora": {"labwc", "greetd", "wayvnc", "gtk-layer-shell", "webkit2gtk4.1", "xdg-desktop-portal", "wl-clipboard", "flatpak"},
+		"arch":   {"labwc", "greetd", "wayvnc", "gtk-layer-shell", "webkit2gtk-4.1", "xdg-desktop-portal", "wl-clipboard", "flatpak"},
 	}
 	required["ubuntu"] = required["debian"]
 	for family, want := range required {
@@ -121,7 +122,7 @@ func TestDesktopPackages(t *testing.T) {
 			if banned.MatchString(l) {
 				t.Errorf("%s: unwanted package line %q", family, l)
 			}
-			if strings.TrimSpace(l) != l || l == "" || strings.Contains(l, " ") {
+			if strings.TrimSpace(l) != l || l == "" || strings.Contains(l, " ") || strings.Contains(l, "#") {
 				t.Errorf("%s: malformed line %q", family, l)
 			}
 			have[l] = true
@@ -131,9 +132,25 @@ func TestDesktopPackages(t *testing.T) {
 				t.Errorf("%s: missing %q", family, w)
 			}
 		}
+		// Every package says why it's there.
+		for _, l := range strings.Split(strings.TrimSpace(lib(t, "", "desktop_package_list", family)), "\n") {
+			if pkg, why, ok := strings.Cut(l, "#"); !ok || strings.TrimSpace(pkg) == "" || len(strings.TrimSpace(why)) < 5 {
+				t.Errorf("%s: no reason given for %q", family, l)
+			}
+		}
 	}
 	if got := lib(t, "", "desktop_packages", "none"); got != "" {
 		t.Errorf("unsupported family should have no packages: %q", got)
+	}
+	// The earlier desktop's packages are known (they stay installed, unused).
+	if old := lib(t, "", "eval", `echo "$OLD_DESKTOP_PACKAGES"`); !strings.Contains(old, "gdm3") || !strings.Contains(old, "gnome-shell") {
+		t.Errorf("OLD_DESKTOP_PACKAGES = %q", old)
+	}
+	// Building NoCap Shell on the machine itself names real build packages.
+	for _, f := range []string{"debian", "fedora", "arch"} {
+		if !strings.Contains(lib(t, "", "shell_build_packages", f), "webkit2gtk") && !strings.Contains(lib(t, "", "shell_build_packages", f), "webkit2gtk-4.1") {
+			t.Errorf("%s: shell build packages lack WebKitGTK", f)
+		}
 	}
 }
 
@@ -172,26 +189,11 @@ func TestNoHardwareFallback(t *testing.T) {
 	if z := lib(t, "", "render_zramswap", "900000"); !strings.Contains(z, "\nSIZE=878\n") || !strings.Contains(z, "ALGO=zstd") {
 		t.Errorf("zramswap: %s", z)
 	}
-	low := keyfile(t, "lowmem", lib(t, "", "render_dconf_lowmem"))
-	if low["org/gnome/desktop/interface"]["enable-animations"] != "false" {
-		t.Error("animations stay on in the low-memory profile")
-	}
-	if low["org/freedesktop/tracker/miner/files"]["crawling-interval"] != "-2" || low["org/freedesktop/localsearch/miner/files"]["enable-monitors"] != "false" {
-		t.Error("file indexing stays on in the low-memory profile")
-	}
-	units := lib(t, "", "eval", `echo "$LOWMEM_USER_UNITS"`)
-	for _, u := range []string{"tracker-miner-fs-3.service", "localsearch-3.service", "evolution-source-registry.service", "evolution-calendar-factory.service"} {
-		if !strings.Contains(units, u) {
-			t.Errorf("%s isn't masked in the low-memory profile", u)
-		}
-	}
-	if hidden := lib(t, "", "render_autostart_hidden"); !strings.Contains(hidden, "Hidden=true") {
-		t.Errorf("autostart: %s", hidden)
-	}
 }
 
-// Package selection on every architecture, armhf included: the same list,
-// picked from what the repositories have.
+// Package selection on every architecture: the same list, picked from what
+// the repositories have. Debian 12 has no labwc: the selection says so (and
+// install.sh asks for Debian 13); everywhere else it's complete.
 func TestDesktopSelect(t *testing.T) {
 	read := func(name string) string {
 		b, err := os.ReadFile(filepath.Join("testdata", "packages", name))
@@ -201,10 +203,9 @@ func TestDesktopSelect(t *testing.T) {
 		return string(b)
 	}
 	for name, want := range map[string][]string{
-		// Debian 12 / Raspberry Pi OS (32-bit): older apps where the new
-		// ones don't exist yet.
-		"debian-12-armhf": {"gdm3", "gnome-console", "gnome-text-editor", "eog", "evince", "gnome-remote-desktop", "x11vnc", "pipewire", "wireplumber", "systemd-zram-generator", "libguac-client-rdp0"},
-		"debian-13-arm64": {"gdm3", "loupe", "papers", "gnome-remote-desktop", "x11vnc", "wayvnc"},
+		"debian-13-arm64":      {"labwc", "greetd", "libgtk-3-0t64", "polkitd", "wayvnc", "wl-clipboard", "guacd", "libguac-client-vnc0", "systemd-zram-generator"},
+		"debian-13-amd64":      {"labwc", "greetd", "libgtk-3-0t64", "libwebkit2gtk-4.1-0", "firmware-amd-graphics"},
+		"raspios-trixie-armhf": {"labwc", "greetd", "libgtk-3-0t64", "libgtk-layer-shell0", "wayvnc"},
 	} {
 		got := lib(t, read(name), "desktop_select", "debian")
 		picks := map[string]bool{}
@@ -219,25 +220,34 @@ func TestDesktopSelect(t *testing.T) {
 				t.Errorf("%s: %s not picked:\n%s", name, w, got)
 			}
 		}
-		if picks["loupe"] && picks["eog"] {
-			t.Errorf("%s: both alternatives picked", name)
+		for _, never := range []string{"gdm3", "gnome-shell", "thunar", "foot", "mousepad", "firefox-esr", "chromium", "xclip"} {
+			if picks[never] {
+				t.Errorf("%s: %s picked", name, never)
+			}
 		}
+	}
+	got := lib(t, read("debian-12-armhf"), "desktop_select", "debian")
+	if !strings.Contains(got, "\n!labwc\n") && !strings.HasPrefix(got, "!labwc\n") {
+		t.Errorf("Debian 12 has no labwc, yet:\n%s", got)
+	}
+	if strings.Count(got, "\n!") > 0 && strings.Count(got, "!") != 1 {
+		t.Errorf("Debian 12: only labwc should be missing:\n%s", got)
 	}
 	// Optional lines with nothing available are listed as such; required
 	// ones make the selection fail.
-	got := lib(t, "gdm3\n", "desktop_select", "debian")
-	if !strings.Contains(got, "\n!gnome-shell\n") || !strings.Contains(got, "\n?wayvnc\n") || !strings.HasPrefix(got, "gdm3\n") {
+	got = lib(t, "labwc\n", "desktop_select", "debian")
+	if !strings.Contains(got, "\n!greetd\n") || !strings.Contains(got, "\n?grim\n") || !strings.HasPrefix(got, "labwc\n") {
 		t.Errorf("selection with almost nothing:\n%s", got)
 	}
 }
 
 func TestAccentCSS(t *testing.T) {
 	g4 := lib(t, "", "render_gtk4_accent")
-	if !strings.Contains(g4, "@define-color accent_bg_color #e5383b;") || !strings.Contains(g4, "@define-color accent_fg_color #ffffff;") {
+	if !strings.Contains(g4, "@define-color accent_bg_color #e8232b;") || !strings.Contains(g4, "@define-color accent_fg_color #ffffff;") {
 		t.Errorf("gtk4: %s", g4)
 	}
 	g3 := lib(t, "", "render_gtk3_accent")
-	if !strings.Contains(g3, "button.suggested-action") || !strings.Contains(g3, "switch:checked") || !strings.Contains(g3, "#e5383b") {
+	if !strings.Contains(g3, "button.suggested-action") || !strings.Contains(g3, "switch:checked") || !strings.Contains(g3, "#e8232b") {
 		t.Errorf("gtk3: %s", g3)
 	}
 	for _, css := range []string{g4, g3} {
@@ -265,13 +275,6 @@ func TestAccentCSS(t *testing.T) {
 	}
 	if back := lib(t, once, "css_without_accent"); strings.TrimSpace(back) != strings.TrimSpace(own) {
 		t.Fatalf("undo:\n%s", back)
-	}
-	// libadwaita gets the CSS up to GNOME 46; 47+ has the accent setting.
-	for major, want := range map[string]bool{"0": true, "43": true, "46": true, "47": false, "48": false} {
-		_, err := libErr(t, "", "gtk4_accent_wanted", major)
-		if (err == nil) != want {
-			t.Errorf("gtk4_accent_wanted %s = %v", major, err == nil)
-		}
 	}
 }
 
@@ -366,7 +369,7 @@ func TestBootTokenEdits(t *testing.T) {
 	}
 }
 
-// keyfile checks a GLib key file's shape: [groups], key=value lines and
+// keyfile checks a key file's shape: [groups], key=value lines and
 // comments only, every group non-empty.
 func keyfile(t *testing.T, name, s string) map[string]map[string]string {
 	t.Helper()
@@ -397,168 +400,65 @@ func keyfile(t *testing.T, name, s string) map[string]map[string]string {
 	return groups
 }
 
-func TestSettingsFiles(t *testing.T) {
-	const uuid = "nocapos-brand@shatheitguy.github.io"
-	favs := "['org.gnome.Nautilus.desktop', 'firefox-esr.desktop', 'org.gnome.Console.desktop', 'org.gnome.Settings.desktop']"
-	exts := []string{favs, uuid, "dash-to-dock@micxgx.gmail.com", "appindicatorsupport@rgcjonas.gmail.com"}
-	gs := keyfile(t, "gschema", lib(t, "", "render_gschema_override", exts...))
-	if gs["org.gnome.shell"]["enabled-extensions"] != "['"+uuid+"', 'dash-to-dock@micxgx.gmail.com', 'appindicatorsupport@rgcjonas.gmail.com']" {
-		t.Errorf("extensions = %s", gs["org.gnome.shell"]["enabled-extensions"])
-	}
-	if fav := gs["org.gnome.shell"]["favorite-apps"]; fav != favs {
-		t.Errorf("dock = %s", fav)
-	}
-	if gs["org.gnome.desktop.interface"]["color-scheme"] != "'prefer-dark'" || !strings.Contains(gs["org.gnome.desktop.background"]["picture-uri"], "/usr/share/backgrounds/nocapos/") {
-		t.Errorf("look: %v", gs)
-	}
-	// Only keys every GNOME since 43 has go in the override (an unknown key
-	// there makes glib-compile-schemas complain); newer ones go to dconf.
-	for g, kv := range gs {
-		if !strings.HasPrefix(g, "org.gnome.") || strings.Contains(g, "dash-to-dock") {
-			t.Errorf("override has schema %s", g)
-		}
-		if _, ok := kv["accent-color"]; ok {
-			t.Error("accent-color (GNOME 47+) belongs in dconf, not the override")
+// The screen: greetd shows NoCap's sign-in screen as its own account, then
+// starts the NoCap Desktop session.
+func TestSignInService(t *testing.T) {
+	plain := lib(t, "", "render_greetd_config", "_greetd")
+	for _, want := range []string{"[default_session]\ncommand = \"/usr/libexec/nocapos/nocap-greeter-session\"\nuser = \"_greetd\"\n", "[terminal]\nvt = 7\n"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("greetd config lacks %q:\n%s", want, plain)
 		}
 	}
-
-	// Older Ubuntu: its dock, no app indicators, the older terminal.
-	db := keyfile(t, "dconf", lib(t, "", "render_dconf_local", "['org.gnome.Terminal.desktop', 'org.gnome.Settings.desktop']", uuid, "ubuntu-dock@ubuntu.com"))
-	if db["org/gnome/desktop/interface"]["accent-color"] != "'red'" {
-		t.Error("NoCap red accent missing")
+	if strings.Contains(plain, "initial_session") {
+		t.Errorf("automatic sign-in on by default:\n%s", plain)
 	}
-	if db["org/gnome/shell/extensions/dash-to-dock"]["dock-fixed"] != "true" {
-		t.Error("the dock must always be visible")
+	auto := lib(t, "", "render_greetd_config", "_greetd", "sam")
+	if !strings.Contains(auto, "[initial_session]\ncommand = \"/usr/libexec/nocapos/nocap-session\"\nuser = \"sam\"\n") {
+		t.Errorf("autologin config:\n%s", auto)
 	}
-	if db["org/gnome/shell"]["enabled-extensions"] != "['"+uuid+"', 'ubuntu-dock@ubuntu.com']" || !strings.Contains(db["org/gnome/shell"]["favorite-apps"], "'org.gnome.Terminal.desktop'") {
-		t.Errorf("shell: %v", db["org/gnome/shell"])
+	if got := strings.TrimSpace(lib(t, auto, "greetd_autologin")); got != "sam" {
+		t.Errorf("greetd_autologin = %q", got)
 	}
-	if db["org/gnome/settings-daemon/plugins/power"]["sleep-inactive-ac-type"] != "'nothing'" {
-		t.Error("a server must never put itself to sleep")
+	if got := strings.TrimSpace(lib(t, plain, "greetd_autologin")); got != "" {
+		t.Errorf("greetd_autologin (off) = %q", got)
 	}
-	if db["org/gnome/software"]["allow-updates"] != "false" {
-		t.Error("updates come from NoCapOS")
-	}
-	// No web apps on the desktop: nothing anywhere opens NoCapOS's web UI.
-	for _, out := range []string{lib(t, "", "render_dconf_local", "['org.gnome.Nautilus.desktop']", uuid), lib(t, "", "render_gschema_override", "['org.gnome.Nautilus.desktop']", uuid)} {
-		if strings.Contains(out, "nocap-") || strings.Contains(out, "127.0.0.1") {
-			t.Errorf("web app in the desktop's settings:\n%s", out)
+	for passwd, want := range map[string]string{
+		"root:x:0:0::/root:/bin/bash\n_greetd:x:110:115::/var/lib/greetd:/usr/sbin/nologin\n": "_greetd",
+		"greetd:x:980:980::/var/lib/greetd:/sbin/nologin\n":                                   "greetd",
+		"greeter:x:964:964::/var/lib/greeter:/usr/bin/nologin\n":                              "greeter",
+		"root:x:0:0::/root:/bin/bash\n":                                                       "_greetd",
+	} {
+		if got := strings.TrimSpace(lib(t, "", "greeter_user", root(t, map[string]string{"etc/passwd": passwd}))); got != want {
+			t.Errorf("greeter_user(%q) = %q, want %q", passwd, got, want)
 		}
 	}
-	locks := strings.Split(strings.TrimSpace(lib(t, "", "render_dconf_locks")), "\n")
-	for _, l := range locks[1:] {
-		if !strings.HasPrefix(l, "/org/gnome/") || strings.Contains(l, " ") {
-			t.Errorf("bad lock line %q", l)
-		}
+	// The lock screen checks the account's own password; the keyring opens at sign-in.
+	if p := lib(t, "", "render_pam_lock", "debian"); !strings.Contains(p, "@include common-auth") {
+		t.Errorf("pam (debian): %s", p)
 	}
-	if len(locks) > 6 {
-		t.Errorf("lock only what's needed (%d locks)", len(locks)-1)
+	if p := lib(t, "", "render_pam_lock", "fedora"); !strings.Contains(p, "auth include system-auth") {
+		t.Errorf("pam (fedora): %s", p)
 	}
-	gdm := keyfile(t, "gdm", lib(t, "", "render_dconf_gdm"))
-	if gdm["org/gnome/login-screen"]["logo"] != "'/usr/share/nocapos/desktop/login-logo.png'" {
-		t.Errorf("sign-in logo: %v", gdm["org/gnome/login-screen"])
+	pam := "#%PAM-1.0\nauth include common-auth\n"
+	with := lib(t, pam, "pam_with_keyring")
+	if !strings.Contains(with, "auth       optional   pam_gnome_keyring.so") || lib(t, with, "pam_with_keyring") != with {
+		t.Errorf("keyring pam:\n%s", with)
 	}
-	if css := lib(t, "", "render_gdm_css"); !strings.Contains(css, "#lockDialogGroup") || !strings.Contains(css, "resource:///org/gnome/shell/theme/nocapos-login.jpg") {
-		t.Errorf("sign-in css: %s", css)
-	}
-	if got := lib(t, "", "gv_list", "a", "", "b"); got != "['a', 'b']\n" {
-		t.Errorf("gv_list: %q", got)
+	portals := keyfile(t, "portals", lib(t, "", "render_portals_conf"))
+	if portals["preferred"]["org.freedesktop.impl.portal.ScreenCast"] != "wlr" || portals["preferred"]["default"] != "gtk" {
+		t.Errorf("portals: %v", portals)
 	}
 }
 
-func TestGDMHelpers(t *testing.T) {
-	deb := root(t, map[string]string{"etc/gdm3/daemon.conf": "[daemon]\n", "lib/systemd/system/gdm3.service": ""})
-	if got := strings.TrimSpace(lib(t, "", "gdm_config", deb)); got != "/etc/gdm3/daemon.conf" {
-		t.Errorf("debian conf %q", got)
-	}
-	if got := strings.TrimSpace(lib(t, "", "gdm_unit", deb)); got != "gdm3.service" {
-		t.Errorf("debian unit %q", got)
-	}
-	ubuntu := root(t, map[string]string{"etc/gdm3/custom.conf": "", "usr/lib/systemd/system/gdm.service": ""})
-	if got := strings.TrimSpace(lib(t, "", "gdm_config", ubuntu)); got != "/etc/gdm3/custom.conf" {
-		t.Errorf("ubuntu conf %q", got)
-	}
-	if got := strings.TrimSpace(lib(t, "", "gdm_unit", ubuntu)); got != "gdm.service" {
-		t.Errorf("ubuntu unit %q", got)
-	}
-	fedora := root(t, map[string]string{"etc/gdm/": ""})
-	if got := strings.TrimSpace(lib(t, "", "gdm_config", fedora)); got != "/etc/gdm/custom.conf" {
-		t.Errorf("fedora conf %q", got)
-	}
-	for in, want := range map[string]string{"GNOME Shell 48.4": "48", "GNOME Shell 43.9": "43", "GNOME Shell 49.beta": "0", "": "0"} {
-		if got := strings.TrimSpace(lib(t, "", "gnome_major", in)); got != want {
-			t.Errorf("gnome_major(%q) = %q, want %s", in, got, want)
-		}
-	}
-	got := lib(t, "[daemon]\n#WaylandEnable=false\n\n[security]\n", "ini_set", "daemon", "WaylandEnable", "false")
-	if got != "[daemon]\nWaylandEnable=false\n\n[security]\n" {
-		t.Errorf("ini_set: %q", got)
-	}
-}
-
-// The dock: native apps only, whichever of each the machine has.
-func TestDockApps(t *testing.T) {
-	r := root(t, map[string]string{
-		"usr/share/applications/org.gnome.Nautilus.desktop":   "",
-		"usr/share/applications/org.gnome.Settings.desktop":   "",
-		"usr/share/applications/org.gnome.Software.desktop":   "",
-		"usr/share/applications/org.gnome.Terminal.desktop":   "",
-		"usr/share/applications/org.gnome.TextEditor.desktop": "",
-		"usr/share/applications/chromium.desktop":             "",
-		"usr/share/applications/firefox-esr.desktop":          "",
-	})
-	want := "org.gnome.Nautilus.desktop\nfirefox-esr.desktop\norg.gnome.Software.desktop\norg.gnome.Terminal.desktop\norg.gnome.TextEditor.desktop\norg.gnome.Settings.desktop\n"
-	if got := lib(t, "", "dock_apps", r); got != want {
-		t.Errorf("dock_apps:\n%s", got)
-	}
-	// Raspberry Pi OS: its own Chromium, Console, gedit, an older Settings.
-	pi := root(t, map[string]string{
-		"usr/share/applications/chromium-browser.desktop":     "",
-		"usr/share/applications/org.gnome.Console.desktop":    "",
-		"usr/share/applications/org.gnome.gedit.desktop":      "",
-		"usr/share/applications/gnome-control-center.desktop": "",
-	})
-	want = "org.gnome.Nautilus.desktop\nchromium-browser.desktop\norg.gnome.Console.desktop\norg.gnome.gedit.desktop\ngnome-control-center.desktop\n"
-	if got := lib(t, "", "dock_apps", pi); got != want {
-		t.Errorf("dock_apps on a Pi:\n%s", got)
-	}
-}
-
-// The screen's session: NoCapOS's, never a distribution's own desktop.
+// The session entry, for tools that list sessions: NoCapOS's own.
 func TestNoCapSession(t *testing.T) {
-	for _, kind := range []string{"wayland", "x11"} {
-		f := lib(t, "", "render_session_desktop", kind)
-		if !strings.Contains(f, "\nExec=gnome-session\n") || !strings.Contains(f, "\nDesktopNames=GNOME\n") || !strings.HasPrefix(f, "[Desktop Entry]\n") {
-			t.Errorf("%s session:\n%s", kind, f)
-		}
+	f := lib(t, "", "render_session_desktop")
+	if !strings.HasPrefix(f, "[Desktop Entry]\n") || !strings.Contains(f, "\nExec=/usr/libexec/nocapos/nocap-session\n") || !strings.Contains(f, "\nDesktopNames=NoCap;wlroots\n") {
+		t.Errorf("session:\n%s", f)
 	}
-	r := root(t, map[string]string{
-		"usr/share/wayland-sessions/LXDE-pi-labwc.desktop": "",
-		"usr/share/wayland-sessions/nocapos.desktop":       "",
-		"usr/share/wayland-sessions/gnome.desktop":         "",
-		"usr/share/xsessions/LXDE-pi-x.desktop":            "",
-		"usr/share/xsessions/nocapos.desktop":              "",
-	})
-	if got := lib(t, "", "other_sessions", r); got != "/usr/share/wayland-sessions/LXDE-pi-labwc.desktop\n/usr/share/wayland-sessions/gnome.desktop\n/usr/share/xsessions/LXDE-pi-x.desktop\n" {
-		t.Errorf("other_sessions:\n%s", got)
-	}
-	// An account lightdm left on the Pi's desktop moves to NoCapOS's.
-	pi := "[User]\nSession=LXDE-pi-labwc\nXSession=LXDE-pi-labwc\nIcon=/home/pi/.face\nSystemAccount=false\n"
-	if _, err := libErr(t, pi, "session_file_wants_change"); err != nil {
-		t.Error("the Pi desktop's session should change")
-	}
-	got := lib(t, pi, "session_file_with", "User")
-	if got != "[User]\nSession=nocapos\nXSession=nocapos\nIcon=/home/pi/.face\nSystemAccount=false\n" {
-		t.Errorf("session_file_with:\n%s", got)
-	}
-	if _, err := libErr(t, got, "session_file_wants_change"); err == nil {
-		t.Error("already NoCapOS's: nothing to change")
-	}
-	if _, err := libErr(t, "[User]\nSystemAccount=false\n", "session_file_wants_change"); err == nil {
-		t.Error("no session saved: nothing to change")
-	}
-	if got := lib(t, "[User]\nIcon=x\n", "session_file_with", "User"); got != "[User]\nIcon=x\nSession=nocapos\nXSession=nocapos\n" {
-		t.Errorf("session_file_with (none saved):\n%s", got)
+	// alfad's repair writes the very same file.
+	if want := "[Desktop Entry]\n# The NoCapOS desktop (written by NoCapOS's install.sh).\nName=NoCapOS\nComment=The NoCapOS desktop\nExec=/usr/libexec/nocapos/nocap-session\nTryExec=/usr/libexec/nocapos/nocap-session\nType=Application\nDesktopNames=NoCap;wlroots\n"; f != want {
+		t.Errorf("session file differs from hostaccess.SessionDesktop:\n%q", f)
 	}
 }
 

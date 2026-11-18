@@ -6,8 +6,7 @@
 #   nocapos-branding  os-release, console banner, boot splash          all
 #   nocapos-base      metapackage: the system packages NoCapOS uses    ARCH
 #                     (from os/packages/*.list)
-#   nocap-shell, nocap-desktop: built from NoCap Desktop's own build when
-#   NOCAP_SHELL_DIST points at it (see build_desktop_debs below).
+#   nocap-desktop     NoCap Desktop (NoCap Shell, sign-in screen)       ARCH
 # ARCH is a Debian architecture: amd64, arm64 or armhf. The web UI must be
 # built first (frontend: npm run build), so alfad can embed it.
 set -euo pipefail
@@ -373,31 +372,52 @@ EOF
   finish nocapos-installer "$stage"
 }
 
-# ---- NoCap Desktop (hook) ------------------------------------------------
+# ---- nocap-desktop --------------------------------------------------------
 
-# NoCap Desktop's own programs (NoCap Shell and its apps) are built by its
-# own build. Point NOCAP_SHELL_DIST at that build's output folder (with
-# usr/... inside, as it installs) to package it as nocap-shell here.
-build_desktop_debs() {
-  [ -n "${NOCAP_SHELL_DIST:-}" ] || { echo "nocap-shell: NOCAP_SHELL_DIST not set, skipped"; return 0; }
-  local stage="$WORK/nocap-shell"
-  mkdir -p "$stage/DEBIAN"
-  cp -a "$NOCAP_SHELL_DIST/." "$stage/"
-  docs nocap-shell "$stage"
+# NoCap Desktop: NoCap Shell's programs (nocap-shell, nocap-lock: C, built
+# for the image by build.sh in a Debian 13 container; NOCAP_SHELL_BINS points
+# at them), its pages (frontend/dist-shell: npm run build:shell) and the
+# desktop's files (deploy/desktop). The package's postinst puts them in place
+# with the same steps a script install takes (setup-image.sh).
+build_desktop() {
+  local bins="${NOCAP_SHELL_BINS:-}" ui="$ROOT/frontend/dist-shell"
+  if [ -z "$bins" ] || [ ! -x "$bins/nocap-shell" ] || [ ! -x "$bins/nocap-lock" ] || [ ! -f "$ui/shell.html" ]; then
+    echo "nocap-desktop: needs NOCAP_SHELL_BINS (nocap-shell, nocap-lock) and frontend/dist-shell, skipped"
+    return 0
+  fi
+  local stage="$WORK/nocap-desktop" b
+  b="$stage/usr/share/nocapos/desktop-bundle"
+  mkdir -p "$stage/DEBIAN" "$b/shell/bin" "$b/shell/ui" "$b/brand" "$b/wallpapers"
+  cp -R "$ROOT/deploy/desktop" "$b/desktop"
+  install -m 0755 "$bins/nocap-shell" "$bins/nocap-lock" "$b/shell/bin/"
+  cp -R "$ui/." "$b/shell/ui/"
+  cp "$ROOT"/frontend/public/brand/*.png "$b/brand/"
+  cp "$ROOT"/frontend/public/wallpapers/*.jpg "$b/wallpapers/"
+  install -m 0755 "$PKG/nocap-desktop/setup-image.sh" "$b/setup-image.sh"
+  find "$b" -type f ! -perm -u+x -exec chmod 644 {} +
+  docs nocap-desktop "$stage"
   cat >"$stage/DEBIAN/control" <<EOF
-Package: nocap-shell
+Package: nocap-desktop
 Version: $DEBVER
 Architecture: $ARCH
 Maintainer: $MAINT
 Section: x11
 Priority: optional
 Homepage: $HOMEPAGE
-Depends: nocapos-core (= $DEBVER), labwc, greetd, libwebkit2gtk-4.1-0, libgtk-layer-shell0
-Description: NoCap Desktop shell
- NoCap Shell: the top bar, dock, launcher, notifications and the NoCap
- desktop apps for the machine's own screen.
+Depends: nocapos-core (= $DEBVER), labwc, greetd, xwayland, libwebkit2gtk-4.1-0, libgtk-layer-shell0, libjson-glib-1.0-0, libpolkit-agent-1-0, libpam0g
+Description: NoCap Desktop
+ The desktop on the machine's own screen: NoCap's sign-in screen (greetd),
+ labwc and NoCap Shell (top bar, dock, launcher, Control Center,
+ notifications, admin prompts, lock screen).
 EOF
-  finish nocap-shell "$stage"
+  cat >"$stage/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+  /usr/share/nocapos/desktop-bundle/setup-image.sh
+fi
+EOF
+  finish nocap-desktop "$stage"
 }
 
 build_core
@@ -405,4 +425,4 @@ build_image
 build_branding
 build_base
 build_installer
-build_desktop_debs
+build_desktop

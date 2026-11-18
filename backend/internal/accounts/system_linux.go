@@ -392,3 +392,16 @@ func (s *System) SetDisabled(ctx context.Context, username string, disabled bool
 	}
 	return run(ctx, "", "usermod", flag, username)
 }
+
+func (s *System) SetFullName(ctx context.Context, username, fullName string) error {
+	fullName = strings.TrimSpace(fullName)
+	if err := ValidFullName(fullName); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.guard(ctx, username); err != nil {
+		return err
+	}
+	return run(ctx, "", "usermod", "-c", fullName, username)
+}

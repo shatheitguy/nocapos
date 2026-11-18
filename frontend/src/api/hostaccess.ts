@@ -8,7 +8,7 @@ export interface DesktopHealth {
   status: 'ok' | 'starting' | 'warning' | 'broken' | 'off' | 'unavailable';
   problems?: { code: string; detail?: string }[];
   /** The fallback in use when the normal setup didn't work here. */
-  fallback?: '' | 'xorg' | 'software';
+  fallback?: '' | 'software';
 }
 
 /** NoCap Desktop on the server's own monitor. */

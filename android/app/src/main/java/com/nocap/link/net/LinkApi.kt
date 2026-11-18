@@ -97,6 +97,11 @@ fun parseEvents(text: String): Pair<NoCapApi.Events, List<PhoneAction>> {
         signins,
         // "Mirror my screen" asks ride on the same long-poll; dropping this field meant they never reached the phone.
         o.optJSONObject("mirror")?.optString("id")?.takeIf { it.isNotBlank() },
+        o.optBoolean("notes"),
+        (0 until arr("reminders").length()).map {
+            val r = arr("reminders").getJSONObject(it)
+            NoCapApi.NoteReminder(r.optLong("id"), r.optString("note_id"), r.optString("title"), r.optString("text"))
+        },
     )
     val actions = (0 until aa.length()).map {
         val a = aa.getJSONObject(it)

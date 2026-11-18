@@ -79,8 +79,8 @@ for f in /etc/default/grub.d/nocapos.cfg /usr/share/grub/themes/nocapos/theme.tx
   /usr/share/plymouth/themes/nocapos/nocapos.plymouth /usr/share/plymouth/themes/nocapos/nocapos.script \
   /etc/apt/apt.conf.d/99nocapos-os-release /etc/apt/apt.conf.d/52nocapos-unattended-upgrades \
   /etc/apt/apt.conf.d/21nocapos-auto-upgrades /usr/lib/nocapos/image/os-release-sync \
-  /usr/share/glib-2.0/schemas/90_nocapos.gschema.override /etc/dconf/db/local.d/00-nocapos \
-  /etc/dconf/db/gdm.d/90-nocapos /usr/share/wayland-sessions/nocapos.desktop \
+  /usr/libexec/nocapos/nocap-shell /usr/libexec/nocapos/nocap-lock /usr/share/nocapos/shell/shell.html \
+  /usr/share/nocapos/labwc/rc.xml /usr/share/wayland-sessions/nocapos.desktop \
   /usr/share/icons/hicolor/256x256/apps/nocapos.png /usr/local/bin/nocapos /etc/systemd/system/nocapos.service; do
   [ -e "$f" ] || continue
   if owner="$(dpkg-query -S "$f" 2>/dev/null)"; then bad "$f is owned by a package: $owner"; else ok "$f"; fi
@@ -157,11 +157,25 @@ fi
 
 section "NoCap Desktop"
 dm="$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)"
-case "$dm" in gdm3.service | gdm.service) ok "sign-in screen at boot: $dm" ;; *) bad "no GDM display-manager link (got '${dm:-none}')" ;; esac
+case "$dm" in greetd.service) ok "sign-in service at boot: $dm" ;; *) bad "display-manager.service isn't greetd (got '${dm:-none}')" ;; esac
 [ "$(readlink -f /etc/systemd/system/default.target 2>/dev/null)" = "$(readlink -f /lib/systemd/system/graphical.target)" ] &&
   ok "boots to graphical.target" || bad "default target isn't graphical.target"
 [ -f /usr/share/wayland-sessions/nocapos.desktop ] && ok "NoCapOS session" || bad "NoCapOS session file missing"
-command -v gnome-shell >/dev/null && ok "GNOME Shell" || bad "gnome-shell missing"
+command -v labwc >/dev/null && ok "labwc: $(labwc --version 2>&1 | head -1)" || bad "labwc missing"
+if grep -qs 'nocap-greeter-session' /etc/greetd/config.toml; then ok "greetd shows NoCap's sign-in screen"; else bad "greetd isn't set to NoCap's sign-in screen"; fi
+run "nocap-shell" /usr/libexec/nocapos/nocap-shell --version
+if ldd /usr/libexec/nocapos/nocap-shell /usr/libexec/nocapos/nocap-lock 2>&1 | grep -q 'not found'; then
+  bad "NoCap Shell lacks libraries:"; ldd /usr/libexec/nocapos/nocap-shell /usr/libexec/nocapos/nocap-lock | grep 'not found'
+else
+  ok "NoCap Shell's libraries are all there"
+fi
+[ -f /usr/share/nocapos/shell/shell.html ] && ok "NoCap Shell pages" || bad "NoCap Shell pages missing"
+for f in nocap-session.target nocap-shell.service nocap-idle.service; do
+  [ -f "/etc/systemd/user/$f" ] && ok "session service $f" || bad "session service $f missing"
+done
+for p in gdm3 gnome-shell gnome-session; do
+  if dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'ok installed'; then bad "$p is installed (the image has NoCap Desktop only)"; else ok "no $p"; fi
+done
 
 if [ -z "$lists_before" ]; then rm -rf /var/lib/apt/lists/* 2>/dev/null || true; fi
 apt-get clean >/dev/null 2>&1 || true

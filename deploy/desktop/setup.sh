@@ -1,18 +1,26 @@
 # NoCap Desktop, the full desktop: sourced by install.sh after lib.sh. Uses
-# install.sh's helpers (info, warn, has, pkg_*, guacd_note; the package
-# helpers between its "package helpers" marks) and settings (BUNDLE_DIR,
-# ETC, DATA, ARCH, BRANDING). Every file changed outside NoCapOS's own
-# folders is recorded in $DESK_BACKUP, and uninstall-desktop.sh (run by
-# uninstall.sh) puts it back.
+# install.sh's helpers (info, warn, has, pkg_*, guacd_note, display_connected,
+# tty1_in_use, tokens_missing) and settings (BUNDLE_DIR, ETC, DATA, ARCH,
+# BRANDING, VERSION). Every file changed outside NoCapOS's own folders is
+# recorded in $DESK_BACKUP, and uninstall-desktop.sh (run by uninstall.sh)
+# puts it back.
+#
+# What the screen runs: greetd (the sign-in service) shows NoCap's own
+# sign-in screen, then the NoCap Desktop session starts for whoever signed
+# in: labwc (windows) and NoCap Shell (top bar, dock, launcher, control
+# center, notifications, admin prompts, lock screen). See shell/PROTOCOL.md.
 # shellcheck shell=bash
 
 DESK_SRC="$BUNDLE_DIR/desktop"
+SHELL_SRC="$BUNDLE_DIR/shell"
 DESK_LIB=/usr/local/lib/nocapos/desktop
 DESK_SHARE=/usr/share/nocapos/desktop
 DESK_CONF="$ETC/desktop.conf"
 DESK_BACKUP="$DATA/desktop-backup"
 DESK_UNITS=/etc/systemd/system
-BRAND_UUID="$NOCAP_BRAND_UUID"
+DESK_DM=greetd.service
+# Earlier versions' shell extension (removed on update).
+OLD_BRAND_UUID=nocapos-brand@shatheitguy.github.io
 
 desk_record() { mkdir -p "$DESK_BACKUP" && chmod 700 "$DESK_BACKUP" && printf '%s\n' "$*" >>"$DESK_BACKUP/edits"; }
 desk_recorded() { grep -qsxF "$*" "$DESK_BACKUP/edits"; }
@@ -27,6 +35,9 @@ desk_keep() {
   if [ -e "$DESK_BACKUP/files/$name" ] || [ -e "$DESK_BACKUP/files/$name.absent" ]; then return 0; fi
   if [ -e "$1" ]; then cp -pP "$1" "$DESK_BACKUP/files/$name"; else : >"$DESK_BACKUP/files/$name.absent"; fi
 }
+
+# desk_write FILE: stdin into FILE, keeping the original for uninstall.
+desk_write() { desk_keep "$1"; mkdir -p "$(dirname "$1")"; cat >"$1"; }
 
 # Installs without the "recommended" extras (on apt: other distributions'
 # wallpapers, themes and branding come in that way).
@@ -50,6 +61,8 @@ desk_hold_services() {
 }
 desk_release_services() { if grep -qs 'NoCapOS install.sh' /usr/sbin/policy-rc.d; then rm -f /usr/sbin/policy-rc.d; fi; }
 
+desk_have_greetd() { has greetd || [ -x /usr/sbin/greetd ] || [ -x /usr/bin/greetd ]; }
+
 desk_install_packages() { # $1 = family, $2 = manager
   local line alt want=() missing=() skipped=() held=0
   # The same choice on every architecture (amd64, arm64, armhf): whatever
@@ -67,6 +80,9 @@ desk_install_packages() { # $1 = family, $2 = manager
     done | desktop_select "$1"
   )
   if [ "${#missing[@]}" -gt 0 ]; then
+    if [[ " ${missing[*]} " == *" labwc "* ]]; then
+      warn "NoCap Desktop needs labwc, which $(os_field "" PRETTY_NAME) doesn't have (Debian 12 and Ubuntu 22.04 don't; Debian 13, Raspberry Pi OS and Ubuntu 24.04 do). Upgrade this machine to Debian 13 to get NoCap Desktop; everything else in NoCapOS works as it is."
+    fi
     pkg_not_available desktop "${missing[@]//|/ or }"
     return 1
   fi
@@ -81,8 +97,8 @@ desk_install_packages() { # $1 = family, $2 = manager
   desk_hold_services && held=1
   pkg_install_group "$2" desktop lean "${want[@]}" || true
   [ "$held" -eq 0 ] || desk_release_services
-  has gnome-shell || { warn "full desktop: GNOME Shell didn't install (the package tool's error is above)"; return 1; }
-  [ -x /usr/sbin/gdm3 ] || [ -x /usr/sbin/gdm ] || has gdm || has gdm3 || { warn "full desktop: the sign-in screen (GDM) didn't install (the package tool's error is above)"; return 1; }
+  has labwc || { warn "full desktop: labwc (the compositor) didn't install (the package tool's error is above)"; return 1; }
+  desk_have_greetd || { warn "full desktop: greetd (the sign-in service) didn't install (the package tool's error is above)"; return 1; }
 }
 
 # The helpers uninstall.sh needs to undo what's recorded in $DESK_BACKUP.
@@ -93,26 +109,19 @@ desk_install_lib() {
 }
 
 desk_install_assets() {
-  local s src="$DESK_SRC" brand="$BUNDLE_DIR/brand" wp="$BUNDLE_DIR/wallpapers"
-  mkdir -p "$DESK_SHARE" "$DESK_LIB" /usr/share/backgrounds/nocapos /usr/share/gnome-background-properties /usr/local/share/applications
+  local s n src="$DESK_SRC" brand="$BUNDLE_DIR/brand" wp="$BUNDLE_DIR/wallpapers"
+  mkdir -p "$DESK_SHARE" "$DESK_LIB" /usr/share/backgrounds/nocapos /usr/local/share/applications
   install -m 0644 "$src/art/login-background.jpg" "$src/art/login-logo.png" "$DESK_SHARE/"
   install -m 0644 "$brand/mark-128.png" "$DESK_SHARE/logo.png"
   desk_install_lib
-  install -m 0755 "$src/gdm-theme" "$src/remote-guard" "$DESK_LIB/"
-  # Wallpapers: NoCapOS's own, also listed in Settings → Appearance.
-  {
-    echo '<?xml version="1.0" encoding="UTF-8"?>'
-    echo '<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">'
-    echo '<wallpapers>'
-    for s in "$wp"/*.jpg; do
-      case "$s" in *-thumb.jpg) continue ;; esac
-      [ -f "$s" ] || continue
-      install -m 0644 "$s" /usr/share/backgrounds/nocapos/
-      n="$(basename "$s" .jpg)"
-      printf '  <wallpaper deleted="false"><name>NoCapOS %s</name><filename>/usr/share/backgrounds/nocapos/%s.jpg</filename><filename-dark>/usr/share/backgrounds/nocapos/%s.jpg</filename-dark><options>zoom</options><pcolor>#050508</pcolor><scolor>#050508</scolor></wallpaper>\n' "${n^}" "$n" "$n"
-    done
-    echo '</wallpapers>'
-  } >/usr/share/gnome-background-properties/nocapos.xml
+  install -m 0755 "$src/remote-guard" "$DESK_LIB/"
+  # Wallpapers: NoCapOS's own (the desktop's default is tide.jpg).
+  for s in "$wp"/*.jpg; do
+    case "$s" in *-thumb.jpg) continue ;; esac
+    [ -f "$s" ] || continue
+    n="$(basename "$s")"
+    install -m 0644 "$s" "/usr/share/backgrounds/nocapos/$n"
+  done
   # The NoCapOS icon (apps, the About page's logo via os-release LOGO=nocapos).
   for s in 16 32 48 64 128 256 512; do
     [ -f "$brand/mark-$s.png" ] || continue
@@ -122,276 +131,206 @@ desk_install_assets() {
   mkdir -p /usr/share/pixmaps
   install -m 0644 "$brand/mark-256.png" /usr/share/pixmaps/nocapos.png
   if has gtk-update-icon-cache; then gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true; fi
-  if has update-desktop-database; then update-desktop-database -q /usr/local/share/applications >/dev/null 2>&1 || true; fi
 }
 
-# The small NoCapOS shell extension: the logo in the top bar and the accent.
-desk_install_extension() {
-  local major variant dir="/usr/share/gnome-shell/extensions/$BRAND_UUID"
-  major="$(gnome_major "$(gnome-shell --version 2>/dev/null)")"
-  variant=esm
-  if [ "$major" -gt 0 ] && [ "$major" -lt 45 ]; then variant=legacy; fi
-  rm -rf "$dir"
-  mkdir -p "$dir"
-  install -m 0644 "$DESK_SRC/extension/$variant/extension.js" "$DESK_SRC/extension/$variant/metadata.json" "$DESK_SRC/extension/stylesheet.css" "$dir/"
-}
-
-desk_extension_uuids() {
-  local u
-  echo "$BRAND_UUID"
-  for u in dash-to-dock@micxgx.gmail.com ubuntu-dock@ubuntu.com; do
-    if [ -d "/usr/share/gnome-shell/extensions/$u" ]; then echo "$u"; break; fi
-  done
-  for u in appindicatorsupport@rgcjonas.gmail.com ubuntu-appindicators@ubuntu.com; do
-    if [ -d "/usr/share/gnome-shell/extensions/$u" ]; then echo "$u"; break; fi
-  done
-}
-
-desk_settings() {
-  local favs exts=()
-  favs="$(gv_list $(dock_apps ""))"
-  mapfile -t exts < <(desk_extension_uuids)
-  # GSettings defaults (every account, every GNOME since 43).
-  render_gschema_override "$favs" "${exts[@]}" >/usr/share/glib-2.0/schemas/90_nocapos.gschema.override
-  glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1 || warn "full desktop: glib-compile-schemas failed; GNOME keeps its own defaults"
-  # dconf system database: the rest, plus the few locked keys.
-  mkdir -p /etc/dconf/profile /etc/dconf/db/local.d/locks /etc/dconf/db/gdm.d
-  if [ ! -f /etc/dconf/profile/user ]; then
-    desk_keep /etc/dconf/profile/user
-    printf 'user-db:user\nsystem-db:local\n' >/etc/dconf/profile/user
-  elif ! grep -qx 'system-db:local' /etc/dconf/profile/user; then
-    desk_keep /etc/dconf/profile/user
-    echo 'system-db:local' >>/etc/dconf/profile/user
-  fi
-  render_dconf_local "$favs" "${exts[@]}" >/etc/dconf/db/local.d/00-nocapos
-  render_dconf_locks >/etc/dconf/db/local.d/locks/nocapos
-  # The sign-in screen: the distribution's own profile plus NoCapOS's
-  # database. Earlier versions wrote a profile of their own whose file-db
-  # Debian doesn't have; that one is rebuilt.
-  desk_gdm_profile
-  render_dconf_gdm >/etc/dconf/db/gdm.d/90-nocapos
-  has dconf && { dconf update >/dev/null 2>&1 || warn "full desktop: dconf update failed"; }
-}
-
-desk_gdm_profile() {
-  local p=/etc/dconf/profile/gdm cur="" want
-  [ -f "$p" ] && cur="$(cat "$p")"
-  if [ ! -f "$p" ] || [ "$cur" = "$LEGACY_GDM_PROFILE" ]; then
-    desk_keep "$p"
-    want="$(render_gdm_profile </usr/share/dconf/profile/gdm 2>/dev/null || render_gdm_profile </dev/null)"
-  else
-    want="$(render_gdm_profile <"$p")"
-  fi
-  if [ "$cur" != "$want" ]; then
-    desk_keep "$p"
-    printf '%s\n' "$want" >"$p"
-  fi
-}
-
-desk_units() {
-  cat >"$DESK_UNITS/nocapos-gdm-theme.service" <<EOF
-# Keeps the NoCapOS sign-in screen theme in step with GNOME Shell updates.
-# Written by NoCapOS's install.sh.
-[Unit]
-Description=NoCapOS sign-in screen theme
-Before=display-manager.service
-ConditionPathExists=/usr/share/gnome-shell/gnome-shell-theme.gresource
-
-[Service]
-Type=oneshot
-ExecStart=$DESK_LIB/gdm-theme --if-stale
-
-[Install]
-WantedBy=graphical.target
-EOF
-  cat >"$DESK_UNITS/nocapos-desktop-guard.service" <<EOF
-# Keeps NoCap Desktop's remote screen (RDP/VNC) reachable from this machine
-# only; NoCapOS opens it in the browser for signed-in admins.
-# Written by NoCapOS's install.sh.
-[Unit]
-Description=NoCap Desktop remote screen guard (loopback only)
-Before=display-manager.service gnome-remote-desktop.service
-After=network-pre.target nftables.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=$DESK_LIB/remote-guard start
-ExecStop=$DESK_LIB/remote-guard stop
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable nocapos-gdm-theme.service >/dev/null 2>&1 || true
-  # Restarted, so an update's port list applies straight away.
-  { systemctl enable nocapos-desktop-guard.service && systemctl restart nocapos-desktop-guard.service; } >/dev/null 2>&1 || warn "full desktop: the remote screen guard didn't start"
-  "$DESK_LIB/gdm-theme" || warn "full desktop: the sign-in screen theme couldn't be built; it keeps its own look"
-}
-
-# Other updaters stay out of sight: updates come from NoCapOS (Settings →
-# Software Update), never a second updater with its own branding. Software
-# itself stays: it's the desktop's app store (Flatpak apps), with its own
-# updates switched off (render_dconf_locks).
-SOFTWARE_FILES="/etc/xdg/autostart/gnome-software-service.desktop /etc/xdg/autostart/org.gnome.Software.desktop /usr/share/applications/org.gnome.Software.desktop"
-desk_hide_updaters() {
-  local f
-  has dpkg-divert || return 0
-  # Earlier versions hid Software too: bring it back.
-  for f in $SOFTWARE_FILES; do
-    if desk_recorded "divert|$f"; then
-      dpkg-divert --local --rename --remove "$f" >/dev/null 2>&1 || true
-      grep -vxF "divert|$f" "$DESK_BACKUP/edits" >"$DESK_BACKUP/edits.tmp" && cat "$DESK_BACKUP/edits.tmp" >"$DESK_BACKUP/edits"
-      rm -f "$DESK_BACKUP/edits.tmp"
-    fi
-  done
-  for f in /etc/xdg/autostart/update-notifier.desktop \
-    /usr/share/applications/update-manager.desktop /usr/share/applications/software-properties-gtk.desktop; do
-    [ -e "$f" ] || dpkg-divert --list "$f" 2>/dev/null | grep -q . || continue
-    if ! dpkg-divert --list "$f" 2>/dev/null | grep -q nocapos; then
-      dpkg-divert --local --rename --divert "$f.nocapos-hidden" --add "$f" >/dev/null 2>&1 && desk_record "divert|$f"
-    fi
-  done
+# ---------------------------------------------------------------- NoCap Shell
+# desk_shell_runs BIN: the program has every library it needs here (and
+# nocap-shell answers --version).
+desk_shell_runs() {
+  [ -f "$1" ] && [ -x "$1" ] || return 1
+  if has ldd && ldd "$1" 2>/dev/null | grep -q 'not found'; then return 1; fi
+  case "$1" in */nocap-shell) "$1" --version >/dev/null 2>&1 || return 1 ;; esac
   return 0
 }
 
-# Identity: the machine's pretty name and, on apt systems installed from a
-# plain distribution, /etc/os-release (the About page, the sign-in screen).
-desk_identity() {
-  [ "$BRANDING" -eq 1 ] || return 0
-  if has hostnamectl; then
-    local pretty
-    pretty="$(hostnamectl --pretty 2>/dev/null || true)"
-    if [ "$pretty" != NoCapOS ]; then
-      [ -f "$DESK_BACKUP/pretty-hostname" ] || { mkdir -p "$DESK_BACKUP"; printf '%s\n' "$pretty" >"$DESK_BACKUP/pretty-hostname"; }
-      hostnamectl set-hostname --pretty NoCapOS >/dev/null 2>&1 || true
+# desk_build_shell MANAGER FAMILY OUT_DIR: builds nocap-shell and nocap-lock
+# from the bundle's sources on this machine (when the bundle's own builds
+# can't run here: an older or different system library set).
+desk_build_shell() {
+  local mgr="$1" family="$2" out="$3" p alt pick work deps=()
+  [ -f "$SHELL_SRC/src/Makefile" ] || { warn "NoCap Shell: this bundle has no sources to build from"; return 1; }
+  info "Building NoCap Shell for this system (its libraries differ from the release build; a few minutes)"
+  for p in $(shell_build_packages "$family"); do
+    pick=""
+    for alt in ${p//|/ }; do
+      if pkg_available "$mgr" "$alt"; then pick="$alt"; break; fi
+    done
+    [ -n "$pick" ] && deps+=("$pick")
+  done
+  [ "${#deps[@]}" -eq 0 ] || pkg_install_group "$mgr" desktop lean "${deps[@]}" || true
+  work="$(mktemp -d)"
+  cp -R "$SHELL_SRC/src/." "$work/"
+  if ! make -C "$work" -j"$(nproc 2>/dev/null || echo 2)" NOCAP_VERSION="${VERSION:-dev}" >"$work/build.log" 2>&1; then
+    warn "NoCap Shell didn't build here; the last lines of the build log:"
+    tail -n 15 "$work/build.log" >&2
+    rm -rf "$work"
+    return 1
+  fi
+  mkdir -p "$out"
+  install -m 0755 "$work/build/nocap-shell" "$work/build/nocap-lock" "$out/"
+  rm -rf "$work"
+}
+
+# desk_install_shell MANAGER FAMILY: NoCap Shell's programs, pages, session
+# scripts and labwc settings.
+desk_install_shell() {
+  local mgr="$1" family="$2" bin="$SHELL_SRC/bin" built="" f
+  mkdir -p "$SHELL_LIB"
+  # The programs: the bundle's build for this architecture when it runs
+  # here, else one built on this machine.
+  if ! desk_shell_runs "$bin/nocap-shell" || ! desk_shell_runs "$bin/nocap-lock"; then
+    built="$(mktemp -d)"
+    if desk_build_shell "$mgr" "$family" "$built"; then
+      bin="$built"
+    elif desk_shell_runs "$SHELL_LIB/nocap-shell" && desk_shell_runs "$SHELL_LIB/nocap-lock"; then
+      warn "NoCap Shell: keeping the programs already installed"
+      bin=""
+    else
+      rm -rf "$built"
+      return 1
     fi
   fi
-  # The NoCapOS images keep os-release themselves.
-  [ -x /usr/lib/nocapos/image/os-release-sync ] && return 0
-  has dpkg-divert || return 0
-  if "$DESK_LIB/os-release-sync" --divert; then
-    printf 'DPkg::Post-Invoke { "if [ -x %s/os-release-sync ]; then %s/os-release-sync || true; fi"; };\n' "$DESK_LIB" "$DESK_LIB" \
-      >/etc/apt/apt.conf.d/99nocapos-desktop-os-release
-    desk_recorded "os-release" || desk_record "os-release"
-  fi
-}
-
-# Other sign-in screens (lightdm on Raspberry Pi OS, sddm, ...) step aside
-# for GDM: disabled, and Debian's choice of display manager says GDM, so a
-# later package update doesn't bring them back. One that has the screen
-# right now keeps it until the next restart (switching live can leave the
-# screen black), and DESK_DM_SWITCHED says so.
-DESK_DM_SWITCHED=0
-desk_take_display_manager() { # $1 = GDM unit
-  local cur u
-  cur="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
-  cur="$(basename "${cur:-none}")"
-  if [ ! -f "$DESK_BACKUP/display-manager" ]; then
-    mkdir -p "$DESK_BACKUP"
-    echo "$cur" >"$DESK_BACKUP/display-manager"
-    systemctl get-default >"$DESK_BACKUP/default-target" 2>/dev/null || echo multi-user.target >"$DESK_BACKUP/default-target"
-  fi
-  if [ -f /etc/X11/default-display-manager ] || [ -d /etc/X11 ]; then
-    desk_keep /etc/X11/default-display-manager
-    if [ -x /usr/sbin/gdm3 ]; then echo /usr/sbin/gdm3 >/etc/X11/default-display-manager; fi
-  fi
-  if has debconf-set-selections && [ -x /usr/sbin/gdm3 ]; then
-    for u in gdm3 lightdm sddm; do
-      echo "$u shared/default-x-display-manager select gdm3" | debconf-set-selections >/dev/null 2>&1 || true
+  if [ -n "$bin" ]; then
+    # Replaced in one step each (a running session keeps its old copy).
+    for f in nocap-shell nocap-lock; do
+      install -m 0755 "$bin/$f" "$SHELL_LIB/.$f.new" && mv -f "$SHELL_LIB/.$f.new" "$SHELL_LIB/$f"
     done
   fi
-  for u in "$cur" lightdm.service sddm.service lxdm.service slim.service xdm.service nodm.service; do
-    case "$u" in none | "$1" | gdm.service | gdm3.service) continue ;; esac
-    if systemctl is-active --quiet "$u" 2>/dev/null; then DESK_DM_SWITCHED=1; fi
-    systemctl disable "$u" >/dev/null 2>&1 || true
+  [ -z "$built" ] || rm -rf "$built"
+  for f in nocap-session nocap-greeter-session nocap-lock-start nocap-open; do
+    install -m 0755 "$DESK_SRC/session/$f" "$SHELL_LIB/$f"
   done
-  if [ "$DESK_DM_SWITCHED" -eq 1 ]; then printf '    sign-in screen: GDM from the next restart (was %s)\n' "$cur"; fi
+  # The pages: local files only (the host refuses anything else).
+  [ -f "$SHELL_SRC/ui/shell.html" ] || { warn "NoCap Shell: this bundle has no shell pages"; return 1; }
+  rm -rf "$SHELL_UI.new"
+  mkdir -p "$SHELL_UI.new"
+  cp -R "$SHELL_SRC/ui/." "$SHELL_UI.new/"
+  chmod -R a+rX,go-w "$SHELL_UI.new"
+  rm -rf "$SHELL_UI"
+  mv "$SHELL_UI.new" "$SHELL_UI"
+  # labwc: NoCap Desktop's settings for sessions and for the sign-in screen,
+  # and the window decorations.
+  mkdir -p "$SHELL_CONF" "$GREETER_CONF" /usr/share/themes/NoCap/openbox-3
+  install -m 0644 "$DESK_SRC/labwc/rc.xml" "$DESK_SRC/labwc/menu.xml" "$DESK_SRC/labwc/environment" "$SHELL_CONF/"
+  install -m 0755 "$DESK_SRC/labwc/autostart" "$SHELL_CONF/autostart"
+  install -m 0644 "$DESK_SRC/greeter/rc.xml" "$DESK_SRC/labwc/environment" "$GREETER_CONF/"
+  install -m 0644 "$DESK_SRC/theme/openbox-3/themerc" /usr/share/themes/NoCap/openbox-3/themerc
 }
 
-# desk_link_display_manager UNIT: graphical.target starts whatever
-# /etc/systemd/system/display-manager.service points at. Debian's and
-# Ubuntu's gdm3.service has no [Install] section (their packages manage
-# that link through a debconf question instead), so "systemctl enable gdm3"
-# does nothing there: without this link the machine boots to a screen with
-# no sign-in screen at all.
-desk_link_display_manager() {
-  local unit="$1" link=/etc/systemd/system/display-manager.service path d
-  path="$(systemctl show -p FragmentPath --value "$unit" 2>/dev/null || true)"
-  if [ -z "$path" ] || [ ! -f "$path" ]; then
-    path=""
-    for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
-      if [ -f "$d/$unit" ] && [ ! -L "$d/$unit" ]; then path="$d/$unit"; break; fi
-    done
+# desk_session_files FAMILY: the session's services, its entry for tools
+# that list sessions, the lock screen's password check and the portals
+# (installed apps open and save files through them).
+desk_session_files() {
+  local family="$1" f
+  # User services every account's session starts (nocap-session.target).
+  mkdir -p /etc/systemd/user
+  for f in nocap-session.target nocap-shell.service nocap-idle.service nocapos-accent.service; do
+    install -m 0644 "$DESK_SRC/session/$f" "/etc/systemd/user/$f"
+  done
+  mkdir -p /usr/share/wayland-sessions
+  render_session_desktop >"/usr/share/wayland-sessions/$NOCAP_SESSION.desktop"
+  render_pam_lock "$family" >/etc/pam.d/nocap-lock
+  mkdir -p /usr/share/xdg-desktop-portal
+  render_portals_conf >/usr/share/xdg-desktop-portal/nocap-portals.conf
+  # Earlier builds of this desktop listed NoCapOS's apps as separate launchers.
+  rm -f /usr/local/share/applications/nocapos-settings.desktop /usr/local/share/applications/nocapos-appstore.desktop /etc/nocapos/dock-default.json
+}
+
+# desk_greetd FAMILY: the sign-in service shows NoCap's sign-in screen as
+# its own unprivileged account. Automatic sign-in set up before (in
+# Settings, or on the earlier sign-in screen) is kept.
+desk_greetd() {
+  local gu auto="" g
+  gu="$(greeter_user "")"
+  if ! id "$gu" >/dev/null 2>&1; then
+    useradd --system --no-create-home --home-dir /var/lib/greetd --shell /usr/sbin/nologin "$gu" >/dev/null 2>&1 ||
+      { warn "NoCap Desktop: couldn't create the sign-in screen's account $gu"; return 1; }
+    desk_record "user|$gu"
   fi
-  [ -n "$path" ] || { warn "NoCap Desktop: $unit isn't installed"; return 1; }
-  if [ "$(readlink -f "$link" 2>/dev/null)" != "$(readlink -f "$path")" ]; then
-    ln -sfn "$path" "$link"
-    printf '    sign-in screen: %s starts at boot\n' "$unit"
+  # Its labwc needs the graphics and input devices.
+  for g in video render input; do
+    getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$gu" >/dev/null 2>&1
+  done
+  if [ -f "$GREETD_CONF" ]; then auto="$(greetd_autologin <"$GREETD_CONF")"; fi
+  if [ -z "$auto" ]; then auto="$(desk_old_autologin)"; fi
+  if [ -n "$auto" ] && ! id "$auto" >/dev/null 2>&1; then auto=""; fi
+  render_greetd_config "$gu" "$auto" | desk_write "$GREETD_CONF"
+  chmod 644 "$GREETD_CONF"
+  # The keyring unlocks with the sign-in password.
+  if [ -f /etc/pam.d/greetd ] && ! grep -qs pam_gnome_keyring /etc/pam.d/greetd; then
+    desk_keep /etc/pam.d/greetd
+    pam_with_keyring </etc/pam.d/greetd >/etc/pam.d/greetd.nocap.tmp && cat /etc/pam.d/greetd.nocap.tmp >/etc/pam.d/greetd
+    rm -f /etc/pam.d/greetd.nocap.tmp
   fi
-  if [ -d /etc/X11 ] && [ -x /usr/sbin/gdm3 ] && [ "$unit" = gdm3.service ]; then
-    echo /usr/sbin/gdm3 >/etc/X11/default-display-manager
-  fi
+  # The sign-in screen comes after the boot splash.
+  mkdir -p "$DESK_UNITS/greetd.service.d"
+  cat >"$DESK_UNITS/greetd.service.d/nocapos.conf" <<'EOF'
+# NoCap Desktop (written by NoCapOS): the sign-in screen after the boot splash.
+[Unit]
+After=plymouth-quit-wait.service systemd-user-sessions.service
+EOF
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
 
-# desk_unlink_display_manager UNIT: the link goes when it's GDM's (off).
-desk_unlink_display_manager() {
-  local link=/etc/systemd/system/display-manager.service
-  if [ -L "$link" ] && [ "$(basename "$(readlink -f "$link")")" = "$1" ]; then
-    rm -f "$link"
-    systemctl daemon-reload >/dev/null 2>&1 || true
-  fi
+# desk_old_autologin: the account the earlier sign-in screen signed in
+# automatically, if any.
+desk_old_autologin() {
+  local f
+  for f in /etc/gdm3/daemon.conf /etc/gdm3/custom.conf /etc/gdm/custom.conf; do
+    [ -f "$f" ] || continue
+    awk '
+      { s = $0; sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s) }
+      s ~ /^\[/ { d = (s == "[daemon]"); next }
+      d && s ~ /^AutomaticLoginEnable[ \t]*=/ { v = s; sub(/^[^=]*=[ \t]*/, "", v); on = (tolower(v) == "true") }
+      d && s ~ /^AutomaticLogin[ \t]*=/ { v = s; sub(/^[^=]*=[ \t]*/, "", v); who = v }
+      END { if (on && who ~ /^[a-z_][a-z0-9_.-]*$/) print who }
+    ' "$f"
+    return 0
+  done
 }
 
-# desk_session: NoCapOS is the session GDM starts. Every account's saved
-# session (AccountsService, ~/.dmrc) becomes NoCapOS's, and other desktops'
-# sessions (Raspberry Pi OS's own desktop, plain GNOME, ...) leave the
-# sign-in screen's list. Sets DESK_SESSION_CHANGED when an account's session
-# changed, which applies from its next sign-in.
-DESK_SESSION_CHANGED=0
-desk_session() { # $1 = GDM config
-  local f u home
-  mkdir -p /usr/share/wayland-sessions /usr/share/xsessions
-  render_session_desktop wayland >"/usr/share/wayland-sessions/$NOCAP_SESSION.desktop"
-  render_session_desktop x11 >"/usr/share/xsessions/$NOCAP_SESSION.desktop"
-  if has dpkg-divert; then
-    while IFS= read -r f; do
-      [ -n "$f" ] || continue
-      dpkg-divert --list "$f" 2>/dev/null | grep -q nocapos && continue
-      if dpkg-divert --local --rename --divert "$f.nocapos-hidden" --add "$f" >/dev/null 2>&1; then
-        desk_record "divert|$f"
-        printf '    hidden session: %s\n' "$(basename "$f" .desktop)"
-      fi
-    done < <(other_sessions "")
+# ---------------------------------------------------------------- earlier desktops
+# Earlier versions' desktop ran on other packages, with NoCapOS's look added
+# by a theme service, a shell extension and settings databases. Those
+# NoCapOS pieces go; the packages themselves stay installed (nothing anyone
+# saved is touched) and the installer says which ones could be removed.
+desk_migrate_old_desktop() {
+  local p left=() changed=0 f
+  if [ -f "$DESK_UNITS/nocapos-gdm-theme.service" ]; then
+    systemctl disable nocapos-gdm-theme.service >/dev/null 2>&1 || true
+    rm -f "$DESK_UNITS/nocapos-gdm-theme.service"
+    changed=1
   fi
-  # GDM's own default (GDM 40+; older ones ignore it).
-  if [ -n "$1" ] && [ -f "$1" ]; then
-    desk_keep "$1"
-    ini_set daemon DefaultSession "$NOCAP_SESSION.desktop" <"$1" >"$1.nocap.tmp" && cat "$1.nocap.tmp" >"$1"
-    rm -f "$1.nocap.tmp"
+  rm -f "$DESK_LIB/gdm-theme"
+  # Earlier builds of this desktop kept its programs here.
+  rm -rf /usr/local/lib/nocapos/shell
+  if has update-alternatives && [ -f "$DESK_SHARE/gdm-theme.gresource" ]; then
+    update-alternatives --remove gdm-theme.gresource "$DESK_SHARE/gdm-theme.gresource" >/dev/null 2>&1 || true
   fi
-  for f in /var/lib/AccountsService/users/*; do
-    [ -f "$f" ] || continue
-    if session_file_wants_change <"$f"; then
-      desk_keep "$f"
-      session_file_with User <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
-      rm -f "$f.nocap.tmp"
-      DESK_SESSION_CHANGED=1
+  rm -f "$DESK_SHARE/gdm-theme.gresource"
+  if [ -d "/usr/share/gnome-shell/extensions/$OLD_BRAND_UUID" ]; then rm -rf "/usr/share/gnome-shell/extensions/$OLD_BRAND_UUID"; changed=1; fi
+  if [ -f /usr/share/glib-2.0/schemas/90_nocapos.gschema.override ]; then
+    rm -f /usr/share/glib-2.0/schemas/90_nocapos.gschema.override
+    if has glib-compile-schemas; then glib-compile-schemas /usr/share/glib-2.0/schemas >/dev/null 2>&1 || true; fi
+  fi
+  for f in /etc/dconf/db/local.d/00-nocapos /etc/dconf/db/local.d/10-nocapos-lowmem /etc/dconf/db/local.d/locks/nocapos /etc/dconf/db/gdm.d/90-nocapos; do
+    if [ -f "$f" ]; then rm -f "$f"; changed=1; fi
+  done
+  if [ "$changed" -eq 1 ] && has dconf; then dconf update >/dev/null 2>&1 || true; fi
+  rm -f /usr/share/xsessions/"$NOCAP_SESSION".desktop /etc/xdg/autostart/nocapos-accent.desktop /usr/share/gnome-background-properties/nocapos.xml
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  # shellcheck disable=SC2086 # a list of packages
+  for p in $OLD_DESKTOP_PACKAGES; do
+    if has dpkg-query && dpkg-query -W -f='${Status}' "$p" 2>/dev/null | grep -q 'ok installed'; then left+=("$p")
+    elif has rpm && rpm -q "$p" >/dev/null 2>&1; then left+=("$p")
+    elif has pacman && pacman -Q "$p" >/dev/null 2>&1; then left+=("$p")
     fi
   done
-  getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 {print $1 ":" $6}' | while IFS=: read -r u home; do
-    f="$home/.dmrc"
-    [ -f "$f" ] && [ ! -L "$f" ] || continue
-    if session_file_wants_change <"$f"; then
-      runuser -u "$u" -- sh -c 'tmp="$(mktemp)" && cat >"$tmp" && cat "$tmp" >"$1"; rm -f "$tmp"' sh "$f" \
-        < <(session_file_with Desktop <"$f") >/dev/null 2>&1 || true
-    fi
-  done
-  # Accounts that changed: GDM has to read them again.
-  if [ "$DESK_SESSION_CHANGED" -eq 1 ]; then
-    systemctl try-restart accounts-daemon.service >/dev/null 2>&1 || true
+  if [ "${#left[@]}" -gt 0 ]; then
+    printf '    earlier desktop: its packages stay installed and unused (%s); nobody'"'"'s files or settings change.\n' "${left[*]}"
+    printf '    To free the space, remove them with the package tool (they are not needed by NoCap Desktop).\n'
   fi
+  return 0
 }
 
 # ---------------------------------------------------------------- earlier screens
@@ -436,20 +375,163 @@ desk_remove_kiosk() {
   done
   if has update-desktop-database; then update-desktop-database -q /usr/local/share/applications >/dev/null 2>&1 || true; fi
   if [ "$(cat "$ETC/desktop-mode" 2>/dev/null)" = kiosk ]; then echo full >"$ETC/desktop-mode"; fi
+  desk_remove_old_browser
   return 0
 }
 
-# desk_install_browser: a web browser for the dock (a native app, like the
-# rest), unless one is installed already.
-desk_install_browser() { # $1 = manager
-  local p
-  for p in firefox-esr firefox chromium chromium-browser brave-browser google-chrome-stable; do
-    if has "$p"; then printf '    browser: %s\n' "$p"; return 0; fi
+# desk_remove_old_browser: earlier versions installed a web browser
+# themselves (from its maker's package repository, for a streamed browser
+# app). NoCapOS ships no browser any more: when NoCapOS installed it (its
+# notes are in the data folder), the package, its repository and key, and
+# NoCapOS's launchers and policies for it go. Everyone's own browser
+# profile in their home folder stays. A browser someone installed
+# themselves is left alone.
+desk_remove_old_browser() {
+  local mine=0 f
+  for f in "$DATA"/brave.log "$DATA"/brave-run.sh "$DATA"/webapps/brave* "$DATA"/brave; do
+    if [ -e "$f" ]; then mine=1; break; fi
   done
-  for p in firefox-esr firefox chromium chromium-browser; do
-    if pkg_available "$1" "$p" && pkg_install_lean "$1" "$p"; then printf '    browser: %s\n' "$p"; return 0; fi
+  [ "$mine" -eq 1 ] || return 0
+  if has dpkg-query && dpkg-query -W -f='${Status}' brave-browser 2>/dev/null | grep -q 'ok installed'; then
+    info "Removing the web browser earlier NoCapOS versions installed (brave-browser); browser profiles in home folders stay"
+    DEBIAN_FRONTEND=noninteractive apt-get remove -y -q brave-browser >/dev/null 2>&1 || warn "brave-browser couldn't be removed; remove it with the package tool"
+  elif has rpm && rpm -q brave-browser >/dev/null 2>&1; then
+    info "Removing the web browser earlier NoCapOS versions installed (brave-browser); browser profiles in home folders stay"
+    dnf remove -y -q brave-browser >/dev/null 2>&1 || warn "brave-browser couldn't be removed; remove it with the package tool"
+  fi
+  if grep -qs 'brave-browser-apt-release.s3.brave.com' /etc/apt/sources.list.d/brave-browser-release.list; then
+    rm -f /etc/apt/sources.list.d/brave-browser-release.list /usr/share/keyrings/brave-browser-archive-keyring.gpg
+  fi
+  if grep -qs 'brave-browser-rpm-release' /etc/yum.repos.d/brave-browser.repo; then rm -f /etc/yum.repos.d/brave-browser.repo; fi
+  rm -f /etc/brave/policies/managed/nocapos.json /usr/local/share/applications/nocap-brave.desktop
+  rm -f "$DATA"/brave.log "$DATA"/brave-run.sh
+  return 0
+}
+
+desk_units() {
+  cat >"$DESK_UNITS/nocapos-desktop-guard.service" <<EOF
+# Keeps NoCap Desktop's remote screen (VNC) reachable from this machine
+# only; NoCapOS opens it in the browser for signed-in admins.
+# Written by NoCapOS's install.sh.
+[Unit]
+Description=NoCap Desktop remote screen guard (loopback only)
+Before=display-manager.service
+After=network-pre.target nftables.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$DESK_LIB/remote-guard start
+ExecStop=$DESK_LIB/remote-guard stop
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  # Restarted, so an update's port list applies straight away.
+  { systemctl enable nocapos-desktop-guard.service && systemctl restart nocapos-desktop-guard.service; } >/dev/null 2>&1 || warn "full desktop: the remote screen guard didn't start"
+}
+
+# Other updaters stay out of sight: updates come from NoCapOS (Settings →
+# Software Update), never a second updater with its own branding.
+desk_hide_updaters() {
+  local f
+  has dpkg-divert || return 0
+  for f in /etc/xdg/autostart/update-notifier.desktop \
+    /usr/share/applications/update-manager.desktop /usr/share/applications/software-properties-gtk.desktop; do
+    [ -e "$f" ] || dpkg-divert --list "$f" 2>/dev/null | grep -q . || continue
+    if ! dpkg-divert --list "$f" 2>/dev/null | grep -q nocapos; then
+      dpkg-divert --local --rename --divert "$f.nocapos-hidden" --add "$f" >/dev/null 2>&1 && desk_record "divert|$f"
+    fi
   done
-  warn "full desktop: no web browser could be installed; the dock goes without one"
+  return 0
+}
+
+# Identity: the machine's pretty name and, on apt systems installed from a
+# plain distribution, /etc/os-release (the About page).
+desk_identity() {
+  [ "$BRANDING" -eq 1 ] || return 0
+  if has hostnamectl; then
+    local pretty
+    pretty="$(hostnamectl --pretty 2>/dev/null || true)"
+    if [ "$pretty" != NoCapOS ]; then
+      [ -f "$DESK_BACKUP/pretty-hostname" ] || { mkdir -p "$DESK_BACKUP"; printf '%s\n' "$pretty" >"$DESK_BACKUP/pretty-hostname"; }
+      hostnamectl set-hostname --pretty NoCapOS >/dev/null 2>&1 || true
+    fi
+  fi
+  # The NoCapOS images keep os-release themselves.
+  [ -x /usr/lib/nocapos/image/os-release-sync ] && return 0
+  has dpkg-divert || return 0
+  if "$DESK_LIB/os-release-sync" --divert; then
+    printf 'DPkg::Post-Invoke { "if [ -x %s/os-release-sync ]; then %s/os-release-sync || true; fi"; };\n' "$DESK_LIB" "$DESK_LIB" \
+      >/etc/apt/apt.conf.d/99nocapos-desktop-os-release
+    desk_recorded "os-release" || desk_record "os-release"
+  fi
+}
+
+# Other sign-in services (the earlier versions' one, a distribution's own)
+# step aside for greetd: disabled, and Debian's record of the
+# display manager says greetd, so a later package update doesn't bring them
+# back. One that has the screen right now keeps it until NoCapOS can switch
+# without signing anyone out (DESK_DM_SWITCHED says so; apply_desktop_mode
+# decides).
+DESK_DM_SWITCHED=0
+DESK_DM_OLD=""
+desk_take_display_manager() {
+  local cur u
+  cur="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+  cur="$(basename "${cur:-none}")"
+  if [ ! -f "$DESK_BACKUP/display-manager" ]; then
+    mkdir -p "$DESK_BACKUP"
+    echo "$cur" >"$DESK_BACKUP/display-manager"
+    systemctl get-default >"$DESK_BACKUP/default-target" 2>/dev/null || echo multi-user.target >"$DESK_BACKUP/default-target"
+  fi
+  if [ -d /etc/X11 ]; then
+    desk_keep /etc/X11/default-display-manager
+    echo /usr/sbin/greetd >/etc/X11/default-display-manager
+  fi
+  # shellcheck disable=SC2086 # a list of units
+  for u in "$cur" $OLD_DISPLAY_MANAGERS; do
+    case "$u" in none | "$DESK_DM") continue ;; esac
+    if systemctl is-active --quiet "$u" 2>/dev/null; then
+      DESK_DM_SWITCHED=1
+      case " $DESK_DM_OLD " in *" $u "*) ;; *) DESK_DM_OLD="$DESK_DM_OLD $u" ;; esac
+    fi
+    systemctl disable "$u" >/dev/null 2>&1 || true
+  done
+  return 0
+}
+
+# desk_link_display_manager UNIT: graphical.target starts whatever
+# /etc/systemd/system/display-manager.service points at. It's made here
+# (an earlier display manager's link is in the way of "systemctl enable").
+desk_link_display_manager() {
+  local unit="$1" link=/etc/systemd/system/display-manager.service path d
+  path="$(systemctl show -p FragmentPath --value "$unit" 2>/dev/null || true)"
+  if [ -z "$path" ] || [ ! -f "$path" ]; then
+    path=""
+    for d in /usr/lib/systemd/system /lib/systemd/system /etc/systemd/system; do
+      if [ -f "$d/$unit" ] && [ ! -L "$d/$unit" ]; then path="$d/$unit"; break; fi
+    done
+  fi
+  [ -n "$path" ] || { warn "NoCap Desktop: $unit isn't installed"; return 1; }
+  if [ "$(readlink -f "$link" 2>/dev/null)" != "$(readlink -f "$path")" ]; then
+    ln -sfn "$path" "$link"
+    printf '    sign-in screen: %s starts at boot\n' "$unit"
+  fi
+  if [ -d /etc/X11 ] && [ "$unit" = "$DESK_DM" ]; then
+    echo /usr/sbin/greetd >/etc/X11/default-display-manager
+  fi
+  systemctl daemon-reload >/dev/null 2>&1 || true
+}
+
+# desk_unlink_display_manager UNIT: the link goes when it's UNIT's (off).
+desk_unlink_display_manager() {
+  local link=/etc/systemd/system/display-manager.service
+  if [ -L "$link" ] && [ "$(basename "$(readlink -f "$link")")" = "$1" ]; then
+    rm -f "$link"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
 }
 
 # desk_restart_needed WHY: this machine has to restart for the screen to
@@ -463,12 +545,13 @@ desk_restart_needed() {
   info "Restart needed: $1"
 }
 
-desk_write_conf() { # $1 = GDM unit, $2 = GDM config
+desk_write_conf() {
   cat >"$DESK_CONF" <<EOF
 # NoCap Desktop on this machine (written by install.sh; NoCapOS reads it).
 FULL=1
-DM_UNIT=$1
-GDM_CONF=$2
+DM_UNIT=$DESK_DM
+GREETD_CONF=$GREETD_CONF
+SHELL=nocap
 EOF
   chmod 644 "$DESK_CONF"
 }
@@ -476,15 +559,11 @@ EOF
 # ---------------------------------------------------------------- small machines
 desk_mem_kb() { awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null; }
 
-# desk_write FILE: stdin into FILE, keeping the original for uninstall.
-desk_write() { desk_keep "$1"; mkdir -p "$(dirname "$1")"; cat >"$1"; }
-
 # Compressed swap in memory on every machine, plus a swap file and the
-# low-memory profile (no indexing, no calendar store, no animations) on
-# machines with less than 2 GB. Settings already made on this machine (an
-# existing zram or swap setup) are kept.
+# low-memory profile on machines with less than 2 GB. Settings already made
+# on this machine (an existing zram or swap setup) are kept.
 desk_tune_memory() {
-  local mem profile mb f fs
+  local mem profile mb fs
   mem="$(desk_mem_kb)"
   profile="$(memory_profile "$mem")"
   printf '    memory: %s MB (%s profile)\n' "$((${mem:-0} / 1024))" "$profile"
@@ -502,10 +581,7 @@ desk_tune_memory() {
       systemctl restart zramswap.service >/dev/null 2>&1 || true
     fi
   fi
-  if [ "$profile" != low ]; then
-    if [ -f /etc/dconf/db/local.d/10-nocapos-lowmem ]; then rm -f /etc/dconf/db/local.d/10-nocapos-lowmem; has dconf && { dconf update >/dev/null 2>&1 || true; }; fi
-    return 0
-  fi
+  [ "$profile" = low ] || return 0
   render_lowmem_sysctl | desk_write /etc/sysctl.d/90-nocapos-lowmem.conf
   sysctl -q -p /etc/sysctl.d/90-nocapos-lowmem.conf >/dev/null 2>&1 || true
   # A swap file when there's no disk swap at all (not on copy-on-write
@@ -527,45 +603,14 @@ desk_tune_memory() {
       ;;
     esac
   fi
-  # The heavy background services, for every account.
-  mkdir -p /etc/systemd/user
-  # shellcheck disable=SC2086 # a list of units
-  for f in $LOWMEM_USER_UNITS; do
-    if [ ! -e "/etc/systemd/user/$f" ]; then
-      ln -s /dev/null "/etc/systemd/user/$f" 2>/dev/null && desk_record "usermask|$f"
-    fi
-  done
-  mkdir -p /etc/xdg/autostart
-  # shellcheck disable=SC2086 # a list of files
-  for f in $LOWMEM_AUTOSTART; do
-    if [ ! -e "/etc/xdg/autostart/$f" ] || grep -qs 'Hidden by NoCapOS' "/etc/xdg/autostart/$f"; then
-      [ -e "/etc/xdg/autostart/$f" ] || desk_record "autostart-hidden|/etc/xdg/autostart/$f"
-      render_autostart_hidden >"/etc/xdg/autostart/$f"
-    fi
-  done
-  render_dconf_lowmem >/etc/dconf/db/local.d/10-nocapos-lowmem
-  has dconf && { dconf update >/dev/null 2>&1 || true; }
 }
 
 # ---------------------------------------------------------------- the accent
-# NoCap red in apps: the GNOME 47+ accent setting (dconf) where it exists,
-# plus gtk.css blocks for GTK 3 apps everywhere and libadwaita apps on older
-# GNOME. New accounts get them from /etc/skel, existing ones right away, and
-# nocapos-accent runs at every sign-in to keep them current (after a GNOME
-# upgrade, say).
+# NoCap red in apps: gtk.css blocks for GTK 3 and GTK 4 apps. New accounts
+# get them from /etc/skel, existing ones right away, and every session runs
+# nocapos-accent (nocapos-accent.service) to keep them current.
 desk_accent() {
   local u home min
-  mkdir -p /etc/xdg/autostart
-  cat >/etc/xdg/autostart/nocapos-accent.desktop <<EOF
-[Desktop Entry]
-# NoCapOS: keeps the NoCap red accent in this account's apps.
-Type=Application
-Name=NoCapOS accent
-Exec=$DESK_LIB/nocapos-accent
-NoDisplay=true
-X-GNOME-Autostart-Phase=Initialization
-X-GNOME-AutoRestart=false
-EOF
   # /etc/skel: new accounts start with it.
   HOME=/etc/skel XDG_CONFIG_HOME=/etc/skel/.config "$DESK_LIB/nocapos-accent" || true
   # Existing accounts, each as itself (never root writing in their home).
@@ -593,47 +638,40 @@ desk_clipboard() {
 # (small and 32-bit ones are tuned, see desk_tune_memory). Returns 1 (after
 # saying why) only when this distribution's packages can't provide it.
 install_full_desktop() {
-  local mgr family dm conf
+  local mgr family
   mgr="$(pkg_manager)"
   family="$(desktop_family "")"
   case "$family" in
     debian | ubuntu) ;;
-    fedora | arch) info "NoCap Desktop on $(os_field "" PRETTY_NAME): best effort, Debian, Ubuntu and Raspberry Pi OS are what it's tested on" ;;
+    fedora | arch) info "NoCap Desktop on $(os_field "" PRETTY_NAME): best effort, Debian 13 and Raspberry Pi OS are what it's tested on" ;;
     *) warn "NoCap Desktop isn't supported on $(os_field "" PRETTY_NAME) yet; the screen is left as it is"; return 1 ;;
   esac
   info "Installing NoCap Desktop: the native desktop (sign-in screen, dock, apps; a few minutes)"
   pkg_refresh "$mgr" || true
-  if [ -x /usr/sbin/lightdm ] && has debconf-set-selections; then
-    # Installing GDM next to lightdm asks which one to use: GDM.
-    echo "gdm3 shared/default-x-display-manager select gdm3" | debconf-set-selections >/dev/null 2>&1 || true
-  fi
   desk_install_packages "$family" "$mgr" || { warn "NoCap Desktop: the desktop's packages couldn't be installed; the screen is left as it is"; return 1; }
-  desk_install_browser "$mgr"
   desk_install_assets
-  desk_install_extension
-  desk_settings
+  desk_install_shell "$mgr" "$family" || { warn "NoCap Desktop: NoCap Shell couldn't be installed; the screen is left as it is"; return 1; }
+  desk_session_files "$family"
+  desk_migrate_old_desktop
   desk_tune_memory
   desk_accent
   desk_clipboard
   desk_units
   desk_hide_updaters
   desk_identity
-  dm="$(gdm_unit "")"
-  conf="$(gdm_config "")"
-  desk_take_display_manager "$dm"
-  desk_session "$conf"
+  desk_take_display_manager
+  desk_greetd "$family" || return 1
   desk_pi_kms
-  # NVIDIA's own driver without kernel modesetting can't run the Wayland
-  # session; GDM falls back to Xorg, which needs the modeset switch too.
+  # NVIDIA's own driver needs kernel modesetting for the compositor.
   if nvidia_proprietary "" && [ "$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null)" != Y ]; then
     EXTRA_BOOT_TOKENS="${EXTRA_BOOT_TOKENS:-} nvidia-drm.modeset=1"
   fi
-  desk_write_conf "$dm" "$conf"
+  desk_write_conf
   first_user_hint
   return 0
 }
 
-# desk_pi_kms: a Raspberry Pi gets its KMS graphics driver (GNOME Shell
+# desk_pi_kms: a Raspberry Pi gets its KMS graphics driver (the compositor
 # can't draw without it). Recorded, so uninstall takes it out again.
 desk_pi_kms() {
   local f
@@ -651,29 +689,47 @@ desk_pi_kms() {
   return 0
 }
 
-# desk_verify UNIT: everything the screen needs is really there. Says what
-# isn't (each of these ends in a black screen).
+# desk_verify: everything the screen needs is really there. Says what isn't
+# (each of these ends in a black screen, or no sign-in screen).
 desk_verify() {
   local ok=0 f found
-  for f in gnome-shell gnome-session; do has "$f" || { warn "NoCap Desktop: $f is missing"; ok=1; }; done
+  has labwc || { warn "NoCap Desktop: labwc (the compositor) is missing"; ok=1; }
+  desk_have_greetd || { warn "NoCap Desktop: greetd (the sign-in service) is missing"; ok=1; }
+  desk_shell_runs "$SHELL_LIB/nocap-shell" || { warn "NoCap Desktop: NoCap Shell can't run here"; ok=1; }
+  desk_shell_runs "$SHELL_LIB/nocap-lock" || { warn "NoCap Desktop: the lock screen can't run here"; ok=1; }
+  [ -f "$SHELL_UI/shell.html" ] || { warn "NoCap Desktop: NoCap Shell's pages are missing"; ok=1; }
+  [ -x "$SHELL_LIB/nocap-session" ] && [ -x "$SHELL_LIB/nocap-greeter-session" ] || { warn "NoCap Desktop: the session scripts are missing"; ok=1; }
+  [ -f "$SHELL_CONF/rc.xml" ] && [ -f "$SHELL_CONF/autostart" ] || { warn "NoCap Desktop: the desktop's labwc settings are missing"; ok=1; }
+  grep -qs "nocap-greeter-session" "$GREETD_CONF" || { warn "NoCap Desktop: greetd isn't set to show NoCap's sign-in screen"; ok=1; }
   [ -f "/usr/share/wayland-sessions/$NOCAP_SESSION.desktop" ] || { warn "NoCap Desktop: the NoCapOS session file is missing"; ok=1; }
-  [ -f "/usr/share/xsessions/$NOCAP_SESSION.desktop" ] || { warn "NoCap Desktop: the NoCapOS Xorg session file is missing"; ok=1; }
-  if ! has Xorg && [ ! -x /usr/lib/xorg/Xorg ] && [ ! -x /usr/libexec/Xorg ]; then
-    warn "NoCap Desktop: Xorg is missing, so there's no fallback when Wayland can't run on this graphics card"; ok=1
-  fi
+  has Xwayland || [ -x /usr/bin/Xwayland ] || warn "NoCap Desktop: Xwayland is missing, so older (X11) apps won't open"
   found=0
   for f in /usr/lib/*/dri/swrast_dri.so /usr/lib/dri/swrast_dri.so /usr/lib64/dri/swrast_dri.so /usr/lib/*/libgallium-*.so /usr/lib64/libgallium-*.so /usr/lib/libgallium-*.so; do
     if [ -e "$f" ]; then found=1; break; fi
   done
   [ "$found" -eq 1 ] || { warn "NoCap Desktop: the Mesa graphics drivers are missing"; ok=1; }
-  [ "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)")" = "$1" ] ||
-    { warn "NoCap Desktop: $1 isn't set to start at boot"; ok=1; }
+  [ "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)")" = "$DESK_DM" ] ||
+    { warn "NoCap Desktop: $DESK_DM isn't set to start at boot"; ok=1; }
   if grep -qs 'NoCapOS install.sh' /usr/sbin/policy-rc.d; then rm -f /usr/sbin/policy-rc.d; fi
   return "$ok"
 }
 
-# GDM signs in with this machine's Linux accounts (the same ones NoCapOS
-# uses). With none yet, say where the first one comes from.
+# desk_screen_in_use: someone is signed in to a graphical session on this
+# machine right now (switching the sign-in service would sign them out).
+desk_screen_in_use() {
+  local id p
+  has loginctl || return 1
+  for id in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    p="$(loginctl show-session "$id" -p Class -p Type -p Remote 2>/dev/null | tr '\n' ' ')"
+    case "$p" in *Class=user\ * | *Class=user) ;; *) continue ;; esac
+    case "$p" in *Remote=yes*) continue ;; esac
+    case "$p" in *Type=wayland* | *Type=x11* | *Type=mir*) return 0 ;; esac
+  done
+  return 1
+}
+
+# The sign-in screen signs in with this machine's Linux accounts (the same
+# ones NoCapOS uses). With none yet, say where the first one comes from.
 first_user_hint() {
   local min
   min="$(awk '$1 == "UID_MIN" {print $2}' /etc/login.defs 2>/dev/null)"
@@ -684,28 +740,30 @@ first_user_hint() {
 }
 
 # apply_desktop_mode full|off: the same switches Settings uses. An update
-# never restarts a sign-in screen that's already up (that would sign out
-# whoever is using the desktop); the new look applies from the next sign-in.
+# never restarts a sign-in service that someone is signed in through (that
+# would sign them out); the switch then waits for the next restart.
 apply_desktop_mode() {
-  local dm
-  dm="$(sed -n 's/^DM_UNIT=//p' "$DESK_CONF" 2>/dev/null)"
-  dm="${dm:-gdm.service}"
+  local dm="$DESK_DM" u
   case "$1" in
     full)
       systemctl set-default graphical.target >/dev/null 2>&1 || true
       systemctl enable --force "$dm" >/dev/null 2>&1 || true
       desk_link_display_manager "$dm" || warn "NoCap Desktop: couldn't enable the sign-in screen"
-      desk_verify "$dm" || warn "NoCap Desktop: some parts are missing (above); fix with Settings → General → NoCap Desktop → Repair, or: sudo cap desktop repair"
-      if systemctl is-active --quiet "$dm" && display_connected && has pgrep && ! pgrep -x gnome-shell >/dev/null 2>&1; then
-        # GDM runs but nothing is on the screen (a black screen): nobody can
-        # be signed in, so restarting it signs nobody out.
-        systemctl restart "$dm" >/dev/null 2>&1 || desk_restart_needed "NoCap Desktop's sign-in screen didn't restart; it starts after a restart"
-      elif systemctl is-active --quiet "$dm"; then
-        if [ "$DESK_SESSION_CHANGED" -eq 1 ]; then
-          desk_restart_needed "the screen moves to the NoCapOS desktop after a restart (or sign out and back in)"
+      desk_verify || warn "NoCap Desktop: some parts are missing (above); fix with Settings → General → NoCap Desktop → Repair, or: sudo cap desktop repair"
+      if systemctl is-active --quiet "$dm"; then
+        if display_connected && has pgrep && ! pgrep -x labwc >/dev/null 2>&1; then
+          # greetd runs but nothing is on the screen (a black screen):
+          # nobody can be signed in, so restarting it signs nobody out.
+          systemctl restart "$dm" >/dev/null 2>&1 || desk_restart_needed "NoCap Desktop's sign-in screen didn't restart; it starts after a restart"
         fi
       elif [ "$DESK_DM_SWITCHED" -eq 1 ]; then
-        desk_restart_needed "restart this machine to switch its screen to NoCap Desktop"
+        if desk_screen_in_use; then
+          desk_restart_needed "the screen moves to NoCap Desktop after a restart (someone is signed in on it right now)"
+        else
+          # Only an empty sign-in screen is showing: switch now.
+          for u in $DESK_DM_OLD; do systemctl stop "$u" >/dev/null 2>&1 || true; done
+          systemctl start "$dm" >/dev/null 2>&1 || desk_restart_needed "NoCap Desktop starts after a restart"
+        fi
       elif tty1_in_use; then
         desk_restart_needed "NoCap Desktop starts on the next boot (someone is signed in on tty1 right now)"
       else
@@ -788,6 +846,7 @@ brand_boot() {
         ;;
       uboot-menu)
         f=/etc/default/u-boot
+        # shellcheck disable=SC2086
         add="$(tokens_missing "$(sed -n 's/^U_BOOT_PARAMETERS=//p' "$f" | tr -d "\"'")" $tokens)"
         if [ -n "$add" ]; then
           # shellcheck disable=SC2086
@@ -802,6 +861,7 @@ brand_boot() {
         ;;
       armbian)
         f=/boot/armbianEnv.txt
+        # shellcheck disable=SC2086
         add="$(tokens_missing "$(sed -n 's/^extraargs=//p' "$f" | tr -d "\"'")" $tokens)"
         if [ -n "$add" ]; then
           # shellcheck disable=SC2086

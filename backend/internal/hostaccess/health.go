@@ -17,24 +17,24 @@ import (
 
 // ---- is NoCap Desktop really on the screen? ----
 //
-// "gdm is enabled" isn't the same as "the screen shows NoCap Desktop". Each
-// of these ends in a black screen, and Health finds them:
+// "greetd is enabled" isn't the same as "the screen shows NoCap Desktop".
+// Each of these ends in a black screen (or no sign-in screen), and Health
+// finds them:
 //
-//   - display-manager.service doesn't point at GDM: graphical.target starts
-//     whatever that link names, and Debian's gdm3.service has no [Install]
-//     section, so "systemctl enable gdm3" never makes it.
+//   - display-manager.service doesn't point at greetd: graphical.target
+//     starts whatever that link names.
 //   - the default target isn't graphical.target.
-//   - GDM runs but no GNOME Shell does (the sign-in screen crashed: Wayland
-//     can't run on this graphics card, no GL driver, a broken theme...).
-//   - GNOME Shell, the NoCapOS session files or Xorg (the fallback) are
-//     missing, or the old web full screen or the installer's service hold
-//     was left behind.
+//   - greetd runs but no compositor (labwc) does: the sign-in screen or the
+//     desktop couldn't start on this graphics hardware.
+//   - labwc, NoCap Shell (its programs and pages), the session file or
+//     greetd's settings for NoCap's sign-in screen are missing, or the old
+//     web full screen or the installer's service hold was left behind.
 //
 // alfad checks every few seconds (Ensure): it puts the boot link and the
 // target back, starts the sign-in screen when nothing is on the screen, and
-// when the sign-in screen keeps failing it steps down a fallback ladder:
-// Xorg instead of Wayland, then Xorg with software rendering and the
-// system's own sign-in theme. Still native GNOME, still NoCapOS's session.
+// when the screen keeps failing it switches to software rendering (labwc
+// with WLR_RENDERER=pixman, which every machine can draw). Still NoCap
+// Desktop, just drawn by the processor.
 
 // DisplayManagerLink is what graphical.target starts.
 const DisplayManagerLink = "/etc/systemd/system/display-manager.service"
@@ -42,33 +42,44 @@ const DisplayManagerLink = "/etc/systemd/system/display-manager.service"
 // Fallback stages (the file desktop-fallback in the data folder).
 const (
 	FallbackNone     = ""
-	FallbackXorg     = "xorg"
 	FallbackSoftware = "software"
 )
 
-// FallbackFileName is in the data folder (gdm-theme reads it too).
+// FallbackFileName is in the data folder.
 const FallbackFileName = "desktop-fallback"
 
-// ShellGrace: how long GDM may run without GNOME Shell before it counts as
-// a crashed sign-in screen.
+// SoftwareRenderingFlag makes the session scripts start labwc with
+// software rendering (nocap-session, nocap-greeter-session).
+const SoftwareRenderingFlag = "/etc/nocapos/desktop-software-rendering"
+
+// NoCap Shell's pieces on the machine.
+const (
+	ShellLibDir     = "/usr/libexec/nocapos"
+	ShellUIDir      = "/usr/share/nocapos/shell"
+	GreetdConfPath  = "/etc/greetd/config.toml"
+	DefaultDMUnit   = "greetd.service"
+	greeterCmd      = ShellLibDir + "/nocap-greeter-session"
+	sessionCmd      = ShellLibDir + "/nocap-session"
+	sessionFilePath = "/usr/share/wayland-sessions/nocapos.desktop"
+)
+
+// ShellGrace: how long greetd may run without a compositor before it
+// counts as a black screen.
 const ShellGrace = 45 * time.Second
 
 // autoFallbackEvery: the least time between two automatic fallback steps.
 const autoFallbackEvery = 3 * time.Minute
 
-// startDelay: alfad starts with the machine; GDM may still be on its way.
+// startDelay: alfad starts with the machine; greetd may still be on its way.
 const startDelay = 60 * time.Second
 
-// NoCapOS's session files (install.sh writes them; Repair puts them back).
-var sessionFiles = map[string]string{
-	"/usr/share/wayland-sessions/nocapos.desktop": sessionDesktop("NoCapOS"),
-	"/usr/share/xsessions/nocapos.desktop":        sessionDesktop("NoCapOS (X11)"),
-}
+// NoCapOS's session file (install.sh writes it; Repair puts it back).
+var sessionFiles = map[string]string{sessionFilePath: SessionDesktop()}
 
-// sessionDesktop is lib.sh's render_session_desktop.
-func sessionDesktop(name string) string {
-	return "[Desktop Entry]\n# The NoCapOS desktop (written by NoCapOS's install.sh).\nName=" + name +
-		"\nComment=The NoCapOS desktop\nExec=gnome-session\nTryExec=gnome-session\nType=Application\nDesktopNames=GNOME\nX-GDM-SessionRegisters=true\n"
+// SessionDesktop is lib.sh's render_session_desktop.
+func SessionDesktop() string {
+	return "[Desktop Entry]\n# The NoCapOS desktop (written by NoCapOS's install.sh).\nName=NoCapOS\nComment=The NoCapOS desktop\nExec=" +
+		sessionCmd + "\nTryExec=" + sessionCmd + "\nType=Application\nDesktopNames=NoCap;wlroots\n"
 }
 
 const swRenderMark = "# NoCap Desktop software rendering (NoCapOS repair)"
@@ -79,10 +90,12 @@ const (
 	ProblemNotGraphical = "not_graphical"
 	ProblemDMStopped    = "dm_stopped"
 	ProblemDMFailed     = "dm_failed"
-	ProblemNoShell      = "no_shell"
-	ProblemNoGnomeShell = "no_gnome_shell"
+	ProblemNoShell      = "no_shell"      // the sign-in service runs, nothing is on the screen
+	ProblemNoCompositor = "no_compositor" // labwc isn't installed
+	ProblemNoNocapShell = "no_nocap_shell"
+	ProblemNoGreeter    = "no_greeter" // greetd isn't set to show NoCap's sign-in screen
 	ProblemNoSession    = "no_session"
-	ProblemNoXorg       = "no_xorg"
+	ProblemNoXwayland   = "no_xwayland" // works; older X11 apps don't open
 	ProblemKioskLeft    = "kiosk_left"
 	ProblemServicesHeld = "services_held"
 )
@@ -99,28 +112,30 @@ type HealthProblem struct {
 type DesktopHealth struct {
 	Status   string          `json:"status"`
 	Problems []HealthProblem `json:"problems,omitempty"`
-	// Fallback in use: "", xorg or software.
+	// Fallback in use: "" or software.
 	Fallback string `json:"fallback,omitempty"`
 }
 
 // HealthInputs is everything Health looks at, gathered from the machine.
 type HealthInputs struct {
-	Full          bool // install.sh set the desktop up
-	WantOn        bool // not switched off in Settings
-	DMUnit        string
-	LinkedUnit    string // what display-manager.service is ("" = nothing)
-	DefaultTarget string
-	DMActive      string // systemctl is-active
-	Display       bool   // a monitor is plugged in
-	ShellRunning  bool
-	NoShellFor    time.Duration
-	HaveShell     bool
-	HaveSessions  bool
-	HaveXorg      bool
-	KioskLeft     bool
-	ServicesHeld  bool
-	Fallback      string
-	Hints         []string // from the journal (JournalHints)
+	Full           bool // install.sh set the desktop up
+	WantOn         bool // not switched off in Settings
+	DMUnit         string
+	LinkedUnit     string // what display-manager.service is ("" = nothing)
+	DefaultTarget  string
+	DMActive       string // systemctl is-active
+	Display        bool   // a monitor is plugged in
+	ShellRunning   bool   // a compositor runs (the sign-in screen's or a session's)
+	NoShellFor     time.Duration
+	HaveCompositor bool
+	HaveNocapShell bool
+	HaveGreeter    bool
+	HaveSessions   bool
+	HaveXwayland   bool
+	KioskLeft      bool
+	ServicesHeld   bool
+	Fallback       string
+	Hints          []string // from the journal (JournalHints)
 }
 
 // EvaluateHealth turns the inputs into a verdict.
@@ -145,8 +160,14 @@ func EvaluateHealth(in HealthInputs) DesktopHealth {
 	if in.DefaultTarget != "graphical.target" {
 		add(ProblemNotGraphical, "the default target is "+orNone(in.DefaultTarget))
 	}
-	if !in.HaveShell {
-		add(ProblemNoGnomeShell, "")
+	if !in.HaveCompositor {
+		add(ProblemNoCompositor, "")
+	}
+	if !in.HaveNocapShell {
+		add(ProblemNoNocapShell, "")
+	}
+	if !in.HaveGreeter {
+		add(ProblemNoGreeter, GreetdConfPath)
 	}
 	if !in.HaveSessions {
 		add(ProblemNoSession, "")
@@ -174,11 +195,11 @@ func EvaluateHealth(in HealthInputs) DesktopHealth {
 	default:
 		add(ProblemDMStopped, "")
 	}
-	if !in.HaveXorg {
-		add(ProblemNoXorg, "")
+	if !in.HaveXwayland {
+		add(ProblemNoXwayland, "")
 	}
 	switch {
-	case len(h.Problems) == 1 && h.Problems[0].Code == ProblemNoXorg:
+	case len(h.Problems) == 1 && h.Problems[0].Code == ProblemNoXwayland:
 		h.Status = "warning"
 	case len(h.Problems) > 0:
 		h.Status = "broken"
@@ -212,14 +233,12 @@ var journalHints = []struct {
 	code string
 	re   *regexp.Regexp
 }{
-	{"gpu", regexp.MustCompile(`(?i)failed to create backend|no gpus? found|failed to open gpu|could not open device|failed to (initialize|create) (renderer|egl|gbm)|eglInitialize failed|no suitable egl`)},
-	{"xorg", regexp.MustCompile(`(?i)unable to run x server|no screens found|\(EE\) .*fatal server error|failed to start x server|xorg.*(failed|exited)`)},
-	{"greeter_crash", regexp.MustCompile(`(?i)session never registered|child process -?\d+ was already dead|greeter.*(crash|exited|died)|gdm-(wayland|x)-session.*(exited|failed)`)},
-	{"gave_up", regexp.MustCompile(`(?i)maximum number of (x )?display failures reached|too many (display )?failures|giving up`)},
-	{"shell_crash", regexp.MustCompile(`(?i)gnome-shell.*(segfault|segmentation fault|core dumped|aborted|dumped core|trap)|traps: gnome-shell`)},
-	{"extension", regexp.MustCompile(`(?i)extension .* had error|JS ERROR`)},
-	{"theme", regexp.MustCompile(`(?i)(failed to load|parsing).*(stylesheet|theme)|gdm-theme\.gresource`)},
-	{"memory", regexp.MustCompile(`(?i)out of memory|oom-kill|killed process \d+ \(gnome-shell\)`)},
+	{"gpu", regexp.MustCompile(`(?i)failed to create (backend|renderer|allocator)|no gpus? found|failed to open gpu|could not open device|failed to (initialize|create) (renderer|egl|gbm)|eglInitialize failed|no suitable egl|no DRM device|drm.*(permission denied|failed)`)},
+	{"seat", regexp.MustCompile(`(?i)libseat|could not (open|take) (seat|session)|failed to open seat|no seat`)},
+	{"greeter_crash", regexp.MustCompile(`(?i)greetd.*(error|failed)|nocap-greeter-session.*(failed|exited)|greeter.*(crash|exited|died)`)},
+	{"gave_up", regexp.MustCompile(`(?i)start request repeated too quickly|too many (restarts|failures)|giving up`)},
+	{"shell_crash", regexp.MustCompile(`(?i)(labwc|nocap-shell|WebKitWebProcess).*(segfault|segmentation fault|core dumped|aborted|dumped core|trap)|traps: (labwc|nocap-shell)`)},
+	{"memory", regexp.MustCompile(`(?i)out of memory|oom-kill|killed process \d+ \((labwc|nocap-shell|WebKitWebProces)`)},
 }
 
 // JournalHints finds the known causes in journal text (codes, sorted).
@@ -285,15 +304,15 @@ func (d *Desktop) fallbackPath() string {
 	return path.Join(filepath.ToSlash(dir), FallbackFileName)
 }
 
-// Fallback is the fallback stage in use.
+// Fallback is the fallback stage in use. (Earlier versions' "xorg" stage
+// doesn't exist any more: the screen starts over on the normal setup.)
 func (d *Desktop) Fallback() string {
 	b, err := d.readFile(d.fallbackPath())
 	if err != nil {
 		return FallbackNone
 	}
-	switch s := strings.TrimSpace(string(b)); s {
-	case FallbackXorg, FallbackSoftware:
-		return s
+	if strings.TrimSpace(string(b)) == FallbackSoftware {
+		return FallbackSoftware
 	}
 	return FallbackNone
 }
@@ -331,11 +350,33 @@ func processRunning(procRoot, name string) bool {
 	return false
 }
 
-func (d *Desktop) haveXorg() bool {
-	return d.lookPath("Xorg") || d.exists("/usr/lib/xorg/Xorg") || d.exists("/usr/libexec/Xorg")
+func (d *Desktop) haveCompositor() bool {
+	return d.lookPath("labwc") || d.exists(ShellLibDir+"/labwc")
 }
 
-// gather reads the machine (and tracks how long GNOME Shell has been gone).
+func (d *Desktop) haveNocapShell() bool {
+	for _, p := range []string{ShellLibDir + "/nocap-shell", ShellLibDir + "/nocap-lock", sessionCmd, greeterCmd, ShellUIDir + "/shell.html"} {
+		if !d.exists(p) {
+			return false
+		}
+	}
+	return true
+}
+
+func (d *Desktop) greetdConf() string {
+	c := d.conf()
+	if c.GreetdConf != "" {
+		return c.GreetdConf
+	}
+	return GreetdConfPath
+}
+
+func (d *Desktop) haveGreeter() bool {
+	b, err := d.readFile(d.greetdConf())
+	return err == nil && strings.Contains(string(b), greeterCmd)
+}
+
+// gather reads the machine (and tracks how long the screen has been empty).
 func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	c := d.conf()
 	in := HealthInputs{Full: d.Native && c.Full, WantOn: d.wantOn(), DMUnit: c.DMUnit, Fallback: d.Fallback()}
@@ -354,13 +395,15 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	in.LinkedUnit = d.linkedUnit(ctx)
 	in.DefaultTarget = d.systemctl(ctx, "get-default")
 	in.DMActive = d.systemctl(ctx, "is-active", c.DMUnit)
-	in.ShellRunning = processRunning(d.procRoot(), "gnome-shell")
-	in.HaveShell = d.lookPath("gnome-shell")
+	in.ShellRunning = processRunning(d.procRoot(), "labwc")
+	in.HaveCompositor = d.haveCompositor()
+	in.HaveNocapShell = d.haveNocapShell()
+	in.HaveGreeter = d.haveGreeter()
 	in.HaveSessions = true
 	for p := range sessionFiles {
 		in.HaveSessions = in.HaveSessions && d.exists(p)
 	}
-	in.HaveXorg = d.haveXorg()
+	in.HaveXwayland = d.lookPath("Xwayland")
 	now := d.now()
 	d.hs.mu.Lock()
 	if in.ShellRunning || (in.DMActive != "active" && in.DMActive != "reloading") {
@@ -373,7 +416,7 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	}
 	d.hs.mu.Unlock()
 	if (in.DMActive == "failed" || in.NoShellFor >= ShellGrace) && in.Display {
-		in.Hints = JournalHints(d.journal(ctx, "-u", c.DMUnit, "-n", "300") + d.journal(ctx, "_COMM=gnome-shell", "-n", "200"))
+		in.Hints = JournalHints(d.journal(ctx, "-u", c.DMUnit, "-n", "300") + d.journal(ctx, "_COMM=labwc", "-n", "200"))
 	}
 	return in
 }
@@ -412,14 +455,14 @@ func (d *Desktop) linkDisplayManager(ctx context.Context, unit string) error {
 	if err := d.symlink(p, DisplayManagerLink); err != nil {
 		return fmt.Errorf("display-manager.service: %w", err)
 	}
-	if unit == "gdm3.service" && d.exists("/usr/sbin/gdm3") && d.exists("/etc/X11") {
-		_ = d.writeFile("/etc/X11/default-display-manager", []byte("/usr/sbin/gdm3\n"), 0o644)
+	if unit == DefaultDMUnit && d.exists("/etc/X11") {
+		_ = d.writeFile("/etc/X11/default-display-manager", []byte("/usr/sbin/greetd\n"), 0o644)
 	}
 	_, _ = d.Run(ctx, "systemctl", "daemon-reload")
 	return nil
 }
 
-// unlinkDisplayManager: off takes GDM's boot link away.
+// unlinkDisplayManager: off takes the sign-in service's boot link away.
 func (d *Desktop) unlinkDisplayManager(ctx context.Context, unit string) {
 	if d.linkedUnit(ctx) == unit {
 		_ = d.remove(DisplayManagerLink)
@@ -429,45 +472,28 @@ func (d *Desktop) unlinkDisplayManager(ctx context.Context, unit string) {
 
 // nextFallback is the stage after cur ("" when there's none left).
 func nextFallback(cur string) string {
-	switch cur {
-	case FallbackNone:
-		return FallbackXorg
-	case FallbackXorg:
+	if cur == FallbackNone {
 		return FallbackSoftware
 	}
 	return ""
 }
 
-// applyFallback switches the sign-in screen (and sessions) to stage.
+// applyFallback switches the sign-in screen and sessions to stage.
 func (d *Desktop) applyFallback(ctx context.Context, stage string) error {
-	c := d.conf()
-	wayland := "true"
-	if stage == FallbackXorg || stage == FallbackSoftware {
-		wayland = "false"
-	}
-	if c.GDMConf != "" {
-		b, err := d.readFile(c.GDMConf)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
+	soft := stage == FallbackSoftware
+	if soft {
+		if err := d.writeFile(SoftwareRenderingFlag, []byte("# NoCap Desktop draws with the processor here (NoCapOS repair).\n"), 0o644); err != nil {
 			return err
 		}
-		if err := d.writeFile(c.GDMConf, []byte(SetINIKey(string(b), "daemon", "WaylandEnable", wayland)), 0o644); err != nil {
-			return err
-		}
+	} else if err := d.remove(SoftwareRenderingFlag); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 	env, _ := d.readFile("/etc/environment")
-	newEnv := EnvironmentWithSoftwareRendering(string(env), stage == FallbackSoftware)
+	newEnv := EnvironmentWithSoftwareRendering(string(env), soft)
 	if newEnv != string(env) {
 		if err := d.writeFile("/etc/environment", []byte(newEnv), 0o644); err != nil {
 			return err
 		}
-	}
-	if stage == FallbackSoftware {
-		// The system's own sign-in theme: a broken theme is one less suspect.
-		if d.exists("/usr/share/gnome-shell/gnome-shell-theme.gresource") {
-			_, _ = d.Run(ctx, "update-alternatives", "--set", "gdm-theme.gresource", "/usr/share/gnome-shell/gnome-shell-theme.gresource")
-		}
-	} else if d.exists("/usr/local/lib/nocapos/desktop/gdm-theme") {
-		_, _ = d.Run(ctx, "/usr/local/lib/nocapos/desktop/gdm-theme")
 	}
 	if stage == FallbackNone {
 		if err := d.remove(d.fallbackPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -554,7 +580,7 @@ func (d *Desktop) Ensure(ctx context.Context) []string {
 		}
 		return did
 	}
-	// The sign-in screen keeps failing: one step down the fallback ladder.
+	// The screen stays empty: software rendering.
 	if h.Has(ProblemNoShell) && in.Display {
 		d.hs.mu.Lock()
 		due := d.hs.lastFallback.IsZero() || now.Sub(d.hs.lastFallback) >= autoFallbackEvery
@@ -586,10 +612,10 @@ type RepairResult struct {
 }
 
 // Repair puts NoCap Desktop back on the screen: the boot link, the
-// graphical target, NoCapOS's session files, settings databases, leftovers
-// of the old web full screen, and, when the sign-in screen wasn't coming
-// up, the next fallback (Xorg, then software rendering). Then the sign-in
-// screen restarts (whoever is signed in on the screen is signed out).
+// graphical target, the session file, greetd's settings for NoCap's sign-in
+// screen, leftovers of the old web full screen, and, when the screen
+// wasn't coming up, software rendering. Then the sign-in screen restarts
+// (whoever is signed in on the screen is signed out).
 func (d *Desktop) Repair(ctx context.Context) (RepairResult, error) {
 	c := d.conf()
 	if !d.Native || !c.Full {
@@ -620,15 +646,16 @@ func (d *Desktop) Repair(ctx context.Context) (RepairResult, error) {
 	for p, body := range sessionFiles {
 		if b, err := d.readFile(p); err != nil || string(b) != body {
 			if err := d.writeFile(p, []byte(body), 0o644); err == nil {
-				note("session file " + path.Base(path.Dir(p)))
+				note("session file")
 			}
 		}
 	}
-	if d.lookPath("glib-compile-schemas") {
-		_, _ = d.Run(ctx, "glib-compile-schemas", "/usr/share/glib-2.0/schemas")
-	}
-	if d.lookPath("dconf") {
-		_, _ = d.Run(ctx, "dconf", "update")
+	if !in.HaveGreeter {
+		conf := d.greetdConf()
+		old, _ := d.readFile(conf)
+		if err := d.writeFile(conf, []byte(GreetdConfig(d.greeterUser(), GreetdAutologin(string(old)))), 0o644); err == nil {
+			note("sign-in screen settings")
+		}
 	}
 	if h.Has(ProblemNoShell) || h.Has(ProblemDMFailed) || len(in.Hints) > 0 {
 		if next := nextFallback(in.Fallback); next != "" {
@@ -647,8 +674,8 @@ func (d *Desktop) Repair(ctx context.Context) (RepairResult, error) {
 	return RepairResult{Actions: did, Health: d.Health(ctx)}, nil
 }
 
-// ResetFallback goes back to the normal setup (Wayland, hardware rendering,
-// NoCapOS's sign-in theme) and restarts the sign-in screen.
+// ResetFallback goes back to the normal setup (hardware rendering) and
+// restarts the sign-in screen.
 func (d *Desktop) ResetFallback(ctx context.Context) error {
 	c := d.conf()
 	if !d.Native || !c.Full {
@@ -698,12 +725,13 @@ func gpuLines(lspci string) string {
 }
 
 // Diagnostics is the text bundle the owner can read or copy: health, the
-// sign-in screen's and GNOME Shell's journal, sessions, the GPU, screens.
+// sign-in service's, compositor's and NoCap Shell's journal, sessions, the
+// GPU, screens.
 func (d *Desktop) Diagnostics(ctx context.Context) string {
 	c := d.conf()
 	unit := c.DMUnit
 	if unit == "" {
-		unit = "gdm.service"
+		unit = DefaultDMUnit
 	}
 	var b strings.Builder
 	section := func(title, body string) {
@@ -740,29 +768,22 @@ func (d *Desktop) Diagnostics(ctx context.Context) string {
 	for _, p := range h.Problems {
 		fmt.Fprintf(&hs, "problem: %s %s\n", p.Code, p.Detail)
 	}
-	fmt.Fprintf(&hs, "display manager: %s (linked: %s, %s)\ndefault target: %s\nmonitor connected: %v\ngnome-shell running: %v\n",
+	fmt.Fprintf(&hs, "sign-in service: %s (linked: %s, %s)\ndefault target: %s\nmonitor connected: %v\ncompositor running: %v\n",
 		unit, orNone(in.LinkedUnit), orNone(in.DMActive), orNone(in.DefaultTarget), in.Display, in.ShellRunning)
 	section("NoCap Desktop health", hs.String())
 	logs := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "-u", unit, "-n", "300")
-	shell := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=gnome-shell", "-n", "300")
-	if hints := JournalHints(logs + "\n" + shell); len(hints) > 0 {
+	comp := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=labwc", "-n", "300")
+	shellLog := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=nocap-shell", "-n", "200")
+	if hints := JournalHints(logs + "\n" + comp + "\n" + shellLog); len(hints) > 0 {
 		section("Likely causes (from the journal)", strings.Join(hints, "\n"))
 	}
 	section("NoCapOS desktop settings", file(DesktopConfPath, 0)+"\nmode: "+strings.TrimSpace(file(DesktopModePath, 0)))
-	if c.GDMConf != "" {
-		section("GDM settings "+c.GDMConf, file(c.GDMConf, 0))
-	}
+	section("Sign-in service settings "+d.greetdConf(), file(d.greetdConf(), 0))
 	section("systemctl status "+unit, run("systemctl", "status", unit, "--no-pager", "-l", "-n", "0"))
 	section("Boot target and display manager", run("systemctl", "get-default")+run("systemctl", "show", "display-manager.service", "-p", "Id", "-p", "FragmentPath", "-p", "LoadState"))
 	section("journalctl -b -u "+unit, logs)
-	section("GNOME Shell (this boot)", shell)
-	section("GNOME session (this boot)", run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=gnome-session-binary", "-n", "150"))
-	section("Xorg (this boot)", run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=Xorg", "-n", "150"))
-	for _, p := range []string{"/var/lib/gdm3/.local/share/xorg/Xorg.0.log", "/var/lib/gdm/.local/share/xorg/Xorg.0.log", "/var/log/Xorg.0.log"} {
-		if d.exists(p) {
-			section(p, file(p, 150))
-		}
-	}
+	section("Compositor (this boot)", comp)
+	section("NoCap Shell (this boot)", shellLog)
 	section("Kernel graphics messages", run("journalctl", "-b", "-k", "--no-pager", "-o", "short-monotonic", "-n", "150", "--grep", "drm|gpu|vc4|v3d|amdgpu|radeon|i915|nouveau|nvidia|simpledrm|virtio|qxl|bochs|vmwgfx|firmware|framebuffer"))
 	section("Sessions", run("loginctl", "list-sessions", "--no-pager")+"\n"+run("loginctl", "show-seat", "seat0", "--no-pager"))
 	gpu := "(lspci isn't installed)"
@@ -786,17 +807,16 @@ func (d *Desktop) Diagnostics(ctx context.Context) string {
 	}
 	section("Screens", strings.Join(screens, "\n"))
 	section("Kernel command line", file("/proc/cmdline", 0))
-	section("GNOME Shell version", run("gnome-shell", "--version"))
-	var sess []string
-	for p := range sessionFiles {
+	section("Versions", run("labwc", "--version")+run(ShellLibDir+"/nocap-shell", "--version"))
+	var parts []string
+	for _, p := range []string{sessionFilePath, sessionCmd, greeterCmd, ShellLibDir + "/nocap-shell", ShellLibDir + "/nocap-lock", ShellUIDir + "/shell.html"} {
 		state := "missing"
 		if d.exists(p) {
 			state = "present"
 		}
-		sess = append(sess, p+": "+state)
+		parts = append(parts, p+": "+state)
 	}
-	sort.Strings(sess)
-	section("NoCapOS session files", strings.Join(sess, "\n"))
+	section("NoCap Desktop files", strings.Join(parts, "\n"))
 	mem := file("/proc/meminfo", 0)
 	section("Memory", mem[:min(400, len(mem))])
 	section("System", run("uname", "-a"))
