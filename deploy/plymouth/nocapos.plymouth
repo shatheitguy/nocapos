@@ -1,6 +1,6 @@
 [Plymouth Theme]
 Name=NoCapOS
-Description=NoCapOS boot splash: the logo and a loading animation
+Description=NoCapOS boot splash: the NoCap logo with a light sweep and a soft red glow
 ModuleName=script
 
 [script]
