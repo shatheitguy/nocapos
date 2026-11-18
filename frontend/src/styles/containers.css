@@ -34,7 +34,7 @@ a.button.icon-btn { padding: 6px; width: 30px; height: 30px; }
 .ct-filter.on span { color: inherit; }
 
 /* cards */
-.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+.ct-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); gap: 12px; }
 .ct-card { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; cursor: pointer; min-width: 0; transition: background 0.15s, border-color 0.15s; }
 .ct-card:hover { background: var(--surface-3); }
 .ct-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

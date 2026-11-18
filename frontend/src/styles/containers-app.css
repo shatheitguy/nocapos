@@ -1,42 +1,46 @@
 /* ==========================================================================
-   Containers app: grouped rows, sections, container page tabs (logs,
+   Containers app: project headers, sections, container page tabs (logs,
    command line, files), images/volumes/devices, Settings → Containers.
    Tokens only (glass + accent), so every theme works.
    ========================================================================== */
-.ct-main.ct-fill { overflow: hidden; }
 .vlist { overflow: auto; min-height: 0; }
 .ct-list { flex: 1 1 0; min-height: 220px; padding: 4px; overflow: auto; }
-.ct-row, .ct-group {
-  display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) 92px 72px auto; align-items: center; gap: 10px;
+.ct-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 80px auto; align-items: center; gap: 10px;
   padding: 0 8px; border-radius: 12px; box-sizing: border-box;
 }
 .ct-row:hover { background: var(--surface-3); }
-.ct-row.nested { padding-left: 30px; }
-.ct-row.off .ct-row-text b { color: var(--muted); }
-.ct-row-main, .ct-group-main {
+.ct-row-main {
   display: flex; align-items: center; gap: 10px; min-width: 0; background: transparent; border: 0; padding: 6px 0; color: inherit; text-align: left; cursor: pointer; font: inherit;
 }
 .ct-row-main.static { cursor: default; }
-.ct-row-main:focus-visible, .ct-group-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.ct-row-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
 .ct-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ct-row-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .ct-row-line .chip.tiny { margin-left: 0; flex: none; }
 .ct-row-sub { font-size: 11.5px; color: var(--muted); }
-.ct-row-image { font-size: 11.5px; }
-.ct-row-meta { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; flex-wrap: nowrap; }
-.ct-row-meta .ct-ports { flex-wrap: nowrap; }
-.ct-row-num { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; font-variant-numeric: tabular-nums; }
-.ct-row-num span { color: var(--muted); font-size: 11px; }
 .ct-row-size { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.ct-group {
-  grid-template-columns: minmax(0, 2.9fr) 92px 72px auto;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%);
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border)); margin: 2px 0;
+
+/* container list: a project header row above that project's cards (or table rows) */
+.ct-groups { display: flex; flex-direction: column; gap: 14px; }
+.ct-groupblock { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ct-group-head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 2px 2px 0; }
+.ct-group-toggle {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex: 1; min-width: 0; background: transparent; border: 0; padding: 4px 2px; color: inherit;
+  text-align: left; cursor: pointer; font: inherit; border-radius: 8px;
 }
-.ct-group-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); flex: none; }
-.ct-group-ico.good { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
-.ct-group-ico.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
-.ct-group-ico.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.ct-group-toggle > svg { color: var(--muted); flex: none; }
+.ct-group-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ct-group-count { white-space: nowrap; }
+.ct-group-ico { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); flex: none; }
+.ct-group-ico.good { color: var(--ok); }
+.ct-group-ico.warn { color: var(--warn); }
+.ct-group-ico.bad { color: var(--bad); }
+.ct-group-usage { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ct-group-usage span { display: inline-flex; align-items: center; gap: 4px; }
+.ct-group-tr td { background: var(--surface-2); cursor: default; }
+.ct-port-cell { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ct-table .ct-quick { flex-wrap: nowrap; justify-content: flex-end; }
 .ct-local {
   display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-family: var(--mono); padding: 1px 7px; border-radius: 99px;
   background: var(--accent-soft); color: var(--accent); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -51,7 +55,6 @@
 .ct-section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ct-section-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.01em; flex: 1; }
 .ct-section .ct-list { min-height: 260px; }
-.ct-section .ct-row { grid-template-columns: minmax(0, 1fr) 80px auto; }
 .ct-pull { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .ct-pull-row { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 6px; }
 .ct-pull-row input { width: 100%; }
@@ -129,15 +132,12 @@
 .la-empty { padding: 10px 14px; margin: 0; }
 
 @media (max-width: 760px) {
-  .ct-row, .ct-group { grid-template-columns: minmax(0, 1fr) 72px auto; }
-  .ct-row-meta, .ct-row-size { display: none; }
-  .ct-row.nested { padding-left: 16px; }
+  .ct-group-usage { display: none; }
   .ct-file { grid-template-columns: minmax(0, 1fr) 64px auto; }
 }
 @media (max-width: 480px) {
   .ct-hide-narrow { display: none !important; }
-  .ct-row-num { display: none; }
-  .ct-row, .ct-group { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
-  .ct-section .ct-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .ct-group-count { display: none; }
+  .ct-section .ct-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
   .ct-section .ct-row .ct-row-size { display: none; }
 }
