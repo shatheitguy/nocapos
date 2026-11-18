@@ -14,12 +14,21 @@ type InstalledApp struct {
 	Version     string
 	WebPort     int
 	Secrets     map[string]string
+	// Storage is how its data is kept: StorageFolders (in the App data
+	// folder) or StorageVolumes (Docker volumes, apps installed before).
+	Storage     string
 	InstalledAt time.Time
 	UpdatedAt   time.Time
 }
 
+// How an installed app keeps its data.
+const (
+	StorageVolumes = "volume"
+	StorageFolders = "bind"
+)
+
 func (s *Store) InstalledApps(ctx context.Context) (map[string]*InstalledApp, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, version, web_port, secrets, installed_at, updated_at FROM apps`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, version, web_port, secrets, storage, installed_at, updated_at FROM apps`)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +38,7 @@ func (s *Store) InstalledApps(ctx context.Context) (map[string]*InstalledApp, er
 		var a InstalledApp
 		var secrets string
 		var inst, upd int64
-		if err := rows.Scan(&a.ID, &a.Version, &a.WebPort, &secrets, &inst, &upd); err != nil {
+		if err := rows.Scan(&a.ID, &a.Version, &a.WebPort, &secrets, &a.Storage, &inst, &upd); err != nil {
 			return nil, err
 		}
 		a.Secrets = map[string]string{}
@@ -58,11 +67,15 @@ func (s *Store) SaveInstalledApp(ctx context.Context, a *InstalledApp) error {
 		return err
 	}
 	now := time.Now().Unix()
+	storage := a.Storage
+	if storage != StorageFolders {
+		storage = StorageVolumes
+	}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO apps (id, version, web_port, secrets, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO apps (id, version, web_port, secrets, storage, installed_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET version = excluded.version, web_port = excluded.web_port,
-		   secrets = excluded.secrets, updated_at = excluded.updated_at`,
-		a.ID, a.Version, a.WebPort, string(secrets), now, now)
+		   secrets = excluded.secrets, storage = excluded.storage, updated_at = excluded.updated_at`,
+		a.ID, a.Version, a.WebPort, string(secrets), storage, now, now)
 	return err
 }
 
