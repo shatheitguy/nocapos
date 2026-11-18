@@ -61,7 +61,7 @@ func TestLocalOnlyBlocksOtherDevicesWhenOff(t *testing.T) {
 		}
 	}
 	// WebSockets, app proxies and the UI are covered too.
-	for _, p := range []string{"/ws", "/ws/terminal", "/apps/brave/", "/dav/x", "/"} {
+	for _, p := range []string{"/ws", "/ws/terminal", "/apps/native/x/", "/dav/x", "/"} {
 		if w := do("192.168.1.50:5000", p, nil); w.Code != http.StatusForbidden {
 			t.Errorf("%s allowed: %d", p, w.Code)
 		}

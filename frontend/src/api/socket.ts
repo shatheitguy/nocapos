@@ -1,6 +1,7 @@
 // One multiplexed WebSocket for the whole desktop. Components subscribe to
 // topics; the socket reconnects with backoff and re-subscribes automatically.
 import { api } from './client';
+import { wsBase } from '../native/platform';
 
 type Handler = (data: unknown) => void;
 type EndHandler = (error?: string) => void;
@@ -44,8 +45,7 @@ export async function connect(): Promise<void> {
     scheduleReconnect();
     return;
   }
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const sock = new WebSocket(`${proto}://${location.host}/ws?ticket=${encodeURIComponent(t.data.ticket)}`);
+  const sock = new WebSocket(`${wsBase()}/ws?ticket=${encodeURIComponent(t.data.ticket)}`);
   ws = sock;
   sock.onopen = () => {
     retry = 0;

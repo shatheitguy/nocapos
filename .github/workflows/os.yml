@@ -65,7 +65,7 @@ jobs:
 
       - name: Web UI
         working-directory: frontend
-        run: npm ci --no-audit --no-fund && npm run build
+        run: npm ci --no-audit --no-fund && npm run build && npm run build:shell
 
       - name: NoCapOS packages (amd64)
         run: |
@@ -186,7 +186,7 @@ jobs:
 
       - name: Web UI
         working-directory: frontend
-        run: npm ci --no-audit --no-fund && npm run build
+        run: npm ci --no-audit --no-fund && npm run build && npm run build:shell
 
       - name: NoCapOS packages (arm64)
         run: |

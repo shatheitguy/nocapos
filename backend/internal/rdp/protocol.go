@@ -106,6 +106,38 @@ type Params struct {
 	Width      int
 	Height     int
 	DPI        int
+
+	// The options below are Remote Desktop's; their zero values keep the
+	// defaults (and Virtual Desk's screens as they are).
+
+	// ColorDepth is 8, 16, 24 or 32 bits (0: the protocol's default).
+	ColorDepth int
+	// FixedSize keeps the remote screen at Width x Height instead of
+	// following the window (RDP's display-update).
+	FixedSize bool
+	// Audio plays the computer's sound here (RDP).
+	Audio bool
+	// DisableCopy / DisablePaste stop the clipboard going one way.
+	DisableCopy, DisablePaste bool
+	// Experience (RDP): what the computer draws; all off is fastest.
+	Wallpaper, Theming, FullWindowDrag, DesktopComposition, MenuAnimations bool
+	NoFontSmoothing                                                        bool
+	// Gateway (RDP): a remote desktop gateway in front of the computer.
+	GatewayHost     string
+	GatewayPort     int
+	GatewayUser     string
+	GatewayPassword string
+	GatewayDomain   string
+}
+
+// AudioTypes are the sound formats the browser client plays (raw PCM).
+var AudioTypes = []string{"audio/L8", "audio/L16"}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return ""
 }
 
 func (p Params) protocol() string {
@@ -119,12 +151,23 @@ func (p Params) values() map[string]string {
 	if p.protocol() == "vnc" {
 		// A virtual machine's own screen: loopback only, no password (it is
 		// reachable only through this authenticated tunnel).
+		port := p.Port
+		if port == 0 {
+			port = 5900
+		}
+		depth := "24"
+		if p.ColorDepth == 8 || p.ColorDepth == 16 || p.ColorDepth == 32 {
+			depth = strconv.Itoa(p.ColorDepth)
+		}
 		return map[string]string{
-			"hostname":    p.Hostname,
-			"port":        strconv.Itoa(p.Port),
-			"password":    p.Password,
-			"color-depth": "24",
-			"cursor":      "remote",
+			"hostname":      p.Hostname,
+			"port":          strconv.Itoa(port),
+			"username":      p.Username,
+			"password":      p.Password,
+			"color-depth":   depth,
+			"cursor":        "remote",
+			"disable-copy":  boolStr(p.DisableCopy),
+			"disable-paste": boolStr(p.DisablePaste),
 		}
 	}
 	port := p.Port
@@ -136,22 +179,46 @@ func (p Params) values() map[string]string {
 		sec = "any"
 	}
 	v := map[string]string{
-		"hostname":              p.Hostname,
-		"port":                  strconv.Itoa(port),
-		"username":              p.Username,
-		"password":              p.Password,
-		"domain":                p.Domain,
-		"security":              sec,
-		"resize-method":         "display-update",
-		"enable-wallpaper":      "false",
-		"enable-font-smoothing": "true",
-		"disable-audio":         "true",
-		"width":                 strconv.Itoa(p.Width),
-		"height":                strconv.Itoa(p.Height),
-		"dpi":                   strconv.Itoa(p.DPI),
+		"hostname":                   p.Hostname,
+		"port":                       strconv.Itoa(port),
+		"username":                   p.Username,
+		"password":                   p.Password,
+		"domain":                     p.Domain,
+		"security":                   sec,
+		"resize-method":              "display-update",
+		"enable-wallpaper":           strconv.FormatBool(p.Wallpaper),
+		"enable-theming":             strconv.FormatBool(p.Theming),
+		"enable-font-smoothing":      strconv.FormatBool(!p.NoFontSmoothing),
+		"enable-full-window-drag":    strconv.FormatBool(p.FullWindowDrag),
+		"enable-desktop-composition": strconv.FormatBool(p.DesktopComposition),
+		"enable-menu-animations":     strconv.FormatBool(p.MenuAnimations),
+		"disable-audio":              strconv.FormatBool(!p.Audio),
+		"disable-copy":               boolStr(p.DisableCopy),
+		"disable-paste":              boolStr(p.DisablePaste),
+		"width":                      strconv.Itoa(p.Width),
+		"height":                     strconv.Itoa(p.Height),
+		"dpi":                        strconv.Itoa(p.DPI),
+	}
+	if p.FixedSize {
+		v["resize-method"] = ""
+	}
+	switch p.ColorDepth {
+	case 8, 16, 24, 32:
+		v["color-depth"] = strconv.Itoa(p.ColorDepth)
 	}
 	if p.IgnoreCert {
 		v["ignore-cert"] = "true"
+	}
+	if p.GatewayHost != "" {
+		gp := p.GatewayPort
+		if gp == 0 {
+			gp = 443
+		}
+		v["gateway-hostname"] = p.GatewayHost
+		v["gateway-port"] = strconv.Itoa(gp)
+		v["gateway-username"] = p.GatewayUser
+		v["gateway-password"] = p.GatewayPassword
+		v["gateway-domain"] = p.GatewayDomain
 	}
 	return v
 }
@@ -177,8 +244,12 @@ func Handshake(w io.Writer, rd *Reader, p Params) (string, error) {
 	if dpi <= 0 {
 		dpi = 96
 	}
+	var audio []string
+	if p.Audio {
+		audio = AudioTypes
+	}
 	hello := Encode("size", strconv.Itoa(p.Width), strconv.Itoa(p.Height), strconv.Itoa(dpi)) +
-		Encode("audio") +
+		Encode("audio", audio...) +
 		Encode("video") +
 		Encode("image", "image/png", "image/jpeg", "image/webp")
 	if _, err := io.WriteString(w, hello); err != nil {

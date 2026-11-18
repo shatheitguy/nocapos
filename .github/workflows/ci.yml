@@ -26,11 +26,18 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Web UI (typecheck + build)
+      - name: Web UI (typecheck + build) and NoCap Desktop's pages
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npm run build
+          npm run build:shell
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shell-ui
+          path: frontend/dist-shell/
+          if-no-files-found: error
 
       - name: Go vet and tests
         working-directory: backend
@@ -44,3 +51,82 @@ jobs:
       # headers state, a half-configured package, a held dpkg lock.
       - name: Installer package repair (Debian trixie container)
         run: docker run --rm -v "$PWD:/src:ro" debian:trixie bash /src/backend/internal/deploytest/testdata/apt-trixie.sh
+
+  # NoCap Desktop's native programs: built with Debian 13's libraries (the
+  # release builds them for every architecture, see shell.yml), the bridge
+  # tests, then a headless run of labwc with NoCap Shell in it.
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and test (debian:trixie)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src docker.io/library/debian:trixie             bash shell/scripts/build-release.sh /src/out/amd64 "$(cat VERSION)"
+          sudo chown -R "$(id -u):$(id -g)" out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shell-bin
+          path: out/amd64/
+          if-no-files-found: error
+
+  shell-smoke:
+    needs: [test, shell]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-bin
+          path: smoke/bin
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shell-ui
+          path: smoke/ui
+
+      - name: labwc (headless) with NoCap Shell
+        run: |
+          chmod 755 smoke/bin/*
+          docker run --rm -v "$PWD:/src" -w /src docker.io/library/debian:trixie             bash shell/test/smoke.sh /src/smoke/bin /src/smoke/ui /src/smoke/out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shell-smoke
+          path: smoke/out/
+          if-no-files-found: ignore
+
+  # NoCap Desktop shows the same NoCap OS as the browser: the menu bar, dock,
+  # launcher, Control Center and notification center are compared pixel by
+  # pixel between the two builds (frontend/e2e/parity.spec.ts).
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build both and compare
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx vite build
+          npx vite build --config vite.shell.config.ts
+          npx playwright install --with-deps chromium
+          npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: parity
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+          if-no-files-found: ignore

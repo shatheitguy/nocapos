@@ -13,6 +13,7 @@ import { ConnectServerPanel } from './NetworkDrives';
 import { GuestFields, SharingSettings } from './SharingSettings';
 import { Toggle } from './Personalize';
 import { MySmbCard } from './SmbStatus';
+import { serverHost, serverOrigin } from '../native/platform';
 
 // Network drives and sharing, inside Files: the sidebar's Network section,
 // "Connect to Server…", "File Sharing…" and a folder's "Share this folder…".
@@ -290,12 +291,12 @@ export function ShareFolderDialog({ root, path, name, onClose, onShared }: { roo
     }
   };
 
-  const host = window.location.hostname;
+  const host = serverHost();
   const copy = (text: string) => void navigator.clipboard?.writeText(text).then(() => toast('success', tr('files.toast.copiedText'), text));
   if (done) {
     const addrs = [
       ...(smb || sharing.smb ? [`\\\\${host}\\${done}`, `smb://${host}/${done}`] : []),
-      ...(dav || sharing.webdav ? [`${window.location.origin}/dav/${encodeURIComponent(done)}/`] : []),
+      ...(dav || sharing.webdav ? [`${serverOrigin()}/dav/${encodeURIComponent(done)}/`] : []),
     ];
     return (
       <FilesModal title={`Sharing “${done}”`} onClose={onClose}>

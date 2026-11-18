@@ -12,12 +12,9 @@ import (
 )
 
 // Streams runs native GUI apps on their own virtual displays and streams each
-// one to the browser exactly the way Brave is streamed: Xvfb + x11vnc +
-// noVNC/websockify on loopback ports, reached only through alfad's
-// same-origin proxy. One session per app per person; idle sessions end.
-//
-// Brave keeps its own display (:99) and ports (5999/6080); app streams use
-// a separate range so the two never collide.
+// one to the browser: Xvfb + x11vnc + noVNC/websockify on loopback ports,
+// reached only through alfad's same-origin proxy. One session per app per
+// person; idle sessions end.
 
 const (
 	streamSlots     = 32
