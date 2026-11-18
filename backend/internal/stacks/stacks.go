@@ -373,6 +373,39 @@ func (m *Manager) Run(ctx context.Context, name, action string) error {
 	return nil
 }
 
+// RunWait runs an action and waits for it to finish.
+func (m *Manager) RunWait(ctx context.Context, name, action string) error {
+	if err := m.Run(ctx, name, action); err != nil {
+		return err
+	}
+	t := time.NewTicker(300 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+		}
+		if o := m.Op(name); o != nil && !o.Running {
+			if o.Error != "" {
+				return errors.New(o.Error)
+			}
+			return nil
+		}
+	}
+}
+
+// Backup keeps a copy of a stack's compose file next to it
+// ("compose.yaml.<tag>") and returns the copy's name.
+func (m *Manager) Backup(name, tag string) (string, error) {
+	compose, _, err := m.Files(name)
+	if err != nil {
+		return "", err
+	}
+	dst := composeFile + "." + tag
+	return dst, os.WriteFile(filepath.Join(m.Dir(name), dst), []byte(compose), 0o600)
+}
+
 // lockedWriter serialises output writes with readers of the op.
 type lockedWriter struct {
 	mu *sync.Mutex
