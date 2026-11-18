@@ -97,6 +97,9 @@ libpam-systemd                          # a seat session for the screen
 ?firmware-amd-graphics                  # AMD graphics firmware
 ?firmware-misc-nonfree                  # Intel and other graphics firmware
 ?systemd-zram-generator|zram-tools      # compressed swap on small machines
+?plymouth                               # the NoCapOS boot splash: start, shutdown, restart, disk password
+?plymouth-themes                        # the splash's graphics plugins (the NoCapOS splash is a script theme)
+?plymouth-label                         # the splash's text: the status line and the disk password question
 EOF2
       ;;
     fedora)
@@ -378,8 +381,139 @@ boot_methods() {
 }
 
 # Kernel command line tokens for a quiet, branded boot. "splash" makes
-# Plymouth draw; the rest hide boot text and firmware logos.
-SPLASH_TOKENS="quiet splash loglevel=3 logo.nologo"
+# Plymouth draw; the rest hide the kernel's and systemd's boot text (also
+# in the initramfs), the blinking console cursor and the kernel's logo.
+# Settings → Show boot details takes them out again (nocap-boot).
+SPLASH_TOKENS="quiet splash loglevel=3 rd.systemd.show_status=false systemd.show_status=false rd.udev.log_level=3 vt.global_cursor_default=0 logo.nologo"
+
+# Where NoCapOS's GRUB files live: the theme, its art and the plain
+# background GRUB shows while the menu stays hidden.
+GRUB_THEME_DIR=/usr/share/grub/themes/nocapos
+
+# render_grub_dropin silent|details: /etc/default/grub.d/nocapos.cfg, which
+# update-grub reads after /etc/default/grub (that file stays as it is).
+# silent: the menu stays hidden unless Shift (or Esc) is held at power-on,
+# NoCap's plain background replaces any distribution wallpaper, Linux keeps
+# GRUB's graphics mode (no flicker), and the kernel line gets the quiet
+# tokens. details (Settings → Show boot details): the menu shows for five
+# seconds and the quiet tokens come out, even ones /etc/default/grub has.
+# Each token ends up there once, however often this is applied.
+render_grub_dropin() {
+  local mode="${1:-silent}" add="" t strip=""
+  for t in $SPLASH_TOKENS; do strip="$strip|$t"; done
+  strip="${strip#|}"
+  [ "$mode" = silent ] && add=" $SPLASH_TOKENS"
+  cat <<EOF
+# NoCapOS boot (written by NoCapOS; Settings → Screen Real Estate → Show boot
+# details switches it). update-grub reads it after /etc/default/grub.
+GRUB_DISTRIBUTOR="NoCapOS"
+GRUB_THEME="$GRUB_THEME_DIR/theme.txt"
+GRUB_BACKGROUND="$GRUB_THEME_DIR/boot.png"
+GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep
+EOF
+  if [ "$mode" = silent ]; then
+    cat <<'EOF'
+# The menu stays hidden: hold Shift (or Esc) at power-on to see it.
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_TIMEOUT=0
+EOF
+  else
+    cat <<'EOF'
+# Boot details on: the menu shows for a few seconds.
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TIMEOUT=5
+EOF
+  fi
+  cat <<EOF
+# The kernel line: what /etc/default/grub has without NoCap's quiet tokens,
+# then NoCap's quiet tokens once (none with boot details on).
+nocap_line=""
+case \$- in *f*) nocap_glob=off ;; *) nocap_glob=on; set -f ;; esac
+for nocap_w in \$GRUB_CMDLINE_LINUX_DEFAULT; do
+  case "\$nocap_w" in $strip) ;; *) nocap_line="\$nocap_line \$nocap_w" ;; esac
+done
+[ "\$nocap_glob" = off ] || set +f
+GRUB_CMDLINE_LINUX_DEFAULT="\${nocap_line# }$add"
+GRUB_CMDLINE_LINUX_DEFAULT="\${GRUB_CMDLINE_LINUX_DEFAULT# }"
+unset nocap_line nocap_w nocap_glob
+EOF
+}
+
+# grub_reads_dropins ROOT: this GRUB reads /etc/default/grub.d/*.cfg
+# (Debian, Ubuntu and their derivatives do).
+grub_reads_dropins() {
+  grep -qs 'default/grub\.d' "$1/usr/sbin/grub-mkconfig" || [ -d "$1/etc/default/grub.d" ]
+}
+
+# grub_dropin_mode: the mode of a nocapos.cfg on stdin (silent or details;
+# empty for an older one, written before the menu could hide).
+grub_dropin_mode() {
+  awk '
+    /^GRUB_TIMEOUT_STYLE=hidden/ { m = "silent" }
+    /^GRUB_TIMEOUT_STYLE=menu/ { m = "details" }
+    END { if (m != "") print m }
+  '
+}
+
+# kms_modules ROOT: the graphics drivers a PC loads first thing in its
+# initramfs, so the boot splash comes up early and at the screen's own
+# resolution: one per kind of graphics card in ROOT/sys (Intel: i915, AMD:
+# amdgpu, NVIDIA without its own driver: nouveau). Virtual machines and
+# anything else use the firmware's framebuffer (simpledrm, built into the
+# kernel), which needs nothing.
+kms_modules() {
+  local d out=""
+  for d in "$1"/sys/bus/pci/devices/*; do
+    [ -f "$d/class" ] && [ -f "$d/vendor" ] || continue
+    case "$(cat "$d/class")" in 0x03*) ;; *) continue ;; esac
+    case "$(cat "$d/vendor")" in
+      0x8086) out="$out i915" ;;
+      0x1002) out="$out amdgpu" ;;
+      0x10de) nvidia_proprietary "$1" || out="$out nouveau" ;;
+    esac
+  done
+  # shellcheck disable=SC2086 # a list of names
+  [ -z "$out" ] || printf '%s\n' $out | sort -u
+}
+
+# render_kms_modules MODULE...: initramfs-tools' module list
+# (/usr/share/initramfs-tools/modules.d/nocapos-kms) that loads them early.
+render_kms_modules() {
+  echo "# NoCapOS (written by NoCapOS): graphics drivers loaded first thing, so the"
+  echo "# boot splash shows early and sharp. Rewritten on every NoCapOS update."
+  printf '%s\n' "$@"
+}
+
+# render_greetd_dropin: greetd.service.d/nocapos.conf. The sign-in screen
+# takes the first console over from the boot splash (vt 1, see
+# render_greetd_config): no text login there while it runs, and the text
+# login comes back if the sign-in screen keeps failing.
+render_greetd_dropin() {
+  cat <<'EOF'
+# NoCap Desktop (written by NoCapOS): the sign-in screen takes the first
+# console over from the boot splash.
+[Unit]
+After=plymouth-quit-wait.service systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
+OnFailure=getty@tty1.service
+EOF
+}
+
+# render_plymouth_quit_dropin: plymouth-quit.service.d/nocapos.conf. When
+# the sign-in screen comes next, the boot splash leaves its last frame on
+# the screen (--retain-splash) until the sign-in screen draws over it: no
+# console, no black flash in between. Without it (no NoCap Desktop on this
+# screen), the splash quits as usual and the text console shows.
+render_plymouth_quit_dropin() {
+  cat <<'EOF'
+# NoCap Desktop (written by NoCapOS): the splash stays until the sign-in
+# screen draws over it.
+[Service]
+ExecStart=
+ExecStart=-/bin/sh -c 'if [ "$$(systemctl get-default)" = graphical.target ] && systemctl -q is-enabled greetd.service; then exec plymouth quit --retain-splash; else exec plymouth quit; fi'
+EOF
+}
 
 # var_tokens_with VAR TOKEN...: reads a shell-style KEY=VALUE file on stdin
 # (/etc/default/u-boot, armbianEnv.txt) and prints it with the tokens added
@@ -487,6 +621,16 @@ tokens_line_without() (
     for tok in "$@"; do [ "$w" = "$tok" ] && keep=0; done
     [ "$keep" -eq 0 ] || out="$out $w"
   done
+  printf '%s\n' "${out# }"
+)
+
+# tokens_missing LINE TOKEN...: the tokens LINE doesn't have yet (the same
+# as install.sh's, for nocap-boot, which runs without it).
+tokens_missing() (
+  set -f
+  local line=" $1 " tok out=""
+  shift
+  for tok in "$@"; do case "$line" in *" $tok "*) ;; *) out="$out $tok" ;; esac; done
   printf '%s\n' "${out# }"
 )
 
@@ -600,11 +744,13 @@ greeter_user() {
 # render_greetd_config GREETER_USER [AUTOLOGIN_USER]: /etc/greetd/config.toml.
 # With an AUTOLOGIN_USER the desktop starts for that account once per boot
 # without the sign-in screen (off unless someone turns it on in Settings).
+# It runs on the first console (vt 1), where the boot splash is: there's no
+# switch to another console, so nothing flashes in between.
 render_greetd_config() {
   cat <<EOF
 # NoCap Desktop's sign-in service (written by NoCapOS; Settings changes it).
 [terminal]
-vt = 7
+vt = 1
 
 [default_session]
 command = "$SHELL_LIB/nocap-greeter-session"
