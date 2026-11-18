@@ -6,6 +6,7 @@ import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
 import { cleanDefaults } from '../lib/openWith';
 import { cleanLayout, EMPTY_LAYOUT, type SidebarLayout } from '../lib/sidebarOrder';
+import { ensurePalette, forgetPalette, paletteFor } from './wallPalette';
 
 export { isCustomWallpaper };
 
@@ -434,8 +435,14 @@ export function deleteCustomWallpaper(id: string) {
     /* storage unavailable */
   }
   writeWallList(customWallpapers().filter((w) => w.id !== id));
+  forgetPalette(id);
   const p = usePrefs.getState();
   if (p.wallpaper === id) p.set({ wallpaper: WALLPAPERS[0].id });
+}
+
+/** A picture of the wallpaper small enough to sample its colors. */
+export function wallpaperSrc(id: string): string {
+  return isCustomWallpaper(id) ? (loadCustomWallpaper(id) ?? '') : `/wallpapers/${id}-thumb.jpg`;
 }
 
 /** The wallpaper that's really shown: the chosen one, or the first built-in when it's gone. */
@@ -463,12 +470,19 @@ export const MENUBAR_H = 30;
 /** macOS style (buttons on the left) adds a menu bar along the top. */
 export const hasMenuBar = (p: Pick<PrefValues, 'titleButtons'>) => p.titleButtons === 'left' && !isCompact();
 
+/**
+ * While the front window is maximized the menu bar slides away (it peeks
+ * back when the pointer reaches the top edge) and windows get the full
+ * height. The dock is not affected.
+ */
+export const useMenubarAuto = create<{ on: boolean }>(() => ({ on: false }));
+
 /** Space the dock (and menu bar) reserve on each edge (the dock: 0 when it auto-hides). */
 export function reserved(p: PrefValues = usePrefs.getState()) {
   const d = effectiveDock(p);
   const t = d.autoHide ? 0 : dockThickness(p);
   return {
-    top: hasMenuBar(p) ? MENUBAR_H : 0,
+    top: hasMenuBar(p) && !useMenubarAuto.getState().on ? MENUBAR_H : 0,
     left: d.position === 'left' ? t : 0,
     right: d.position === 'right' ? t : 0,
     bottom: d.position === 'bottom' ? t : 0,
@@ -496,7 +510,11 @@ export function applyPrefs(p: PrefValues) {
   else root.dataset.theme = p.theme;
   const wallId = shownWallpaper(p.wallpaper);
   const wall = WALLPAPERS.find((w) => w.id === wallId);
-  root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wall ? wall.accent : ui.accent));
+  // Glass matches the wallpaper: a built-in's own accent, or the main color
+  // sampled from your own picture (worked out once, then re-applied).
+  if (ui.id === 'glass') ensurePalette(wallId, wallpaperSrc(wallId), () => applyPrefs(usePrefs.getState()));
+  const wallAccent = wall?.accent ?? paletteFor(wallId)?.[0];
+  root.style.setProperty('--accent', p.accent || (ui.id === 'glass' && wallAccent ? wallAccent : ui.accent));
   root.toggleAttribute('data-grid', ui.id === 'cyberdeck' && p.fxGrid);
 
   const d = effectiveDock(p);
@@ -506,7 +524,8 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-compact', isCompact());
   root.toggleAttribute('data-autohide', d.autoHide);
   root.style.setProperty('--res-top', `${r.top}px`);
-  root.toggleAttribute('data-menubar', r.top > 0);
+  root.toggleAttribute('data-menubar', hasMenuBar(p));
+  root.toggleAttribute('data-menubar-auto', hasMenuBar(p) && useMenubarAuto.getState().on);
   root.style.setProperty('--res-left', `${r.left}px`);
   root.style.setProperty('--res-right', `${r.right}px`);
   root.style.setProperty('--res-bottom', `${r.bottom}px`);

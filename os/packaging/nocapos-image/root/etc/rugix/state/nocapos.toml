@@ -1,0 +1,73 @@
+#:schema https://raw.githubusercontent.com/rugix/rugix/refs/heads/main/schemas/rugix-ctrl-state.schema.json
+
+# What survives a restart and a system update on a NoCapOS image install.
+# Everything else under / starts fresh at every boot: the system itself is
+# read-only and replaced whole by updates. These folders live on the data
+# partition and are bind-mounted in place by Rugix before systemd starts.
+# Settings in /etc are handled by /usr/lib/nocapos/etc-sync (copied, not
+# bind-mounted; see there).
+
+overlay = "discard"
+
+# People's home folders.
+[[persist]]
+directory = "/home"
+
+# NoCapOS: database, settings, sessions, certificates.
+[[persist]]
+directory = "/var/lib/nocapos"
+
+# NoCapOS: your files (NoCap Drive), shares and storage mount points.
+[[persist]]
+directory = "/srv"
+
+# Saved /etc settings (etc-sync's store).
+[[persist]]
+directory = "/var/lib/nocapos-system"
+
+# NoCap Desktop's per-machine state and native apps' homes.
+[[persist]]
+directory = "/var/lib/nocap-desktop"
+
+[[persist]]
+directory = "/var/lib/nocap-apps"
+
+# Docker apps: images, containers, volumes.
+[[persist]]
+directory = "/var/lib/docker"
+
+[[persist]]
+directory = "/var/lib/containerd"
+
+# Virtual Desk: VM disks and firmware state.
+[[persist]]
+directory = "/var/lib/libvirt"
+
+[[persist]]
+directory = "/var/lib/swtpm-localca"
+
+# Native apps (Flatpak) installed for everyone.
+[[persist]]
+directory = "/var/lib/flatpak"
+
+# Logs (journald keeps them in /var/log/journal, capped).
+[[persist]]
+directory = "/var/log"
+
+# Network: DHCP leases and the Wi-Fi radio state.
+[[persist]]
+directory = "/var/lib/NetworkManager"
+
+# Samba's account database (shared folders' passwords).
+[[persist]]
+directory = "/var/lib/samba"
+
+# The firewall's log of blocked attempts and its saved state.
+[[persist]]
+directory = "/var/lib/ufw"
+
+# systemd: timers' last runs, the random seed, backlight levels.
+[[persist]]
+directory = "/var/lib/systemd"
+
+# ZFS pools on extra disks: their cache lives in /etc/zfs (etc-sync).

@@ -80,6 +80,9 @@ func runQuiet(ctx context.Context, args ...string) (string, error) {
 
 // Status reports whether packages can be managed here.
 func (a *Admin) Status() Status {
+	if ImageOS() {
+		return Status{Reason: ImageOSReason}
+	}
 	if !Native() {
 		return Status{Reason: "System packages can be managed when NoCapOS is installed on Linux and runs as root. This NoCapOS instance runs somewhere else (Windows, macOS or a container)."}
 	}

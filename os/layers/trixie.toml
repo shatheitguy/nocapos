@@ -1,0 +1,11 @@
+# Debian 13 (trixie), bootstrapped from snapshot.debian.org so a release can
+# be rebuilt bit for bit later. The snapshot date is set in
+# config/snapshot.toml (passed with --param-file); security fixes come from
+# the debian-security snapshot of the same date.
+root = true
+
+recipes = ["core/debian-bootstrap"]
+
+[parameters."core/debian-bootstrap"]
+suite = "trixie"
+snapshot = "20261115T000000Z"

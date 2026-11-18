@@ -1,0 +1,12 @@
+# NoCapOS for PCs: the NoCapOS packages, branding and the read-only system
+# setup on top of pc-base.
+parent = "pc-base"
+
+recipes = [
+    "nocapos-os",
+    "core/pkg-cleanup",
+    "nocapos-slim",
+]
+
+[parameters.nocapos-os]
+target = "pc"

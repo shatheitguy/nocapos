@@ -1,0 +1,5 @@
+# CI only: an update whose health check fails (NoCapOS never starts), for
+# the automatic rollback test.
+parent = "pc-test"
+
+recipes = ["nocapos-test-broken"]

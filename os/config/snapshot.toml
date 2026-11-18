@@ -1,0 +1,8 @@
+# Debian snapshot this release is built from (snapshot.debian.org, UTC).
+# Passed to every bake with --param-file. The security refresh workflow
+# moves it forward when Debian publishes fixes for packages in the image.
+["core/debian-bootstrap"]
+snapshot = "20261115T000000Z"
+
+[nocapos-sources]
+snapshot = "20261115T000000Z"

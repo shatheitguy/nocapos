@@ -1,0 +1,6 @@
+description = "NoCapOS packages, branding and the read-only system setup"
+dependencies = ["nocapos-sources"]
+
+[parameters]
+target = { default = "pc" }
+channel = { default = "stable" }

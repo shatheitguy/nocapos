@@ -1,0 +1,18 @@
+[Unit]
+Description=NoCapOS: save this machine's settings to the data partition
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+DefaultDependencies=no
+After=local-fs.target
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nocapos/etc-sync save
+# Saved once more on the way down, so nothing changed in the last moments
+# before a restart is lost.
+RemainAfterExit=yes
+ExecStop=/usr/lib/nocapos/etc-sync save
+
+[Install]
+WantedBy=multi-user.target
