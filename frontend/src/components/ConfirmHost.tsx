@@ -9,6 +9,10 @@ export function ConfirmHost() {
   const req = useConfirm((s) => s.current);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const [left, setLeft] = useState<number | null>(null);
+  const [typed, setTyped] = useState('');
+  useEffect(() => setTyped(''), [req]);
+  const needs = req?.typed ?? '';
+  const typedOk = !needs || typed.trim() === needs;
   // Optional countdown: cancels itself at zero (e.g. "Keep these settings?").
   useEffect(() => {
     if (!req?.timeoutSec) {
@@ -40,6 +44,12 @@ export function ConfirmHost() {
         </div>
         <h3 id="confirm-title">{req.title}</h3>
         <p>{req.message}</p>
+        {needs && (
+          <label className="confirm-typed">
+            <span>{tr('dlg.typeToConfirm', { word: needs })}</span>
+            <input value={typed} spellCheck={false} autoComplete="off" onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && typedOk && req.resolve(true)} />
+          </label>
+        )}
         {left !== null && (
           <div className="confirm-countdown">
             <span style={{ width: `${(left / (req.timeoutSec ?? 1)) * 100}%` }} />
@@ -62,7 +72,7 @@ export function ConfirmHost() {
               </button>
             ))
           ) : (
-            <button type="button" className={req.danger ? 'danger-solid' : ''} onClick={() => req.resolve(true)}>
+            <button type="button" className={req.danger ? 'danger-solid' : ''} disabled={!typedOk} onClick={() => req.resolve(true)}>
               {req.confirmLabel ?? tr('dlg.continue')}
             </button>
           )}

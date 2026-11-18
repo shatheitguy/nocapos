@@ -4,6 +4,7 @@ import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
 import { toast } from '../state/toasts';
 import { Section, Toggle } from './Personalize';
+import { AppDataSettings } from './AppDataPanel';
 
 // Settings → Containers → Local addresses: give every container a name on
 // the home network (http(s)://<name>.nocap.local), and download NoCapOS's
@@ -33,12 +34,19 @@ export function ContainersSettings() {
     if (err) toast('error', t('ctr.la.caFail'), err);
   };
 
-  if (error) return <p className="error">{error}</p>;
+  if (error)
+    return (
+      <div className="stack settings-page">
+        <AppDataSettings />
+        <p className="error">{error}</p>
+      </div>
+    );
   if (!state) return <span className="spinner" />;
   const via = [state.mdns && t('ctr.la.viaMdns'), state.dns && t('ctr.la.viaDns')].filter(Boolean).join(' · ');
 
   return (
     <div className="stack settings-page">
+      <AppDataSettings />
       <Section title={t('ctr.la.title')} hint={t('ctr.la.hint')}>
         <Toggle label={t('ctr.la.toggle')} hint={t('ctr.la.toggleHint')} checked={state.enabled} disabled={busy} onChange={(v) => void toggle(v)} />
       </Section>
