@@ -36,6 +36,17 @@ func (c *Client) ImageExists(ctx context.Context, ref string) (bool, error) {
 	return true, nil
 }
 
+// ImageUser is the user an image runs as ("" = root).
+func (c *Client) ImageUser(ctx context.Context, ref string) (string, error) {
+	var out struct {
+		Config struct{ User string }
+	}
+	if err := c.do(ctx, http.MethodGet, "/images/"+url.PathEscape(ref)+"/json", nil, &out); err != nil {
+		return "", err
+	}
+	return out.Config.User, nil
+}
+
 // PullImage pulls fromImage:tag, invoking onProgress for each status line. It
 // blocks until the pull completes; callers should run it off the request path.
 func (c *Client) PullImage(ctx context.Context, image, tag string, onProgress func(PullProgress)) error {

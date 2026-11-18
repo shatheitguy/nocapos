@@ -124,6 +124,14 @@ func (s *Server) saveStack(w http.ResponseWriter, r *http.Request, name string, 
 			return
 		}
 	}
+	before := ""
+	if !create {
+		before, _, _ = s.Stacks.Files(name)
+	}
+	if err := s.checkComposeBinds(r.Context(), b.Compose, before); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	err := s.Stacks.Save(r.Context(), name, b.Compose, b.Env, create)
 	s.audit(r, uid, action, name, err == nil, errText(err))
 	if err != nil {

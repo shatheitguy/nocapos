@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { appURL, openStoreApp, storeApi, type StoreApp } from '../api/appstore';
 import { Icon, type IconName } from '../components/Icon';
 import { AppIcon } from '../components/AppTile';
-import { choiceDialog } from '../state/confirm';
+import { choiceDialog, confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { ContainerEditor } from './ContainerEditor';
@@ -60,11 +60,22 @@ async function uninstallApp(app: StoreApp, after: () => void) {
     message:
       'Its containers are removed. Keep the data and a reinstall picks up where you left off, or delete it for good (settings, accounts and files stored inside the app).',
     choices: [
-      { id: 'delete', label: 'Delete data too', danger: true },
+      { id: 'delete', label: tr('ad.uninstall.choice'), danger: true },
       { id: 'keep', label: 'Uninstall, keep data' },
     ],
   });
   if (!pick) return;
+  if (pick === 'delete') {
+    // Its App data folder (or volumes) go for good: make sure.
+    const sure = await confirmDialog({
+      title: tr('ad.uninstall.title', { app: app.name }),
+      message: tr('ad.uninstall.text', { app: app.name, id: app.id }),
+      danger: true,
+      confirmLabel: tr('ad.uninstall.button'),
+      typed: app.id,
+    });
+    if (!sure) return;
+  }
   const r = await storeApi.uninstall(app.id, pick === 'delete');
   if (!r.ok) toast('error', `Couldn’t uninstall ${app.name}`, r.error);
   after();
