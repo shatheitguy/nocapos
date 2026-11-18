@@ -110,7 +110,7 @@ jobs:
 
       - name: Installer test in QEMU (USB stick, setup, install, first start)
         run: |
-          sudo apt-get install -y -qq mtools >/dev/null
+          sudo apt-get install -y -qq mtools swtpm swtpm-tools >/dev/null
           bash os/test/installer-test.sh
 
       - name: Installer screenshots
