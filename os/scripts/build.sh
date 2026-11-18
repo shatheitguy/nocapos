@@ -23,7 +23,16 @@ case "$cmd" in
     arch="${1:?arch}"
     out="$BUILD/debs/$arch"
     rm -rf "$out"
-    bash "$OS/packaging/build-debs.sh" "$VERSION" "$arch" "$out"
+    # NoCap Shell's programs, built in Debian 13 (the image's libraries).
+    shell_out="$BUILD/shell-bin/$arch"
+    if [ ! -x "$shell_out/nocap-shell" ]; then
+      mkdir -p "$shell_out"
+      docker run --rm --platform "linux/$arch" -v "$ROOT:/src:ro" -v "$shell_out:/out" debian:trixie \
+        bash -c "bash /src/shell/scripts/build-release.sh /out $VERSION && chown -R $(id -u):$(id -g) /out"
+    fi
+    [ -f "$ROOT/frontend/dist-shell/shell.html" ] || { echo "frontend/dist-shell is missing: cd frontend && npm run build:shell" >&2; exit 1; }
+    NOCAP_SHELL_BINS="$shell_out" bash "$OS/packaging/build-debs.sh" "$VERSION" "$arch" "$out"
+    [ -f "$out/nocap-desktop_${VERSION}_${arch}.deb" ] || { echo "NoCap Desktop's package wasn't built" >&2; exit 1; }
     rm -rf "$OS/recipes/nocapos-os/debs"
     mkdir -p "$OS/recipes/nocapos-os/debs"
     cp "$out"/*.deb "$OS/recipes/nocapos-os/debs/"
