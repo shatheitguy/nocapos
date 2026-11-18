@@ -192,7 +192,12 @@ func (in *Installer) install(ctx context.Context, req Request) (string, error) {
 	if _, err := r(ctx, "", "wipefs", "-a", "-f", disk); err != nil {
 		return "", err
 	}
-	if _, err := r(ctx, SfdiskScript(), "sfdisk", "--wipe", "always", "--wipe-partitions", "always", disk); err != nil {
+	// The stick's partition IDs: the boot files name the system partition by its ID.
+	dump, err := r(ctx, "", "sfdisk", "-d", in.Src.Disk)
+	if err != nil {
+		return "", err
+	}
+	if _, err := r(ctx, SfdiskScript(ParseSfdiskDump(dump)), "sfdisk", "--wipe", "always", "--wipe-partitions", "always", disk); err != nil {
 		return "", err
 	}
 	_, _ = r(ctx, "", "partprobe", disk)
@@ -226,7 +231,7 @@ func (in *Installer) install(ctx context.Context, req Request) (string, error) {
 
 	// ---- the system (most of the time)
 	in.set(StepSystem, 8)
-	err := in.Copy(ctx, src(4), p(4), func(done, total int64) {
+	err = in.Copy(ctx, src(4), p(4), func(done, total int64) {
 		if total > 0 {
 			in.set(StepSystem, 8+int(80*done/total))
 		}
