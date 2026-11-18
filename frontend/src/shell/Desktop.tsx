@@ -42,7 +42,7 @@ import { WidgetLayer } from './WidgetLayer';
 import { useNotes, watchNotes } from '../apps/notes/notesStore';
 import { Window } from './Window';
 import { hostOn, hostSend, nativeSurface } from '../native/platform';
-import { mirrorWindows, watchChromeRegion } from '../native/chrome';
+import { mirrorWindows, useHostFrontMaxed, watchChromeRegion } from '../native/chrome';
 
 // Shown once, so it's fetched only when needed.
 const Welcome = lazy(() => import('./Welcome').then((m) => ({ default: m.Welcome })));
@@ -72,11 +72,14 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const compact = compactSize(vp.w, vp.h);
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
   // The front window is maximized: the menu bar slides away (dock stays).
-  const frontMaxed = useWM((s) => {
+  // On NoCap Desktop that's the screen's active window, whichever app's.
+  const wmFrontMaxed = useWM((s) => {
     let top: (typeof s.windows)[number] | undefined;
     for (const w of s.windows) if (!w.minimized && (!top || w.z > top.z)) top = w;
     return !!top?.maximized;
   });
+  const hostFrontMaxed = useHostFrontMaxed((s) => s.on);
+  const frontMaxed = surface === 'chrome' ? hostFrontMaxed : wmFrontMaxed;
   const menubarAuto = menuBar && frontMaxed;
   useEffect(() => {
     if (useMenubarAuto.getState().on === menubarAuto) return;
