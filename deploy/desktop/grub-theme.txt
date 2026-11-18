@@ -1,15 +1,17 @@
-# NoCapOS GRUB theme (installed systems): the NoCapOS logo on near-black,
-# a short centred menu and a thin red countdown bar.
+# NoCapOS GRUB theme (installed systems): the NoCap logo at a medium size a
+# little above the middle of near-black, a short centred menu below it and
+# a thin red countdown bar. The menu only shows while Shift (or Esc) is held
+# at power-on, or with Settings → Show boot details on.
 title-text: ""
 desktop-image: "background.png"
 desktop-color: "#050508"
 terminal-font: "Unifont Regular 16"
 
 + boot_menu {
-  left = 25%
-  width = 50%
-  top = 66%
-  height = 24%
+  left = 30%
+  width = 40%
+  top = 58%
+  height = 26%
   item_font = "Unifont Regular 16"
   selected_item_font = "Unifont Regular 16"
   item_color = "#9a9aa4"
@@ -24,10 +26,10 @@ terminal-font: "Unifont Regular 16"
 
 + progress_bar {
   id = "__timeout__"
-  left = 35%
-  width = 30%
-  top = 93%
-  height = 4
+  left = 40%
+  width = 20%
+  top = 88%
+  height = 3
   fg_color = "#e5383b"
   bg_color = "#202028"
   border_color = "#202028"
