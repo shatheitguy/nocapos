@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { api } from '../api/client';
 import { AppDataBanner } from './AppDataPanel';
 import type { Container, ContainerStats, DockerEvent } from '../api/types';
 import { Icon, type IconName } from '../components/Icon';
-import { VirtualList } from '../components/VirtualList';
-import { fmtBytes, fmtPct } from '../lib/format';
+import { Sparkline } from '../components/Charts';
+import { fmtBytes, fmtPct, fmtRate } from '../lib/format';
 import { usePoll, useTopic } from '../lib/hooks';
 import { groupContainers, sumBy, type Group } from '../lib/containers';
 import { resubscribe } from '../api/socket';
@@ -16,13 +16,13 @@ import { DockerNetworks } from './DockerNetworks';
 import { Stacks } from './Stacks';
 import { dockerApi, type ContainerAction, type DockerUsage, type ProjectAction } from '../api/docker';
 import { confirmDialog } from '../state/confirm';
-import { TypeConfirm } from './StorageParts';
+import { Meter, TypeConfirm } from './StorageParts';
 import { ContainerPage, type History } from './ContainerPage';
-import { Badges, LocalLink, PortLinks, StateDot, containerLink, isApp, isRunning, stateTone } from './ContainerBits';
+import { Badges, LocalLink, PortLinks, StateDot, containerLink, isApp, isRunning, stateTone, uptime } from './ContainerBits';
 import { DevicesSection, ImagesSection, VolumesSection } from './ContainerResources';
 
-// Containers: one window with Containers (grouped by Compose project, with
-// live usage, ports, local addresses and disk size), Images, Volumes,
+// Containers: one window with Containers (live cards or a list, grouped by
+// Compose project, with usage, ports, local addresses and disk size), Images, Volumes,
 // Networks, Devices and Stacks. Opening a container shows its own page
 // (usage graphs, details, logs, a command line, its files). Admin only; the
 // server enforces it, and NoCapOS's own containers stay protected.
@@ -30,10 +30,10 @@ import { DevicesSection, ImagesSection, VolumesSection } from './ContainerResour
 type Tab = 'containers' | 'images' | 'volumes' | 'networks' | 'devices' | 'stacks';
 type Filter = 'all' | 'running' | 'stopped' | 'apps' | 'system';
 type Sort = 'name' | 'cpu' | 'ram';
+type Layout = 'grid' | 'list';
 
 const HISTORY = 60;
 const STATS_EVERY = 2500;
-const ROW = 62;
 
 function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -58,7 +58,6 @@ function readCollapsed(): Set<string> {
   }
 }
 
-type Row = { kind: 'group'; g: Group<Container> } | { kind: 'item'; c: Container };
 type Editing = { id: string | null; device?: string };
 
 export function Containers() {
@@ -70,6 +69,7 @@ export function Containers() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>(() => readPref('nocap.ct.sort', ['name', 'cpu', 'ram'] as const, 'name'));
+  const [layout, setLayout] = useState<Layout>(() => readPref('nocap.ct.layout', ['grid', 'list'] as const, 'grid'));
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [stats, setStats] = useState<Record<string, ContainerStats>>({});
@@ -183,15 +183,9 @@ export function Containers() {
     }
     return gs;
   }, [shown, sort, stats]);
-  const rows = useMemo(() => {
-    const out: Row[] = [];
-    const showHeads = groups.some((g) => g.project !== '');
-    for (const g of groups) {
-      if (showHeads) out.push({ kind: 'group', g });
-      if (!showHeads || !collapsed.has(g.project || '\u0000')) for (const c of g.items) out.push({ kind: 'item', c });
-    }
-    return out;
-  }, [groups, collapsed]);
+  // Project headers only appear once there is a project to tell apart.
+  const showHeads = groups.some((g) => g.project !== '');
+  const isOpen = (g: Group<Container>) => !showHeads || !collapsed.has(g.project || '\u0000');
 
   const toggleGroup = (p: string) => {
     setCollapsed((cur) => {
@@ -231,6 +225,16 @@ export function Containers() {
     void load();
     return r.ok ? null : (r.error ?? '');
   };
+
+  const groupProps = (g: Group<Container>) => ({
+    g,
+    open: isOpen(g),
+    stats,
+    usage,
+    busy: busy === `p:${g.project}`,
+    onToggle: () => toggleGroup(g.project),
+    onAct: (a: ProjectAction) => (a === 'remove' ? setRemovingProject(g.project) : void projectAct(g.project, a)),
+  });
 
   if (error) {
     const offline = error.status === 503 || error.status === 0;
@@ -288,7 +292,7 @@ export function Containers() {
           </button>
         ))}
       </nav>
-      <main className={`app-content ct-main ${tab === 'containers' && !current ? 'ct-fill' : ''}`}>
+      <main className="app-content ct-main">
         {tab === 'stacks' && <Stacks />}
         {tab === 'networks' && <DockerNetworks containers={names} />}
         {tab === 'images' && <ImagesSection usage={usage} />}
@@ -340,6 +344,24 @@ export function Containers() {
                 <option value="cpu">{t('ctr.sort.cpu')}</option>
                 <option value="ram">{t('ctr.sort.ram')}</option>
               </select>
+              <div className="ct-seg" role="group" aria-label={t('ctr.layout')}>
+                {(['grid', 'list'] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    className={layout === l ? 'on' : ''}
+                    title={t(`ctr.layout.${l}`)}
+                    aria-label={t(`ctr.layout.${l}`)}
+                    aria-pressed={layout === l}
+                    onClick={() => {
+                      setLayout(l);
+                      writePref('nocap.ct.layout', l);
+                    }}
+                  >
+                    <Icon name={l} size={15} />
+                  </button>
+                ))}
+              </div>
               <button type="button" className="ghost icon-btn" aria-label={t('ctr.refresh')} title={t('ctr.refresh')} onClick={() => { void load(); void loadUsage(); }}>
                 <Icon name="restart" size={15} />
               </button>
@@ -354,40 +376,46 @@ export function Containers() {
                 </button>
               ))}
             </div>
-            {rows.length === 0 ? (
+            {shown.length === 0 ? (
               <Empty icon="containers" text={list.length ? t('ctr.noMatch') : t('ctr.none')} />
-            ) : (
-              <VirtualList
-                className="ct-list ucard"
-                label={t('ctr.nav.containers')}
-                count={rows.length}
-                rowHeight={ROW}
-                render={(i) => {
-                  const row = rows[i];
-                  return row.kind === 'group' ? (
-                    <GroupRow
-                      key={`g:${row.g.project}`}
-                      g={row.g}
-                      open={!collapsed.has(row.g.project || '\u0000')}
-                      stats={stats}
-                      usage={usage}
-                      busy={busy === `p:${row.g.project}`}
-                      onToggle={() => toggleGroup(row.g.project)}
-                      onAct={(a) => (a === 'remove' ? setRemovingProject(row.g.project) : void projectAct(row.g.project, a))}
-                    />
-                  ) : (
-                    <ContainerRow
-                      key={row.c.id}
-                      c={row.c}
-                      s={stats[row.c.id]}
-                      size={usage?.containers[row.c.id]?.rw}
-                      busy={busy === row.c.id}
-                      nested={!!row.c.project}
-                      onOpen={() => setOpenId(row.c.id)}
-                      onAct={act}
-                    />
+            ) : layout === 'grid' ? (
+              <div className="ct-groups">
+                {groups.map((g) => {
+                  const open = isOpen(g);
+                  return (
+                    <section key={`g:${g.project}`} className="ct-groupblock" aria-label={g.project || t('ctr.standalone')}>
+                      {showHeads && <GroupHead {...groupProps(g)} />}
+                      {open && (
+                        <div className="ct-grid">
+                          {g.items.map((c) => (
+                            <ContainerCard
+                              key={c.id}
+                              c={c}
+                              s={stats[c.id]}
+                              hist={history.current.get(c.id)}
+                              size={usage?.containers[c.id]?.rw}
+                              busy={busy === c.id}
+                              onOpen={() => setOpenId(c.id)}
+                              onAct={act}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
                   );
-                }}
+                })}
+              </div>
+            ) : (
+              <ContainerTable
+                groups={groups}
+                showHeads={showHeads}
+                isOpen={isOpen}
+                head={(g) => <GroupHead {...groupProps(g)} />}
+                stats={stats}
+                usage={usage}
+                busy={busy}
+                onOpen={setOpenId}
+                onAct={act}
               />
             )}
           </>
@@ -446,47 +474,180 @@ function QuickActions({ c, busy, onAct }: { c: Container; busy: boolean; onAct: 
   );
 }
 
-function ContainerRow({ c, s, size, busy, nested, onOpen, onAct }: {
-  c: Container; s?: ContainerStats; size?: number; busy: boolean; nested: boolean; onOpen: () => void; onAct: (c: Container, a: ContainerAction) => void;
+function memText(s?: ContainerStats) {
+  if (!s) return '–';
+  return `${fmtBytes(s.mem_usage)} / ${fmtBytes(s.mem_limit)}`;
+}
+
+const memLevel = (pct: number) => (pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : undefined);
+
+/** One container as a live card: state, image, usage, then ports, local address, size and uptime. */
+function ContainerCard({ c, s, hist, size, busy, onOpen, onAct }: {
+  c: Container; s?: ContainerStats; hist?: History; size?: number; busy: boolean; onOpen: () => void; onAct: (c: Container, a: ContainerAction) => void;
 }) {
   const t = useT();
   const live = isRunning(c) && s;
+  const up = uptime(c);
   const local = c.local_addresses?.[0];
   return (
-    <div className={`ct-row ${nested ? 'nested' : ''} ${isRunning(c) ? '' : 'off'}`} role="listitem" style={{ height: ROW }}>
-      <button type="button" className="ct-row-main" onClick={onOpen} aria-label={t('ctr.openContainer', { name: c.name })}>
+    <div
+      className={`ct-card ucard ${isRunning(c) ? '' : 'off'}`}
+      role="button"
+      tabIndex={0}
+      aria-label={t('ctr.openContainer', { name: c.name })}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onOpen()}
+    >
+      <div className="ct-card-head">
         <StateDot state={c.state} />
-        <span className="ct-row-text">
-          <span className="ct-row-line">
-            <b className="ellipsis">{c.name}</b>
-            <Badges c={c} />
-          </span>
-          <span className="ct-row-line ct-row-sub">
-            <span className="mono ellipsis ct-row-image" title={c.image}>{c.image}</span>
-          </span>
-        </span>
-      </button>
-      <span className="ct-row-meta">
-        <PortLinks c={c} max={2} />
+        <b className="ct-card-name ellipsis" title={c.name}>{c.name}</b>
+        <QuickActions c={c} busy={busy} onAct={onAct} />
+      </div>
+      <div className="ct-card-image mono ellipsis" title={c.image}>{c.image}</div>
+      <div className="ct-badges">
+        <span className={`chip tiny ${stateTone(c.state)}`}>{c.state}</span>
+        <Badges c={c} />
+      </div>
+      {live ? (
+        <div className="ct-metrics">
+          <div className="ct-metric">
+            <span className="ct-metric-head">
+              <span>{t('ctr.cpu')}</span>
+              <b>{fmtPct(s.cpu_percent, 1)}</b>
+            </span>
+            <Sparkline values={hist?.cpu ?? []} height={26} className="accent" />
+          </div>
+          <div className="ct-metric">
+            <span className="ct-metric-head">
+              <span>{t('ctr.memory')}</span>
+              <b>{fmtPct(s.mem_percent, 0)}</b>
+            </span>
+            <Meter pct={s.mem_percent} level={memLevel(s.mem_percent)} />
+            <span className="ct-sub">{memText(s)}</span>
+          </div>
+          <div className="ct-io">
+            <span title={t('ctr.netIO')}>
+              <Icon name="network" size={12} /> ↓ {fmtRate(s.net_rx_rate)} · ↑ {fmtRate(s.net_tx_rate)}
+            </span>
+            <span title={t('ctr.diskIO')}>
+              <Icon name="disk" size={12} /> R {fmtRate(s.block_read_rate ?? 0)} · W {fmtRate(s.block_write_rate ?? 0)}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="ct-metrics idle muted small">{isRunning(c) ? t('ctr.readingUsage') : c.status}</div>
+      )}
+      <div className="ct-card-foot">
+        <PortLinks c={c} max={3} />
         {local && <LocalLink url={local} />}
-      </span>
-      <span className="ct-row-num" title={t('ctr.cpuMem')}>
-        {live ? (
-          <>
-            <b>{fmtPct(s.cpu_percent, 1)}</b>
-            <span>{fmtBytes(s.mem_usage)}</span>
-          </>
-        ) : (
-          <span className="muted">{c.state}</span>
+        <span className="spacer" />
+        {size != null && (
+          <span className="muted small" title={t('ctr.sizeHint')}>
+            <Icon name="database" size={12} /> {fmtBytes(size)}
+          </span>
         )}
-      </span>
-      <span className="ct-row-size muted small" title={t('ctr.sizeHint')}>{size != null ? fmtBytes(size) : '–'}</span>
-      <QuickActions c={c} busy={busy} onAct={onAct} />
+        {up && (
+          <span className="muted small" title={t('ctr.uptime')}>
+            <Icon name="clock" size={12} /> {up}
+          </span>
+        )}
+        {(c.restart_count ?? 0) > 0 && <span className="chip tiny warn" title={t('ctr.restarts')}>↻ {c.restart_count}</span>}
+      </div>
     </div>
   );
 }
 
-function GroupRow({ g, open, stats, usage, busy, onToggle, onAct }: {
+/** The list layout: one table, a project header row above each project's containers. */
+function ContainerTable({ groups, showHeads, isOpen, head, stats, usage, busy, onOpen, onAct }: {
+  groups: Group<Container>[];
+  showHeads: boolean;
+  isOpen: (g: Group<Container>) => boolean;
+  head: (g: Group<Container>) => ReactNode;
+  stats: Record<string, ContainerStats>;
+  usage: DockerUsage | null;
+  busy: string | null;
+  onOpen: (id: string) => void;
+  onAct: (c: Container, a: ContainerAction) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="ucard ct-table-wrap">
+      <table className="table hover ct-table">
+        <thead>
+          <tr>
+            <th>{t('ctr.name')}</th>
+            <th>{t('ctr.cpu')}</th>
+            <th>{t('ctr.memory')}</th>
+            <th>{t('ctr.col.net')}</th>
+            <th>{t('ctr.col.disk')}</th>
+            <th>{t('ctr.uptime')}</th>
+            <th>{t('ctr.ports')}</th>
+            <th title={t('ctr.sizeHint')}>{t('ctr.size')}</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <Fragment key={`g:${g.project}`}>
+              {showHeads && (
+                <tr className="ct-group-tr">
+                  <td colSpan={9}>{head(g)}</td>
+                </tr>
+              )}
+              {isOpen(g) &&
+                g.items.map((c) => {
+                  const s = isRunning(c) ? stats[c.id] : undefined;
+                  const size = usage?.containers[c.id]?.rw;
+                  return (
+                    <tr key={c.id} onClick={() => onOpen(c.id)}>
+                      <td>
+                        <span className="ct-name-cell">
+                          <StateDot state={c.state} />
+                          <b className="ellipsis">{c.name}</b>
+                          <Badges c={c} />
+                        </span>
+                        <div className="muted small mono ellipsis ct-img-cell">{c.image}</div>
+                      </td>
+                      <td className="num">{s ? fmtPct(s.cpu_percent, 1) : '–'}</td>
+                      <td className="num">
+                        {s ? (
+                          <>
+                            {fmtBytes(s.mem_usage)}
+                            <Meter pct={s.mem_percent} level={memLevel(s.mem_percent)} />
+                          </>
+                        ) : (
+                          '–'
+                        )}
+                      </td>
+                      <td className="num small">{s ? `${fmtRate(s.net_rx_rate)} / ${fmtRate(s.net_tx_rate)}` : '–'}</td>
+                      <td className="num small">{s ? `${fmtRate(s.block_read_rate ?? 0)} / ${fmtRate(s.block_write_rate ?? 0)}` : '–'}</td>
+                      <td className="small">
+                        {uptime(c) ?? <span className="muted">{c.state}</span>}
+                        {(c.restart_count ?? 0) > 0 && <span className="chip tiny warn">↻ {c.restart_count}</span>}
+                      </td>
+                      <td className="small">
+                        <span className="ct-port-cell">
+                          <PortLinks c={c} max={2} />
+                          {c.local_addresses?.[0] && <LocalLink url={c.local_addresses[0]} />}
+                        </span>
+                      </td>
+                      <td className="num small muted">{size != null ? fmtBytes(size) : '–'}</td>
+                      <td className="row-actions">
+                        <QuickActions c={c} busy={busy === c.id} onAct={onAct} />
+                      </td>
+                    </tr>
+                  );
+                })}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** A project's header row: open/close, how many run, its total usage and size, and actions for all of it. */
+function GroupHead({ g, open, stats, usage, busy, onToggle, onAct }: {
   g: Group<Container>; open: boolean; stats: Record<string, ContainerStats>; usage: DockerUsage | null; busy: boolean; onToggle: () => void; onAct: (a: ProjectAction) => void;
 }) {
   const t = useT();
@@ -496,27 +657,28 @@ function GroupRow({ g, open, stats, usage, busy, onToggle, onAct }: {
   const size = usage ? sumBy(g.items, (c) => usage.containers[c.id]?.rw) : null;
   const locked = g.items.some((c) => c.system);
   return (
-    <div className="ct-group" role="listitem" style={{ height: ROW }}>
-      <button type="button" className="ct-group-main" onClick={onToggle} aria-expanded={open}>
+    <div className="ct-group-head">
+      <button type="button" className="ct-group-toggle" onClick={onToggle} aria-expanded={open}>
         <Icon name={open ? 'chevronDown' : 'chevronRight'} size={14} />
         <span className={`ct-group-ico ${stateTone(g.state)}`}>
           <Icon name={standalone ? 'containers' : 'layers'} size={15} />
         </span>
-        <span className="ct-row-text">
-          <b className="ellipsis">{standalone ? t('ctr.standalone') : g.project}</b>
-          <span className="muted small">{t('ctr.groupCount', { running: g.running, total: g.items.length })}</span>
-        </span>
+        <b className="ellipsis">{standalone ? t('ctr.standalone') : g.project}</b>
+        <span className="muted small ct-group-count">{t('ctr.groupCount', { running: g.running, total: g.items.length })}</span>
       </button>
-      <span className="ct-row-num">
+      <span className="ct-group-usage muted small">
         {g.running > 0 && (
-          <>
-            <b>{fmtPct(cpu, 1)}</b>
-            <span>{fmtBytes(mem)}</span>
-          </>
+          <span title={t('ctr.cpuMem')}>
+            {fmtPct(cpu, 1)} · {fmtBytes(mem)}
+          </span>
+        )}
+        {size != null && (
+          <span title={t('ctr.sizeHint')}>
+            <Icon name="database" size={12} /> {fmtBytes(size)}
+          </span>
         )}
       </span>
-      <span className="ct-row-size muted small">{size != null ? fmtBytes(size) : ''}</span>
-      {!standalone ? (
+      {!standalone && (
         <div className="btn-group ct-quick">
           {g.state !== 'running' && (
             <button type="button" className="ghost icon-btn" title={t('ctr.proj.start')} aria-label={t('ctr.proj.start')} disabled={busy} onClick={() => onAct('start')}>
@@ -537,8 +699,6 @@ function GroupRow({ g, open, stats, usage, busy, onToggle, onAct }: {
             <Icon name="trash" size={15} />
           </button>
         </div>
-      ) : (
-        <span />
       )}
     </div>
   );
