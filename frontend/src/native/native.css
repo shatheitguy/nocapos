@@ -29,3 +29,8 @@ html[data-native-surface='app'] .window.native-window.tiled { border-radius: 0; 
 /* Native surfaces never scroll as a page or show a loading state. */
 html[data-native-surface='desktop'],
 html[data-native-surface='chrome'] { overflow: hidden; }
+
+/* The menu bar's hot strip over a maximized window: thin, so the window's
+   own top edge keeps nearly all of its clicks (only the strip is in the
+   chrome's input region while the bar is away). */
+html[data-native-surface='chrome'] .menubar-hot { height: 3px; }
