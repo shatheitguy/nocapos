@@ -1,6 +1,7 @@
 #!/bin/bash
-# Takes NoCap Desktop's full desktop back out: NoCapOS's settings, theme,
-# shell extension, app entries, boot branding and units, and puts back what
+# Takes NoCap Desktop back out: NoCap Shell's programs and pages, the
+# session's services and settings, the sign-in service's settings, boot
+# branding and units (and what earlier versions added), and puts back what
 # install.sh changed (recorded in the data folder's desktop-backup). The
 # desktop packages themselves stay installed (remove them with your package
 # manager); the sign-in screen goes back to whatever was there before.
@@ -23,7 +24,7 @@ if [ -f "$BK/display-manager" ]; then
   target="$(cat "$BK/default-target" 2>/dev/null || echo multi-user.target)"
   if [ -n "$dm" ] && [ "$prev" != "$dm" ]; then
     systemctl disable "$dm" >/dev/null 2>&1 || true
-    # GDM's link (Debian's gdm3 has no [Install], so install.sh made it).
+    # The display-manager.service link install.sh made.
     link=/etc/systemd/system/display-manager.service
     if [ -L "$link" ] && [ "$(basename "$(readlink -f "$link")")" = "$dm" ]; then rm -f "$link"; fi
   fi
@@ -61,6 +62,14 @@ if [ -x "$LIB/nocapos-accent" ]; then
       runuser -u "$u" -- env HOME="$home" "$LIB/nocapos-accent" --remove >/dev/null 2>&1 || true
     done
 fi
+# NoCap Shell: its programs, the session's services, the lock screen's
+# password check, the portal choice, the window decorations, the sign-in
+# service's start order and the software rendering switch.
+rm -rf /usr/libexec/nocapos /usr/local/lib/nocapos/shell /usr/share/themes/NoCap
+for f in nocap-session.target nocap-shell.service nocap-idle.service nocapos-accent.service; do rm -f "/etc/systemd/user/$f"; done
+rm -f /etc/pam.d/nocap-lock /usr/share/xdg-desktop-portal/nocap-portals.conf /etc/nocapos/desktop-software-rendering
+rm -rf /etc/systemd/system/greetd.service.d/nocapos.conf
+rmdir /etc/systemd/system/greetd.service.d 2>/dev/null || true
 # The desktop clipboard agent.
 rm -f /etc/systemd/user/graphical-session.target.wants/nocapos-clipboard.service /etc/systemd/user/nocapos-clipboard.service
 # The remote screen follower's leftovers.
@@ -110,6 +119,7 @@ if [ -f "$BK/edits" ]; then
       grub-cfg) rm -f /etc/default/grub.d/nocapos.cfg; grub=1 ;;
       divert) if has dpkg-divert; then dpkg-divert --local --rename --remove "$a" >/dev/null 2>&1 || true; fi ;;
       os-release) [ -x "$LIB/os-release-sync" ] && "$LIB/os-release-sync" --undo ;;
+      user) if id "$a" >/dev/null 2>&1 && ! pgrep -u "$a" >/dev/null 2>&1; then userdel "$a" >/dev/null 2>&1 || true; fi ;;
       usermask) [ "$(readlink "/etc/systemd/user/$a" 2>/dev/null)" = /dev/null ] && rm -f "/etc/systemd/user/$a" ;;
       autostart-hidden) grep -qs 'Hidden by NoCapOS' "$a" && rm -f "$a" ;;
       swapfile)
@@ -131,7 +141,7 @@ if [ -f "$BK/pretty-hostname" ] && has hostnamectl; then
   hostnamectl set-hostname --pretty "$(cat "$BK/pretty-hostname")" >/dev/null 2>&1 || true
 fi
 rm -rf "$DATA/desktop-remote"
-# Repair fallbacks (Xorg, software rendering) alfad applied.
+# Repair fallbacks (software rendering) alfad applied.
 rm -f "$DATA/desktop-fallback"
 if [ -f /etc/environment ] && grep -qs 'NoCap Desktop software rendering' /etc/environment; then
   grep -v -e 'NoCap Desktop software rendering' -e '^LIBGL_ALWAYS_SOFTWARE=1$' /etc/environment >/etc/environment.nocap.tmp && cat /etc/environment.nocap.tmp >/etc/environment

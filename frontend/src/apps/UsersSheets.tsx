@@ -3,6 +3,9 @@ import { groupsApi, usersApi, type PeopleGroup, type Person } from '../api/users
 import { Icon } from '../components/Icon';
 import { tr, useT } from '../i18n';
 import { toast } from '../state/toasts';
+import { confirmDialog } from '../state/confirm';
+import { removeAvatar, uploadAvatar } from '../lib/avatar';
+import { openApp } from './meta';
 import { PersonSessionsPanel } from './SessionsPanel';
 import {
   Field, GROUP_COLORS, GroupMark, GroupToggles, PasswordInput, PersonAvatar, RoleBadge, RolePicker, Sheet, SheetSection, StrengthMeter,
@@ -152,10 +155,24 @@ export function EditPersonSheet({ person: p, linux, groups, onClose, onChanged, 
   const t = useT();
   const [busy, setBusy] = useState(false);
   const role = roleOf(p);
-  const locked = !!p.root || p.you;
+  // Root can't be changed here. You can manage yourself, except disabling
+  // or deleting your own account (another admin does that).
+  const locked = !!p.root;
+  const dangerLocked = !!p.root || p.you;
+  const [name, setName] = useState(p.full_name ?? '');
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const changeRole = async (to: Role) => {
     if (to === role) return;
+    if (p.you && role === 'admin') {
+      const ok = await confirmDialog({
+        title: t('ug.edit.selfDemoteTitle'),
+        message: t('ug.edit.selfDemoteMsg'),
+        confirmLabel: t('ug.edit.selfDemoteCta'),
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     const r = await applyRole(p, to);
     if (r.ok) toast('success', t(`ug.toast.role.${to}`, { name: p.username }));
@@ -169,6 +186,40 @@ export function EditPersonSheet({ person: p, linux, groups, onClose, onChanged, 
     if (!r.ok) toast('error', t('ug.toast.groupFailed', { group: g.name }), r.error);
     await onChanged();
     setBusy(false);
+  };
+  const saveName = async () => {
+    const next = name.trim();
+    if (next === (p.full_name ?? '')) return;
+    setBusy(true);
+    const r = await usersApi.setFullName(p.username, next);
+    if (r.ok) toast('success', t('ug.toast.nameSaved'));
+    else {
+      toast('error', t('ug.toast.failed'), r.error);
+      setName(p.full_name ?? '');
+    }
+    await onChanged();
+    setBusy(false);
+  };
+  const pickPhoto = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      setPhotoBusy(true);
+      const err = await uploadAvatar(f, p.username);
+      if (err) toast('error', t('ug.toast.failed'), err);
+      await onChanged();
+      setPhotoBusy(false);
+    };
+    input.click();
+  };
+  const dropPhoto = async () => {
+    setPhotoBusy(true);
+    await removeAvatar(p.username);
+    await onChanged();
+    setPhotoBusy(false);
   };
 
   return (
@@ -188,7 +239,37 @@ export function EditPersonSheet({ person: p, linux, groups, onClose, onChanged, 
         <span className="ug-autosave"><Icon name="check" size={12} /> {t('ug.edit.autosave')}</span>
       </div>
 
-      <SheetSection title={t('ug.add.role')} hint={locked ? (p.root ? t('ug.edit.rootLocked') : t('ug.edit.selfLocked')) : t('ug.edit.roleHint')}>
+      {!p.root && (linux || p.you) && (
+        <SheetSection title={t('ug.edit.profile')}>
+          <div className="ug-profile">
+            {p.you && (
+              <div className="ug-profile-photo">
+                <PersonAvatar person={p} size={56} />
+                <div className="ug-profile-photo-actions">
+                  <button type="button" className="ghost sm" onClick={pickPhoto} disabled={photoBusy}>
+                    {photoBusy ? <span className="spinner sm" /> : <Icon name="image" size={14} />} {t('ug.edit.photoChange')}
+                  </button>
+                  {p.avatar && (
+                    <button type="button" className="ghost sm" onClick={() => void dropPhoto()} disabled={photoBusy}>
+                      {t('ug.edit.photoRemove')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {linux && (
+              <Field label={t('ug.f.fullName')} hint={t('ug.edit.nameHint')}>
+                <input value={name} maxLength={128} autoComplete="off" placeholder="Alex Smith" disabled={busy}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={() => void saveName()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+              </Field>
+            )}
+          </div>
+        </SheetSection>
+      )}
+
+      <SheetSection title={t('ug.add.role')} hint={p.root ? t('ug.edit.rootLocked') : p.you ? t('ug.edit.selfRoleHint') : t('ug.edit.roleHint')}>
         <RolePicker value={role} onChange={(r) => void changeRole(r)} disabled={locked || busy} linux={linux} />
       </SheetSection>
 
@@ -202,14 +283,26 @@ export function EditPersonSheet({ person: p, linux, groups, onClose, onChanged, 
 
       <SheetSection title={t('ug.edit.security')}>
         <div className="ug-list">
-          <div className="ug-list-row">
-            <Icon name="lock" size={16} />
-            <span className="ug-list-text">
-              <b>{t('ug.edit.twofa')}</b>
-              <span>{p.totp ? t('ug.edit.twofaOn') : t('ug.edit.twofaOff')}</span>
-            </span>
-            <span className={`ug-pill ${p.totp ? 'good' : ''}`}>{p.totp ? t('ug.on') : t('ug.off')}</span>
-          </div>
+          {p.you ? (
+            <button type="button" className="ug-list-row action" onClick={() => { onClose(); openApp('settings', { props: { section: 'security' } }); }}>
+              <Icon name="lock" size={16} />
+              <span className="ug-list-text">
+                <b>{t('ug.edit.twofa')}</b>
+                <span>{p.totp ? t('ug.edit.twofaOn') : t('ug.edit.twofaSelf')}</span>
+              </span>
+              <span className={`ug-pill ${p.totp ? 'good' : ''}`}>{p.totp ? t('ug.on') : t('ug.off')}</span>
+              <Icon name="chevronRight" size={15} />
+            </button>
+          ) : (
+            <div className="ug-list-row">
+              <Icon name="lock" size={16} />
+              <span className="ug-list-text">
+                <b>{t('ug.edit.twofa')}</b>
+                <span>{p.totp ? t('ug.edit.twofaOn') : t('ug.edit.twofaOff')}</span>
+              </span>
+              <span className={`ug-pill ${p.totp ? 'good' : ''}`}>{p.totp ? t('ug.on') : t('ug.off')}</span>
+            </div>
+          )}
           <button type="button" className="ug-list-row action" onClick={onPassword}>
             <Icon name="key" size={16} />
             <span className="ug-list-text">
@@ -229,7 +322,7 @@ export function EditPersonSheet({ person: p, linux, groups, onClose, onChanged, 
         </div>
       </SheetSection>
 
-      {!locked && (
+      {!dangerLocked && (
         <SheetSection title={t('ug.edit.danger')}>
           <div className="ug-danger">
             <button type="button" className="ghost" onClick={onDisable}>

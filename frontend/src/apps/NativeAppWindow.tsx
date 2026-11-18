@@ -7,7 +7,7 @@ import { NativeAppIcon } from '../shell/NativeTile';
 import { useWM, type WinState } from '../state/windows';
 
 // A Linux app installed on the server, running on its own virtual display
-// and streamed into this window, the same way the Brave window works.
+// and streamed into this window.
 export function NativeAppWindow({ win }: { win: WinState }) {
   const id = win.props?.id ?? '';
   const name = win.props?.name ?? 'App';
@@ -99,12 +99,12 @@ export function NativeAppWindow({ win }: { win: WinState }) {
   const failed = fatal || status?.phase === 'error' || status?.phase === 'idle';
 
   return (
-    <div className="browser native-stream">
-      <div className="browser-bar">
-        <div className="brave-badge">
+    <div className="nstream">
+      <div className="nstream-bar">
+        <div className="nstream-badge">
           <NativeAppIcon app={{ id }} size={16} /> {name}
         </div>
-        <span className="browser-state muted small">{ready ? 'Connected' : (status?.message ?? 'Starting…')}</span>
+        <span className="nstream-state muted small">{ready ? 'Connected' : (status?.message ?? 'Starting…')}</span>
         <span className="spacer" />
         <button type="button" title="Reload" aria-label="Reload" onClick={() => setNonce((n) => n + 1)} disabled={!ready}>
           <Icon name="restart" size={15} />
@@ -117,12 +117,12 @@ export function NativeAppWindow({ win }: { win: WinState }) {
         </button>
       </div>
 
-      <div className="browser-view">
+      <div className="nstream-view">
         {ready ? (
-          <iframe ref={frame} key={`${sid}-${nonce}`} className="browser-frame" src={streamURL(sid)} title={name} allow="clipboard-read; clipboard-write; fullscreen" />
+          <iframe ref={frame} key={`${sid}-${nonce}`} className="nstream-frame" src={streamURL(sid)} title={name} allow="clipboard-read; clipboard-write; fullscreen" />
         ) : (
-          <div className="brave-boot">
-            <div className="brave-logo">
+          <div className="nstream-boot">
+            <div className="nstream-logo">
               <NativeAppIcon app={{ id }} size={46} />
             </div>
             {failed ? (

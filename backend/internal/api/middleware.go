@@ -119,7 +119,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/apps/"):
-			// Streamed app content (e.g. Brave). It is framed same-origin by the
+			// Streamed app content (Linux apps). It is framed same-origin by the
 			// desktop, so no X-Frame-Options DENY here; the proxy manages the
 			// upstream's own security headers.
 		case isUserContentPath(r.URL.Path):

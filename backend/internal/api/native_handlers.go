@@ -266,7 +266,7 @@ func (s *Server) nativeLaunched(w http.ResponseWriter, r *http.Request, got nati
 func (s *Server) grantNativeCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     nativeCookie,
-		Value:    s.signBrave(userFrom(r.Context()).ID, sessionFrom(r.Context()), time.Now().Add(nativeTTL)),
+		Value:    s.signStream(userFrom(r.Context()).ID, sessionFrom(r.Context()), time.Now().Add(nativeTTL)),
 		Path:     nativePrefix,
 		MaxAge:   int(nativeTTL.Seconds()),
 		HttpOnly: true,

@@ -104,6 +104,9 @@ fun Hub(a: MainActivity) {
                     Big(t("Send a file", "Send a file"), "↑", Modifier.weight(1f)) { a.pickToSend() }
                     Big(t("Send a note", "Send text"), "✎", Modifier.weight(1f)) { sendText = true }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Big(t("Brain Dump", "Sticky Notes"), "▤", Modifier.weight(1f)) { a.openNotes() }
+                }
                 val apps = a.serverApps.filter { it.id != "nocapos" }
                 if (apps.isNotEmpty()) {
                     Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(18.dp)).padding(14.dp)) {

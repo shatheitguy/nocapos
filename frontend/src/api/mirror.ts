@@ -1,4 +1,5 @@
 import { api } from './client';
+import { wsBase } from '../native/platform';
 
 // Phone mirroring: your own linked phones' live screens (never anyone
 // else's, administrators included).
@@ -44,4 +45,4 @@ export const mirrorApi = {
 };
 
 export const mirrorSocketURL = (ticket: string) =>
-  `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/mirror?ticket=${encodeURIComponent(ticket)}`;
+  `${wsBase()}/ws/mirror?ticket=${encodeURIComponent(ticket)}`;
