@@ -25,7 +25,9 @@ export interface BackupRepo {
 export interface BackupSource {
   root?: string;
   path?: string;
-  special?: 'nocapos';
+  special?: 'nocapos' | 'appdata';
+  /** App data: stop the apps using it while it's backed up (consistent databases). */
+  stop_apps?: boolean;
 }
 
 export interface BackupSchedule {

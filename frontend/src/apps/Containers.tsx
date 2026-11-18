@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { api } from '../api/client';
+import { AppDataBanner } from './AppDataPanel';
 import type { Container, ContainerStats, DockerEvent } from '../api/types';
 import { Icon, type IconName } from '../components/Icon';
 import { VirtualList } from '../components/VirtualList';
@@ -291,7 +292,12 @@ export function Containers() {
         {tab === 'stacks' && <Stacks />}
         {tab === 'networks' && <DockerNetworks containers={names} />}
         {tab === 'images' && <ImagesSection usage={usage} />}
-        {tab === 'volumes' && <VolumesSection />}
+        {tab === 'volumes' && (
+          <>
+            <AppDataBanner onChanged={load} />
+            <VolumesSection />
+          </>
+        )}
         {tab === 'devices' && <DevicesSection containers={list} onAttach={(id, device) => setEditing({ id, device })} />}
         {tab === 'containers' && current && (
           <ContainerPage
@@ -314,6 +320,7 @@ export function Containers() {
         )}
         {tab === 'containers' && !current && (
           <>
+            <AppDataBanner onChanged={load} />
             <div className="ct-toolbar">
               <label className="search compact ct-search">
                 <Icon name="search" size={15} />
