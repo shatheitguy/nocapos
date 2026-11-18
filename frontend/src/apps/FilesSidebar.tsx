@@ -1,5 +1,7 @@
 import { tr } from '../i18n';
-import { useEffect, useState, type DragEvent, type MouseEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type DragEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
+import { usePrefs } from '../state/prefs';
+import { arrangeFavs, arrangePlaces, dropIndex, moveTo, setHidden, shownPlaces, step, type SidebarLayout } from '../lib/sidebarOrder';
 import { useReceived } from '../state/received';
 import { RECYCLE, baseName, inRecycle, isAppData, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
 import type { NetShare } from '../api/netdrive';
@@ -34,6 +36,102 @@ export function readDrag(e: DragEvent): DragFiles | null {
   }
 }
 const isInternal = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE);
+
+/** What a reorderable sidebar item spreads onto its button. */
+interface PlaceProps {
+  ref: (el: HTMLElement | null) => void;
+  className: string;
+  onPointerDown: (e: PointerEvent) => void;
+  onPointerMove: (e: PointerEvent) => void;
+  onPointerUp: (e: PointerEvent) => void;
+  onPointerCancel: (e: PointerEvent) => void;
+  onClickCapture: (e: MouseEvent) => void;
+  onContextMenu?: (e: MouseEvent) => void;
+}
+
+/**
+ * Rearranging a list by dragging: with a mouse once it moves a few pixels,
+ * with touch after holding a moment. The others shift live to make room;
+ * letting go saves the order.
+ */
+function useReorder(keys: string[], commit: (next: string[]) => void) {
+  const [drag, setDrag] = useState<{ key: string; index: number } | null>(null);
+  const els = useRef(new Map<string, HTMLElement>());
+  const st = useRef<{ key: string; x: number; y: number; id: number; touch: boolean; active: boolean; timer: number; centres: number[] } | null>(null);
+  const skipClick = useRef(false);
+  const at = useRef(0); // where the dragged item would land
+  const view = drag ? moveTo(keys, drag.key, drag.index) : keys;
+
+  const begin = () => {
+    const s = st.current;
+    if (!s) return;
+    s.active = true;
+    s.centres = keys
+      .filter((k) => k !== s.key)
+      .map((k) => {
+        const r = els.current.get(k)?.getBoundingClientRect();
+        return r ? r.top + r.height / 2 : 0;
+      });
+    try {
+      els.current.get(s.key)?.setPointerCapture(s.id);
+    } catch {
+      /* the pointer may be gone */
+    }
+    at.current = keys.indexOf(s.key);
+    setDrag({ key: s.key, index: at.current });
+  };
+  const end = (save: boolean) => {
+    const s = st.current;
+    st.current = null;
+    if (!s) return;
+    window.clearTimeout(s.timer);
+    if (s.active) {
+      skipClick.current = true;
+      setDrag(null);
+      if (save && at.current !== keys.indexOf(s.key)) commit(moveTo(keys, s.key, at.current));
+    }
+  };
+
+  const bind = (key: string): PlaceProps => ({
+    ref: (el) => {
+      if (el) els.current.set(key, el);
+      else els.current.delete(key);
+    },
+    className: drag?.key === key ? 'fs-dragging' : drag ? 'fs-shifting' : '',
+    onPointerDown: (e) => {
+      if (e.button !== 0 || keys.length < 2) return;
+      const touch = e.pointerType !== 'mouse';
+      st.current = { key, x: e.clientX, y: e.clientY, id: e.pointerId, touch, active: false, timer: 0, centres: [] };
+      if (touch) st.current.timer = window.setTimeout(begin, 450);
+    },
+    onPointerMove: (e) => {
+      const s = st.current;
+      if (!s || s.key !== key) return;
+      if (!s.active) {
+        const d = Math.hypot(e.clientX - s.x, e.clientY - s.y);
+        if (s.touch) {
+          if (d > 8) end(false); // scrolling, not holding
+          return;
+        }
+        if (d < 5) return;
+        begin();
+      }
+      e.preventDefault();
+      at.current = dropIndex(e.clientY, s.centres);
+      setDrag({ key, index: at.current });
+    },
+    onPointerUp: () => end(true),
+    onPointerCancel: () => end(false),
+    onClickCapture: (e) => {
+      if (skipClick.current) {
+        skipClick.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+  });
+  return { view, bind, dragging: !!drag };
+}
 
 export function FilesSidebar({
   roots,
@@ -71,6 +169,10 @@ export function FilesSidebar({
   openMenu: (e: MouseEvent, items: MenuEntry[]) => void;
 }) {
   const [over, setOver] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const layout = usePrefs((s) => s.filesSidebar);
+  const setPrefs = usePrefs((s) => s.set);
+  const saveLayout = (l: Partial<SidebarLayout>) => setPrefs({ filesSidebar: { ...usePrefs.getState().filesSidebar, ...l } });
   const special = current?.special ?? null;
   const received = useReceived((s) => s.info);
   useEffect(() => {
@@ -133,71 +235,165 @@ export function FilesSidebar({
     },
   };
 
+  // ---------- places, in the person's order ----------
+  const places: Record<string, { label: string; render: (extra: PlaceProps) => ReactNode }> = {};
+  if (home) {
+    places.home = {
+      label: tr('files.side.home'),
+      render: (x) => (
+        <button type="button" {...x} className={`fs-item ${x.className} ${inside(home) && !favs.some((f) => at(f.root, f.path)) ? 'on' : ''} ${over === 'home' ? 'drop' : ''}`} onClick={() => onGo(home, '/')} {...dropTarget('home', (d, c) => onDropInto(d, home, '/', c))}>
+          <Icon name="home" size={17} />
+          <span className="fs-name">Home</span>
+        </button>
+      ),
+    };
+  }
+  places.recents = {
+    label: tr('files.side.recents'),
+    render: (x) => (
+      <button type="button" {...x} className={`fs-item ${x.className} ${special === 'recents' ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'recents')}>
+        <Icon name="clock" size={17} />
+        <span className="fs-name">Recents</span>
+      </button>
+    ),
+  };
+  if (recvPath && received?.root) {
+    places.drops = {
+      label: received.folder,
+      render: (x) => (
+        <button
+          type="button"
+          {...x}
+          className={`fs-item fs-received ${x.className} ${inReceived ? 'on' : ''}`}
+          title={tr('recv.sideHint')}
+          onClick={() => {
+            onGo(received.root!, recvPath);
+            useReceived.getState().markSeen();
+          }}
+        >
+          <Icon name="download" size={17} />
+          <span className="fs-name">{received.folder}</span>
+          {received.unread > 0 && (
+            <span className="fs-badge" aria-label={tr('recv.unread', { n: received.unread })}>
+              {received.unread > 99 ? '99+' : received.unread}
+            </span>
+          )}
+        </button>
+      ),
+    };
+  }
+  // App data and System stay administrators' only, whatever the layout says.
+  if (admin) {
+    places.appdata = {
+      label: tr('files.appdata.title'),
+      render: (x) => (
+        <button type="button" {...x} className={`fs-item ${x.className} ${special === 'appdata' || (!special && current && isAppData(current.root)) ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'appdata')}>
+          <Icon name="appData" size={17} />
+          <span className="fs-name">{tr('files.appdata.title')}</span>
+        </button>
+      ),
+    };
+  }
+  for (const r of others) {
+    if (r.id === 'system' && !admin) continue;
+    places[`root:${r.id}`] = {
+      label: r.name,
+      render: (x) => (
+        <button type="button" {...x} className={`fs-item ${x.className} ${inside(r.id) ? 'on' : ''}`} title={r.total ? `${fmtBytes(r.free, 0)} free of ${fmtBytes(r.total, 0)}` : r.name} onClick={() => onGo(r.id, '/')}>
+          <Icon name={r.kind === 'share' ? 'network' : r.kind === 'homes' ? 'users' : r.id === 'home' ? 'user' : 'drive'} size={17} />
+          <span className="fs-name">{r.name}</span>
+          {r.read_only && <span className="fs-sub" title="You can look at this folder but not change it">Read only</span>}
+        </button>
+      ),
+    };
+  }
+  const placeOrder = arrangePlaces(layout.order, Object.keys(places));
+  const shown = shownPlaces(placeOrder, layout.hidden);
+  const placeDrag = useReorder(shown, (next) => {
+    // Hidden places keep their slots; the shown ones take the new order.
+    let i = 0;
+    saveLayout({ order: placeOrder.map((k) => (layout.hidden.includes(k) ? k : next[i++])) });
+  });
+  const placeMenu = (key: string): MenuEntry[] => {
+    const i = shown.indexOf(key);
+    return [
+      { label: tr('files.side.moveUp'), icon: 'arrowUp', disabled: i <= 0, onClick: () => saveLayout({ order: step(placeOrder, key, -1, layout.hidden) }) },
+      { label: tr('files.side.moveDown'), icon: 'arrowDown', disabled: i < 0 || i >= shown.length - 1, onClick: () => saveLayout({ order: step(placeOrder, key, 1, layout.hidden) }) },
+      { label: tr('files.side.hide'), icon: 'eye', onClick: () => saveLayout({ order: placeOrder, hidden: setHidden(layout.hidden, key, true) }) },
+      { label: tr('files.side.edit'), icon: 'settings', onClick: () => setEditing(true) },
+    ];
+  };
+
+  // ---------- favorites, in their own order ----------
+  const favKey = (f: Favorite) => `${f.root}:${f.path}`;
+  const favOrder = arrangeFavs(layout.favs, favs.map(favKey));
+  const favByKey = new Map(favs.map((f) => [favKey(f), f]));
+  const favDrag = useReorder(favOrder, (next) => saveLayout({ favs: next }));
+
   return (
     <nav className="sidebar files-sidebar fs-side">
-      <h2 className="app-title fs-title">{tr('files.title')}</h2>
+      <div className="fs-title-row">
+        <h2 className="app-title fs-title">{tr('files.title')}</h2>
+        <button
+          type="button"
+          className="ghost icon-btn fs-more"
+          aria-label={tr('files.side.more')}
+          title={tr('files.side.more')}
+          onClick={(e) => openMenu(e, [{ label: tr('files.side.edit'), icon: 'settings', onClick: () => setEditing(true) }])}
+        >
+          <Icon name="more" size={15} />
+        </button>
+      </div>
+
+      {editing && (
+        <div className="fs-edit" role="group" aria-label={tr('files.side.edit')}>
+          <p className="fs-edit-title">{tr('files.side.editTitle')}</p>
+          {placeOrder.map((k) => (
+            <label key={k} className="fs-edit-row">
+              <input type="checkbox" checked={!layout.hidden.includes(k)} onChange={(e) => saveLayout({ order: placeOrder, hidden: setHidden(layout.hidden, k, !e.target.checked) })} />
+              <span>{places[k].label}</span>
+            </label>
+          ))}
+          <div className="fs-edit-actions">
+            <button type="button" className="ghost" onClick={() => saveLayout({ order: [], hidden: [], favs: [] })}>
+              {tr('files.side.reset')}
+            </button>
+            <button type="button" onClick={() => setEditing(false)}>
+              {tr('files.side.done')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="fs-section">
-        {home && (
-          <button type="button" className={`fs-item ${inside(home) && !favs.some((f) => at(f.root, f.path)) ? 'on' : ''} ${over === 'home' ? 'drop' : ''}`} onClick={() => onGo(home, '/')} {...dropTarget('home', (d, c) => onDropInto(d, home, '/', c))}>
-            <Icon name="home" size={17} />
-            <span className="fs-name">Home</span>
-          </button>
-        )}
-        <button type="button" className={`fs-item ${special === 'recents' ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'recents')}>
-          <Icon name="clock" size={17} />
-          <span className="fs-name">Recents</span>
-        </button>
-        {recvPath && received?.root && (
-          <button
-            type="button"
-            className={`fs-item fs-received ${inReceived ? 'on' : ''}`}
-            title={tr('recv.sideHint')}
-            onClick={() => {
-              onGo(received.root!, recvPath);
-              useReceived.getState().markSeen();
-            }}
-          >
-            <Icon name="download" size={17} />
-            <span className="fs-name">{received.folder}</span>
-            {received.unread > 0 && (
-              <span className="fs-badge" aria-label={tr('recv.unread', { n: received.unread })}>
-                {received.unread > 99 ? '99+' : received.unread}
-              </span>
-            )}
-          </button>
-        )}
-        {admin && (
-          <button type="button" className={`fs-item ${special === 'appdata' || (!special && current && isAppData(current.root)) ? 'on' : ''}`} onClick={() => home && onGo(home, '/', 'appdata')}>
-            <Icon name="appData" size={17} />
-            <span className="fs-name">{tr('files.appdata.title')}</span>
-          </button>
-        )}
-        {others.map((r) => (
-          <button key={r.id} type="button" className={`fs-item ${inside(r.id) ? 'on' : ''}`} title={r.total ? `${fmtBytes(r.free, 0)} free of ${fmtBytes(r.total, 0)}` : r.name} onClick={() => onGo(r.id, '/')}>
-            <Icon name={r.kind === 'share' ? 'network' : r.kind === 'homes' ? 'users' : r.id === 'home' ? 'user' : 'drive'} size={17} />
-            <span className="fs-name">{r.name}</span>
-            {r.read_only && <span className="fs-sub" title="You can look at this folder but not change it">Read only</span>}
-          </button>
+        {placeDrag.view.map((k) => (
+          <Fragment key={k}>{places[k].render({ ...placeDrag.bind(k), onContextMenu: (e: MouseEvent) => openMenu(e, placeMenu(k)) })}</Fragment>
         ))}
       </div>
 
       <SideSection title="Favorites" className={over === 'favs' ? 'drop' : ''} {...favDrop}>
-        {favs.map((f) => {
+        {favDrag.view.map((fk) => {
+          const f = favByKey.get(fk);
+          if (!f) return null;
           const key = `fav:${f.root}:${f.path}`;
           const name = f.path === '/' ? rootLabel(f.root) : baseName(f.path);
           const missing = !roots.some((r) => r.id === f.root) && !isAppData(f.root);
+          const i = favOrder.indexOf(fk);
+          const b = favDrag.bind(fk);
           return (
             <button
               key={key}
               type="button"
-              className={`fs-item ${at(f.root, f.path) ? 'on' : ''} ${over === key ? 'drop' : ''} ${missing ? 'missing' : ''}`}
+              {...b}
+              className={`fs-item ${b.className} ${at(f.root, f.path) ? 'on' : ''} ${over === key ? 'drop' : ''} ${missing ? 'missing' : ''}`}
               title={missing ? `${name} — not connected` : `${rootLabel(f.root)}${f.path === '/' ? '' : f.path}`}
               disabled={missing}
               onClick={() => onGo(f.root, f.path)}
               onContextMenu={(e) =>
                 openMenu(e, [
                   { label: 'Open', icon: 'folder', onClick: () => onGo(f.root, f.path) },
+                  { label: tr('files.side.moveUp'), icon: 'arrowUp', disabled: i <= 0, onClick: () => saveLayout({ favs: step(favOrder, fk, -1) }) },
+                  { label: tr('files.side.moveDown'), icon: 'arrowDown', disabled: i >= favOrder.length - 1, onClick: () => saveLayout({ favs: step(favOrder, fk, 1) }) },
                   { label: 'Remove from Favorites', icon: 'star', onClick: () => onRemoveFav(f.root, f.path) },
                 ])
               }

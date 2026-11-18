@@ -20,7 +20,11 @@ type Config struct {
 	// alfad move to a nearby free port if the default is taken.
 	ListenAddrExplicit bool
 	DataDir            string
-	DockerHost         string
+	// AppDataDir is where apps keep their files when no admin chose a
+	// folder (ALFA_APPDATA_DIR; the image OS points it at its data
+	// partition). "" = the default, /srv/appdata.
+	AppDataDir string
+	DockerHost string
 
 	// Host filesystem views. In a container these are read-only bind mounts
 	// of the host's /proc, /sys and selected /etc files.
@@ -101,6 +105,7 @@ func Load() (*Config, error) {
 		ListenAddr:         env("ALFA_LISTEN_ADDR", defaultListenAddr()),
 		ListenAddrExplicit: strings.TrimSpace(os.Getenv("ALFA_LISTEN_ADDR")) != "",
 		DataDir:            env("ALFA_DATA_DIR", defaultDataDir()),
+		AppDataDir:         strings.TrimSpace(os.Getenv("ALFA_APPDATA_DIR")),
 		DockerHost:         env("ALFA_DOCKER_HOST", env("DOCKER_HOST", defaultDockerHost())),
 		HostProc:           hostPath("ALFA_HOST_PROC", "/host/proc", "/proc"),
 		HostSys:            hostPath("ALFA_HOST_SYS", "/host/sys", "/sys"),

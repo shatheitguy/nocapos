@@ -47,6 +47,13 @@ const (
 // It returns their user name as stored, and whether they're an administrator.
 type UserCheck func(ctx context.Context, username, password string) (name string, admin bool, ok bool)
 
+// AppDataShareName is the SMB share of the App data folder.
+const AppDataShareName = "appdata"
+
+// UseAppData offers the App data folder as the "appdata" share, to admins
+// only, while folder returns it ("" = the share is off).
+func (m *Manager) UseAppData(folder func(ctx context.Context) string) { m.appData = folder }
+
 // UseSpaces connects sharing to the shared folders and accounts, and keeps
 // Samba in step with them.
 func (m *Manager) UseSpaces(sp *spaces.Manager, check UserCheck) {
@@ -401,6 +408,20 @@ func (m *Manager) sambaConfig(ctx context.Context) (SambaConfig, error) {
 			continue
 		}
 		c.Shares = append(c.Shares, sh)
+	}
+	if m.appData != nil {
+		if dir := m.appData(ctx); dir != "" && !strings.ContainsAny(dir, "%\n") {
+			sh := SambaShare{Name: AppDataShareName, Comment: "App data (administrators)", Path: dir, Browseable: true}
+			for _, p := range people {
+				if p.Admin && !p.Disabled && !strings.EqualFold(p.Name, "root") {
+					sh.Valid = append(sh.Valid, p.Name)
+					sh.Write = append(sh.Write, p.Name)
+				}
+			}
+			if len(sh.Valid) > 0 {
+				c.Shares = append(c.Shares, sh)
+			}
+		}
 	}
 	return c, nil
 }
