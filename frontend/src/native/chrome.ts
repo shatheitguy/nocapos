@@ -6,7 +6,9 @@
 // keyboard. It also mirrors the screen's NoCap OS app windows into the window
 // manager store, so the dock and menu bar show them exactly as in the
 // browser.
+import { create } from 'zustand';
 import { useWM, type WinState } from '../state/windows';
+import { frontMaximized } from './frontWindow';
 import { hostCall, hostOn, hostSend } from './platform';
 
 // ---------- the input region ----------
@@ -83,15 +85,33 @@ let lastRegion = '';
 let lastKeyboard = '';
 let lastZones = '';
 
+/** The menu bar slides away (a maximized front window, see useMenubarAuto). */
+const menubarAuto = () => document.documentElement.hasAttribute('data-menubar-auto');
+
+/**
+ * While the menu bar is away only its thin hot strip along the top takes
+ * clicks (found by the hit grid); once the pointer reaches it, or the bar is
+ * in use, the bar's whole box does, even while it is still sliding in.
+ */
+function peekingBar(): DOMRect | null {
+  if (!menubarAuto()) return null;
+  const bar = document.querySelector('.menubar');
+  if (!bar) return null;
+  const peek =
+    bar.matches(':hover, :focus-within') || !!bar.querySelector("[aria-expanded='true']") || !!document.querySelector('.menubar-hot:hover');
+  if (!peek) return null;
+  const r = bar.getBoundingClientRect();
+  return new DOMRect(r.left, 0, r.width, r.height);
+}
+
 function updateRegion() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const parts = hitParts(w, h, (x, y) => document.elementFromPoint(x, y));
-  const { rects, full } = regionOf(
-    parts.map((p) => p.getBoundingClientRect()),
-    w,
-    h,
-  );
+  const boxes = parts.map((p) => p.getBoundingClientRect());
+  const bar = peekingBar();
+  if (bar) boxes.push(bar);
+  const { rects, full } = regionOf(boxes, w, h);
   const key = full ? 'full' : JSON.stringify(rects);
   if (key !== lastRegion) {
     lastRegion = key;
@@ -107,12 +127,16 @@ function updateRegion() {
   updateZones(w, h);
 }
 
-/** Room kept free for maximized windows: the menu bar and a dock that stays. */
+/**
+ * Room kept free for maximized windows: the menu bar and a dock that stays.
+ * None for a menu bar that slides away (not even while it peeks back), so
+ * the compositor gives the maximized window the full height.
+ */
 function updateZones(w: number, h: number) {
   const bar = document.querySelector('.menubar');
   const dock = document.querySelector('.dock');
   const zones = { top: 0, bottom: 0, left: 0, right: 0 };
-  if (bar) zones.top = Math.ceil(bar.getBoundingClientRect().bottom);
+  if (bar && !menubarAuto()) zones.top = Math.ceil(bar.getBoundingClientRect().bottom);
   if (dock && !dock.closest('.autohide')) {
     const r = dock.getBoundingClientRect();
     if (r.height > 0 && r.width > 0) {
@@ -139,8 +163,18 @@ export function watchChromeRegion(): () => void {
       updateRegion();
     }, 60);
   };
+  // The pointer reaching the hot strip or leaving the menu bar (it peeks
+  // back and slides away again without any change to the page).
+  const nearBar = (e: Event) => {
+    const t = e.target as Element | null;
+    if (t?.closest?.('.menubar, .menubar-hot')) soon();
+  };
   const mo = new MutationObserver(soon);
   mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-menubar-auto'] });
+  document.addEventListener('pointerover', nearBar, true);
+  document.addEventListener('pointerout', nearBar, true);
+  document.addEventListener('focusout', nearBar, true);
   window.addEventListener('resize', soon);
   document.addEventListener('transitionend', soon, true);
   document.addEventListener('animationend', soon, true);
@@ -149,6 +183,9 @@ export function watchChromeRegion(): () => void {
   soon();
   return () => {
     mo.disconnect();
+    document.removeEventListener('pointerover', nearBar, true);
+    document.removeEventListener('pointerout', nearBar, true);
+    document.removeEventListener('focusout', nearBar, true);
     window.removeEventListener('resize', soon);
     document.removeEventListener('transitionend', soon, true);
     document.removeEventListener('animationend', soon, true);
@@ -195,13 +232,20 @@ export function windowsFromHost(list: readonly HostWindow[]): { windows: WinStat
   return { windows, focused };
 }
 
+/** The screen's front window (any app's, not only NoCap OS's) is maximized. */
+export const useHostFrontMaxed = create<{ on: boolean }>(() => ({ on: false }));
+
 const hostId = (id: string) => (id.startsWith('native:') ? id.slice(7) : null);
 
 /** The window manager store follows the screen's real windows; its actions act on them. */
 export function mirrorWindows(): () => void {
+  let front: string | null = null;
   const apply = (list: unknown) => {
     if (!Array.isArray(list)) return;
     useWM.setState(windowsFromHost(list as HostWindow[]));
+    const f = frontMaximized(list as HostWindow[], front);
+    front = f.front;
+    if (useHostFrontMaxed.getState().on !== f.maxed) useHostFrontMaxed.setState({ on: f.maxed });
   };
   const act = (method: string) => (id: string) => {
     const h = hostId(id);
@@ -217,5 +261,8 @@ export function mirrorWindows(): () => void {
   });
   const off = hostOn('windows.changed', apply);
   void hostCall('windows.list').then(apply, () => undefined);
-  return off;
+  return () => {
+    off();
+    useHostFrontMaxed.setState({ on: false });
+  };
 }
