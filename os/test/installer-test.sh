@@ -33,8 +33,22 @@ cp "$vars" "$WORK/vars-usb.fd"; cp "$vars" "$WORK/vars-installed.fd"
 accel=()
 [ -w /dev/kvm ] && accel=(-accel kvm -cpu host)
 
+# A software TPM 2.0 (swtpm), like a PC's security chip; it lives as long
+# as the test, so the installed drive unlocks with the same chip.
+mkdir -p "$WORK/tpm"
+swtpm_setup --tpm2 --tpm-state "$WORK/tpm" >/dev/null 2>&1 || true
+swtpm socket --tpm2 --tpmstate "dir=$WORK/tpm" --ctrl "type=unixio,path=$WORK/tpm.sock" --flags startup-clear --daemon \
+  || fail "swtpm didn't start"
+for _ in $(seq 1 50); do [ -S "$WORK/tpm.sock" ] && break; sleep 0.1; done
+start_tpm() {
+  [ -S "$WORK/tpm.sock" ] && return 0
+  swtpm socket --tpm2 --tpmstate "dir=$WORK/tpm" --ctrl "type=unixio,path=$WORK/tpm.sock" --flags startup-clear --daemon
+  for _ in $(seq 1 50); do [ -S "$WORK/tpm.sock" ] && break; sleep 0.1; done
+}
+
 QEMU_PID=""
 qemu() {
+  start_tpm
   local vars="$1"; shift
   qemu-system-x86_64 "${accel[@]}" -machine q35 -m 4096 -smp 2 \
     -drive "if=pflash,format=raw,readonly=on,file=$code" -drive "if=pflash,format=raw,file=$vars" \
@@ -42,6 +56,7 @@ qemu() {
     -device virtio-net-pci,netdev=n0 \
     -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22,hostfwd=tcp:127.0.0.1:$HTTPS_PORT-:443" \
     -device virtio-rng-pci -vga virtio -display none \
+    -chardev "socket,id=chrtpm,path=$WORK/tpm.sock" -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-tis,tpmdev=tpm0 \
     -qmp "unix:$WORK/qmp.sock,server,nowait" \
     -serial "file:$WORK/serial.log" -no-reboot -daemonize -pidfile "$WORK/qemu.pid"
   QEMU_PID="$(cat "$WORK/qemu.pid")"
@@ -122,9 +137,9 @@ qmp key tab tab spc >/dev/null; sleep 2
 shot 03-disk-selected
 
 # ---- 3. install -------------------------------------------------------------------------
-log "Installing onto the 40 GB drive (locked with a passphrase)"
+log "Installing onto the 40 GB drive (locked, unlocked by the security chip)"
 cat >"$WORK/req.json" <<'EOF'
-{"disk":"/dev/vdb","encrypt":true,"use_tpm":false,"passphrase":"nocap-test-passphrase",
+{"disk":"/dev/vdb","encrypt":true,"use_tpm":true,"passphrase":"",
  "account":{"full_name":"Test Person","username":"tester","password":"Correct-Horse-9"},
  "hostname":"nocap-installed","timezone":"Asia/Dubai","keyboard":"us","language":"en","usage":"web"}
 EOF
