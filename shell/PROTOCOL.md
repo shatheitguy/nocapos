@@ -30,6 +30,25 @@ and dock keep free for maximized windows (`surface.zones`, invisible
 spacer surfaces with exclusive zones). A full-screen part (the launcher,
 search, a dialog) makes the whole surface take input and the keyboard.
 
+With the menu bar layout, the menu bar slides away while the screen's
+active window (`windows.changed`, any app) is maximized, the same as in the
+browser (`useMenubarAuto`): the page sends `surface.zones` with `top: 0`, so
+labwc gives the maximized window the full height (it re-applies maximized
+geometry when the usable area changes), and the input region keeps only a
+3 px strip along the top. When the pointer reaches it, or while the bar is
+hovered, focused or has a menu open, the bar's whole box takes input again
+and the bar peeks back over the window, without changing the zone. The zone
+comes back when the window is restored, minimized or closed, or a window
+that isn't maximized becomes active (while no window is active, e.g. the
+bar's own menu has the keyboard, the last active one still counts).
+
+Manual check (the headless smoke run has no session, so no menu bar):
+title buttons on the left, open any app and maximize it. The bar slides up
+and the window's top edge reaches y = 0; touch the top edge and the bar
+peeks back over the window (the window doesn't move); open a bar menu and
+it stays; restore, minimize or close the window and the bar is back with
+the window below it.
+
 URL: `nocap-shell://shell/shell.html?surface=<name>` (`&app=&props=` for apps).
 
 ## Nothing remote, ever
