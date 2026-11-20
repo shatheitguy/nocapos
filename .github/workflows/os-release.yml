@@ -2,14 +2,11 @@ name: NoCapOS image release
 
 # Adds the system images, update bundles and the update manifest
 # (nocapos-os.json) to a NoCapOS release, and refreshes the NoCapOS APT
-# repository. Runs after the Release workflow published a version that has no
-# system images yet (so every new VERSION gets them once), or by hand. The
-# release's other files (bundles for script installs, install.sh, the APK)
-# are left as they are. See os/README.md, "Cutting a release".
+# repository. Only by hand: system images are published when the owner has
+# tested the release's update, never automatically. The release's other
+# files (bundles for script installs, install.sh, the APK) are left as they
+# are. See os/README.md, "Cutting a release".
 on:
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -30,7 +27,6 @@ concurrency:
 
 jobs:
   check:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.c.outputs.tag }}
@@ -40,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
       - id: c
         env:
           GH_TOKEN: ${{ github.token }}

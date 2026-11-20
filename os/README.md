@@ -191,14 +191,15 @@ Order: `0.14.0-beta.N` < `0.14.0` < `0.14.0-s1` < `0.14.0-s2` < `0.14.1`
 
 ### Security updates from Debian
 
-`.github/workflows/os-security.yml` runs every day (and by hand):
+`.github/workflows/os-security.yml` checks every day; it only builds and
+publishes when run by hand with `publish` (after the owner has tested):
 
 1. It reads the package lists (`nocapos-<target>.packages.tsv`) of the
    newest stable release with system images and compares them with Debian
    13's security archive, `trixie-updates` and point releases
    (`scripts/security-check.py`).
-2. When a package has a security fix, it rebuilds that same release (its
-   tag) from today's Debian snapshot, runs the QEMU tests (boot, update,
+2. The day's run lists what Debian fixed in its summary. Run by hand with
+   `publish`, it rebuilds that same release (its tag) from today's Debian snapshot, runs the QEMU tests (boot, update,
    rollback, installer) and publishes `vX.Y.Z-sN` with the images, bundles
    and a manifest marked `security`, listing each fixed package and its CVE
    IDs from the Debian changelog.
@@ -220,8 +221,8 @@ an update; `/etc` settings come back through `etc-sync`.
 1. Bump `VERSION` in a pull request and merge it. The Release workflow
    publishes the script-install files (tarballs, `install.sh`, APK) as
    before.
-2. When it finishes, `os-release.yml` sees a release without system images,
-   builds them from that tag (`os.yml` with `release: true`: both targets,
+2. Once the owner has tested the release's update, run "NoCapOS image
+   release" (`os-release.yml`) by hand. It builds the images from that tag (`os.yml` with `release: true`: both targets,
    all QEMU tests), signs the bundles, and attaches:
    - `nocapos-pc.img.xz`, `nocapos-pc-usb.img.xz` (USB stick with the setup),
      `nocapos-pi.img.xz`;
@@ -230,9 +231,9 @@ an update; `/etc` settings come back through `etc-sync`.
    - `nocapos-<target>.packages.tsv` (what's inside).
 3. It refreshes the APT repository (release `apt`).
 
-A pre-release (beta) gets the same treatment and shows up on the beta
-channel. To redo a release's images: run "NoCapOS image release" by hand
-with `force`.
+System images are never published automatically. A pre-release (beta)
+gets the same treatment and shows up on the beta channel. To redo a
+release's images, run it again with `force`.
 
 ## The installer
 
