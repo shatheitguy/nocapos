@@ -280,3 +280,48 @@ button.notes-widget-body { background: transparent; color: inherit; font-weight:
   .nt-sheet-scrim { padding: 0; }
   .nt-sheet { width: 100%; height: 100%; border-radius: 0; }
 }
+
+/* ---------- a note in its own window ---------- */
+.nt-sheet-window { position: absolute; inset: 0; display: flex; }
+.nt-sheet-window > .nt-sheet { width: 100%; height: 100%; max-width: none; border-radius: 0; border: 0; box-shadow: none; animation: none; }
+.nt-window-empty { display: grid; place-items: center; height: 100%; padding: 24px; text-align: center; }
+
+/* ---------- the desktop widget: edit in place, and show there are more ---------- */
+.notes-widget-wrap { position: relative; display: flex; height: 100%; min-height: 0; }
+.notes-widget-wrap > .notes-widget { flex: 1; min-width: 0; position: relative; z-index: 1; }
+/* More than one note: cards peek out behind it, tilted, like a pile of
+   sticky notes, so it's clear at a glance there are more. */
+.notes-widget-wrap.stacked::before,
+.notes-widget-wrap.stacked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+  transform-origin: 50% 100%;
+  pointer-events: none;
+}
+.notes-widget-wrap.stacked::before { transform: translate(7px, 6px) rotate(3deg); }
+.notes-widget-wrap.stacked::after { transform: translate(13px, 11px) rotate(6deg); opacity: 0.7; }
+.notes-widget-wrap.stacked[data-count='2']::after { display: none; }
+:root[data-theme='light'] .notes-widget-wrap.stacked::before,
+:root[data-theme='light'] .notes-widget-wrap.stacked::after { background: linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(240, 240, 245, 0.7)); border-color: rgba(0, 0, 0, 0.08); }
+.notes-widget .notes-widget-body { cursor: text; overflow: auto; -webkit-mask-image: none; mask-image: none; }
+.notes-widget .notes-widget-body .ne-body { min-height: 100%; outline: none; }
+.notes-widget-count {
+  align-self: center;
+  margin-right: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.notes-widget-nav { display: flex; align-items: center; justify-content: center; gap: 6px; padding-top: 6px; }
+.notes-widget-nav .ne-btn { width: 22px; height: 22px; }
+.notes-widget-dots { display: flex; gap: 5px; }
+.notes-widget-dots span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.3; transition: opacity 0.2s, transform 0.2s; }
+.notes-widget-dots span.on { opacity: 1; transform: scale(1.25); }
