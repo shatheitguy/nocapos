@@ -98,6 +98,10 @@ type Manager struct {
 	hostname    func() (string, error)
 	addrs       func() []string
 
+	// appData returns the App data folder when its admin-only "appdata"
+	// share is on ("" = off).
+	appData func(ctx context.Context) string
+
 	mu    sync.Mutex
 	state map[int64]*driveState
 	dav   *davAuth

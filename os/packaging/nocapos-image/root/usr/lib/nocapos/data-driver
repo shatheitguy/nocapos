@@ -56,7 +56,13 @@ open_luks() {
   modprobe dm_crypt 2>/dev/null || true
   [ -e "/dev/mapper/$MAPPER" ] && return 0
   if cryptsetup luksDump "$DEV" 2>/dev/null | grep -q 'systemd-tpm2'; then
-    if cryptsetup open --token-only "$DEV" "$MAPPER" 2>/dev/null; then
+    # The security chip: its driver may not be loaded this early.
+    modprobe -q tpm_crb 2>/dev/null || true
+    modprobe -q tpm_tis 2>/dev/null || true
+    i=0
+    while [ ! -e /dev/tpmrm0 ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    [ -e /dev/tpmrm0 ] || note "no security chip device (/dev/tpmrm0)"
+    if timeout 60 cryptsetup open --token-only "$DEV" "$MAPPER" 2>/dev/null; then
       note "unlocked with the security chip"
       return 0
     fi

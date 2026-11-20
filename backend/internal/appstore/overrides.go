@@ -225,11 +225,18 @@ func (m *Manager) Template(ctx context.Context, id string, defaults bool) (*Temp
 		}
 	}
 	t := &Template{Services: []TemplateService{}}
+	// Where its data goes: folders in App data for new installs and apps
+	// already there, Docker volumes for apps installed before.
+	storage := m.newStorage(ctx)
+	if row, err := m.db.InstalledApp(ctx, id); err == nil {
+		storage = row.Storage
+	}
+	root := m.root(ctx, storage)
 	if len(a.Services) > 1 {
 		t.Network = netName(id)
 	}
 	for _, s := range a.Services {
-		ts := TemplateService{Service: s.Name, CatalogImage: s.Image, Secrets: []string{}, Spec: baseSpec(a, s)}
+		ts := TemplateService{Service: s.Name, CatalogImage: s.Image, Secrets: []string{}, Spec: baseSpec(a, s, root)}
 		if a.Web != nil && a.Web.Service == s.Name {
 			ts.WebPort = a.Web.Port
 		}
@@ -270,7 +277,7 @@ func (m *Manager) Template(ctx context.Context, id string, defaults bool) (*Temp
 
 // baseSpec is a catalog service as a docker.Spec (secrets stay placeholders;
 // the web UI's host port is 0 = automatic).
-func baseSpec(a *App, s Service) docker.Spec {
+func baseSpec(a *App, s Service, root string) docker.Spec {
 	spec := docker.Spec{
 		Name:        containerName(a.ID, s.Name),
 		Image:       s.Image,
@@ -293,7 +300,7 @@ func baseSpec(a *App, s Service) docker.Spec {
 		spec.Ports = append(spec.Ports, docker.PortMap{Host: p.Host, Container: p.Container, Protocol: proto})
 	}
 	for _, v := range s.Volumes {
-		spec.Mounts = append(spec.Mounts, docker.SpecMount{Type: "volume", Source: volumeName(a.ID, v.Name), Target: v.Path, ReadOnly: v.ReadOnly})
+		spec.Mounts = append(spec.Mounts, catalogMount(a, v, root))
 	}
 	if len(a.Services) > 1 {
 		spec.NetworkMode = netName(a.ID)
