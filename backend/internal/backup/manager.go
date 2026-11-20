@@ -58,11 +58,32 @@ type Repo struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
-// Source is something to back up: a folder in a storage location, or NoCapOS itself.
+// Source is something to back up: a folder in a storage location, NoCapOS
+// itself, or the App data folder.
 type Source struct {
 	Root    string `json:"root,omitempty"`
 	Path    string `json:"path,omitempty"`
 	Special string `json:"special,omitempty"`
+	// StopApps (App data): stop the apps using it while it's backed up, so
+	// their databases are copied in a consistent state.
+	StopApps bool `json:"stop_apps,omitempty"`
+}
+
+// SpecialAppData backs up the App data folder (every app's files).
+const SpecialAppData = "appdata"
+
+// AppData connects backups to the App data folder: where it is, and how to
+// stop the apps using it (restart starts them again).
+type AppData struct {
+	Root     func(ctx context.Context) string
+	StopApps func(ctx context.Context) (restart func(), err error)
+}
+
+// UseAppData lets plans back up the App data folder.
+func (m *Manager) UseAppData(a AppData) {
+	m.mu.Lock()
+	m.appData = &a
+	m.mu.Unlock()
 }
 
 // Schedule says when a plan runs: every "hour", "day" or "week" (at a time, on
@@ -121,6 +142,7 @@ type Manager struct {
 	repoLocks map[int64]*sync.Mutex
 	onResult  func(Result)
 	base      context.Context // alfad's lifetime, set by RunScheduler
+	appData   *AppData
 }
 
 // Result is how a backup plan run ended (for notifications).
@@ -457,10 +479,10 @@ func (m *Manager) SavePlan(ctx context.Context, p Plan) (int64, error) {
 	}
 	for i, s := range p.Sources {
 		if s.Special != "" {
-			if s.Special != SpecialNoCapOS {
+			if s.Special != SpecialNoCapOS && s.Special != SpecialAppData {
 				return 0, fmt.Errorf("unknown source %q", s.Special)
 			}
-			p.Sources[i] = Source{Special: s.Special}
+			p.Sources[i] = Source{Special: s.Special, StopApps: s.Special == SpecialAppData && s.StopApps}
 			continue
 		}
 		if _, err := m.files.Root(s.Root); err != nil {
@@ -728,7 +750,32 @@ func (m *Manager) resolveSources(ctx context.Context, sources []Source, repo *st
 			if err != nil {
 				return nil, nil, cleanup, fmt.Errorf("prepare NoCapOS settings: %w", err)
 			}
-			cleanup = done
+			prev := cleanup
+			cleanup = func() { done(); prev() }
+			paths = append(paths, dir)
+			continue
+		}
+		if s.Special == SpecialAppData {
+			m.mu.Lock()
+			ad := m.appData
+			m.mu.Unlock()
+			if ad == nil || ad.Root == nil {
+				m.log.Warn("backup: App data isn't available here, skipped")
+				continue
+			}
+			dir := ad.Root(ctx)
+			if _, err := os.Stat(dir); err != nil {
+				m.log.Warn("backup: App data folder missing, skipped", "path", dir)
+				continue
+			}
+			if s.StopApps && ad.StopApps != nil {
+				restart, err := ad.StopApps(ctx)
+				if err != nil {
+					return nil, nil, cleanup, fmt.Errorf("stop the apps: %w", err)
+				}
+				prev := cleanup
+				cleanup = func() { restart(); prev() }
+			}
 			paths = append(paths, dir)
 			continue
 		}
@@ -1074,6 +1121,12 @@ func besideName(dest, stamp string) string {
 func (m *Manager) label(p string) string {
 	if p == filepath.ToSlash(filepath.Join(m.dataDir, "backup-staging", "nocapos")) {
 		return "NoCapOS settings & accounts"
+	}
+	m.mu.Lock()
+	ad := m.appData
+	m.mu.Unlock()
+	if ad != nil && ad.Root != nil && p == filepath.ToSlash(ad.Root(context.Background())) {
+		return "App data"
 	}
 	native := filepath.FromSlash(p)
 	for _, r := range m.files.Roots() {

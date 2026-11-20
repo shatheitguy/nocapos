@@ -1,11 +1,15 @@
-// The NoCapOS mark with a slow glow, and the brand progress bar: used while
-// NoCapOS updates, restarts or shuts down. Both calm down under reduced motion.
+// The NoCapOS mark, and the brand progress bar: used while NoCapOS updates,
+// restarts or shuts down. While busy, a light sweep crosses the chrome and
+// the mark floats over a soft red shadow. Both calm down under reduced motion.
 
 export function BrandMark({ size = 96, busy = true }: { size?: number; busy?: boolean }) {
   return (
-    <div className={`brand-mark ${busy ? 'busy' : ''}`} style={{ width: size, height: size }} aria-hidden="true">
-      <span className="brand-mark-glow" />
-      <img src="/brand/mark-512.png" alt="" width={size} height={size} draggable={false} />
+    <div className={`brand-mark brand-hero ${busy ? 'busy' : ''}`} style={{ width: size, height: size }} aria-hidden="true">
+      <span className="brand-hero-shadow" />
+      <span className="brand-hero-art">
+        <img src="/brand/mark-512.png" alt="" width={size} height={size} draggable={false} />
+        <span className="brand-hero-shine" />
+      </span>
     </div>
   );
 }

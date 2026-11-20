@@ -8,6 +8,8 @@ export interface ConfirmRequest {
   cancelLabel?: string;
   /** Auto-cancel after this many seconds (shown as a countdown). */
   timeoutSec?: number;
+  /** A word the person must type before confirming (for things that can't be undone). */
+  typed?: string;
 }
 
 export interface Choice {

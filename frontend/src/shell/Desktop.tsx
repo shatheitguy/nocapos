@@ -17,7 +17,7 @@ import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { useWidgets } from '../state/widgets';
 import { ConfirmHost } from '../components/ConfirmHost';
-import { compactSize, hasMenuBar } from '../state/prefs';
+import { applyPrefs, compactSize, hasMenuBar, useMenubarAuto } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
 import { HomeHeader } from './HomeHeader';
@@ -42,7 +42,7 @@ import { WidgetLayer } from './WidgetLayer';
 import { useNotes, watchNotes } from '../apps/notes/notesStore';
 import { Window } from './Window';
 import { hostOn, hostSend, nativeSurface } from '../native/platform';
-import { mirrorWindows, watchChromeRegion } from '../native/chrome';
+import { mirrorWindows, useHostFrontMaxed, watchChromeRegion } from '../native/chrome';
 
 // Shown once, so it's fetched only when needed.
 const Welcome = lazy(() => import('./Welcome').then((m) => ({ default: m.Welcome })));
@@ -71,6 +71,21 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const vp = useViewport();
   const compact = compactSize(vp.w, vp.h);
   const menuBar = usePrefs((s) => hasMenuBar(s)) && !compact;
+  // The front window is maximized: the menu bar slides away (dock stays).
+  // On NoCap Desktop that's the screen's active window, whichever app's.
+  const wmFrontMaxed = useWM((s) => {
+    let top: (typeof s.windows)[number] | undefined;
+    for (const w of s.windows) if (!w.minimized && (!top || w.z > top.z)) top = w;
+    return !!top?.maximized;
+  });
+  const hostFrontMaxed = useHostFrontMaxed((s) => s.on);
+  const frontMaxed = surface === 'chrome' ? hostFrontMaxed : wmFrontMaxed;
+  const menubarAuto = menuBar && frontMaxed;
+  useEffect(() => {
+    if (useMenubarAuto.getState().on === menubarAuto) return;
+    useMenubarAuto.setState({ on: menubarAuto });
+    applyPrefs(usePrefs.getState());
+  }, [menubarAuto]);
   const [launcher, setLauncher] = useState(false);
   const [saverOn, setSaverOn] = useState(false);
   const [deskMenu, setDeskMenu] = useState<{ x: number; y: number } | null>(null);
@@ -290,6 +305,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
 
       {chromePart && (
         <>
+          {menuBar && menubarAuto && <div className="menubar-hot" aria-hidden="true" />}
           {menuBar && (
             <ErrorBoundary title="Menu bar" fallback="hidden">
               <MenuBar user={user} onLock={onLock} />
