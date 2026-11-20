@@ -29,6 +29,7 @@ import (
 	"alfaos/alfad/internal/removable"
 	"alfaos/alfad/internal/scripts"
 	"alfaos/alfad/internal/spaces"
+	"alfaos/alfad/internal/sshd"
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
@@ -103,6 +104,7 @@ type Server struct {
 	linkFeed         linkFeed        // the person's phones changed, or handed a link over
 	mirror           mirrorState     // phone mirroring: rooms and viewer tickets
 	shield           *shieldState    // Shield: firewall (ufw) and DNS blocker
+	ssh              *sshd.Manager   // remote login (SSH): the switch and people's keys
 	localAddr        *localAddrState // containers' local addresses (*.nocap.local)
 	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
 	pulls            pullJobs        // image downloads in progress
@@ -151,6 +153,7 @@ func New(ctx context.Context, d Deps) *Server {
 		d.Removable.SetOnChange(s.notifyDrives)
 	}
 	s.shield = newShield(ctx, d.Config.DataDir, d.Log, s.shieldReverted)
+	s.ssh = sshd.New(d.Config.DataDir, hostSwitchesNative())
 	s.initLocalAddresses(ctx)
 	// NoCap Link: phones find this server nearby (_nocap._tcp).
 	go s.advertiseLink(ctx)
@@ -265,6 +268,8 @@ func (s *Server) Handler() http.Handler {
 	// devices may open NoCapOS (admin only, audited).
 	mux.Handle("GET /api/v1/system/host-access", s.admin(s.hostAccessGet))
 	mux.Handle("PUT /api/v1/system/remote-access", s.admin(s.remoteAccessSet))
+	// Remote login (SSH): the switch (admin) and each person's keys.
+	s.sshRoutes(mux)
 	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
