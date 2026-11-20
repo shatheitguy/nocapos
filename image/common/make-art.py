@@ -6,11 +6,11 @@
 Writes, all on the brand's near-black:
   isolinux-splash.png       640x480   BIOS boot menu of the ISO (syslinux)
   grub-live-splash.png      800x600   UEFI boot menu of the ISO (GRUB)
-  grub-background.png       1280x720  GRUB menu of installed systems
   installer-banner.png      800x75    debian-installer banner (light theme)
   installer-banner-dark.png 800x75    debian-installer banner (dark theme)
   calamares-welcome.png     720x300   graphical installer's welcome page
   calamares-logo.png        256x256   graphical installer's logo and window icon
+The installed system's GRUB art comes from scripts/make-boot-art.py.
 Needs Pillow (Debian: python3-pil) and fonts-dejavu-core.
 """
 import os
@@ -67,7 +67,6 @@ def main():
     # syslinux draws its menu from row ~12 (16px rows), so the art stays above.
     splash(lockup, (640, 480), 0.36, 0.03).save(os.path.join(out, "isolinux-splash.png"))
     splash(lockup, (800, 600), 0.44, 0.04).save(os.path.join(out, "grub-live-splash.png"))
-    splash(lockup, (1280, 720), 0.52, 0.08).save(os.path.join(out, "grub-background.png"))
     banner(mark, False).save(os.path.join(out, "installer-banner.png"))
     banner(mark, True).save(os.path.join(out, "installer-banner-dark.png"))
     welcome = Image.new("RGBA", (720, 300), (0, 0, 0, 0))
