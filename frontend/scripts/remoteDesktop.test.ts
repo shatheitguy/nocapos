@@ -80,6 +80,11 @@ test('failures in plain words', () => {
   assert.equal(classifyFailure(513, 'engine: could not download', 'rdp', false), 'engine');
   assert.equal(classifyFailure(517, 'closed', 'rdp', true), 'closed');
   assert.equal(classifyFailure(undefined, 'something odd', 'vnc', false), 'other');
+  // Seen on a real Windows PC: the engine sends the self-signed certificate
+  // failure as "upstream not found" (519); it must still offer to trust it.
+  const selfSigned = 'SSL/TLS connection failed (untrusted/self-signed certificate?)';
+  assert.equal(classifyFailure(519, selfSigned, 'rdp', false), 'cert');
+  assert.equal(classifyFailure(519, selfSigned, 'rdp', true), 'security');
 });
 
 test('quality and keysyms', () => {
