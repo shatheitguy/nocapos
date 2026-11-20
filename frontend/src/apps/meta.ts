@@ -233,6 +233,19 @@ export const APPS: Record<string, AppMeta> = {
     single: true,
     keywords: 'sticky notes stickies brain dump memo jot todo to-do checklist list reminder',
   },
+  // One note in a window of its own (moved, resized, kept open next to the
+  // app). Opened from Sticky Notes, the desktop widget and reminders.
+  note: {
+    id: 'note',
+    get title() {
+      return tr('notes.untitled');
+    },
+    icon: 'stickyNote',
+    tile: ['#ff5a5f', '#b3121a'],
+    size: { w: 460, h: 520 },
+    description: 'One sticky note in its own window',
+    hidden: true,
+  },
   // The id stays "phone" so older links, pins and desktop icons keep working.
   phone: {
     id: 'phone',
