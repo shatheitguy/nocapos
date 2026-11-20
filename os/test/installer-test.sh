@@ -153,6 +153,9 @@ while :; do
   sleep 10; t=$((t + 10)); [ "$t" -lt 1800 ] || fail "the install took too long"
 done
 shot 04-done
+# The installed drive's first start: kernel and early-boot messages on the
+# serial port too (the screen keeps the splash), so a failure shows why.
+vssh 'mkdir -p /mnt/b && mount /dev/vdb2 /mnt/b && sed -i "/^linux /s/\$/ console=tty0 console=ttyS0,115200 rugix.init.quiet=false/" /mnt/b/grub.cfg && grep ^linux /mnt/b/grub.cfg; umount /mnt/b' || true
 vssh 'systemctl poweroff' || true
 wait_exit 120
 

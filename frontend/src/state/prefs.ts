@@ -5,6 +5,7 @@ import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
 import { isCustomWallpaper, pickWallpaper } from '../lib/wallpaperPick';
 import { cleanDefaults } from '../lib/openWith';
+import { cleanLayout, EMPTY_LAYOUT, type SidebarLayout } from '../lib/sidebarOrder';
 import { ensurePalette, forgetPalette, paletteFor } from './wallPalette';
 
 export { isCustomWallpaper };
@@ -120,6 +121,7 @@ export interface PrefValues {
   language: LanguageId;
   lingo: Lingo; // Gen Z or Standard wording
   openWith: Record<string, string>; // file type ("jpg") → the app Files opens it with
+  filesSidebar: SidebarLayout; // the Files sidebar's order and hidden places
 
   welcomeDone: boolean; // the first-start welcome was finished or skipped
   welcomeStep: number; // where the welcome was left, to pick up there
@@ -175,6 +177,7 @@ export const DEFAULT_PREFS: PrefValues = {
   language: 'en',
   lingo: 'genz',
   openWith: {},
+  filesSidebar: EMPTY_LAYOUT,
 
   welcomeDone: false,
   welcomeStep: 0,
@@ -320,6 +323,7 @@ function sanitize(raw: Record<string, unknown>): Partial<PrefValues> {
     if (out.wallpaper && !BUILT_IN_IDS.includes(out.wallpaper) && !isCustomWallpaper(out.wallpaper)) delete out.wallpaper;
     if (out.lingo && !LINGOS.includes(out.lingo)) delete out.lingo;
     if ('openWith' in out) out.openWith = cleanDefaults(out.openWith);
+    if ('filesSidebar' in out) out.filesSidebar = cleanLayout(out.filesSidebar);
     // One-time move to the Glass look (people can switch back in Appearance).
     if (!raw.glass1 && out.uiTheme === 'classic') delete out.uiTheme;
     // The old on/off switch becomes the far end of the Transparency slider.
@@ -466,12 +470,19 @@ export const MENUBAR_H = 30;
 /** macOS style (buttons on the left) adds a menu bar along the top. */
 export const hasMenuBar = (p: Pick<PrefValues, 'titleButtons'>) => p.titleButtons === 'left' && !isCompact();
 
+/**
+ * While the front window is maximized the menu bar slides away (it peeks
+ * back when the pointer reaches the top edge) and windows get the full
+ * height. The dock is not affected.
+ */
+export const useMenubarAuto = create<{ on: boolean }>(() => ({ on: false }));
+
 /** Space the dock (and menu bar) reserve on each edge (the dock: 0 when it auto-hides). */
 export function reserved(p: PrefValues = usePrefs.getState()) {
   const d = effectiveDock(p);
   const t = d.autoHide ? 0 : dockThickness(p);
   return {
-    top: hasMenuBar(p) ? MENUBAR_H : 0,
+    top: hasMenuBar(p) && !useMenubarAuto.getState().on ? MENUBAR_H : 0,
     left: d.position === 'left' ? t : 0,
     right: d.position === 'right' ? t : 0,
     bottom: d.position === 'bottom' ? t : 0,
@@ -513,7 +524,8 @@ export function applyPrefs(p: PrefValues) {
   root.toggleAttribute('data-compact', isCompact());
   root.toggleAttribute('data-autohide', d.autoHide);
   root.style.setProperty('--res-top', `${r.top}px`);
-  root.toggleAttribute('data-menubar', r.top > 0);
+  root.toggleAttribute('data-menubar', hasMenuBar(p));
+  root.toggleAttribute('data-menubar-auto', hasMenuBar(p) && useMenubarAuto.getState().on);
   root.style.setProperty('--res-left', `${r.left}px`);
   root.style.setProperty('--res-right', `${r.right}px`);
   root.style.setProperty('--res-bottom', `${r.bottom}px`);

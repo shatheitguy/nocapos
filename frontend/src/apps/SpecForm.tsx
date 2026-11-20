@@ -4,6 +4,23 @@ import { fileApi, type FileRoot } from '../api/files';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { tr } from '../i18n';
+import { appDataApi } from '../api/appdata';
+import { isSuggested, suggestPath } from '../lib/appdataPaths';
+
+// The App data folder, asked once: new storage defaults to <it>/<container>/<name>.
+let appDataRoot: Promise<string> | null = null;
+function useAppDataRoot(): string {
+  const [root, setRoot] = useState('');
+  useEffect(() => {
+    appDataRoot ??= appDataApi.suggest('app', 'data').then((r) => (r.ok ? r.data.root : ''));
+    let live = true;
+    void appDataRoot.then((r) => live && setRoot(r));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return root;
+}
 
 // The container settings form, shared by "Edit before install" (App Store),
 // editing an installed container, and adding a new one: image and tag, name,
@@ -210,6 +227,14 @@ export function SpecForm({
   const [picker, setPicker] = useState<number | null>(null);
   const [shown, setShown] = useState<Set<number>>(new Set());
   const [capDraft, setCapDraft] = useState('');
+  const dataRoot = useAppDataRoot();
+  const owner = spec.name.trim() || 'app';
+  // A folder still at its suggestion follows the folder in the container.
+  const setTarget = (i: number, target: string) => {
+    const m = spec.mounts[i];
+    const follow = m.type === 'bind' && !!dataRoot && isSuggested(m.source, dataRoot, owner);
+    set('mounts', setAt<SpecMount>(spec.mounts, i, follow ? { target, source: suggestPath(dataRoot, owner, target) } : { target }));
+  };
   useEffect(() => setCmd(joinCmd(spec.cmd)), [spec.cmd]);
 
   const set = <K extends keyof ContainerSpec>(k: K, v: ContainerSpec[K]) => onChange({ ...spec, [k]: v });
@@ -413,7 +438,7 @@ export function SpecForm({
       <section className="ce-sec">
         <h3>
           Storage
-          <button type="button" className="ghost ce-add" onClick={() => set('mounts', [...spec.mounts, { type: 'bind', source: '', target: '', read_only: false }])}>
+          <button type="button" className="ghost ce-add" onClick={() => set('mounts', [...spec.mounts, { type: 'bind', source: dataRoot ? suggestPath(dataRoot, owner, '') : '', target: '', read_only: false }])}>
             <Icon name="plus" size={13} /> Add
           </button>
         </h3>
@@ -423,13 +448,16 @@ export function SpecForm({
           <div className="ce-rows">
             {spec.mounts.map((m, i) => (
               <div key={i} className="ce-mount">
-                <select value={m.type} onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { type: e.target.value as SpecMount['type'], source: '' }))} aria-label="Storage type">
+                <select value={m.type} onChange={(e) => {
+                    const type = e.target.value as SpecMount['type'];
+                    set('mounts', setAt<SpecMount>(spec.mounts, i, { type, source: type === 'bind' && dataRoot ? suggestPath(dataRoot, owner, m.target) : '' }));
+                  }} aria-label="Storage type">
                   <option value="bind">Folder on the server</option>
                   <option value="volume">Docker volume</option>
                 </select>
                 {m.type === 'bind' ? (
                   <div className="ce-src">
-                    <input value={m.source} spellCheck={false} placeholder="/srv/nocapos/app-data" onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { source: e.target.value }))} aria-label="Folder on the server" />
+                    <input value={m.source} spellCheck={false} placeholder={dataRoot ? suggestPath(dataRoot, owner, m.target) : '/srv/appdata/app/data'} title={dataRoot ? tr('ad.spec.hint', { root: dataRoot }) : undefined} onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { source: e.target.value }))} aria-label="Folder on the server" />
                     <button type="button" className="ghost" onClick={() => setPicker(i)}>
                       <Icon name="folder" size={13} /> Choose
                     </button>
@@ -438,7 +466,7 @@ export function SpecForm({
                   <input list="ce-volumes" value={m.source} spellCheck={false} placeholder="volume name" onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { source: e.target.value }))} aria-label="Volume" />
                 )}
                 <span className="ce-arrow">→</span>
-                <input value={m.target} spellCheck={false} placeholder="/data (in the container)" onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { target: e.target.value }))} aria-label="Folder in the container" />
+                <input value={m.target} spellCheck={false} placeholder="/data (in the container)" onChange={(e) => setTarget(i, e.target.value)} aria-label="Folder in the container" />
                 <label className="ce-ro">
                   <input type="checkbox" checked={m.read_only} onChange={(e) => set('mounts', setAt<SpecMount>(spec.mounts, i, { read_only: e.target.checked }))} /> Read only
                 </label>
