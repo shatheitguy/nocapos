@@ -119,6 +119,12 @@ func (s *Server) appstoreAction(w http.ResponseWriter, r *http.Request) {
 		if r.ContentLength > 0 && !decodeJSON(w, r, &req) {
 			return
 		}
+		for _, sp := range req.Services {
+			if err := s.checkBinds(ctx, sp.Mounts, nil); err != nil {
+				writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+				return
+			}
+		}
 		jobID, err = s.AppStore.InstallWith(ctx, id, req.Services, done)
 	case "update":
 		jobID, err = s.AppStore.Update(ctx, id, done)

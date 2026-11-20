@@ -1,3 +1,5 @@
+import { appDataApi } from '../api/appdata';
+import { suggestPath } from '../lib/appdataPaths';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { stacksApi, type ComposeInfo, type StackAction, type StackDetail, type StackOp, type StackSummary } from '../api/stacks';
 import type { Container } from '../api/types';
@@ -11,14 +13,15 @@ import { Choice } from './Personalize';
 // Stacks: multi-container apps from a compose file, deployed with Docker's
 // own Compose. Stacks started elsewhere show up too (read-only).
 
-const STARTER = `services:
+/** A new stack's compose file: its files go in <App data>/<stack>/ (or next to it, before the folder is known). */
+const starter = (root: string, name: string) => `services:
   web:
     image: nginx:alpine
     restart: unless-stopped
     ports:
       - "8080:80"
     volumes:
-      - ./html:/usr/share/nginx/html:ro
+      - ${root ? suggestPath(root, name.trim() || 'my-stack', 'html') : './html'}:/usr/share/nginx/html:ro
 `;
 
 const ACTION_LABEL: Record<string, string> = {
@@ -227,7 +230,20 @@ function OpOutput({ op }: { op: StackOp }) {
 function StackEditor({ name, compose, onClose }: { name: string | null; compose?: ComposeInfo; onClose: () => void }) {
   const [stackName, setStackName] = useState(name ?? '');
   const [detail, setDetail] = useState<StackDetail | null>(null);
-  const [yaml, setYaml] = useState(name ? '' : STARTER);
+  const [yaml, setYaml] = useState(name ? '' : starter('', ''));
+  const [dataRoot, setDataRoot] = useState('');
+  useEffect(() => {
+    if (name) return;
+    void appDataApi.suggest('app', 'data').then((r) => r.ok && setDataRoot(r.data.root));
+  }, [name]);
+  // The starter follows the stack's name until someone edits it.
+  const lastStarter = useRef(starter('', ''));
+  useEffect(() => {
+    if (name) return;
+    const next = starter(dataRoot, stackName);
+    setYaml((y) => (y === lastStarter.current ? next : y));
+    lastStarter.current = next;
+  }, [name, dataRoot, stackName]);
   const [env, setEnv] = useState('');
   const [view, setView] = useState<'compose' | 'env' | 'logs'>('compose');
   const [logs, setLogs] = useState<string | null>(null);

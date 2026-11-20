@@ -183,6 +183,10 @@ export function classifyFailure(code: number | undefined, message: string, proto
   const m = message.toLowerCase();
   if (code === 769 || code === 771 || /auth|credential|password|logon|log on|access denied/.test(m)) return 'auth';
   if (code === 513 && /engine/.test(m)) return 'engine';
+  // A certificate/TLS message wins over the status code: the engine reports
+  // an untrusted (self-signed) certificate as "upstream not found" (519),
+  // which would otherwise read as "can't reach" with no way to trust it.
+  if (protocol === 'rdp' && /certificate|self-signed|ssl\/tls|tls connection/.test(m)) return ignoredCert ? 'security' : 'cert';
   if (/dns|not found|unreachable|no route|timed out|timeout|could not connect|unable to connect|connection refused/.test(m) || code === 519 || code === 514) {
     return 'unreachable';
   }

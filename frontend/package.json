@@ -8,7 +8,7 @@
     "build": "node scripts/check-i18n.mjs && npm test && tsc --noEmit && vite build",
     "build:shell": "vite build --config vite.shell.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test scripts/wallpapers.test.ts scripts/wifiQr.test.ts scripts/setupCheck.test.ts scripts/justify.test.ts scripts/openWith.test.ts scripts/media.test.ts scripts/launcherOrder.test.ts scripts/containers.test.ts scripts/notes.test.ts scripts/remoteDesktop.test.ts scripts/deskshellBridge.test.ts scripts/wallAccent.test.ts scripts/frontWindow.test.ts",
+    "test": "node --experimental-strip-types --no-warnings --test scripts/wallpapers.test.ts scripts/wifiQr.test.ts scripts/setupCheck.test.ts scripts/justify.test.ts scripts/openWith.test.ts scripts/media.test.ts scripts/launcherOrder.test.ts scripts/containers.test.ts scripts/notes.test.ts scripts/remoteDesktop.test.ts scripts/deskshellBridge.test.ts scripts/wallAccent.test.ts scripts/frontWindow.test.ts scripts/sidebarOrder.test.ts scripts/appdata.test.ts",
     "check:i18n": "node scripts/check-i18n.mjs"
   },
   "dependencies": {
