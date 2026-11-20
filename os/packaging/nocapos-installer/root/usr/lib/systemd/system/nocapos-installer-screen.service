@@ -1,0 +1,34 @@
+[Unit]
+Description=NoCapOS setup on the screen
+Documentation=https://github.com/shatheitguy/nocapos/blob/main/os/README.md
+ConditionPathExists=/run/rugix/mounts/config/nocapos-installer
+After=nocapos-installer.service systemd-user-sessions.service plymouth-quit-wait.service
+Wants=nocapos-installer.service
+Conflicts=getty@tty1.service greetd.service
+Before=graphical.target
+
+[Service]
+Type=simple
+# A full-screen kiosk session on the first console: cage shows exactly one
+# window, the setup.
+ExecStart=/usr/bin/cage -s -- /usr/libexec/nocapos/nocap-kiosk http://127.0.0.1:8790/installer
+Restart=always
+RestartSec=1
+User=root
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+Environment=XDG_SESSION_TYPE=wayland
+Environment=WLR_RENDERER_ALLOW_SOFTWARE=1
+Environment=WEBKIT_DISABLE_COMPOSITING_MODE=1
+# The kiosk only ever shows the local setup page (it refuses to navigate
+# anywhere else), and runs as root on the stick, where the web process
+# sandbox can't start.
+Environment=WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+
+[Install]
+WantedBy=multi-user.target

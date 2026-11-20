@@ -2,19 +2,20 @@
 // native desktop on the server's own monitor (on or off), and whether other
 // devices may open NoCapOS at all.
 import { useEffect, useState } from 'react';
-import { hostAccessApi, type DesktopHealth, type HostAccess } from '../api/hostaccess';
+import { hostAccessApi, type DesktopHealth, type HostAccess, type Usage } from '../api/hostaccess';
 import { useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { copyWithToast, missing } from '../lib/settingsKit';
 import { openApp } from './meta';
 import { Row, Section as Group, Toggle } from './Personalize';
+import { UsagePicker } from '../shell/UsagePicker';
 
 export function HostAccessPage() {
   const t = useT();
   const [st, setSt] = useState<HostAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | null>(null);
+  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | 'usage' | null>(null);
   const [diag, setDiag] = useState<string | null>(null);
   const [diagOpen, setDiagOpen] = useState(false);
 
@@ -68,6 +69,28 @@ export function HostAccessPage() {
     setDiag(r.data.text);
   };
 
+  const setUsage = async (mode: Usage) => {
+    if (!st || mode === st.usage) return;
+    let confirm = false;
+    if (mode === 'desktop') {
+      const away = !st.client_local;
+      const ok = await confirmDialog({
+        title: t(away ? 'su.lockOutTitle' : 'su.localTitle'),
+        message: t(away ? 'su.lockOutMsg' : 'su.localMsg'),
+        confirmLabel: t(away ? 'su.lockOutGo' : 'su.localGo'),
+        danger: true,
+      });
+      if (!ok) return;
+      confirm = true;
+    }
+    setBusy('usage');
+    const r = await hostAccessApi.setUsage(mode, confirm);
+    setBusy(null);
+    if (!r.ok) return toast('error', t('use.failed'), r.error);
+    setSt(r.data);
+    toast('success', t('use.saved'));
+  };
+
   const setRemote = async (on: boolean) => {
     if (!st) return;
     let confirm = false;
@@ -114,6 +137,11 @@ export function HostAccessPage() {
 
   return (
     <div className="stack settings-page">
+      {st.native && st.remote.supported && d.available && st.usage && (
+        <Group title={t('use.title')} hint={t('use.hint')}>
+          <UsagePicker value={st.usage} disabled={busy === 'usage'} onChange={(m) => void setUsage(m)} />
+        </Group>
+      )}
       <Group title={t('nd.screen')} hint={t('nd.screen.hint')}>
         {!d.available ? (
           <Row label={t('nd.mode')} hint={d.reason ?? t('nd.notSetUp')}>

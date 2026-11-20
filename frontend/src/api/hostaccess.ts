@@ -35,8 +35,13 @@ export interface DesktopState {
   health?: DesktopHealth;
 }
 
+/** How NoCapOS is used: the desktop and web access, the desktop only, or web only (no screen). */
+export type Usage = 'desktop-web' | 'desktop' | 'web';
+
 export interface HostAccess {
   native: boolean;
+  /** How NoCapOS is used, from the two switches below. */
+  usage?: Usage;
   /** This browser runs on the server itself. */
   client_local: boolean;
   remote: { supported: boolean; enabled: boolean; reason?: string };
@@ -49,6 +54,7 @@ export const hostAccessApi = {
     api<HostAccess>('/api/v1/system/remote-access', { method: 'PUT', body: { enabled, confirm } }),
   setDesktop: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { enabled } }),
   setDesktopMode: (mode: DesktopMode) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { mode } }),
+  setUsage: (mode: Usage, confirm = false) => api<HostAccess>('/api/v1/system/usage', { method: 'PUT', body: { mode, confirm } }),
   setAutologin: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop/autologin', { method: 'PUT', body: { enabled } }),
   /** Puts NoCap Desktop back on the screen (restarts the sign-in screen). */
   repairDesktop: () => api<{ actions: string[]; health: DesktopHealth; state: HostAccess }>('/api/v1/system/desktop/repair', { method: 'POST', body: {} }),

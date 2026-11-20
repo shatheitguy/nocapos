@@ -265,6 +265,7 @@ func (s *Server) Handler() http.Handler {
 	// devices may open NoCapOS (admin only, audited).
 	mux.Handle("GET /api/v1/system/host-access", s.admin(s.hostAccessGet))
 	mux.Handle("PUT /api/v1/system/remote-access", s.admin(s.remoteAccessSet))
+	mux.Handle("PUT /api/v1/system/usage", s.admin(s.usageSet))
 	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.

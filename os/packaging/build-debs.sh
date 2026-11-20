@@ -309,6 +309,69 @@ build_base() {
   finish nocapos-base "$stage"
 }
 
+# ---- nocapos-installer (PC only) -----------------------------------------
+
+# The kiosk window is a small C program against WebKitGTK 4.1; it's
+# compiled in a Debian 13 container, so it matches the image's libraries.
+build_kiosk() {
+  local out="$1"
+  mkdir -p "$out"
+  docker run --rm -v "$PKG/nocapos-installer/kiosk:/src:ro" -v "$out:/out" debian:trixie bash -c '
+    set -e
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends gcc libc6-dev pkg-config libwebkit2gtk-4.1-dev >/dev/null
+    gcc -O2 -Wall -Wno-unused-parameter -o /out/nocap-kiosk /src/nocap-kiosk.c $(pkg-config --cflags --libs webkit2gtk-4.1 gtk+-3.0)
+    strip /out/nocap-kiosk
+    chown '"$(id -u):$(id -g)"' /out/nocap-kiosk'
+}
+
+build_installer() {
+  [ "$ARCH" = amd64 ] || { echo "nocapos-installer: PC (amd64) only, skipped"; return 0; }
+  if ! command -v docker >/dev/null; then
+    echo "nocapos-installer: needs Docker to build the kiosk window, skipped" >&2
+    return 0
+  fi
+  local stage="$WORK/nocapos-installer"
+  mkdir -p "$stage/DEBIAN" "$stage/usr/bin" "$stage/usr/libexec/nocapos"
+  copy_root "$PKG/nocapos-installer" "$stage"
+  (cd "$ROOT/backend" && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch \
+    go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$stage/usr/bin/nocap-installer" ./cmd/nocap-installer)
+  build_kiosk "$WORK/kiosk"
+  install -m 755 "$WORK/kiosk/nocap-kiosk" "$stage/usr/libexec/nocapos/nocap-kiosk"
+  find "$stage/usr/lib" -type f -exec chmod 644 {} +
+  docs nocapos-installer "$stage"
+  cat >"$stage/DEBIAN/control" <<EOF
+Package: nocapos-installer
+Version: $DEBVER
+Architecture: $ARCH
+Maintainer: $MAINT
+Section: admin
+Priority: optional
+Homepage: $HOMEPAGE
+Depends: nocapos-image (= $DEBVER), cage, libwebkit2gtk-4.1-0, cryptsetup, systemd-cryptsetup, dosfstools, e2fsprogs, fdisk, util-linux
+Description: NoCapOS installer
+ The full-screen NoCapOS setup that runs from the NoCapOS USB stick: it
+ asks for your language, the drive, your account and how you'll use
+ NoCapOS, then writes NoCapOS onto the drive. Only active on the stick.
+EOF
+  cat >"$stage/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl enable nocapos-installer.service nocapos-installer-screen.service >/dev/null 2>&1 || true
+fi
+EOF
+  cat >"$stage/DEBIAN/postrm" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+  systemctl disable nocapos-installer.service nocapos-installer-screen.service >/dev/null 2>&1 || true
+fi
+EOF
+  finish nocapos-installer "$stage"
+}
+
 # ---- nocap-desktop --------------------------------------------------------
 
 # NoCap Desktop: NoCap Shell's programs (nocap-shell, nocap-lock: C, built
@@ -356,8 +419,10 @@ fi
 EOF
   finish nocap-desktop "$stage"
 }
+
 build_core
 build_image
 build_branding
 build_base
+build_installer
 build_desktop

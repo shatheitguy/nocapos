@@ -1,0 +1,12 @@
+{
+  "use.title": "How you use NoCapOS",
+  "use.hint": "The screen, your other devices, or both. The switches below follow along.",
+  "use.both": "Desktop + web access",
+  "use.bothText": "NoCap Desktop on this screen, plus NoCapOS in the browser on the rest of your devices at home.",
+  "use.desktop": "Desktop only",
+  "use.desktopText": "NoCap Desktop on this screen. Other devices can't open NoCapOS.",
+  "use.web": "Web only (no screen)",
+  "use.webText": "No desktop on this machine. Run NoCapOS from your other devices' browsers.",
+  "use.failed": "Couldn't switch how NoCapOS is used",
+  "use.saved": "Locked in"
+}

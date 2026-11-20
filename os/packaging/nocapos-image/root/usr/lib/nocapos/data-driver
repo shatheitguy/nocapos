@@ -16,14 +16,24 @@ MAPPER=nocap-data
 
 [ -n "$DEV" ] && [ -n "$MNT" ] || { echo "usage: data-driver format|mount|wipe DEVICE MOUNTPOINT" >&2; exit 2; }
 
+# Logged to the kernel log: this runs before the journal.
+note() { echo "nocapos data-driver: $*" >/dev/kmsg 2>/dev/null || echo "nocapos data-driver: $*" >&2; }
+
 is_luks() { command -v cryptsetup >/dev/null 2>&1 && cryptsetup isLuks "$DEV" 2>/dev/null; }
 
 ask_passphrase() {
   # Up to three tries, on the splash when it's up.
   if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
-    plymouth ask-for-password --prompt="Enter the passphrase to unlock NoCapOS" \
-      --number-of-tries=3 --command="cryptsetup open --type luks2 --key-file=- $DEV $MAPPER"
-    return
+    tries=0
+    while [ "$tries" -lt 3 ]; do
+      tries=$((tries + 1))
+      pass="$(plymouth ask-for-password --prompt="Enter the passphrase to unlock NoCapOS")" || pass=""
+      if printf '%s' "$pass" | cryptsetup open --type luks2 --key-file=- "$DEV" "$MAPPER"; then
+        return 0
+      fi
+      plymouth display-message --text="That passphrase didn't work." 2>/dev/null || true
+    done
+    return 1
   fi
   tries=0
   while [ "$tries" -lt 3 ]; do
@@ -46,11 +56,20 @@ open_luks() {
   modprobe dm_crypt 2>/dev/null || true
   [ -e "/dev/mapper/$MAPPER" ] && return 0
   if cryptsetup luksDump "$DEV" 2>/dev/null | grep -q 'systemd-tpm2'; then
-    if cryptsetup open --token-only "$DEV" "$MAPPER" 2>/dev/null; then
+    # The security chip: its driver may not be loaded this early.
+    modprobe -q tpm_crb 2>/dev/null || true
+    modprobe -q tpm_tis 2>/dev/null || true
+    i=0
+    while [ ! -e /dev/tpmrm0 ] && [ "$i" -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    [ -e /dev/tpmrm0 ] || note "no security chip device (/dev/tpmrm0)"
+    if timeout 60 cryptsetup open --token-only "$DEV" "$MAPPER" 2>/dev/null; then
+      note "unlocked with the security chip"
       return 0
     fi
+    note "the security chip did not unlock $DEV"
     echo "The security chip didn't unlock the drive; asking for the passphrase." >&2
   fi
+  note "asking for the passphrase"
   ask_passphrase
 }
 

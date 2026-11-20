@@ -247,6 +247,25 @@ func (s *System) RoleOf(ctx context.Context, username string) (string, bool, err
 	return a.Role, a.Disabled, nil
 }
 
+// HasPeople: auth.FirstAccounts. Root doesn't count.
+func (s *System) HasPeople(ctx context.Context) (bool, error) {
+	list, err := s.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, a := range list {
+		if !a.Root {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// CreateFirstAdmin: auth.FirstAccounts.
+func (s *System) CreateFirstAdmin(ctx context.Context, username, fullName, password string) error {
+	return s.Create(ctx, NewAccount{Username: username, FullName: fullName, Password: password, Role: store.RoleAdmin})
+}
+
 // ---------- changes ----------
 
 func run(ctx context.Context, stdin string, name string, args ...string) error {

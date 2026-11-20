@@ -60,14 +60,16 @@ type Sealer interface {
 }
 
 type Service struct {
-	st   *store.Store
-	iss  *Issuer
-	opt  Options
-	box  Sealer
-	sys  SystemAccounts // nil = NoCapOS's own accounts
-	now  func() time.Time
-	lock *Lockout // per-account failed attempts (password and 2FA code)
-	mfa  mfaStore // sign-ins waiting for their 2FA code
+	st  *store.Store
+	iss *Issuer
+	opt Options
+	box Sealer
+	sys SystemAccounts // nil = NoCapOS's own accounts
+	// firstOnSystem: the first-run setup may make the first system account.
+	firstOnSystem bool
+	now           func() time.Time
+	lock          *Lockout // per-account failed attempts (password and 2FA code)
+	mfa           mfaStore // sign-ins waiting for their 2FA code
 
 	setupMu sync.Mutex // one first-run setup at a time (the store is the final guard)
 }
@@ -81,6 +83,10 @@ func (s *Service) SetSealer(box Sealer) { s.box = box }
 
 func (s *Service) SetupRequired(ctx context.Context) (bool, error) {
 	if s.sys != nil {
+		if fa, ok := s.sys.(FirstAccounts); ok && s.firstOnSystem {
+			has, err := fa.HasPeople(ctx)
+			return !has, err
+		}
 		return false, nil // sign in with an existing host account instead
 	}
 	n, err := s.st.CountUsers(ctx)
@@ -130,6 +136,9 @@ func (s *Service) Setup(ctx context.Context, req SetupRequest, meta ClientMeta) 
 	}
 	if err := ValidatePassword(password); err != nil {
 		return nil, err
+	}
+	if s.sys != nil {
+		return s.setupSystem(ctx, username, password, meta)
 	}
 	hash, err := HashPassword(password)
 	if err != nil {

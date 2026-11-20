@@ -34,6 +34,7 @@ import (
 	"alfaos/alfad/internal/hardware"
 	"alfaos/alfad/internal/nativeapps"
 	"alfaos/alfad/internal/netdrive"
+	"alfaos/alfad/internal/osimage"
 	"alfaos/alfad/internal/photos"
 	"alfaos/alfad/internal/rdp"
 	"alfaos/alfad/internal/removable"
@@ -211,6 +212,9 @@ func serve() error {
 		switch {
 		case err == nil:
 			svc.SetSystemAccounts(sys)
+			// A fresh NoCapOS image has nobody on it: the first-run setup
+			// makes the owner's account.
+			svc.SetFirstAccountOnSystem(osimage.IsImage())
 			dir = sys
 			log.Info("accounts: signing in with this machine's Linux users")
 		case cfg.AuthMode == "system":
@@ -379,6 +383,8 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	// "Desktop only": other devices' connections are closed on arrival.
+	ln = srv.GateListener(ln)
 	errCh := make(chan error, 1)
 	if certFile != "" {
 		httpSrv.TLSConfig = tlsutil.ServerConfig()
@@ -428,6 +434,9 @@ func startHTTPRedirect(addr string, httpsAddr net.Addr, srv *api.Server, log *sl
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		ln = srv.GateListener(ln)
+	}
 	if err != nil {
 		log.Warn("http redirect not started (is another web server using the port?)", "addr", addr, "err", err)
 		return rs
