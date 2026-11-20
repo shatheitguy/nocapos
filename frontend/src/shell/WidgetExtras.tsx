@@ -8,7 +8,8 @@ import { fmtBytes, fmtUptime } from '../lib/format';
 import { useClock, usePoll } from '../lib/hooks';
 import { useTimePrefs, zoned } from '../lib/time';
 import { APPS, openApp } from '../apps/meta';
-import { NoteBody } from '../apps/notes/NoteParts';
+import { NoteEditor } from '../apps/notes/NoteEditor';
+import { openNote } from '../apps/notes/openNote';
 import { displayTitle, sortNotes } from '../apps/notes/noteDoc';
 import { useNotes } from '../apps/notes/notesStore';
 import { useT } from '../i18n';
@@ -78,49 +79,66 @@ export function NotesWidget() {
   );
   // The note you picked, else your first pinned or latest one.
   const note = live.find((n) => n.id === chosen) ?? live[0];
-  const open = (id?: string) => openApp('notes', id ? { props: { note: id, at: String(Date.now()) } } : {});
-  const next = () => {
+  const at = note ? live.indexOf(note) : -1;
+  const step = (d: number) => {
     if (live.length < 2 || !note) return;
-    choose(live[(live.indexOf(note) + 1) % live.length].id);
+    choose(live[(at + d + live.length) % live.length].id);
   };
   const add = () => {
     const n = useNotes.getState().create();
     choose(n.id);
-    open(n.id);
   };
+  const many = live.length > 1;
+  // Up to 7 dots; with more notes the dots show where you are roughly.
+  const dots = Math.min(live.length, 7);
+  const dotOn = live.length <= 7 ? at : Math.round((at / (live.length - 1)) * (dots - 1));
   return (
-    <div className="widget glass notes-widget nt-tint" data-color={note?.color ?? 'glass'}>
-      <div className="widget-head">
-        <span className="notes-widget-title">
-          <Icon name="stickyNote" size={14} /> {note ? displayTitle(note, 40) || t('notes.untitled') : APPS.notes.title}
-        </span>
-        <span className="notes-widget-acts">
-          {live.length > 1 && (
-            <button type="button" className="ne-btn" title={t('notes.widgetNext')} aria-label={t('notes.widgetNext')} onClick={next}>
-              <Icon name="swap" size={13} />
+    <div className={`notes-widget-wrap ${many ? 'stacked' : ''}`} data-count={Math.min(live.length, 3)}>
+      <div className="widget glass notes-widget nt-tint" data-color={note?.color ?? 'glass'}>
+        <div className="widget-head">
+          <span className="notes-widget-title">
+            <Icon name="stickyNote" size={14} /> {note ? displayTitle(note, 40) || t('notes.untitled') : APPS.notes.title}
+          </span>
+          <span className="notes-widget-acts">
+            {many && (
+              <span className="notes-widget-count" title={t('notes.widgetCount', { n: at + 1, total: live.length })}>
+                {at + 1}/{live.length}
+              </span>
+            )}
+            {note && (
+              <button type="button" className="ne-btn" title={t('notes.openWindow')} aria-label={t('notes.openWindow')} onClick={() => openNote(note.id)}>
+                <Icon name="external" size={13} />
+              </button>
+            )}
+            <button type="button" className="ne-btn" title={t('notes.new')} aria-label={t('notes.new')} onClick={add}>
+              <Icon name="plus" size={13} />
             </button>
-          )}
-          <button type="button" className="ne-btn" title={t('notes.new')} aria-label={t('notes.new')} onClick={add}>
-            <Icon name="plus" size={13} />
-          </button>
-        </span>
-      </div>
-      {note ? (
-        <div
-          className="notes-widget-body"
-          role="button"
-          tabIndex={0}
-          onClick={() => open(note.id)}
-          onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && open(note.id)}
-          title={t('notes.openInApp')}
-        >
-          <NoteBody note={note.title.trim() ? note : { ...note, body: note.body.slice(1) }} tick />
+          </span>
         </div>
-      ) : (
-        <button type="button" className="notes-widget-body empty muted" onClick={add}>
-          {loaded ? t('notes.widgetEmpty') : t('notes.loading')}
-        </button>
-      )}
+        {note ? (
+          // Typed into right here; saved as you type, like in the app.
+          <NoteEditor key={note.id} note={note} toolbar={false} compact className="notes-widget-body" placeholder={t('notes.widgetPlaceholder')} />
+        ) : (
+          <button type="button" className="notes-widget-body empty muted" onClick={add}>
+            {loaded ? t('notes.widgetEmpty') : t('notes.loading')}
+          </button>
+        )}
+        {many && (
+          <div className="notes-widget-nav">
+            <button type="button" className="ne-btn" title={t('notes.widgetPrev')} aria-label={t('notes.widgetPrev')} onClick={() => step(-1)}>
+              <Icon name="chevronLeft" size={13} />
+            </button>
+            <span className="notes-widget-dots" aria-hidden="true">
+              {Array.from({ length: dots }, (_, i) => (
+                <span key={i} className={i === dotOn ? 'on' : ''} />
+              ))}
+            </span>
+            <button type="button" className="ne-btn" title={t('notes.widgetNext')} aria-label={t('notes.widgetNext')} onClick={() => step(1)}>
+              <Icon name="chevronRight" size={13} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
