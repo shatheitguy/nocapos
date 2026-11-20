@@ -345,7 +345,7 @@ function remind(n: Note) {
     title: tr('notes.reminderTitle', { title }),
     body: n.title ? n.text.split('\n').find((l) => l.trim())?.slice(0, 160) : undefined,
     icon: 'notes',
-    action: { app: 'notes', props: { note: n.id } },
+    action: { app: 'note', props: { note: n.id } },
     created_at: new Date().toISOString(),
   });
 }
