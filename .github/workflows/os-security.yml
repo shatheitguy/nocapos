@@ -1,10 +1,11 @@
 name: NoCapOS security refresh
 
-# Every day (and by hand): does Debian have security fixes (or point-release
-# fixes) for packages in the newest released NoCapOS image? If so, the same
-# NoCapOS release is rebuilt from today's Debian snapshot, tested in QEMU
-# (boot, update and rollback, installer) and published as a security
-# refresh: version X.Y.Z-sN, tag vX.Y.Z-sN. Glow Up shows it as a security
+# Every day: does Debian have security fixes (or point-release fixes) for
+# packages in the newest released NoCapOS image? The run's summary lists
+# them. Publishing is by hand only (publish: true, after the owner has
+# tested): the same NoCapOS release is rebuilt from today's Debian snapshot,
+# tested in QEMU (boot, update and rollback, installer) and published as a
+# security refresh: version X.Y.Z-sN, tag vX.Y.Z-sN. Glow Up shows it as a security
 # update with the fixed packages and CVEs; it installs when the owner says
 # so (or by itself, if they turned that on). See os/README.md.
 on:
@@ -12,8 +13,8 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: only report what would be fixed
+      publish:
+        description: build, test and publish the security refresh (else only report)
         type: boolean
         default: false
 
@@ -67,7 +68,7 @@ jobs:
 
   images:
     needs: check
-    if: needs.check.outputs.needed == 'true' && !inputs.dry_run
+    if: needs.check.outputs.needed == 'true' && inputs.publish
     uses: ./.github/workflows/os.yml
     with:
       release: true
