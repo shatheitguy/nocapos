@@ -3,6 +3,7 @@ import { shieldApi, type Exposed, type FwEntry, type FwRule, type FwState, type 
 import { Icon } from '../components/Icon';
 import { useT } from '../i18n';
 import { confirmDialog } from '../state/confirm';
+import { openApp } from './meta';
 import { Empty } from './Monitor';
 import { Card, Select, fwCall } from './ShieldCommon';
 
@@ -116,6 +117,16 @@ function ExposedCard({ fw, setFw }: { fw: FwState; setFw: (s: FwState) => void }
                   {e.locked ? ` · ${t('sh.exp.locked')}` : ''}
                 </span>
               </span>
+              {e.setting ? (
+                <>
+                  <span className={`chip ${e.open ? (e.scope === 'anywhere' ? 'warn' : 'good') : 'good'}`}>
+                    {t(e.open ? (e.scope === 'anywhere' ? 'ssh.exp.anywhere' : 'ssh.exp.lan') : 'ssh.exp.off')}
+                  </span>
+                  <button type="button" className="ghost small" onClick={() => openApp('settings', { props: { section: e.setting } })}>
+                    {t('ssh.exp.change')}
+                  </button>
+                </>
+              ) : (<>
               <span className={`chip ${e.open ? 'warn' : 'good'}`}>{t(e.open ? 'sh.exp.open' : 'sh.exp.closed')}</span>
               <input
                 type="checkbox"
@@ -125,6 +136,7 @@ function ExposedCard({ fw, setFw }: { fw: FwState; setFw: (s: FwState) => void }
                 disabled={(e.open && e.locked) || !!fw.pending}
                 onChange={() => void flip(e)}
               />
+              </>)}
             </li>
           ))}
         </ul>
