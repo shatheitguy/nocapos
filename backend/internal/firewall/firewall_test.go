@@ -356,6 +356,15 @@ func (f *fakeUFW) run(_ context.Context, name string, args ...string) (string, e
 		return "Firewall stopped", os.WriteFile(filepath.Join(f.etc, "ufw", "ufw.conf"), []byte("ENABLED=no\nLOGLEVEL=low\n"), 0o644)
 	case j == "reload":
 		return "Firewall reloaded", nil
+	case len(args) > 2 && args[0] == "--force" && args[1] == "delete":
+		spec := strings.Join(args[2:], " ")
+		for i, r := range f.rules {
+			if strings.Join(r, " ") == spec {
+				f.rules = append(f.rules[:i], f.rules[i+1:]...)
+				return "Rule deleted", nil
+			}
+		}
+		return "Could not delete non-existent rule", errors.New("Could not delete non-existent rule")
 	case args[0] == "allow" || args[0] == "deny" || args[0] == "limit" || args[0] == "reject":
 		f.rules = append(f.rules, args)
 		return "Rule added", nil
