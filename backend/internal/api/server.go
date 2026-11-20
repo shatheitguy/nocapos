@@ -75,6 +75,7 @@ type Deps struct {
 type Server struct {
 	Deps
 	appData         *appdata.Manager // each Docker app's data folders in Files
+	appMover        *appdata.Mover   // the App data folder: moving apps into it, and it
 	hub             *ws.Hub
 	tickets         *auth.TicketStore
 	fileTickets     fileTicketStore
@@ -129,6 +130,7 @@ func New(ctx context.Context, d Deps) *Server {
 		s.appData = appdata.New(d.Docker, d.Files.Protected)
 		d.Files.AddResolver(s.appData.Resolve)
 	}
+	s.setupAppData()
 	s.webBook = webaddr.NewBook(d.Store)
 	s.pkgJobs = syspkg.NewJobs()
 	s.pkgAdmin = syspkg.NewAdmin()
@@ -373,6 +375,15 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))
 	mux.Handle("GET /api/v1/files/external", s.authed(s.filesExternal))
 	mux.Handle("GET /api/v1/files/appdata", s.admin(s.filesAppData))
+	mux.Handle("GET /api/v1/appdata", s.admin(s.appDataOverview))
+	mux.Handle("POST /api/v1/appdata/move", s.admin(s.appDataMove))
+	mux.Handle("GET /api/v1/appdata/job", s.admin(s.appDataJob))
+	mux.Handle("POST /api/v1/appdata/root", s.admin(s.appDataSetRoot))
+	mux.Handle("POST /api/v1/appdata/root/old", s.admin(s.appDataOldRoot))
+	mux.Handle("GET /api/v1/appdata/old-volumes", s.admin(s.appDataOldVolumes))
+	mux.Handle("POST /api/v1/appdata/old-volumes/remove", s.admin(s.appDataRemoveOldVolumes))
+	mux.Handle("PUT /api/v1/appdata/share", s.admin(s.appDataShare))
+	mux.Handle("GET /api/v1/appdata/suggest", s.admin(s.appDataSuggest))
 	mux.Handle("POST /api/v1/files/external/eject", s.admin(s.filesEject))
 	mux.Handle("POST /api/v1/files/compress", s.authed(s.filesCompress))
 	mux.Handle("POST /api/v1/files/extract", s.authed(s.filesExtract))

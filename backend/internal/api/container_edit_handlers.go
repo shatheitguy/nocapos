@@ -105,6 +105,14 @@ func (s *Server) containerEdit(w http.ResponseWriter, r *http.Request) {
 		s.dockerError(w, r, err)
 		return
 	}
+	var had []docker.SpecMount
+	for _, m := range d.Mounts {
+		had = append(had, docker.SpecMount{Type: m.Type, Source: m.Source})
+	}
+	if err := s.checkBinds(r.Context(), spec.Mounts, had); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	uid := userFrom(r.Context()).ID
 	if d.System {
 		writeError(w, http.StatusForbidden, "protected", "NoCapOS's own containers can't be edited")
@@ -148,6 +156,10 @@ func (s *Server) containerCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	if err := s.checkBinds(ctx, spec.Mounts, nil); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	uid := userFrom(ctx).ID
 	if ok, err := s.Docker.ImageExists(ctx, spec.Image); err != nil {
 		s.dockerError(w, r, err)

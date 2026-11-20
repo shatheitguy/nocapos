@@ -18,6 +18,7 @@ import { fileApi, type FileRoot } from '../api/files';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtAgo, fmtBytes } from '../lib/format';
 import { confirmDialog } from '../state/confirm';
+import { tr } from '../i18n';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import { Choice, Row, Section, Toggle } from './Personalize';
@@ -205,6 +206,7 @@ function NoEngine({ status, installing, onInstall }: { status: BackupStatus; ins
 
 function sourceLabel(s: BackupSource, roots: FileRoot[]) {
   if (s.special === 'nocapos') return 'NoCapOS settings & accounts';
+  if (s.special === 'appdata') return tr('ad.backup.label');
   const root = roots.find((r) => r.id === s.root)?.name ?? s.root;
   return s.path && s.path !== '/' ? `${root} › ${s.path.replace(/^\//, '').replace(/\//g, ' › ')}` : root;
 }
@@ -450,6 +452,26 @@ function PlanEditor({
           checked={chosen.has('special:nocapos')}
           onChange={(on) => toggleSource({ special: 'nocapos' }, on)}
         />
+        {(
+          <>
+            <Toggle
+              label={tr('ad.backup.label')}
+              hint={tr('ad.backup.hint')}
+              checked={chosen.has('special:appdata')}
+              onChange={(on) => toggleSource({ special: 'appdata', stop_apps: false }, on)}
+            />
+            {chosen.has('special:appdata') && (
+              <div className="bk-folders">
+                <Toggle
+                  label={tr('ad.backup.stop')}
+                  hint={tr('ad.backup.stopHint')}
+                  checked={!!sources.find((s) => s.special === 'appdata')?.stop_apps}
+                  onChange={(on) => setSources((list) => list.map((s) => (s.special === 'appdata' ? { ...s, stop_apps: on } : s)))}
+                />
+              </div>
+            )}
+          </>
+        )}
         {roots.map((r) => {
           const whole = chosen.has(`${r.id}:/`);
           return (
