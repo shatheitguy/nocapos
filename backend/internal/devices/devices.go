@@ -164,7 +164,7 @@ func CapsList(s string) []string {
 const (
 	// DefaultLimit is how many devices each person may link when an
 	// administrator hasn't said otherwise.
-	DefaultLimit = 5
+	DefaultLimit = 10
 	// MaxLimit is the highest limit that can be set. 0 means no limit.
 	MaxLimit = 100
 )
