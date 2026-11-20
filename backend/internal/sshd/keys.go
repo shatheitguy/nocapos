@@ -30,12 +30,12 @@ const maxAuthorizedKeys = 1 << 20
 
 // keyTypes are the public key types accepted, by their name in the key.
 var keyTypes = map[string]bool{
-	ssh.KeyAlgoED25519:   true,
-	ssh.KeyAlgoECDSA256:  true,
-	ssh.KeyAlgoECDSA384:  true,
-	ssh.KeyAlgoECDSA521:  true,
-	ssh.KeyAlgoRSA:       true,
-	ssh.KeyAlgoSKED25519: true,
+	ssh.KeyAlgoED25519:    true,
+	ssh.KeyAlgoECDSA256:   true,
+	ssh.KeyAlgoECDSA384:   true,
+	ssh.KeyAlgoECDSA521:   true,
+	ssh.KeyAlgoRSA:        true,
+	ssh.KeyAlgoSKED25519:  true,
 	ssh.KeyAlgoSKECDSA256: true,
 }
 
@@ -130,14 +130,14 @@ func ParseKey(text, name string) (NewKey, error) {
 
 // cleanName checks a key's name: printable, one line, MaxKeyName at most.
 func cleanName(name string) (string, error) {
+	for _, c := range name {
+		if c != ' ' && c != '\t' && !unicode.IsPrint(c) {
+			return "", invalid("the name can't contain line breaks or control characters")
+		}
+	}
 	name = strings.Join(strings.Fields(name), " ")
 	if len([]rune(name)) > MaxKeyName {
 		return "", invalid("the name is too long (%d characters at most)", MaxKeyName)
-	}
-	for _, c := range name {
-		if !unicode.IsPrint(c) {
-			return "", invalid("the name can't contain control characters")
-		}
 	}
 	return name, nil
 }
