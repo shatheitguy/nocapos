@@ -4,7 +4,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { useT } from '../i18n';
 import { toast } from '../state/toasts';
 import { Empty } from './Monitor';
-import { Card, QueryBars, Stat, fmtNum, fwCall, pct, useSecondsLeft } from './ShieldCommon';
+import { Card, KeepBanner, QueryBars, Stat, fmtNum, pct, useSecondsLeft } from './ShieldCommon';
 import { DnsTab } from './ShieldDns';
 import { FirewallTab } from './ShieldFirewall';
 import { LogsTab } from './ShieldLogs';
@@ -61,40 +61,13 @@ export function Shield() {
           </button>
         ))}
       </nav>
-      <KeepBanner fw={fw} setFw={setFw} reload={load} />
+      <KeepBanner pending={fw.pending} done={setFw} reload={load} />
       <div className="sh-body">
         {tab === 'overview' && <Overview fw={fw} dns={dns} stats={stats} setDns={setDns} go={setTab} />}
         {tab === 'firewall' && <FirewallTab fw={fw} setFw={setFw} />}
         {tab === 'dns' && <DnsTab dns={dns} setDns={setDns} stats={stats} />}
         {tab === 'logs' && <LogsTab stats={stats} logOn={dns.settings.log_enabled} />}
         {tab === 'settings' && <SettingsTab fw={fw} setFw={setFw} dns={dns} setDns={setDns} />}
-      </div>
-    </div>
-  );
-}
-
-/** "Keep these changes?" with a countdown; the server undoes them at zero. */
-function KeepBanner({ fw, setFw, reload }: { fw: FwState; setFw: (s: FwState) => void; reload: () => Promise<void> }) {
-  const t = useT();
-  const left = useSecondsLeft(fw.pending?.deadline);
-  useEffect(() => {
-    if (fw.pending && left === 0) {
-      const id = window.setTimeout(() => void reload(), 2000);
-      return () => window.clearTimeout(id);
-    }
-  }, [fw.pending, left, reload]);
-  if (!fw.pending) return null;
-  const p = fw.pending;
-  return (
-    <div className="sh-keep" role="alertdialog" aria-live="assertive">
-      <Icon name="alert" size={18} />
-      <div className="sh-keep-text">
-        <strong>{t('sh.keep.title')}</strong>
-        <span>{t('sh.keep.body', { n: left })}</span>
-      </div>
-      <div className="sh-keep-actions">
-        <button type="button" className="ghost small" onClick={() => void fwCall(shieldApi.undo(p.id), setFw, t('sh.keep.undone'))}>{t('sh.keep.undo')}</button>
-        <button type="button" className="small" onClick={() => void fwCall(shieldApi.keep(p.id), setFw, t('sh.keep.kept'))}>{t('sh.keep.keep')}</button>
       </div>
     </div>
   );
