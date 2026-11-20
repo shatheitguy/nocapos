@@ -1751,6 +1751,17 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
   border-bottom: 1px solid var(--glass-border); color: var(--text); font-size: 13px;
 }
 .menubar .spacer { flex: 1; }
+/* A maximized front window: the menu bar slides up out of the way and
+   peeks back when the pointer reaches the top edge (or while in use). */
+.menubar { transition: transform 0.22s cubic-bezier(0.22, 0.8, 0.3, 1); }
+.menubar-hot { position: absolute; top: 0; left: 0; right: 0; height: 6px; z-index: 100002; }
+:root[data-menubar-auto] .menubar { transform: translateY(-100%); box-shadow: none; }
+:root[data-menubar-auto] .menubar-hot:hover + .menubar,
+:root[data-menubar-auto] .menubar:hover,
+:root[data-menubar-auto] .menubar:focus-within,
+:root[data-menubar-auto] .menubar:has([aria-expanded='true']) { transform: none; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+:root[data-reduce-motion] .menubar { transition: none; }
+@media (prefers-reduced-motion: reduce) { .menubar { transition: none; } }
 .mb-brand { background: transparent; padding: 2px 6px; border-radius: 6px; }
 .mb-brand .brand-mark { width: 20px; height: 20px; font-size: 12px; border-radius: 6px; }
 .mb-brand:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 10%, transparent); filter: none; }
@@ -1791,6 +1802,32 @@ button.danger-solid { background: var(--bad); color: #fff; }
 }
 .brand-mark.busy .brand-mark-glow { animation: brand-glow 3.2s ease-in-out infinite; }
 .brand-mark.busy img { animation: brand-breathe 3.2s ease-in-out infinite; }
+
+/* The big mark on update / restart screens: no tile (the red C and ring
+   would vanish into it); a chrome shine sweeps across while busy. */
+.brand-mark.brand-hero { background: none; box-shadow: none; border-radius: 0; overflow: visible; margin-bottom: 10px; }
+.brand-hero-art {
+  position: relative; width: 100%; height: 100%; display: block;
+  -webkit-mask: url('/brand/mark-512.png') center / contain no-repeat;
+  mask: url('/brand/mark-512.png') center / contain no-repeat;
+}
+.brand-hero-art img { position: absolute; inset: 0; }
+.brand-hero-shine {
+  position: absolute; inset: -20%; transform: translateX(-120%); pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.85) 50%, transparent 60%);
+}
+.brand-hero-shadow {
+  position: absolute; left: 12%; right: 12%; bottom: -10%; height: 18%; border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(232, 35, 43, 0.45), transparent 70%);
+  opacity: 0.5;
+}
+.brand-hero.busy .brand-hero-art { animation: brand-float 3.2s ease-in-out infinite; }
+.brand-hero.busy .brand-hero-shine { animation: brand-shine 2.6s ease-in-out infinite; }
+.brand-hero.busy .brand-hero-shadow { animation: brand-shadow 3.2s ease-in-out infinite; }
+.brand-hero.busy img { animation: none; }
+@keyframes brand-float { 50% { transform: translateY(-5px); } }
+@keyframes brand-shine { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(120%); } }
+@keyframes brand-shadow { 50% { transform: scaleX(0.8); opacity: 0.3; } }
 .brand-bar { --bar-track: var(--track); position: relative; width: 100%; height: 6px; margin-top: 8px; border-radius: 999px; background: var(--bar-track); overflow: hidden; }
 .brand-bar-fill {
   position: relative; height: 100%; border-radius: inherit; overflow: hidden;
@@ -1811,12 +1848,13 @@ button.danger-solid { background: var(--bad); color: #fff; }
 @keyframes brand-sweep { to { transform: translateX(100%); } }
 @keyframes brand-slide { 0% { left: -40%; } 100% { left: 102%; } }
 @media (prefers-reduced-motion: reduce) {
-  .brand-mark .brand-mark-glow, .brand-mark img, .brand-bar-fill::after { animation: none !important; }
+  .brand-mark .brand-mark-glow, .brand-mark img, .brand-bar-fill::after, .brand-hero-art, .brand-hero-shine, .brand-hero-shadow { animation: none !important; }
   .brand-bar-fill { transition: none; }
   .brand-bar.indeterminate .brand-bar-fill { animation: none !important; left: 0; width: 100%; opacity: 0.6; }
   .power-overlay { animation: none; }
 }
-:root[data-reduce-motion] .brand-mark .brand-mark-glow, :root[data-reduce-motion] .brand-mark img, :root[data-reduce-motion] .brand-bar-fill::after { animation: none !important; }
+:root[data-reduce-motion] .brand-mark .brand-mark-glow, :root[data-reduce-motion] .brand-mark img, :root[data-reduce-motion] .brand-bar-fill::after,
+:root[data-reduce-motion] .brand-hero-art, :root[data-reduce-motion] .brand-hero-shine, :root[data-reduce-motion] .brand-hero-shadow { animation: none !important; }
 :root[data-reduce-motion] .brand-bar.indeterminate .brand-bar-fill { animation: none !important; left: 0; width: 100%; opacity: 0.6; }
 
 /* ============ Software update overlay ============ */
