@@ -6,7 +6,7 @@
 #   /usr/lib/nocapos/image/         image scripts (layer.sh runs once in the chroot)
 #   /usr/lib/nocapos/images/        container images loaded on the first boot (guacd)
 #   /usr/share/plymouth/themes/nocapos/   boot splash (deploy/plymouth)
-#   /usr/share/grub/themes/nocapos/       GRUB theme (amd64, when art is given)
+#   /usr/share/grub/themes/nocapos/       GRUB theme and silent-boot settings (pc)
 #   /etc/...                        systemd units, apt settings, GRUB defaults
 #
 #   image/common/stage-overlay.sh VERSION ARCH PLATFORM DEST [ART_DIR]
@@ -14,7 +14,7 @@
 #     ARCH      amd64 | arm64
 #     PLATFORM  pc | rpi
 #     DEST      output directory (created)
-#     ART_DIR   output of make-art.py (optional; adds the GRUB theme)
+#     ART_DIR   output of make-art.py (optional)
 #
 # The bundle is downloaded from the GitHub release and checked against the
 # release's SHA256SUMS; the build stops on any mismatch. To test a bundle
@@ -82,13 +82,23 @@ mkdir -p "$DEST/usr/share/icons/hicolor/256x256/apps" "$DEST/usr/share/pixmaps"
 cp "$ROOT/frontend/public/brand/mark-256.png" "$DEST/usr/share/icons/hicolor/256x256/apps/nocapos.png"
 cp "$ROOT/frontend/public/brand/mark-256.png" "$DEST/usr/share/pixmaps/nocapos.png"
 
-# GRUB theme for the installed system (PC only).
-if [ -n "$ART" ] && [ "$PLATFORM" = pc ]; then
-  mkdir -p "$DEST/usr/share/grub/themes/nocapos"
-  cp "$ART/grub-background.png" "$DEST/usr/share/grub/themes/nocapos/background.png"
+# The silent boot: nocap-boot (the installer's own, deploy/desktop), run by
+# layer.sh and post-install.sh, the same as on script installs.
+mkdir -p "$DEST/usr/lib/nocapos/image/boot"
+install -m 0755 "$ROOT/deploy/desktop/nocap-boot" "$DEST/usr/lib/nocapos/image/boot/nocap-boot"
+install -m 0644 "$ROOT/deploy/desktop/lib.sh" "$ROOT/deploy/desktop/grub-nocapos" "$DEST/usr/lib/nocapos/image/boot/"
+
+# GRUB for the installed system (PC only): the theme with the medium logo,
+# the plain background shown while the menu stays hidden, and the settings
+# (silent: hidden menu, quiet kernel line), in place before the installer
+# first runs update-grub.
+if [ "$PLATFORM" = pc ]; then
+  mkdir -p "$DEST/usr/share/grub/themes/nocapos" "$DEST/etc/default/grub.d" "$DEST/etc/grub.d"
+  cp "$ROOT/deploy/desktop/art/grub-background.png" "$DEST/usr/share/grub/themes/nocapos/background.png"
+  cp "$ROOT/deploy/desktop/art/grub-boot.png" "$DEST/usr/share/grub/themes/nocapos/boot.png"
   cp "$ROOT/deploy/desktop/grub-theme.txt" "$DEST/usr/share/grub/themes/nocapos/theme.txt"
-else
-  rm -f "$DEST/etc/default/grub.d/nocapos.cfg"
+  bash -c '. "$1"; render_grub_dropin silent' _ "$ROOT/deploy/desktop/lib.sh" >"$DEST/etc/default/grub.d/nocapos.cfg"
+  install -m 0755 "$ROOT/deploy/desktop/grub-nocapos" "$DEST/etc/grub.d/06_nocapos"
 fi
 
 # The remote desktop engine (guacd) as a container image: Debian 13 doesn't

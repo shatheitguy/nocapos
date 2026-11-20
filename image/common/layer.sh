@@ -88,16 +88,12 @@ printf '\nNoCapOS — manage this machine from https://%s/ (or http://nocap.loca
 if command -v plymouth-set-default-theme >/dev/null 2>&1 && [ -f /usr/share/plymouth/themes/nocapos/nocapos.plymouth ]; then
   plymouth-set-default-theme nocapos
 fi
-# Raspberry Pi: the kernel command line lives in cmdline.txt (one line).
-for f in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
-  [ -f "$f" ] || continue
-  line="$(tr -d '\r\n' <"$f")"
-  for t in quiet splash loglevel=3 logo.nologo plymouth.ignore-serial-consoles; do
-    case " $line " in *" $t "*) ;; *) line="$line $t" ;; esac
-  done
-  printf '%s\n' "$line" >"$f"
-  break
-done
+# The silent boot (the installer's nocap-boot): the quiet kernel line in
+# the Raspberry Pi's cmdline.txt and GRUB's settings; boot menus and the
+# initramfs are rebuilt below, by the PC installer and on the first boot.
+if [ -x "$IMG/boot/nocap-boot" ]; then
+  "$IMG/boot/nocap-boot" apply --no-update || echo "warning: nocap-boot didn't finish; the first boot's installer applies the silent boot" >&2
+fi
 # Raspberry Pi firmware: no rainbow square before the splash.
 for f in /boot/firmware/config.txt /boot/config.txt; do
   [ -f "$f" ] || continue
