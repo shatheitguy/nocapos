@@ -170,6 +170,7 @@ func (s *Server) spacesChanged(ctx context.Context) {
 	if s.Spaces != nil {
 		s.Spaces.Changed(context.WithoutCancel(ctx))
 	}
+	s.sshUsersChanged(context.WithoutCancel(ctx))
 }
 
 type updateUserRequest struct {

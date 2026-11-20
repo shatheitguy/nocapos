@@ -859,6 +859,11 @@ type Exposed struct {
 	// Bypass: container ports are published by the container engine, which
 	// writes its own packet-filter rules before ufw's.
 	Bypass bool `json:"bypass,omitempty"`
+	// Setting: a NoCapOS setting owns this (the Settings page to open
+	// instead of a switch here). Scope: who it's open to then ("lan" or
+	// "anywhere"; "" while it's off).
+	Setting string `json:"setting,omitempty"`
+	Scope   string `json:"scope,omitempty"`
 }
 
 // ReachableFromAnyone is Reachable for any outside address (no source rule).
