@@ -111,6 +111,7 @@ type Server struct {
 	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
 	osImg            *osState        // image install: whole-system updates (nil on a script install)
 	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
+	squad            squadState      // Your Squad: link requests between servers, and from phones
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -198,6 +199,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/link/discover", s.authed(s.linkDiscover))
 	mux.Handle("GET /api/v1/link/bluetooth", s.admin(s.linkBluetoothGet))
 	mux.Handle("PUT /api/v1/link/bluetooth", s.admin(s.linkBluetoothPut))
+	// Your Squad: linking with other NoCap servers; phones asking to link.
+	s.squadRoutes(mux)
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
 	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))
@@ -272,6 +275,7 @@ func (s *Server) Handler() http.Handler {
 	s.sshRoutes(mux)
 	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
+	mux.Handle("PUT /api/v1/system/boot-details", s.admin(s.bootDetailsSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
 	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
 	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.

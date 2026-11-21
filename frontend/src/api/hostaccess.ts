@@ -74,6 +74,8 @@ export interface HostAccess {
   client_local: boolean;
   remote: { supported: boolean; enabled: boolean; reason?: string };
   desktop: DesktopState;
+  /** Settings → Show boot details: the boot menu and startup messages (the start is silent while off). */
+  boot?: { supported: boolean; details: boolean };
 }
 
 export const hostAccessApi = {
@@ -82,6 +84,7 @@ export const hostAccessApi = {
     api<HostAccess>('/api/v1/system/remote-access', { method: 'PUT', body: { enabled, confirm } }),
   setDesktop: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { enabled } }),
   setDesktopMode: (mode: DesktopMode) => api<HostAccess>('/api/v1/system/desktop', { method: 'PUT', body: { mode } }),
+  setBootDetails: (enabled: boolean) => api<HostAccess>('/api/v1/system/boot-details', { method: 'PUT', body: { enabled } }),
   setAutologin: (enabled: boolean) => api<HostAccess>('/api/v1/system/desktop/autologin', { method: 'PUT', body: { enabled } }),
   /** Puts NoCap Desktop back on the screen (restarts the sign-in screen). */
   repairDesktop: () =>

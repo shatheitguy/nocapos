@@ -15,7 +15,7 @@ export function HostAccessPage() {
   const t = useT();
   const [st, setSt] = useState<HostAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | 'old' | null>(null);
+  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | 'boot' | 'old' | null>(null);
   const [diag, setDiag] = useState<string | null>(null);
   const [diagOpen, setDiagOpen] = useState(false);
   const [old, setOld] = useState<OldDesktop | null>(null);
@@ -101,6 +101,15 @@ export function HostAccessPage() {
     setBusy(null);
     if (!r.ok) return toast('error', t('nd.autologin.failed'), r.error);
     setSt(r.data);
+  };
+
+  const setBootDetails = async (on: boolean) => {
+    setBusy('boot');
+    const r = await hostAccessApi.setBootDetails(on);
+    setBusy(null);
+    if (!r.ok) return toast('error', t('nd.bootDetails.failed'), r.error);
+    setSt(r.data);
+    toast('success', t('nd.bootDetails.done'));
   };
 
   const repair = async () => {
@@ -207,6 +216,10 @@ export function HostAccessPage() {
               <Row label={t('nd.restart.row')} hint={t('nd.restart.hint', { users: (d.health.old_session_users ?? []).join(', ') || '—' })}>
                 <button type="button" onClick={() => void offerRestart(d.health?.old_session_users)}>{t('nd.restart.button')}</button>
               </Row>
+            )}
+            {st.boot?.supported && (
+              <Toggle label={t('nd.bootDetails')} hint={t(st.boot.details ? 'nd.bootDetails.on' : 'nd.bootDetails.off')}
+                checked={st.boot.details} disabled={busy === 'boot'} onChange={(on) => void setBootDetails(on)} />
             )}
             <Row label={t('nd.repair')} hint={t('nd.repair.hint')}>
               <button type="button" disabled={busy === 'repair'} onClick={() => void repair()}>{t('nd.repair.button')}</button>

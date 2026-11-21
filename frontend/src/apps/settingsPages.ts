@@ -72,8 +72,8 @@ export interface Entry {
 }
 
 export const ENTRIES: Entry[] = [
-  { id: 'network', cat: 'network', admin: true, icon: 'wifi', keywords: 'internet lan connection find other servers discover nearby mdns bluetooth ble',
-    options: ['sn.networking', 'find.label', 'find.btLabel'] },
+  { id: 'network', cat: 'network', admin: true, icon: 'wifi', keywords: 'internet lan connection',
+    options: ['sn.networking'] },
   { id: 'wifi', cat: 'network', sub: 'wifi', admin: true, icon: 'wifi', keywords: 'wireless wlan ssid hotspot',
     options: ['wifi.savedTitle', 'wifi.share', 'wifi.forget', 'wifi.autoConnect'] },
   { id: 'shield', cat: 'network', admin: true, app: 'shield', icon: 'shield',
@@ -87,8 +87,8 @@ export const ENTRIES: Entry[] = [
   { id: 'update', cat: 'general', sub: 'update', admin: true, icon: 'download', keywords: 'upgrade version release new packages patches',
     options: ['gu.updateAll', 'gu.check'] },
   { id: 'access', cat: 'general', sub: 'access', admin: true, icon: 'monitor',
-    keywords: 'monitor display native local screen hdmi remote access lan other devices phone local-only lock',
-    options: ['nd.mode', 'nd.autologin', 'nd.repair', 'nd.diag', 'su.remoteRow'] },
+    keywords: 'monitor display native local screen hdmi remote access lan other devices phone local-only lock boot grub splash startup messages verbose',
+    options: ['nd.mode', 'nd.autologin', 'nd.bootDetails', 'nd.repair', 'nd.diag', 'su.remoteRow'] },
   { id: 'storage', cat: 'general', sub: 'storage', icon: 'disk', keywords: 'disk drive space capacity usage',
     options: ['sp.disks'] },
   { id: 'storageApp', cat: 'general', admin: true, app: 'storage', icon: 'hdd',
@@ -106,8 +106,8 @@ export const ENTRIES: Entry[] = [
     options: ['sp.logs'] },
   { id: 'power', cat: 'general', admin: true, icon: 'power', keywords: 'reboot shutdown power off',
     options: ['set.hero.restart', 'set.hero.shutdown'] },
-  { id: 'devices', cat: 'devices', icon: 'phone', keywords: 'devices linked squad phone android tablet pair pairing link launcher app qr code mobile limit max how many battery online last seen received drops sent files folder screens',
-    options: ['ld.nocapId', 'ld.link', 'ld.unlink', 'ld.rename', 'ld.defaultLabel', 'recv.title', 'recv.folderLabel', 'link.addr.title'] },
+  { id: 'devices', cat: 'devices', icon: 'phone', keywords: 'devices linked squad phone android tablet pair pairing link launcher app qr code mobile limit max how many battery online last seen received drops sent files folder screens find other nocap servers discover nearby mdns bluetooth ble',
+    options: ['ld.nocapId', 'ld.link', 'ld.unlink', 'ld.rename', 'ld.defaultLabel', 'recv.title', 'recv.folderLabel', 'link.addr.title', 'find.label', 'find.btLabel'] },
   { id: 'agents', cat: 'agents', icon: 'sparkles', keywords: 'mcp ai agent token computer use automation assistant approval',
     options: ['ag.letIn', 'ag.loopback', 'ag.add', 'ag.revoke', 'ag.stop', 'ag.scopes'] },
   { id: 'containers', cat: 'containers', admin: true, icon: 'containers', keywords: 'docker local addresses nocap.local domain mdns https certificate ca trust reverse proxy containers',

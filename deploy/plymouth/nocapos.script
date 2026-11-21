@@ -1,63 +1,53 @@
-# NoCapOS boot splash (Plymouth script theme): the logo centred on near-black
-# with a slow red glow, three loading dots and a thin progress bar. The same
-# splash shows at shutdown, restart and while updates install, with a line
-# saying which.
+# NoCapOS boot splash (Plymouth script theme). The NoCap logo at a medium
+# size, a little above the middle of near-black (where the boot menu has
+# it), floating over a soft red glow while a light sweep crosses its chrome:
+# the same look as NoCapOS's update and restart screens. The same splash
+# shows at shutdown and restart, with a line saying which, and asks for the
+# disk password on encrypted machines. The artwork comes from
+# scripts/make-boot-art.py.
 
 Window.SetBackgroundTopColor(0.02, 0.02, 0.03);
 Window.SetBackgroundBottomColor(0.02, 0.02, 0.03);
 
 sw = Window.GetWidth();
 sh = Window.GetHeight();
-short = Math.Min(sw, sh);
+wx = Window.GetX();
+wy = Window.GetY();
 
-# ---- logo + glow
-logo_img = Image("logo.png");
-size = Math.Int(short * 0.28);
-if (size > 256) size = 256;
-if (size < 96) size = 96;
-logo_img = logo_img.Scale(size, size);
-logo = Sprite(logo_img);
-lx = Math.Int(Window.GetX() + sw / 2 - size / 2);
-ly = Math.Int(Window.GetY() + sh / 2 - size / 2 - short * 0.05);
+# ---- the logo: 20% of the screen's height, its middle at 42% from the top
+logo_src = Image("logo.png");
+lh = Math.Int(sh * 0.2);
+if (lh > logo_src.GetHeight()) lh = logo_src.GetHeight();
+if (lh < 120) lh = 120;
+lw = Math.Int(logo_src.GetWidth() * lh / logo_src.GetHeight());
+if (lw > sw * 0.8) {
+  lw = Math.Int(sw * 0.8);
+  lh = Math.Int(logo_src.GetHeight() * lw / logo_src.GetWidth());
+}
+lx = Math.Int(wx + sw / 2 - lw / 2);
+ly = Math.Int(wy + sh * 0.42 - lh / 2);
+logo = Sprite(logo_src.Scale(lw, lh));
 logo.SetPosition(lx, ly, 10);
 
-glow_size = Math.Int(size * 1.5);
-glow_img = Image("glow.png").Scale(glow_size, glow_size);
-glow = Sprite(glow_img);
-glow.SetPosition(Math.Int(lx + size / 2 - glow_size / 2), Math.Int(ly + size / 2 - glow_size / 2), 5);
+# ---- the light sweep: one frame per step, already cut to the logo's shape
+shine_n = 20;
+for (i = 0; i < shine_n; i++)
+  shine_img[i] = Image("shine-" + i + ".png").Scale(lw, lh);
+shine = Sprite();
+shine.SetPosition(lx, ly, 11);
+shine.SetOpacity(0);
 
-# ---- loading dots
-dot_img = Image("dot.png");
-gap = 22;
-dots_y = Math.Int(ly + size + short * 0.06);
-for (i = 0; i < 3; i++) {
-  dot[i] = Sprite(dot_img);
-  dot[i].SetPosition(Math.Int(Window.GetX() + sw / 2 - gap + i * gap - dot_img.GetWidth() / 2), dots_y, 10);
-  dot[i].SetOpacity(0.25);
-}
+# ---- the soft red glow behind the mark, and the shadow the logo floats over
+halo_size = Math.Int(lh * 2.2);
+halo = Sprite(Image("halo.png").Scale(halo_size, halo_size));
+halo.SetPosition(Math.Int(wx + sw / 2 - halo_size / 2), Math.Int(ly + lh * 0.38 - halo_size / 2), 5);
+shadow_w = Math.Int(lw * 0.62);
+shadow_h = Math.Int(shadow_w * 0.2);
+shadow = Sprite(Image("shadow.png").Scale(shadow_w, shadow_h));
+shadow.SetPosition(Math.Int(wx + sw / 2 - shadow_w / 2), Math.Int(ly + lh * 1.02), 4);
 
-# ---- progress bar (fed by Plymouth's boot progress)
-bar_w = Math.Int(short * 0.32);
-if (bar_w < 160) bar_w = 160;
-bar_h = 4;
-bar_x = Math.Int(Window.GetX() + sw / 2 - bar_w / 2);
-bar_y = dots_y + 34;
-track = Sprite(Image("track.png").Scale(bar_w, bar_h));
-track.SetPosition(bar_x, bar_y, 9);
-fill_src = Image("fill.png");
-fill = Sprite();
-fill.SetPosition(bar_x, bar_y, 10);
-shown = 0;
-
-fun progress_cb(duration, progress) {
-  if (progress > shown) shown = progress;
-  w = Math.Int(bar_w * shown);
-  if (w < 1) w = 1;
-  fill.SetImage(fill_src.Scale(w, bar_h));
-}
-Plymouth.SetBootProgressFunction(progress_cb);
-
-# ---- shutting down, restarting or installing updates: say so, no bar
+# ---- shutting down, restarting or installing updates: say so
+text_y = Math.Int(ly + lh + sh * 0.07);
 mode = Plymouth.GetMode();
 status_text = "";
 if (mode == "shutdown") status_text = "Shutting down";
@@ -66,67 +56,95 @@ if (mode == "updates" || mode == "system-upgrade") status_text = "Installing upd
 if (mode == "firmware-upgrade") status_text = "Updating firmware. Keep the power on.";
 status = Sprite();
 if (status_text != "") {
-  track.SetOpacity(0);
-  fill.SetOpacity(0);
   status_img = Image.Text(status_text, 0.92, 0.93, 0.96);
   status.SetImage(status_img);
-  status.SetPosition(Math.Int(Window.GetX() + sw / 2 - status_img.GetWidth() / 2), bar_y - 6, 10);
+  status.SetPosition(Math.Int(wx + sw / 2 - status_img.GetWidth() / 2), text_y, 10);
 }
 
-# ---- animation: the glow breathes, the dots run a wave
+# ---- animation (Plymouth calls this 50 times a second): the logo floats
+# over 3.2 s, the sweep crosses it in 1.4 s and rests for 1.2 s, the glow
+# breathes slowly.
 t = 0;
 fun refresh_cb() {
   t++;
-  glow.SetOpacity(0.55 + 0.35 * Math.Sin(t / 30));
-  for (i = 0; i < 3; i++) {
-    a = Math.Sin(t / 8 - i * 0.9);
-    if (a < 0) a = 0;
-    dot[i].SetOpacity(0.25 + 0.75 * a);
+  f = (1 - Math.Cos(t * 6.28318 / 160)) / 2;
+  y = ly - Math.Int(lh * 0.03 * f);
+  logo.SetY(y);
+  shine.SetY(y);
+  shadow.SetOpacity(0.6 - 0.3 * f);
+  halo.SetOpacity(0.75 + 0.25 * Math.Sin(t / 50));
+  c = t - Math.Int(t / 130) * 130;
+  if (c < 72) {
+    shine.SetImage(shine_img[Math.Int(c * shine_n / 72)]);
+    shine.SetOpacity(1);
+  } else {
+    shine.SetOpacity(0);
   }
 }
 Plymouth.SetRefreshFunction(refresh_cb);
 
-# ---- messages (e.g. "Starting NoCapOS") and the disk password prompt
+# ---- messages (e.g. from a service that needs a moment)
 msg = Sprite();
-msg.SetPosition(0, bar_y + 26, 10);
 fun message_cb(text) {
-  img = Image.Text(text, 0.6, 0.63, 0.7);
-  msg.SetImage(img);
-  msg.SetX(Math.Int(Window.GetX() + sw / 2 - img.GetWidth() / 2));
+  msg_img = Image.Text(text, 0.6, 0.63, 0.7);
+  msg.SetImage(msg_img);
+  msg.SetPosition(Math.Int(wx + sw / 2 - msg_img.GetWidth() / 2), text_y + 30, 10);
 }
 Plymouth.SetMessageFunction(message_cb);
 
+# ---- the disk password (encrypted disks): the question above a dark field
+# with a red edge, a lock and one dot per character typed
+entry_img = Image("entry.png");
+ew = entry_img.GetWidth();
+eh = entry_img.GetHeight();
+ex = Math.Int(wx + sw / 2 - ew / 2);
+ey = Math.Int(text_y + 34);
+entry = Sprite(entry_img);
+entry.SetPosition(ex, ey, 20);
+entry.SetOpacity(0);
+lock_img = Image("lock.png");
+lock = Sprite(lock_img);
+lock.SetPosition(ex + 14, Math.Int(ey + (eh - lock_img.GetHeight()) / 2), 21);
+lock.SetOpacity(0);
 prompt = Sprite();
+prompt.SetOpacity(0);
 bullet_img = Image("bullet.png");
-max_bullets = 24;
+max_bullets = Math.Int((ew - 64) / 16);
 for (i = 0; i < max_bullets; i++) {
   bullet[i] = Sprite(bullet_img);
+  bullet[i].SetPosition(ex + 48 + i * 16, Math.Int(ey + (eh - bullet_img.GetHeight()) / 2), 21);
   bullet[i].SetOpacity(0);
 }
+
 fun password_cb(text, count) {
-  p = Image.Text(text, 0.92, 0.93, 0.96);
-  prompt.SetImage(p);
-  prompt.SetPosition(Math.Int(Window.GetX() + sw / 2 - p.GetWidth() / 2), bar_y + 26, 11);
+  prompt_img = Image.Text(text, 0.92, 0.93, 0.96);
+  prompt.SetImage(prompt_img);
+  prompt.SetPosition(Math.Int(wx + sw / 2 - prompt_img.GetWidth() / 2), text_y, 21);
   prompt.SetOpacity(1);
-  n = count;
-  if (n > max_bullets) n = max_bullets;
-  x0 = Math.Int(Window.GetX() + sw / 2 - n * 14 / 2);
+  entry.SetOpacity(1);
+  lock.SetOpacity(1);
   for (i = 0; i < max_bullets; i++) {
-    bullet[i].SetPosition(x0 + i * 14, bar_y + 52, 11);
-    bullet[i].SetOpacity(i < n);
+    if (i < count) bullet[i].SetOpacity(1);
+    else bullet[i].SetOpacity(0);
   }
+  status.SetOpacity(0);
   msg.SetOpacity(0);
 }
 Plymouth.SetDisplayPasswordFunction(password_cb);
 
 fun normal_cb() {
   prompt.SetOpacity(0);
+  entry.SetOpacity(0);
+  lock.SetOpacity(0);
   for (i = 0; i < max_bullets; i++) bullet[i].SetOpacity(0);
+  status.SetOpacity(1);
   msg.SetOpacity(1);
 }
 Plymouth.SetDisplayNormalFunction(normal_cb);
 
+# ---- the hand-off to the sign-in screen keeps the last frame: a still logo
 fun quit_cb() {
-  fill.SetImage(fill_src.Scale(bar_w, bar_h));
+  shine.SetOpacity(0);
+  logo.SetY(ly);
 }
 Plymouth.SetQuitFunction(quit_cb);
