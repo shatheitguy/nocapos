@@ -19,12 +19,16 @@ type ServerLink struct {
 	Sealed       bool
 	OurTokenHash string
 	Version      string
+	Role         string // what the link is for: RoleLinkPeer for now (failover later)
 	LinkedBy     string
 	CreatedAt    time.Time
 	LastSeen     time.Time // zero = never
 }
 
-const serverLinkCols = `nocap_id, name, url, fingerprint, their_token, sealed, our_token_hash, version, linked_by, created_at, last_seen`
+// RoleLinkPeer: two servers in the same squad.
+const RoleLinkPeer = "peer"
+
+const serverLinkCols = `nocap_id, name, url, fingerprint, their_token, sealed, our_token_hash, version, role, linked_by, created_at, last_seen`
 
 func scanServerLink(row scanner) (*ServerLink, error) {
 	var (
@@ -32,7 +36,7 @@ func scanServerLink(row scanner) (*ServerLink, error) {
 		sealed        int
 		created, seen int64
 	)
-	if err := row.Scan(&l.NocapID, &l.Name, &l.URL, &l.Fingerprint, &l.TheirToken, &sealed, &l.OurTokenHash, &l.Version, &l.LinkedBy, &created, &seen); err != nil {
+	if err := row.Scan(&l.NocapID, &l.Name, &l.URL, &l.Fingerprint, &l.TheirToken, &sealed, &l.OurTokenHash, &l.Version, &l.Role, &l.LinkedBy, &created, &seen); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -82,12 +86,16 @@ func (s *Store) SaveServerLink(ctx context.Context, l *ServerLink) error {
 	if !l.LastSeen.IsZero() {
 		seen = l.LastSeen.Unix()
 	}
+	role := l.Role
+	if role == "" {
+		role = RoleLinkPeer
+	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO server_links (`+serverLinkCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO server_links (`+serverLinkCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(nocap_id) DO UPDATE SET name = excluded.name, url = excluded.url, fingerprint = excluded.fingerprint,
 		   their_token = excluded.their_token, sealed = excluded.sealed, our_token_hash = excluded.our_token_hash,
-		   version = excluded.version, linked_by = excluded.linked_by, created_at = excluded.created_at, last_seen = excluded.last_seen`,
-		l.NocapID, l.Name, l.URL, l.Fingerprint, l.TheirToken, sealed, l.OurTokenHash, l.Version, l.LinkedBy, l.CreatedAt.Unix(), seen)
+		   version = excluded.version, role = excluded.role, linked_by = excluded.linked_by, created_at = excluded.created_at, last_seen = excluded.last_seen`,
+		l.NocapID, l.Name, l.URL, l.Fingerprint, l.TheirToken, sealed, l.OurTokenHash, l.Version, role, l.LinkedBy, l.CreatedAt.Unix(), seen)
 	if isUniqueViolation(err) {
 		return ErrConflict
 	}
