@@ -12,6 +12,7 @@ import { isNativeKey, launchNativeApp, nativeIdOf, useNativeApps } from '../stat
 import { FolderView } from './FolderView';
 import { NativeAppIcon, nativeMenuItems } from './NativeTile';
 import { appMenuItems } from './Shelf';
+import { middleOpen } from './middleOpen';
 
 /** App shortcuts and folders on the desktop: drag anywhere, double-click to open, drop an app on another to make a folder. */
 export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
@@ -137,6 +138,7 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
               pressApp(e, i.appId, 'desktop');
             }}
             onDoubleClick={(e) => activate(i.appId, e.currentTarget.getBoundingClientRect(), e)}
+            {...(folder || store || native ? {} : middleOpen(i.appId))}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();

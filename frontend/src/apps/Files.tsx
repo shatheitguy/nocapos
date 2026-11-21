@@ -14,6 +14,7 @@ import {
   appDataNames,
   isAppData,
   isArchive,
+  isHomeDir,
   joinPath,
   parentPath,
   rawUrl,
@@ -24,11 +25,11 @@ import {
 } from '../api/files';
 import { ContextMenu, Dialog, type DialogSpec, type MenuEntry } from '../components/Dialog';
 import { Bar } from '../components/Charts';
-import { Icon, type IconName } from '../components/Icon';
-import { AppIcon } from '../components/AppTile';
+import { Icon } from '../components/Icon';
 import { APPDATA_ROOT, appDataApi, sizeText } from '../api/appdata';
 import { AppDataMoves, useAppData } from './AppDataPanel';
 import { fmtBytes } from '../lib/format';
+import { paneRoot } from '../lib/fileRoots';
 import { usePoll } from '../lib/hooks';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
@@ -122,8 +123,6 @@ interface Item {
   /** App data: the app the folder belongs to, and where it is on this server. */
   app?: string;
   source?: string;
-  /** App data: the app's icon. */
-  appIcon?: { icon: IconName; tile: [string, string]; logo?: string; logo_mono?: boolean };
 }
 
 const isLocal = (r: FileRoot) => r.id !== 'system' && !r.id.startsWith('net:') && r.kind !== 'share' && r.kind !== 'homes';
@@ -279,7 +278,7 @@ export function Files({ win }: { win: WinState }) {
   const cur = states[active];
   const home = roots?.find((r) => r.kind === 'home') ?? roots?.find(isLocal) ?? roots?.[0];
   const firstRoot = home?.id ?? '';
-  const rootLabel = (id: string) => (id === home?.id ? 'Home' : (roots?.find((r) => r.id === id)?.name ?? appDataNames.get(id) ?? 'Files'));
+  const rootLabel = (id: string) => (id === home?.id || isHomeDir(id) ? 'Home' : (roots?.find((r) => r.id === id)?.name ?? appDataNames.get(id) ?? 'Files'));
   const pane = (side: 0 | 1) => {
     const other = states[side === 0 ? 1 : 0];
     return (
@@ -465,8 +464,10 @@ function FilePane({
   // ---------- data ----------
 
   useEffect(() => {
-    // App data locations aren't in the list (they come and go with the apps).
-    if (roots?.length && !roots.some((r) => r.id === root) && !isAppData(root)) setRoot(roots[0].id);
+    // App data locations and an administrator's own home (where their
+    // Received folder is) aren't in the list, but can still be opened.
+    const keep = paneRoot(roots, root);
+    if (keep !== root) setRoot(keep);
   }, [roots, root]);
 
   const reload = useCallback(async () => {
@@ -474,7 +475,7 @@ function FilePane({
     setLoading(true);
     setNote(null);
     if (special === 'appdata') {
-      // One folder per app in the App data folder, with its icon and size.
+      // One folder per app in the App data folder, named after the app, with its size.
       const r = await appDataApi.overview();
       setLoading(false);
       if (!r.ok) {
@@ -492,7 +493,6 @@ function FilePane({
         entry: { name: f.title, dir: true, size: Math.max(0, f.size), mod_time: '', mode: '', perm: 0 },
         app: f.title,
         source: `${sizeText(f.size)} · ${f.path}`,
-        appIcon: { icon: (f.icon as IconName) || 'appData', tile: f.tile ?? ['#7a7f8c', '#555a66'], logo: f.logo, logo_mono: f.logo_mono },
       }));
       list.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
       setItems(list);
@@ -1037,7 +1037,7 @@ function FilePane({
 
   const shareItem = (folder: string, name: string): MenuEntry | null => {
     // Sharing is for administrators, from the fixed storage locations.
-    if (!isAdminUser() || root === 'system' || root.startsWith('net:') || isAppData(root) || rootInfo?.kind || special) return null;
+    if (!isAdminUser() || root === 'system' || root.startsWith('net:') || isAppData(root) || isHomeDir(root) || rootInfo?.kind || special) return null;
     const existing = shares.find((sh) => sh.root === root && sh.path === folder);
     return existing
       ? { label: `Stop Sharing “${existing.name}”`, icon: 'network', onClick: () => onUnshare(existing) }
@@ -1180,7 +1180,6 @@ function FilePane({
           </span>
         </span>
       );
-    if (i.appIcon) return <AppIcon app={i.appIcon} size={Math.round(size * 0.8)} />;
     return <FileGlyph name={i.entry.name} dir={i.entry.dir} size={size} shared={i.entry.dir && i.root === root && sharedPaths.has(i.path)} />;
   };
 
