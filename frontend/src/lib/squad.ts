@@ -33,6 +33,8 @@ export interface LinkedServer {
   url: string;
   fingerprint: string;
   version: string;
+  /** what the link is for: "peer" for now */
+  role?: string;
   online: boolean;
   last_seen?: string;
   linked_by: string;

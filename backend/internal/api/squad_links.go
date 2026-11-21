@@ -418,6 +418,7 @@ type linkedServerJSON struct {
 	URL         string     `json:"url"`
 	Fingerprint string     `json:"fingerprint"`
 	Version     string     `json:"version"`
+	Role        string     `json:"role"` // peer (failover later)
 	Online      bool       `json:"online"`
 	LastSeen    *time.Time `json:"last_seen,omitempty"`
 	LinkedBy    string     `json:"linked_by"`
@@ -443,7 +444,7 @@ func (s *Server) squadList(w http.ResponseWriter, r *http.Request) {
 	q.prune()
 	linked := make([]linkedServerJSON, 0, len(links))
 	for _, l := range links {
-		j := linkedServerJSON{NocapID: l.NocapID, Name: l.Name, URL: l.URL, Fingerprint: l.Fingerprint, Version: l.Version,
+		j := linkedServerJSON{NocapID: l.NocapID, Name: l.Name, URL: l.URL, Fingerprint: l.Fingerprint, Version: l.Version, Role: l.Role,
 			Online: q.status[l.NocapID].Online, LinkedBy: l.LinkedBy, CreatedAt: l.CreatedAt}
 		if !l.LastSeen.IsZero() {
 			t := l.LastSeen

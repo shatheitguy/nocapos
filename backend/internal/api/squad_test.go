@@ -164,7 +164,7 @@ func TestServerLinkLifecycle(t *testing.T) {
 	}
 
 	la, err := a.w.st.ServerLink(context.Background(), b.id)
-	if err != nil || la.Fingerprint != b.fp || la.URL != b.ts.URL || la.LinkedBy != "boss" {
+	if err != nil || la.Fingerprint != b.fp || la.URL != b.ts.URL || la.LinkedBy != "boss" || la.Role != store.RoleLinkPeer {
 		t.Fatalf("A's link: %+v %v", la, err)
 	}
 	lb, err := b.w.st.ServerLink(context.Background(), a.id)
