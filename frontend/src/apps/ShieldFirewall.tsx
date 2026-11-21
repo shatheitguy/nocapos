@@ -122,7 +122,7 @@ function ExposedCard({ fw, setFw }: { fw: FwState; setFw: (s: FwState) => void }
                   <span className={`chip ${e.open ? (e.scope === 'anywhere' ? 'warn' : 'good') : 'good'}`}>
                     {t(e.open ? (e.scope === 'anywhere' ? 'ssh.exp.anywhere' : 'ssh.exp.lan') : 'ssh.exp.off')}
                   </span>
-                  <button type="button" className="ghost small" onClick={() => openApp('settings', { props: { section: e.setting } })}>
+                  <button type="button" className="ghost small" onClick={() => openApp('settings', { props: { section: e.setting as string } })}>
                     {t('ssh.exp.change')}
                   </button>
                 </>
