@@ -32,12 +32,15 @@ apt-get install -y -q --no-install-recommends grub-common grub2-common grub-pc-b
 
 # ---------------------------------------------------------------- GRUB
 # A machine to build a menu for: a kernel, its initramfs, and grub-probe
-# answering for a plain ext4 root (a container has no real disk).
+# answering for a plain ext4 root (a container has no real disk; the real
+# grub-probe can't resolve its overlay root). grub-mkconfig calls
+# /usr/sbin/grub-probe by its full path, so the stand-in goes there.
 KVER=6.12.0-0-amd64
 mkdir -p /boot/grub /etc/default/grub.d /usr/local/lib/nocapos/desktop /var/lib/nocapos/desktop-backup
 printf 'kernel' >/boot/vmlinuz-$KVER
 printf 'initrd' >/boot/initrd.img-$KVER
-cat >/usr/local/sbin/grub-probe <<'EOF'
+dpkg-divert --quiet --local --rename --add /usr/sbin/grub-probe
+cat >/usr/sbin/grub-probe <<'EOF'
 #!/bin/sh
 for a in "$@"; do case "$a" in --target=*) t="${a#--target=}" ;; esac; done
 prev=""; for a in "$@"; do [ "$prev" = -t ] && t="$a"; prev="$a"; done
@@ -53,7 +56,7 @@ case "$t" in
   *) echo "" ;;
 esac
 EOF
-chmod 755 /usr/local/sbin/grub-probe
+chmod 755 /usr/sbin/grub-probe
 # The owner's PC: Debian's defaults (installed from the 0.13 ISO, updated
 # to 0.14, whose drop-in didn't hide the menu yet).
 cat >/etc/default/grub <<'EOF'
@@ -64,7 +67,7 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 logo.nologo"
 GRUB_CMDLINE_LINUX=""
 EOF
 printf '# NoCapOS boot menu (written by install.sh, removed by uninstall.sh).\nGRUB_DISTRIBUTOR="NoCapOS"\nGRUB_THEME="/usr/share/grub/themes/nocapos/theme.txt"\nGRUB_GFXMODE=auto\n' >/etc/default/grub.d/nocapos.cfg
-update-grub >/dev/null 2>&1
+update-grub >"$OUT/update-grub-before.log" 2>&1 || { cat "$OUT/update-grub-before.log"; echo "update-grub fails before NoCapOS changes anything"; exit 1; }
 grep -q 'desktop-base\|desktop-grub' /boot/grub/grub.cfg && echo "before: the distribution wallpaper is in grub.cfg (as on the owner's PC)"
 
 # What brand_boot installs, then nocap-boot.
@@ -83,12 +86,17 @@ C=/boot/grub/grub.cfg
 grub-script-check "$C" && ok "grub-script-check" || fail "grub-script-check rejects grub.cfg"
 grep -q 'set timeout_style=hidden' "$C" && grep -q 'set timeout=0' "$C" && ok "menu hidden" || fail "menu not hidden"
 grep -q "set theme=.*/grub/themes/nocapos/theme.txt" "$C" && ok "NoCap theme" || fail "no NoCap theme"
-grep -q 'background_image.*/grub/themes/nocapos/boot.png' "$C" && ok "NoCap background" || fail "no NoCap background"
+# With a theme, GRUB's 00_header leaves background_image to the theme; any
+# background_image that is there must be NoCap's.
+if grep 'background_image' "$C" | grep -qv '/grub/themes/nocapos/'; then fail "a background other than NoCap's: $(grep background_image "$C")"; else ok "only NoCap's background"; fi
 if grep -q 'desktop-base\|desktop-grub\|debian-blueish' "$C"; then fail "the distribution wallpaper is still in grub.cfg"; else ok "no distribution wallpaper"; fi
 awk '/### NoCapOS: a silent boot ###/ {n = NR} /### BEGIN \/etc\/grub.d\/10_linux ###/ {l = NR} END {exit !(n && l && n < l)}' "$C" &&
   grep -q 'set color_normal=black/black' "$C" && grep -q 'keystatus --shift' "$C" &&
   ok "GRUB's own lines invisible, Shift shows the menu (before the entries)" || fail "06_nocapos isn't in grub.cfg before 10_linux"
-grep -q 'set gfxpayload=keep' "$C" && ok "gfxpayload=keep" || fail "no gfxpayload=keep"
+# Debian's 10_linux: "set linux_gfx_mode=keep" and "gfxmode $linux_gfx_mode"
+# in each entry; upstream GRUB: "set gfxpayload=keep".
+{ grep -q 'set gfxpayload=keep' "$C" || { grep -q 'set linux_gfx_mode=keep' "$C" && grep -q 'gfxmode \$linux_gfx_mode' "$C"; }; } &&
+  ok "gfxpayload=keep" || fail "no gfxpayload=keep"
 line="$(grep -m1 "^[[:space:]]*linux[[:space:]]" "$C")"
 for t in quiet splash loglevel=3 rd.systemd.show_status=false systemd.show_status=false rd.udev.log_level=3 vt.global_cursor_default=0; do
   n="$(printf '%s\n' "$line" | tr ' \t' '\n\n' | grep -cx -- "$t" || true)"
