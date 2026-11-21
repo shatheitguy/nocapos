@@ -1,4 +1,5 @@
 import { tr } from '../i18n';
+import { createPortal } from 'react-dom';
 import { WinClose } from '../components/WinClose';
 import { useEffect, useState, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { netApi, type GuestMode, type NetDrive, type NetShare, type NetSupport, type Sharing } from '../api/netdrive';
@@ -30,7 +31,15 @@ export function FilesModal({ title, onClose, children }: { title: string; onClos
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
-  return (
+  // Drawn over the whole Files window, not inside the sidebar it's opened
+  // from: the sidebar's own button styles would otherwise reach into the
+  // dialog (its close button came out as a squeezed dot instead of the same
+  // button every window has, in either button style).
+  const [host, setHost] = useState<Element | null>(null);
+  const anchor = (el: HTMLSpanElement | null) => {
+    if (el) setHost(el.closest('.window-body') ?? el.closest('.files') ?? document.body);
+  };
+  const dialog = (
     <div className="dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="dialog fn-modal" role="dialog" aria-label={title} onKeyDown={(e) => e.stopPropagation()}>
         <header className="fn-modal-head">
@@ -40,6 +49,12 @@ export function FilesModal({ title, onClose, children }: { title: string; onClos
         <div className="fn-modal-body">{children}</div>
       </div>
     </div>
+  );
+  return (
+    <>
+      <span ref={anchor} hidden />
+      {host && createPortal(dialog, host)}
+    </>
   );
 }
 
