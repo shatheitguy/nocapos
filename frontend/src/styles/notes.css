@@ -206,7 +206,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 18px 20px 12px;
+  padding: 0 20px 12px;
   border-radius: 24px;
   background: var(--note-wash) var(--sheet-solid, var(--surface));
   backdrop-filter: blur(40px) saturate(1.5);
@@ -216,7 +216,9 @@
   color: var(--tint-ink);
   animation: nt-pop 0.16s ease;
 }
-.nt-sheet-top { display: flex; align-items: center; gap: 8px; }
+/* The title row has the window title bar's metrics (styles/modal.css), edge to edge. */
+.nt-sheet > .nt-sheet-top { margin: 0 -20px; }
+.nt-sheet-window > .nt-sheet > .nt-sheet-top { height: auto; padding-top: 12px; }
 .nt-title { flex: 1; font: inherit; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; border: 0 !important; background: transparent !important; box-shadow: none !important; padding: 4px 0 !important; color: inherit; outline: none; }
 .nt-sheet-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--tint-ink) 10%, transparent); flex-wrap: wrap; }
 .nt-acts { display: flex; gap: 2px; }

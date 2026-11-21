@@ -13,17 +13,33 @@
 .win-buttons.win-close-solo > button.close svg { width: 14px; height: 14px; flex: none; }
 :root[data-title-buttons='left']:not([data-compact]) .win-buttons.win-close-solo > button.close svg { width: 8px; height: 8px; }
 
-/* ---------- the title row ---------- */
-.modal-head { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; }
-.modal-head-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.modal-head-titles h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-head-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-head-icon {
-  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
+/* ---------- the title row: the window title bar's metrics ---------- */
+/* Height, side padding, gap and title type come from the same variables as
+ * .titlebar (styles.css), so the close button sits at the same inset from a
+ * dialog's corner as from a window's. */
+.modal-head {
+  position: relative; flex: none; display: flex; align-items: center; min-width: 0; box-sizing: border-box;
+  height: var(--titlebar-h); gap: var(--titlebar-gap);
+  padding: 0 var(--titlebar-pad-btn) 0 var(--titlebar-pad-title);
+}
+/* The left-button (traffic-light) style: the red light first, the title beside it. */
+:root[data-title-buttons='left']:not([data-compact]) .modal-head { padding: 0 var(--titlebar-pad-title) 0 var(--titlebar-pad-btn); }
+.modal-head-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.modal-head-titles h2 {
+  margin: 0; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--titlebar-title-size); font-weight: var(--titlebar-title-weight); letter-spacing: var(--titlebar-title-tracking);
+  font-family: var(--titlebar-title-font); text-transform: var(--titlebar-title-case);
+}
+.modal-head-sub { font-size: 11.5px; line-height: 1.25; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-head > .modal-head-icon, .modal-head > .ug-sheet-icon {
+  width: calc(var(--titlebar-h) - 14px); height: calc(var(--titlebar-h) - 14px); border-radius: 9px; display: grid; place-items: center; flex: none;
   color: var(--accent); background: var(--accent-soft);
 }
-.modal-head > .win-close-solo { margin-left: 0; }
+.modal-head > .win-close-solo { margin: 0; }
 .modal-grabber { display: none; }
+/* Under the title row, a hairline like the title bar's. */
+.dialog.modal > .modal-head, .st-sheet > .modal-head, .ug-sheet > .modal-head { border-bottom: 1px solid var(--border); }
+:root[data-ui='glass'] :is(.dialog.modal, .st-sheet, .ug-sheet) > .modal-head { border-bottom-color: color-mix(in srgb, var(--text) 8%, transparent); }
 
 /* ---------- the dialog ---------- */
 .dialog-backdrop.fixed { position: fixed; z-index: 1000; }
@@ -32,8 +48,6 @@
   padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column;
 }
 :root .dialog.modal.wide { width: min(760px, calc(100% - 32px)); }
-.dialog.modal > .modal-head { padding: 14px 14px 10px 18px; border-bottom: 1px solid var(--border); }
-:root[data-title-buttons='left'] .dialog.modal > .modal-head { padding-left: 16px; }
 .modal-body { overflow: auto; overscroll-behavior: contain; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .modal-body > * { flex-shrink: 0; }
 .modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--border); }
@@ -41,7 +55,6 @@
 /* ---------- phones: a bottom sheet with a grabber, same close button ---------- */
 :root[data-compact] .dialog.modal { max-height: calc(100% - 8px); border-radius: 22px 22px 0 0; padding: 0; }
 :root[data-compact] .dialog-backdrop.modal-backdrop { padding: 0; }
-:root[data-compact] .dialog.modal > .modal-head { padding-top: 22px; }
 :root[data-compact] .dialog.modal > .modal-head > .modal-grabber {
   display: block; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px;
   background: color-mix(in srgb, var(--text) 22%, transparent);
