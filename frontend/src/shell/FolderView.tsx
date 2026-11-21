@@ -8,6 +8,7 @@ import { useFlip } from '../lib/flip';
 import { preview } from '../lib/launcherOrder';
 import { takeOut, useFolders } from '../state/folders';
 import { appMenuItems } from './Shelf';
+import { middleOpen } from './middleOpen';
 
 /**
  * An open folder: its name (click to rename) and the apps inside. Click an app
@@ -125,6 +126,10 @@ export function FolderView({
               title="Drag to move it · drag out to take it out of the folder"
               onPointerDown={(e) => pressApp(e, id, 'folder', { folderId, touchHold: TOUCH_HOLD, onStart: () => setMenu(null) })}
               onClick={(e) => launch(id, e.shiftKey)}
+              {...middleOpen(id, () => {
+                onClose();
+                onOpened?.();
+              })}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

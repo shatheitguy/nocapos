@@ -1111,26 +1111,14 @@ pi_cmdline() {
   return 1
 }
 
-setup_bootsplash() {
-  [ -f "$BUNDLE_DIR/plymouth/nocapos.script" ] || return 0 # an older bundle
-  if ! has plymouth-set-default-theme && [ "$MINIMAL" -eq 0 ]; then
-    local mgr
-    mgr="$(pkg_manager)"
-    case "$mgr" in
-      apt) pkg_available apt plymouth && pkg_install apt plymouth plymouth-themes || true ;;
-      dnf) pkg_install dnf plymouth plymouth-scripts || true ;;
-    esac
-  fi
-  if ! has plymouth-set-default-theme; then
-    warn "Plymouth isn't available, so the NoCapOS boot splash was skipped"
-    return 0
-  fi
+# setup_splash_theme: the NoCapOS Plymouth theme in place and chosen (the
+# one there before is kept for uninstall), the initramfs rebuilt with it.
+setup_splash_theme() {
   mkdir -p "$SPLASH_DIR"
   chmod 700 "$SPLASH_DIR"
   local current changed=0
   current="$(plymouth-set-default-theme 2>/dev/null || true)"
   if [ ! -f "$SPLASH_DIR/theme" ] && [ "$current" != nocapos ]; then echo "${current:-text}" >"$SPLASH_DIR/theme"; fi
-
   if ! diff -rq "$BUNDLE_DIR/plymouth" "$SPLASH_THEME" >/dev/null 2>&1; then
     rm -rf "$SPLASH_THEME"
     mkdir -p "$SPLASH_THEME"
@@ -1146,14 +1134,44 @@ setup_bootsplash() {
       warn "boot splash set, but the initramfs couldn't be rebuilt; it shows a little later in the boot"
     fi
   fi
+}
+
+setup_bootsplash() {
+  [ -f "$BUNDLE_DIR/plymouth/nocapos.script" ] || return 0 # an older bundle
+  if ! has plymouth-set-default-theme && [ "$MINIMAL" -eq 0 ]; then
+    local mgr
+    mgr="$(pkg_manager)"
+    case "$mgr" in
+      # plymouth: the splash itself (start, shutdown, restart, the disk
+      # password); plymouth-themes: its graphics plugins; plymouth-label:
+      # the splash's text (status line, the password question).
+      apt) pkg_available apt plymouth && pkg_install apt plymouth plymouth-themes || true
+        pkg_available apt plymouth-label && pkg_install apt plymouth-label || true ;;
+      dnf) pkg_install dnf plymouth plymouth-scripts || true ;;
+    esac
+  fi
+  if has plymouth-set-default-theme; then
+    setup_splash_theme
+  else
+    warn "Plymouth isn't available, so the NoCapOS boot splash was skipped (the boot is still silent)"
+  fi
 
   # The kernel needs "quiet splash" for Plymouth to draw instead of boot
   # text; the rest of the tokens hide firmware logos and boot messages.
-  local f add BOOT_TOKENS="${SPLASH_TOKENS:-quiet splash} ${EXTRA_BOOT_TOKENS:-}"
+  local f add BOOT_TOKENS="${SPLASH_TOKENS:-quiet splash} ${EXTRA_BOOT_TOKENS:-}" dropins=0
   BOOT_GRUB_CHANGED=0
-  # Boot menus and firmware: GRUB theme, systemd-boot, U-Boot, Raspberry Pi.
-  if [ "$DESKTOP_FULL_OK" -eq 1 ]; then brand_boot || warn "some boot menus couldn't be branded"; fi
-  if f="$(pi_cmdline)"; then
+  # Boot menus, kernel lines and firmware: nocap-boot (via brand_boot) on
+  # every boot method it knows. The edits below are only for what it can't
+  # do: an older bundle, or a GRUB that doesn't read /etc/default/grub.d.
+  if [ "$DESKTOP_FULL_OK" -eq 1 ]; then
+    brand_boot || warn "some boot menus couldn't be branded"
+    if grub_reads_dropins ""; then dropins=1; fi
+  fi
+  mkdir -p "$SPLASH_DIR"
+  chmod 700 "$SPLASH_DIR"
+  if [ "$DESKTOP_FULL_OK" -eq 1 ] && pi_cmdline >/dev/null; then
+    : # nocap-boot did the Raspberry Pi's cmdline.txt
+  elif f="$(pi_cmdline)"; then
     # A serial console (enabled on many Pi images) makes Plymouth fall back to text.
     add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" $BOOT_TOKENS plymouth.ignore-serial-consoles)"
     if [ -n "$add" ]; then
@@ -1162,7 +1180,7 @@ setup_bootsplash() {
       cmdline_with $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f" && rm -f "$f.nocap.tmp"
       echo "$add" >>"$SPLASH_DIR/cmdline-added"
     fi
-  elif [ -f /etc/default/grub ]; then
+  elif [ -f /etc/default/grub ] && [ "$dropins" -eq 0 ]; then
     local cur
     cur="$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | head -1 | tr -d "\"'")"
     add="$(tokens_missing "$cur" $BOOT_TOKENS)"

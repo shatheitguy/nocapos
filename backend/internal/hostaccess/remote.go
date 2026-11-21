@@ -207,10 +207,13 @@ func screenUnitArgs() []string {
 }
 
 // WayvncArgs is the screen server's command line for a session: its own
-// (empty) settings file, so a person's own wayvnc settings never apply, the
-// pointer drawn into the picture, and a Unix socket instead of a port.
+// (empty) settings file, so a person's own wayvnc settings never apply, and
+// a Unix socket instead of a port. The pointer is not drawn into the
+// picture (--render-cursor): with wayvnc 0.9.1 on Debian 13 that path fails
+// in pixman and crashes wayvnc as soon as a viewer connects, so "Open
+// screen" only ever showed Reconnect. The viewer draws the pointer itself.
 func WayvncArgs(dir string) []string {
-	return []string{"wayvnc", "--config=" + path.Join(dir, "config"), "--render-cursor", "--unix-socket", path.Join(dir, "vnc.sock")}
+	return []string{"wayvnc", "--config=" + path.Join(dir, "config"), "--unix-socket", path.Join(dir, "vnc.sock")}
 }
 
 // mirrorWayland runs wayvnc inside session s (as its owner) and puts the

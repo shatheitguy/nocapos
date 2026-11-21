@@ -490,7 +490,7 @@ func TestRemoteViewFollowsTheScreen(t *testing.T) {
 	joined := strings.Join(f.calls, "\n")
 	for _, want := range []string{
 		"systemd-run --unit=nocapos-screen --collect --quiet --property=KillMode=mixed --uid=_greetd --setenv=XDG_RUNTIME_DIR=" + filepath.ToSlash(filepath.Join(rt, "116")) + " --setenv=WAYLAND_DISPLAY=wayland-1",
-		"wayvnc --config=/run/nocapos/screen/116/config --render-cursor --unix-socket /run/nocapos/screen/116/vnc.sock",
+		"wayvnc --config=/run/nocapos/screen/116/config --unix-socket /run/nocapos/screen/116/vnc.sock",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing %q in:\n%s", want, joined)

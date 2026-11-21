@@ -75,7 +75,7 @@ kern="$(dpkg-query -W -f='${Package} ${Version}\n' 'linux-image-*' 2>/dev/null |
 printf '  kernel packages:\n%s\n' "$(printf '%s\n' "$kern" | sed 's/^/    /')"
 
 section "NoCapOS files belong to no package"
-for f in /etc/default/grub.d/nocapos.cfg /usr/share/grub/themes/nocapos/theme.txt \
+for f in /etc/default/grub.d/nocapos.cfg /etc/grub.d/06_nocapos /usr/share/grub/themes/nocapos/theme.txt \
   /usr/share/plymouth/themes/nocapos/nocapos.plymouth /usr/share/plymouth/themes/nocapos/nocapos.script \
   /etc/apt/apt.conf.d/99nocapos-os-release /etc/apt/apt.conf.d/52nocapos-unattended-upgrades \
   /etc/apt/apt.conf.d/21nocapos-auto-upgrades /usr/lib/nocapos/image/os-release-sync \

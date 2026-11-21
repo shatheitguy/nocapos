@@ -89,6 +89,8 @@ type hostAccessState struct {
 	ClientLocal bool                    `json:"client_local"` // this browser runs on the server itself
 	Remote      remoteAccessState       `json:"remote"`
 	Desktop     hostaccess.DesktopState `json:"desktop"`
+	// Boot: the "Show boot details" switch (the boot is silent while off).
+	Boot hostaccess.BootState `json:"boot"`
 }
 
 type remoteAccessState struct {
@@ -104,6 +106,10 @@ func (s *Server) hostAccessState(r *http.Request) hostAccessState {
 		ClientLocal: hostaccess.LoopbackPeer(r.RemoteAddr),
 		Remote:      remoteAccessState{Supported: native, Enabled: hostaccess.RemoteEnabled(s.Config.DataDir)},
 		Desktop:     s.desktop.State(r.Context()),
+		Boot:        s.desktop.Boot(),
+	}
+	if !native {
+		st.Boot.Supported = false
 	}
 	if !native {
 		st.Remote.Reason = "This switch needs NoCapOS installed straight on Linux (not in Docker)."
@@ -219,6 +225,40 @@ func (s *Server) desktopAutologinSet(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeError(w, http.StatusInternalServerError, "autologin_failed", "Couldn't change automatic sign-in: "+err.Error())
 		}
+		return
+	}
+	writeJSON(w, http.StatusOK, s.hostAccessState(r))
+}
+
+// bootDetailsSet is Settings → Show boot details: on brings back the boot
+// menu and the boot messages, off makes the boot silent again.
+func (s *Server) bootDetailsSet(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "say enabled: true or false")
+		return
+	}
+	if !hostSwitchesNative() {
+		writeError(w, http.StatusNotImplemented, "unsupported", "This switch needs NoCapOS installed straight on Linux (not in Docker).")
+		return
+	}
+	err := s.desktop.SetBootDetails(r.Context(), *req.Enabled)
+	what := "off"
+	if *req.Enabled {
+		what = "on"
+	}
+	s.audit(r, userFrom(r.Context()).ID, "system.boot_details", what, err == nil, errText(err))
+	if err != nil {
+		if errors.Is(err, hostaccess.ErrBootUnavailable) {
+			writeError(w, http.StatusNotImplemented, "unsupported", "Update NoCapOS first (Settings → Software Update): this switch comes with it.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "boot_details_failed", "The boot settings didn't change (the boot menu is as it was): "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, s.hostAccessState(r))

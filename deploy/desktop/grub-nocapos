@@ -1,0 +1,46 @@
+#!/bin/sh
+# /etc/grub.d/06_nocapos (installed by NoCapOS): a silent NoCapOS boot.
+# update-grub runs it after 05_debian_theme, so what it writes into
+# grub.cfg comes after the distribution's colours and wallpaper:
+#   - while the menu stays hidden (/etc/default/grub.d/nocapos.cfg), GRUB's
+#     own lines ("Booting ...", "Loading Linux ...", "Loading initial
+#     ramdisk ...") are drawn black on NoCap's black background, so the
+#     screen stays plain from power-on to the boot splash;
+#   - holding Shift at power-on shows the menu (Esc too, as always);
+#   - with other systems on the disk (os-prober on), the menu shows for a
+#     few seconds so they can be picked.
+# Nothing happens when nocapos.cfg isn't in use. Removed by NoCapOS's
+# uninstaller.
+set -e
+
+[ "${GRUB_THEME:-}" = /usr/share/grub/themes/nocapos/theme.txt ] || exit 0
+[ "${GRUB_TIMEOUT_STYLE:-}" = hidden ] || exit 0
+
+others=0
+if [ "${GRUB_DISABLE_OS_PROBER:-true}" = false ] && command -v os-prober >/dev/null 2>&1; then
+  if [ -n "$(os-prober 2>/dev/null | head -1)" ]; then others=1; fi
+fi
+
+cat <<'EOF'
+### NoCapOS: a silent boot ###
+if [ "${timeout_style}" = "hidden" ] ; then
+  if keystatus --shift ; then
+    set timeout_style=menu
+    set timeout=-1
+  else
+    set color_normal=black/black
+    set color_highlight=black/black
+  fi
+fi
+EOF
+if [ "$others" -eq 1 ]; then
+  cat <<'EOF'
+# Other systems on this disk: the menu shows so they can be picked.
+if [ "${timeout_style}" = "hidden" ] ; then
+  set color_normal=light-gray/black
+  set color_highlight=white/black
+  set timeout_style=menu
+  set timeout=5
+fi
+EOF
+fi

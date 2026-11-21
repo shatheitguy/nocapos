@@ -31,13 +31,16 @@ var OldDisplayManagers = []string{"gdm3.service", "gdm.service", "lightdm.servic
 // GreetdDropInPath is greetd's drop-in written by setup.sh (desk_greetd).
 const GreetdDropInPath = "/etc/systemd/system/greetd.service.d/nocapos.conf"
 
-// GreetdDropIn is lib.sh's render_greetd_dropin: the sign-in screen after
-// the boot splash, and never next to another sign-in service.
+// GreetdDropIn is lib.sh's render_greetd_dropin: the sign-in screen takes
+// the first console over from the boot splash, and never runs next to
+// another sign-in service.
 func GreetdDropIn() string {
 	units := strings.Join(OldDisplayManagers, " ")
-	return "# NoCap Desktop (written by NoCapOS): the sign-in screen after the boot splash,\n" +
-		"# and never next to another sign-in service (starting it stops them first).\n" +
-		"[Unit]\nAfter=plymouth-quit-wait.service systemd-user-sessions.service\n" +
+	return "# NoCap Desktop (written by NoCapOS): the sign-in screen takes the first\n" +
+		"# console over from the boot splash, and never runs next to another sign-in\n" +
+		"# service (starting it stops them first).\n" +
+		"[Unit]\nAfter=plymouth-quit-wait.service systemd-user-sessions.service getty@tty1.service\n" +
+		"Conflicts=getty@tty1.service\nOnFailure=getty@tty1.service\n" +
 		"Conflicts=" + units + "\nAfter=" + units + "\n"
 }
 

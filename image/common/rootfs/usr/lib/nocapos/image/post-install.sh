@@ -67,7 +67,15 @@ systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.se
 # administrator: NoCapOS signs in with the machine's Linux accounts.
 
 # ---------------------------------------------------------------- boot
+# The silent boot for this machine's own hardware (its graphics driver
+# early in the initramfs), then the boot menu: nocap-boot checks grub.cfg
+# and keeps the previous one if update-grub fails.
+if [ -x "$IMG/boot/nocap-boot" ]; then "$IMG/boot/nocap-boot" apply --no-update || true; fi
 if command -v update-initramfs >/dev/null 2>&1; then update-initramfs -u -k all >/dev/null 2>&1 || true; fi
-if command -v update-grub >/dev/null 2>&1; then update-grub >/dev/null 2>&1 || true; fi
+if [ -x "$IMG/boot/nocap-boot" ]; then
+  NOCAP_GRUB_CHANGED=1 "$IMG/boot/nocap-boot" apply || true
+elif command -v update-grub >/dev/null 2>&1; then
+  update-grub >/dev/null 2>&1 || true
+fi
 echo "NoCapOS: installed system ready (${1:-installer})"
 exit 0

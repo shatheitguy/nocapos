@@ -42,8 +42,13 @@ releases, so the image diverts Debian's copy to `/usr/lib/os-release.debian`
 rebuilds NoCapOS's version after every dpkg run
 (`/usr/lib/nocapos/image/os-release-sync`). The rest of the identity:
 
-- GRUB: `GRUB_DISTRIBUTOR="NoCapOS"`, NoCapOS theme
-  (`/usr/share/grub/themes/nocapos`), `quiet splash` (`/etc/default/grub.d/nocapos.cfg`).
+- GRUB: a silent boot, the same as script installs (`deploy/desktop/nocap-boot`):
+  the menu stays hidden unless Shift or Esc is held at power-on, NoCap's own
+  background instead of any distribution wallpaper, GRUB's "Loading ..." lines
+  invisible (`/etc/grub.d/06_nocapos`), a quiet kernel line, and the NoCapOS
+  theme with the medium logo when the menu shows (`/etc/default/grub.d/nocapos.cfg`,
+  `/usr/share/grub/themes/nocapos`). Settings → Show boot details brings the
+  menu and the boot messages back.
 - Boot splash: the Plymouth theme from `deploy/plymouth` (the same one
   `install.sh` sets up).
 - ISO boot menus (BIOS and UEFI, NoCapOS art and colours,

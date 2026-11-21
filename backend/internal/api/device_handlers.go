@@ -243,11 +243,7 @@ func checkNewDevice(w http.ResponseWriter, req *claimRequest) bool {
 // with its token.
 func (s *Server) issueDevice(w http.ResponseWriter, r *http.Request, u *store.User, req claimRequest, nocapID, action, detail string) {
 	token, hash := devices.NewToken()
-	now := time.Now()
-	d := &store.Device{
-		ID: store.NewID(), UserID: u.ID, Name: req.DeviceName, Platform: req.Platform,
-		Battery: -1, CreatedAt: now, LastSeenAt: now, Model: req.Model, OSVersion: req.OSVersion,
-	}
+	d := newDeviceFor(u, req)
 	if full, err := s.linkDevice(r, u, d, hash); err != nil {
 		s.internalError(w, r, err)
 		return
@@ -262,6 +258,15 @@ func (s *Server) issueDevice(w http.ResponseWriter, r *http.Request, u *store.Us
 		DeviceID: d.ID, Token: token, NocapID: nocapID, ServerName: s.serverName(),
 		User: map[string]string{"username": u.Username},
 	})
+}
+
+// newDeviceFor is a device about to be linked to u.
+func newDeviceFor(u *store.User, req claimRequest) *store.Device {
+	now := time.Now()
+	return &store.Device{
+		ID: store.NewID(), UserID: u.ID, Name: req.DeviceName, Platform: req.Platform,
+		Battery: -1, CreatedAt: now, LastSeenAt: now, Model: req.Model, OSVersion: req.OSVersion,
+	}
 }
 
 // devicesLinkSelf links the phone making this request to the person signed
