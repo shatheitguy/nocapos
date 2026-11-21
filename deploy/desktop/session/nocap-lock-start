@@ -1,8 +1,52 @@
 #!/bin/sh
-# Starts the NoCap lock screen without waiting for it to unlock (the idle
-# watcher must not block, e.g. before the machine sleeps). nocap-lock
-# itself keeps to one copy.
-/usr/libexec/nocapos/nocap-lock >/dev/null 2>&1 &
-# Give it a moment to lock every screen before sleep goes ahead.
-sleep 1
+# Starts the NoCap lock screen and returns once it has locked every screen
+# (at most 5 seconds), without waiting for it to unlock: the idle watcher
+# must not block, and before the machine sleeps the screens must already be
+# covered.
+#
+# The lock never fails open: if nocap-lock ends without being unlocked (it
+# crashed or was killed), labwc keeps every screen covered and this starts
+# it again, so the password prompt comes back. nocap-lock itself keeps to
+# one copy (exit 3 when another one has the screen).
+LOCK=/usr/libexec/nocapos/nocap-lock
+RT="${XDG_RUNTIME_DIR:-}"
+if [ -z "$RT" ] || [ ! -d "$RT" ] || [ ! -w "$RT" ]; then
+  exec "$LOCK" >/dev/null # nowhere to keep its state: just lock
+fi
+STATUS="$RT/nocap-lock.$$.status"
+
+# compositor_alive: the session's Wayland display is still there.
+compositor_alive() { [ -n "${WAYLAND_DISPLAY:-}" ] && [ -S "$RT/${WAYLAND_DISPLAY##*/}" ]; }
+
+supervise() {
+  fails=0
+  while :; do
+    start=$(date +%s)
+    "$LOCK" >"$STATUS"
+    code=$?
+    case "$code" in
+      0) break ;;    # unlocked with the password
+      2 | 3) break ;; # no lock support here, or another copy has the screen
+    esac
+    compositor_alive || break # the session ended
+    # Ended without an unlock: start it again at once. A lock that keeps
+    # failing within seconds is retried more slowly, but never given up on:
+    # the screens stay covered until the password is typed.
+    if [ $(($(date +%s) - start)) -lt 10 ]; then fails=$((fails + 1)); else fails=0; fi
+    echo "nocap-lock-start: the lock screen ended without an unlock (exit $code); starting it again" >&2
+    if [ "$fails" -ge 20 ]; then sleep 10; elif [ "$fails" -ge 3 ]; then sleep 2; fi
+  done
+  rm -f "$STATUS"
+}
+
+supervise </dev/null >/dev/null &
+pid=$!
+# Wait until it says the screens are locked (or it ended, or 5 seconds).
+i=0
+while [ "$i" -lt 50 ]; do
+  grep -qs 'nocap-lock: locked' "$STATUS" && exit 0
+  kill -0 "$pid" 2>/dev/null || exit 0
+  sleep 0.1
+  i=$((i + 1))
+done
 exit 0

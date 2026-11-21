@@ -2,7 +2,8 @@
 // native desktop on the server's own monitor (on or off), and whether other
 // devices may open NoCapOS at all.
 import { useEffect, useState } from 'react';
-import { hostAccessApi, type DesktopHealth, type HostAccess } from '../api/hostaccess';
+import { hostAccessApi, type DesktopHealth, type HostAccess, type OldDesktop } from '../api/hostaccess';
+import { hostApi } from '../api/hostctl';
 import { useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
@@ -14,13 +15,70 @@ export function HostAccessPage() {
   const t = useT();
   const [st, setSt] = useState<HostAccess | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | 'boot' | null>(null);
+  const [busy, setBusy] = useState<'desktop' | 'remote' | 'repair' | 'boot' | 'old' | null>(null);
   const [diag, setDiag] = useState<string | null>(null);
   const [diagOpen, setDiagOpen] = useState(false);
+  const [old, setOld] = useState<OldDesktop | null>(null);
+  const [oldJob, setOldJob] = useState<{ output: string; error?: string } | null>(null);
 
   useEffect(() => {
     void hostAccessApi.get().then((r) => (r.ok && !missing(r) ? setSt(r.data) : setError(missing(r) ? t('set.notAvailable') : (r.error ?? t('set.loadFail')))));
+    void hostAccessApi.oldDesktop().then((r) => r.ok && setOld(r.data));
   }, []);
+
+  // The earlier desktop still has the screen for someone: restarting moves it to NoCap Desktop.
+  const offerRestart = async (users?: string[]) => {
+    const ok = await confirmDialog({
+      title: t('nd.restart.title'),
+      message: t('nd.restart.body', { users: (users ?? []).join(', ') || '—' }),
+      confirmLabel: t('nd.restart.go'),
+      danger: true,
+    });
+    if (!ok) return;
+    const r = await hostApi.powerAction('reboot');
+    if (!r.ok) return toast('error', t('nd.restart.failed'), r.error);
+    toast('info', t('nd.restart.started'));
+  };
+
+  const oldKeep = async () => {
+    const r = await hostAccessApi.oldDesktopKeep();
+    if (!r.ok) return toast('error', t('nd.old.failed'), r.error);
+    setOld(r.data);
+    toast('success', t('nd.old.kept'));
+  };
+
+  const oldRemove = async () => {
+    if (!old) return;
+    const ok = await confirmDialog({
+      title: t('nd.old.confirmTitle'),
+      message: t('nd.old.confirmBody', { list: old.remove.join(', ') }),
+      confirmLabel: t('nd.old.confirmGo'),
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy('old');
+    const r = await hostAccessApi.oldDesktopRemove();
+    if (!r.ok) {
+      setBusy(null);
+      return toast('error', t('nd.old.failed'), r.error);
+    }
+    let j = r.data.job;
+    setOldJob({ output: j.output });
+    for (let i = 0; i < 3600 && j.running; i++) {
+      await new Promise((res) => window.setTimeout(res, 1000));
+      const jr = await hostAccessApi.pkgJob(j.id);
+      if (!jr.ok) break;
+      j = jr.data;
+      setOldJob({ output: j.output, error: j.error });
+    }
+    setBusy(null);
+    if (j.ok) {
+      setOldJob(null);
+      toast('success', t('nd.old.removed'));
+    } else toast('error', t('nd.old.failed'), j.error);
+    const o = await hostAccessApi.oldDesktop();
+    if (o.ok) setOld(o.data);
+  };
 
   const setDesktop = async (on: boolean) => {
     if (!st || on === (st.desktop.mode === 'full')) return;
@@ -62,6 +120,12 @@ export function HostAccessPage() {
     setBusy(null);
     if (!r.ok) return toast('error', t('nd.repair.failed'), r.error);
     setSt(r.data.state);
+    if (r.data.restart_needed) {
+      // Nobody gets signed out: the switch waits for a restart.
+      toast('info', t('nd.repair.restartNeeded'), r.data.actions.join(' · '));
+      void offerRestart(r.data.old_session_users);
+      return;
+    }
     toast('success', t('nd.repair.done'), r.data.actions.join(' · '));
   };
 
@@ -148,6 +212,11 @@ export function HostAccessPage() {
                 </span>
               </Row>
             )}
+            {d.health?.restart_needed && (
+              <Row label={t('nd.restart.row')} hint={t('nd.restart.hint', { users: (d.health.old_session_users ?? []).join(', ') || '—' })}>
+                <button type="button" onClick={() => void offerRestart(d.health?.old_session_users)}>{t('nd.restart.button')}</button>
+              </Row>
+            )}
             {st.boot?.supported && (
               <Toggle label={t('nd.bootDetails')} hint={t(st.boot.details ? 'nd.bootDetails.on' : 'nd.bootDetails.off')}
                 checked={st.boot.details} disabled={busy === 'boot'} onChange={(on) => void setBootDetails(on)} />
@@ -170,6 +239,23 @@ export function HostAccessPage() {
                       </button>
                     </div>
                     <pre style={{ maxHeight: '24rem', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.75rem', margin: 0 }}>{diag}</pre>
+                  </>
+                )}
+              </div>
+            )}
+            {old?.notice && (
+              <div className="stack">
+                <Row label={t('nd.old.title')} hint={t('nd.old.hint', { list: old.remove.join(', ') })}>
+                  <span className="settings-value">
+                    <button type="button" disabled={busy === 'old'} onClick={() => void oldRemove()}>{t('nd.old.remove')}</button>{' '}
+                    <button type="button" className="ghost" disabled={busy === 'old'} onClick={() => void oldKeep()}>{t('nd.old.keep')}</button>
+                  </span>
+                </Row>
+                {old.keep.length > 0 && <p className="muted">{t('nd.old.keepList', { list: old.keep.join(', ') })}</p>}
+                {oldJob && (
+                  <>
+                    <pre style={{ maxHeight: '16rem', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.75rem', margin: 0 }}>{oldJob.output}</pre>
+                    {oldJob.error && <p className="error">{oldJob.error}</p>}
                   </>
                 )}
               </div>

@@ -146,6 +146,10 @@ void control_own(void);
 int control_client(const char *action, const char *arg);
 void control_osd(const char *what);
 
+/* ---- keeping the screen awake: org.freedesktop.ScreenSaver (idle.c) ---- */
+void idle_init(void);
+guint idle_inhibit_count(void);
+
 /* ---- app windows (appwin.c) ---- */
 int appwin_run(const char *app, const char *props, gboolean single, int argc, char **argv);
 gboolean app_id_valid(const char *id);

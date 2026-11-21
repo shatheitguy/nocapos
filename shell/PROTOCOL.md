@@ -116,6 +116,39 @@ and `--osd volume-up|…` talk to the running host over the session bus
 (`io.nocapos.Shell`, `Control(s action, s arg)`), so labwc's keybindings can
 drive NoCap OS's panels.
 
+## Keeping the screen awake
+
+NoCap Shell owns `org.freedesktop.ScreenSaver` on the session bus
+(`/org/freedesktop/ScreenSaver` and `/ScreenSaver`): `Inhibit(s app, s
+reason) → u cookie`, `UnInhibit(u)`, `GetActive() → b` (the lock screen is
+up), `Lock()`, plus no-op `SimulateUserActivity` and `GetActiveTime`.
+Cookies belong to the bus client that asked (only it can release them) and
+all of its cookies go when it leaves the bus; at most 16 per client, 64 in
+all. While any is held, the shell keeps one Wayland idle inhibitor
+(`zwp_idle_inhibit_manager_v1`) on a 1×1 invisible background surface;
+labwc then holds back ext-idle-notify, so swayidle's idle lock
+(`nocap-idle.service`) waits. The lock before sleep isn't affected. The
+desktop portal's Inhibit goes to the gtk backend (`nocap-portals.conf`),
+which calls `org.freedesktop.ScreenSaver` (idle only: it refuses requests
+that also ask to block suspend or logout). Apps using Wayland idle inhibit
+directly (players in full screen) need nothing from the shell.
+
+## Staying up
+
+- A web view whose process crashed, or whose page didn't load, reloads:
+  after 1 s for the first three times in two minutes, then 5 s, then every
+  30 s, never giving up. Each web process cleans up early above a third of
+  the memory (512 MB to 3 GB).
+- `nocap-shell.service` restarts on failure with backoff (2 s up to 30 s)
+  and no start limit; its web processes are first in line if memory runs
+  out (`OOMScoreAdjust=200`).
+- `nocap-lock-start` returns once the screens are locked (at most 5 s) and
+  starts `nocap-lock` again if it ends without an unlock; labwc keeps the
+  screens covered meanwhile (an abandoned lock stays locked), so the lock
+  never fails open.
+- A screen that goes away and comes back gets the surfaces and the
+  menu bar/dock zones back.
+
 ## Never as root
 
 `nocap-shell`, `nocap-lock` and the session scripts refuse to run as root;

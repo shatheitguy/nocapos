@@ -612,10 +612,16 @@ power_done(GObject *src, GAsyncResult *res, gpointer data)
   g_free(j);
 }
 
+/* The lock screen: through nocap-lock-start when it's there (it starts the
+ * lock again if it ever ends without being unlocked), else directly. */
 static char *
 lock_path(void)
 {
-  char *p = g_build_filename(shell.bin_dir ? shell.bin_dir : "/", "nocap-lock", NULL);
+  char *p = g_build_filename(shell.bin_dir ? shell.bin_dir : "/", "nocap-lock-start", NULL);
+  if (g_file_test(p, G_FILE_TEST_IS_EXECUTABLE))
+    return p;
+  g_free(p);
+  p = g_build_filename(shell.bin_dir ? shell.bin_dir : "/", "nocap-lock", NULL);
   if (g_file_test(p, G_FILE_TEST_IS_EXECUTABLE))
     return p;
   g_free(p);

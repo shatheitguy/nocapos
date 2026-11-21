@@ -61,7 +61,17 @@ func (a *Admin) Invalidate() {
 }
 
 func runQuiet(ctx context.Context, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	return runFor(ctx, 2*time.Minute, args...)
+}
+
+// RunLong runs a package command that may take a while (removing many
+// packages), with its output; at most 30 minutes.
+func RunLong(ctx context.Context, args ...string) (string, error) {
+	return runFor(ctx, 30*time.Minute, args...)
+}
+
+func runFor(ctx context.Context, timeout time.Duration, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = append(os.Environ(), "DEBIAN_FRONTEND=noninteractive", "LC_ALL=C")
