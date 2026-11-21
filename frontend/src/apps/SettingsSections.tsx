@@ -17,6 +17,7 @@ import {
 import { toast } from '../state/toasts';
 import { tr, useT } from '../i18n';
 import { Choice, Row, Section, Slider, Toggle } from './Personalize';
+import { RemoteLogin, SshKeysCard } from './SettingsSsh';
 
 // ---------------- Date & Time ----------------
 
@@ -176,11 +177,13 @@ export function LockScreen() {
 
 // ---------------- Security ----------------
 
-export function Security({ autoStart = false }: { autoStart?: boolean }) {
+export function Security({ autoStart = false, isAdmin = false }: { autoStart?: boolean; isAdmin?: boolean }) {
   return (
     <div className="stack settings-page">
       <TwoFactor autoStart={autoStart} />
       <ChangePassword />
+      <SshKeysCard />
+      {isAdmin && <RemoteLogin />}
     </div>
   );
 }

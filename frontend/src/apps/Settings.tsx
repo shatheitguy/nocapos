@@ -310,7 +310,7 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
     case 'sound':
       return <SoundSettings />;
     case 'security':
-      return <Security autoStart={start2fa} />;
+      return <Security autoStart={start2fa} isAdmin={isAdmin} />;
     case 'lock':
       return <LockScreen />;
     case 'account':
