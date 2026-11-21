@@ -98,5 +98,7 @@
   "set.storageApp.desc": "Drive health, pools, snapshots, shares and the boot drive live in the Storage app",
   "set.storageOpen": "Open Storage",
   "set.setupRow": "Do the setup again",
-  "set.storageRow": "Manage your drives"
+  "set.storageRow": "Manage your drives",
+  "sn.virtualLinks": "Virtual links ({n})",
+  "sn.virtualHint": "Spun up by your containers and VMs"
 }
