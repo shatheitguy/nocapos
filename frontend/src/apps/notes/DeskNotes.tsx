@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 
 import { Icon } from '../../components/Icon';
 import { useT } from '../../i18n';
 import { workArea } from '../../state/prefs';
-import { openApp } from '../meta';
+import { openNote } from './openNote';
 import { NoteEditor } from './NoteEditor';
 import { ColorDots, Popover } from './NoteParts';
 import { clampDesk, displayTitle, type Desk, type Note } from './noteDoc';
@@ -92,9 +92,9 @@ function DeskNote({ note, area }: { note: Note; area: { w: number; h: number } }
           <button
             type="button"
             className="ne-btn"
-            title={t('notes.openInApp')}
-            aria-label={t('notes.openInApp')}
-            onClick={() => openApp('notes', { props: { note: note.id, at: String(Date.now()) } })}
+            title={t('notes.openWindow')}
+            aria-label={t('notes.openWindow')}
+            onClick={() => openNote(note.id)}
           >
             <Icon name="maximize" size={14} />
           </button>

@@ -144,6 +144,12 @@ const steps: Step[] = [
     open: async (p) => {
       await p.locator('.dock-item.launchpad').first().click();
       await p.waitForSelector('.launcher');
+      // The backdrop differs on purpose: the browser blurs the desktop
+      // behind the app list, while on the screen (a separate window that
+      // can't blur another) it's a dark sheet (native/native.css). Give both
+      // the same plain backdrop so the comparison is about the app list
+      // itself: icons, labels, search, pages and layout.
+      await p.addStyleTag({ content: '.launcher { background: #0b0d12 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }' });
     },
     shot: (p) => p.screenshot(),
   },
