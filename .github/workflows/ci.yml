@@ -52,6 +52,28 @@ jobs:
       - name: Installer package repair (Debian trixie container)
         run: docker run --rm -v "$PWD:/src:ro" debian:trixie bash /src/backend/internal/deploytest/testdata/apt-trixie.sh
 
+  # The silent boot against Debian 13's real update-grub scripts (with the
+  # distribution wallpaper package installed) and Plymouth, which draws the
+  # NoCapOS splash into a virtual screen: screenshots of the boot, the disk
+  # password prompt and a restart are kept as an artifact.
+  boot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GRUB and Plymouth (debian:trixie)
+        run: |
+          mkdir -p boot-out
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/boot-out:/out" docker.io/library/debian:trixie \
+            bash /src/backend/internal/deploytest/testdata/boot-trixie.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-splash
+          path: boot-out/
+          if-no-files-found: ignore
+
   # NoCap Desktop's native programs: built with Debian 13's libraries (the
   # release builds them for every architecture, see shell.yml), the bridge
   # tests, then a headless run of labwc with NoCap Shell in it.

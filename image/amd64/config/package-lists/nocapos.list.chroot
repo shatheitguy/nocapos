@@ -12,6 +12,7 @@ unattended-upgrades
 apt-listchanges
 plymouth
 plymouth-themes
+plymouth-label
 initramfs-tools
 grub-common
 locales

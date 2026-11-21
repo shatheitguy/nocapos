@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"alfaos/alfad/internal/hostaccess"
 )
 
 func libPath(t *testing.T) string {
@@ -404,9 +406,13 @@ func keyfile(t *testing.T, name, s string) map[string]map[string]string {
 // starts the NoCap Desktop session.
 func TestSignInService(t *testing.T) {
 	plain := lib(t, "", "render_greetd_config", "_greetd")
-	for _, want := range []string{"[default_session]\ncommand = \"/usr/libexec/nocapos/nocap-greeter-session\"\nuser = \"_greetd\"\n", "[terminal]\nvt = 7\n"} {
+	for _, want := range []string{"[default_session]\ncommand = \"/usr/libexec/nocapos/nocap-greeter-session\"\nuser = \"_greetd\"\n", "[terminal]\nvt = 1\n"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("greetd config lacks %q:\n%s", want, plain)
+		}
+		// alfad writes the same file when automatic sign-in changes.
+		if !strings.Contains(hostaccess.GreetdConfig("_greetd", ""), want) {
+			t.Errorf("hostaccess.GreetdConfig lacks %q", want)
 		}
 	}
 	if strings.Contains(plain, "initial_session") {

@@ -272,6 +272,7 @@ func (s *Server) Handler() http.Handler {
 	s.sshRoutes(mux)
 	mux.Handle("PUT /api/v1/system/desktop", s.admin(s.desktopSet))
 	mux.Handle("PUT /api/v1/system/desktop/autologin", s.admin(s.desktopAutologinSet))
+	mux.Handle("PUT /api/v1/system/boot-details", s.admin(s.bootDetailsSet))
 	// The NoCap Desktop window: the screen itself, through the Remote Desktop engine.
 	mux.Handle("POST /api/v1/system/desktop/view", s.admin(s.desktopView))
 	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.

@@ -106,6 +106,9 @@ desk_install_lib() {
   mkdir -p "$DESK_LIB"
   install -m 0644 "$DESK_SRC/lib.sh" "$DESK_LIB/lib.sh"
   install -m 0755 "$DESK_SRC/uninstall-desktop.sh" "$DESK_SRC/os-release-sync" "$DESK_SRC/nocapos-accent" "$DESK_LIB/"
+  # The silent boot, and Settings → Show boot details.
+  install -m 0755 "$DESK_SRC/nocap-boot" "$DESK_LIB/nocap-boot"
+  install -m 0644 "$DESK_SRC/grub-nocapos" "$DESK_LIB/grub-nocapos"
 }
 
 desk_install_assets() {
@@ -262,13 +265,11 @@ desk_greetd() {
     pam_with_keyring </etc/pam.d/greetd >/etc/pam.d/greetd.nocap.tmp && cat /etc/pam.d/greetd.nocap.tmp >/etc/pam.d/greetd
     rm -f /etc/pam.d/greetd.nocap.tmp
   fi
-  # The sign-in screen comes after the boot splash.
-  mkdir -p "$DESK_UNITS/greetd.service.d"
-  cat >"$DESK_UNITS/greetd.service.d/nocapos.conf" <<'EOF'
-# NoCap Desktop (written by NoCapOS): the sign-in screen after the boot splash.
-[Unit]
-After=plymouth-quit-wait.service systemd-user-sessions.service
-EOF
+  # The sign-in screen takes the first console over from the boot splash,
+  # which leaves its last frame up until the sign-in screen draws.
+  mkdir -p "$DESK_UNITS/greetd.service.d" "$DESK_UNITS/plymouth-quit.service.d"
+  render_greetd_dropin >"$DESK_UNITS/greetd.service.d/nocapos.conf"
+  render_plymouth_quit_dropin >"$DESK_UNITS/plymouth-quit.service.d/nocapos.conf"
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
 
@@ -779,102 +780,51 @@ apply_desktop_mode() {
   esac
 }
 
+
 # ---------------------------------------------------------------- boot
-# desk_keyword_file KEYWORD FILE TOKENS: adds the tokens a boot menu's
-# KEYWORD lines are missing (judged by the first such line) and records them.
-desk_keyword_file() {
-  local add first
-  first="$(grep -m1 -i "^[[:space:]]*$1[[:space:]]" "$2" || true)"
-  [ -n "$first" ] || return 0
-  # shellcheck disable=SC2086 # a list of tokens
-  add="$(tokens_missing "$first" $3)"
-  [ -n "$add" ] || return 0
-  # shellcheck disable=SC2086
-  keyword_tokens_with "$1" $add <"$2" >"$2.nocap.tmp" && cat "$2.nocap.tmp" >"$2" && desk_record "keyword|$2|$1|$add"
-  rm -f "$2.nocap.tmp"
+# desk_put SRC DEST: DEST becomes a copy of SRC when it differs (returns 0
+# when it changed).
+desk_put() {
+  if [ -f "$2" ] && cmp -s "$1" "$2"; then return 1; fi
+  mkdir -p "$(dirname "$2")"
+  install -m 0644 "$1" "$2"
 }
 
-# Brands every way this machine can boot: GRUB (menu theme and name),
-# systemd-boot, U-Boot menus (extlinux, Debian's u-boot-menu), Armbian and
-# Raspberry Pi firmware (no rainbow square, no firmware text). Kernel
-# command line tokens added here are recorded and taken out by uninstall.
+# Brands every way this machine boots and makes it silent: the GRUB theme
+# (the menu only shows while Shift or Esc is held), the kernel lines of
+# GRUB, systemd-boot, U-Boot menus, Armbian and the Raspberry Pi (no boot
+# text, the NoCapOS splash), firmware logos off, and the graphics driver
+# loaded early for the splash. nocap-boot does the boot menus and kernel
+# lines, the same way Settings → Show boot details does; it backs up and
+# checks GRUB's files and puts them back if update-grub fails. What's
+# changed outside NoCapOS's folders is recorded, and uninstall puts it back.
 brand_boot() {
-  local m f add tokens="$SPLASH_TOKENS ${EXTRA_BOOT_TOKENS:-}"
+  local f changed=0
   desk_install_lib
-  for m in $(boot_methods ""); do
-    case "$m" in
-      pi)
-        for f in /boot/firmware/config.txt /boot/config.txt; do
-          [ -f "$f" ] || continue
-          if ! grep -qs '^[[:space:]]*disable_splash=' "$f"; then
-            config_txt_with disable_splash=1 <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
-            rm -f "$f.nocap.tmp"
-            desk_record "configtxt|$f|disable_splash=1"
-          fi
-          break
-        done
-        ;;
-      grub)
-        if [ ! -f /usr/share/grub/themes/nocapos/theme.txt ]; then
-          mkdir -p /usr/share/grub/themes/nocapos
-          install -m 0644 "$DESK_SRC/grub-theme.txt" /usr/share/grub/themes/nocapos/theme.txt
-          install -m 0644 "$DESK_SRC/art/grub-background.png" /usr/share/grub/themes/nocapos/background.png
-          desk_record "grub-theme"; BOOT_GRUB_CHANGED=1
-        fi
-        if [ -d /etc/default/grub.d ] || grep -qs 'grub.d' /usr/sbin/grub-mkconfig; then
-          if [ ! -f /etc/default/grub.d/nocapos.cfg ]; then
-            mkdir -p /etc/default/grub.d
-            printf '# NoCapOS boot menu (written by install.sh, removed by uninstall.sh).\nGRUB_DISTRIBUTOR="NoCapOS"\nGRUB_THEME="/usr/share/grub/themes/nocapos/theme.txt"\nGRUB_GFXMODE=auto\n' >/etc/default/grub.d/nocapos.cfg
-            desk_record "grub-cfg"; BOOT_GRUB_CHANGED=1
-          fi
-        fi
-        ;;
-      systemd-boot)
-        if [ -f /etc/kernel/cmdline ]; then
-          # shellcheck disable=SC2086
-          add="$(tokens_missing "$(cat /etc/kernel/cmdline)" $tokens)"
-          if [ -n "$add" ]; then
-            # shellcheck disable=SC2086
-            tokens_line_with $add </etc/kernel/cmdline >/etc/kernel/cmdline.nocap.tmp && cat /etc/kernel/cmdline.nocap.tmp >/etc/kernel/cmdline
-            rm -f /etc/kernel/cmdline.nocap.tmp
-            desk_record "line|/etc/kernel/cmdline|$add"
-          fi
-        fi
-        for f in /boot/efi/loader/entries/*.conf /efi/loader/entries/*.conf /boot/loader/entries/*.conf; do
-          if [ -f "$f" ]; then desk_keyword_file options "$f" "$tokens"; fi
-        done
-        ;;
-      uboot-menu)
-        f=/etc/default/u-boot
-        # shellcheck disable=SC2086
-        add="$(tokens_missing "$(sed -n 's/^U_BOOT_PARAMETERS=//p' "$f" | tr -d "\"'")" $tokens)"
-        if [ -n "$add" ]; then
-          # shellcheck disable=SC2086
-          var_tokens_with U_BOOT_PARAMETERS $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
-          rm -f "$f.nocap.tmp"
-          desk_record "var|$f|U_BOOT_PARAMETERS|$add"
-          if has u-boot-update; then u-boot-update >/dev/null 2>&1 || true; fi
-        fi
-        ;;
-      extlinux)
-        desk_keyword_file append /boot/extlinux/extlinux.conf "$tokens"
-        ;;
-      armbian)
-        f=/boot/armbianEnv.txt
-        # shellcheck disable=SC2086
-        add="$(tokens_missing "$(sed -n 's/^extraargs=//p' "$f" | tr -d "\"'")" $tokens)"
-        if [ -n "$add" ]; then
-          # shellcheck disable=SC2086
-          var_tokens_with extraargs $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
-          rm -f "$f.nocap.tmp"
-          desk_record "var|$f|extraargs|$add"
-        fi
-        if grep -q '^bootlogo=true' "$f"; then
-          sed -i 's/^bootlogo=true/bootlogo=false/' "$f" && desk_record "armbian-bootlogo|$f"
-        fi
-        ;;
-    esac
+  if boot_methods "" | grep -qx grub; then
+    mkdir -p "$GRUB_THEME_DIR"
+    desk_put "$DESK_SRC/grub-theme.txt" "$GRUB_THEME_DIR/theme.txt" && changed=1
+    desk_put "$DESK_SRC/art/grub-background.png" "$GRUB_THEME_DIR/background.png" && changed=1
+    desk_put "$DESK_SRC/art/grub-boot.png" "$GRUB_THEME_DIR/boot.png" && changed=1
+    desk_recorded "grub-theme" || desk_record "grub-theme"
+  fi
+  for f in /boot/firmware/config.txt /boot/config.txt; do
+    [ -f "$f" ] || continue
+    # Raspberry Pi firmware: no rainbow square before the splash.
+    if ! grep -qs '^[[:space:]]*disable_splash=' "$f"; then
+      config_txt_with disable_splash=1 <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
+      rm -f "$f.nocap.tmp"
+      desk_record "configtxt|$f|disable_splash=1"
+    fi
+    break
   done
+  f=/boot/armbianEnv.txt
+  if [ -f "$f" ] && grep -q '^bootlogo=true' "$f"; then
+    sed -i 's/^bootlogo=true/bootlogo=false/' "$f" && desk_record "armbian-bootlogo|$f"
+  fi
+  # Boot menus and kernel lines (a failure there leaves them as they were).
+  NOCAP_GRUB_CHANGED="$changed" EXTRA_BOOT_TOKENS="${EXTRA_BOOT_TOKENS:-}" "$DESK_LIB/nocap-boot" apply |
+    while IFS= read -r line; do info "$line"; done
   # Plymouth draws the NoCapOS splash at shutdown and restart too.
   for f in plymouth-poweroff plymouth-reboot plymouth-halt plymouth-kexec; do
     if [ "$(systemctl is-enabled "$f.service" 2>/dev/null)" = masked ]; then systemctl unmask "$f.service" >/dev/null 2>&1 || true; fi
