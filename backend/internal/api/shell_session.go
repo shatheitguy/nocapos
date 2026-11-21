@@ -127,6 +127,9 @@ func (s *Server) shellSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "forbidden", "no desktop session for this account: "+err.Error())
 		return
 	}
+	if s.desktop != nil {
+		s.desktop.NoteShellSession()
+	}
 	writeJSON(w, http.StatusOK, shellSessionResponse{
 		User: sess.User.Username, RealName: sess.User.Username, Admin: sess.User.Role == "admin",
 		APIOrigin:   s.shellAPIOrigin(),

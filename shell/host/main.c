@@ -85,6 +85,7 @@ on_activate(GtkApplication *app, gpointer u)
   system_init();
   notify_init();
   control_own();
+  idle_init();
   polkit_agent_start();
 }
 
@@ -132,6 +133,9 @@ main(int argc, char **argv)
 
   shell.test = g_strcmp0(g_getenv("NOCAP_SHELL_TEST"), "1") == 0;
   shell.debug = g_strcmp0(g_getenv("NOCAP_SHELL_DEBUG"), "1") == 0;
+  /* Test and debug lines reach a log file as they happen. */
+  if (shell.test || shell.debug)
+    setvbuf(stdout, NULL, _IOLBF, 0);
   resolve_paths(argv[0]);
   account_defaults();
 

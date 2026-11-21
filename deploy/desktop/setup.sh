@@ -266,7 +266,8 @@ desk_greetd() {
     rm -f /etc/pam.d/greetd.nocap.tmp
   fi
   # The sign-in screen takes the first console over from the boot splash,
-  # which leaves its last frame up until the sign-in screen draws.
+  # which leaves its last frame up until the sign-in screen draws; it never
+  # runs next to another sign-in service.
   mkdir -p "$DESK_UNITS/greetd.service.d" "$DESK_UNITS/plymouth-quit.service.d"
   render_greetd_dropin >"$DESK_UNITS/greetd.service.d/nocapos.conf"
   render_plymouth_quit_dropin >"$DESK_UNITS/plymouth-quit.service.d/nocapos.conf"
