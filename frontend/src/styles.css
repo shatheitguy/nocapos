@@ -2667,11 +2667,7 @@ button.nd-addr code { font-size: 12.5px; }
 .sidebar button.fn-link { gap: 8px; color: var(--muted); font-weight: 500; font-size: 13px; justify-content: flex-start; white-space: nowrap; text-align: left; }
 .sidebar button.fn-link:hover:not(:disabled) { color: var(--text); }
 .fn-pill { margin-left: auto; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
-.dialog.fn-modal { width: min(640px, calc(100% - 32px)); max-height: calc(100% - 40px); padding: 0; gap: 0; overflow: hidden; }
-.fn-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
-.fn-modal-head h3 { margin: 0; font-size: 16px; }
-/* Mac-style buttons: the close light sits first, with the title beside it. */
-:root[data-title-buttons='left'] .fn-modal-head { justify-content: flex-start; gap: 12px; }
+:root .dialog.modal.fn-modal { width: min(640px, calc(100% - 32px)); }
 .fn-modal-body { overflow: auto; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
 .fn-modal-body .settings-section { margin: 0; }
 .fn-intro { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }

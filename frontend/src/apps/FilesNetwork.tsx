@@ -1,6 +1,5 @@
 import { tr } from '../i18n';
-import { createPortal } from 'react-dom';
-import { WinClose } from '../components/WinClose';
+import { Modal } from '../components/Modal';
 import { useEffect, useState, type HTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 import { netApi, type GuestMode, type NetDrive, type NetShare, type NetSupport, type Sharing } from '../api/netdrive';
 import type { MenuEntry } from '../components/Dialog';
@@ -19,42 +18,12 @@ import { serverHost, serverOrigin } from '../native/platform';
 // Network drives and sharing, inside Files: the sidebar's Network section,
 // "Connect to Server…", "File Sharing…" and a folder's "Share this folder…".
 
-/** A large dialog inside the Files window. */
+/** A large dialog inside the Files window (drawn over the whole window, not the sidebar it's opened from). */
 export function FilesModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
-  // Drawn over the whole Files window, not inside the sidebar it's opened
-  // from: the sidebar's own button styles would otherwise reach into the
-  // dialog (its close button came out as a squeezed dot instead of the same
-  // button every window has, in either button style).
-  const [host, setHost] = useState<Element | null>(null);
-  const anchor = (el: HTMLSpanElement | null) => {
-    if (el) setHost(el.closest('.window-body') ?? el.closest('.files') ?? document.body);
-  };
-  const dialog = (
-    <div className="dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog fn-modal" role="dialog" aria-label={title} onKeyDown={(e) => e.stopPropagation()}>
-        <header className="fn-modal-head">
-          <h3>{title}</h3>
-          <WinClose onClick={onClose} label={tr('common.close')} />
-        </header>
-        <div className="fn-modal-body">{children}</div>
-      </div>
-    </div>
-  );
   return (
-    <>
-      <span ref={anchor} hidden />
-      {host && createPortal(dialog, host)}
-    </>
+    <Modal title={title} onClose={onClose} className="fn-modal" bodyClassName="fn-modal-body">
+      {children}
+    </Modal>
   );
 }
 
