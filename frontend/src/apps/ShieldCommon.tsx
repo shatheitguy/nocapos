@@ -1,11 +1,38 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ApiResult } from '../api/client';
-import type { DnsPoint, FwState } from '../api/shield';
+import { shieldApi, type DnsPoint, type FwPending, type FwState } from '../api/shield';
 import { Icon, type IconName } from '../components/Icon';
-import { tr } from '../i18n';
+import { tr, useT } from '../i18n';
 import { toast } from '../state/toasts';
 
-// Pieces the Shield app's tabs share.
+// Pieces the Shield app's tabs share (and Settings' remote login).
+
+/** "Keep these changes?" with a countdown; the server undoes them at zero. */
+export function KeepBanner({ pending, done, reload }: { pending?: FwPending; done: (s: FwState) => void; reload: () => Promise<void> | void }) {
+  const t = useT();
+  const left = useSecondsLeft(pending?.deadline);
+  useEffect(() => {
+    if (pending && left === 0) {
+      const id = window.setTimeout(() => void reload(), 2000);
+      return () => window.clearTimeout(id);
+    }
+  }, [pending, left, reload]);
+  if (!pending) return null;
+  const p = pending;
+  return (
+    <div className="sh-keep" role="alertdialog" aria-live="assertive">
+      <Icon name="alert" size={18} />
+      <div className="sh-keep-text">
+        <strong>{t('sh.keep.title')}</strong>
+        <span>{t('sh.keep.body', { n: left })}</span>
+      </div>
+      <div className="sh-keep-actions">
+        <button type="button" className="ghost small" onClick={() => void fwCall(shieldApi.undo(p.id), done, t('sh.keep.undone'))}>{t('sh.keep.undo')}</button>
+        <button type="button" className="small" onClick={() => void fwCall(shieldApi.keep(p.id), done, t('sh.keep.kept'))}>{t('sh.keep.keep')}</button>
+      </div>
+    </div>
+  );
+}
 
 /** A titled glass card. */
 export function Card({ title, icon, hint, actions, children, className = '' }: { title?: string; icon?: IconName; hint?: string; actions?: ReactNode; children: ReactNode; className?: string }) {

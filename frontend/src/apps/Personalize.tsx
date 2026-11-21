@@ -34,7 +34,7 @@ export function Section({ title, hint, children }: { title: string; hint?: strin
 }
 
 /** One setting: label (+ hint) on the left, control on the right. `stacked` puts the control underneath. */
-export function Row({ label, hint, stacked, children }: { label?: string; hint?: string; stacked?: boolean; children: ReactNode }) {
+export function Row({ label, hint, stacked, children }: { label?: string; hint?: string; stacked?: boolean; children?: ReactNode }) {
   return (
     <div className={`settings-row ${stacked ? 'stacked' : ''} ${label ? '' : 'full'}`}>
       {label && (

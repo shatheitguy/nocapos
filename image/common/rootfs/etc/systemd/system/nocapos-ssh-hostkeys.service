@@ -1,0 +1,16 @@
+# NoCapOS image: creates the SSH server's host keys when there are none.
+# Images are built without them (every machine needs its own), and the SSH
+# server refuses to start without them. Runs before the SSH server, and only
+# while no host key exists.
+[Unit]
+Description=NoCapOS: create missing SSH host keys
+Before=ssh.service sshd.service ssh.socket sshd.socket
+ConditionPathExists=/usr/bin/ssh-keygen
+ConditionPathExistsGlob=!/etc/ssh/ssh_host_*_key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ssh-keygen -A
+
+[Install]
+WantedBy=multi-user.target ssh.service sshd.service

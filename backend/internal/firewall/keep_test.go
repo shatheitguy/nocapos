@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -77,5 +78,36 @@ func TestUndoOutlivesRequest(t *testing.T) {
 	}
 	if f.active {
 		t.Fatal("still active after undo")
+	}
+}
+
+func TestSetTaggedAddsAndRemoves(t *testing.T) {
+	e, f := newFake(t)
+	const c = "NoCapOS remote login (local network)"
+	f.rules = [][]string{{"allow", "in", "proto", "tcp", "from", "any", "to", "any", "port", "8443"}}
+	want := []Rule{
+		{Action: "allow", Proto: "tcp", Port: "22", From: "192.168.1.0/24", Comment: c},
+		{Action: "allow", Proto: "tcp", Port: "22", From: "192.168.1.0/24", Comment: c}, // twice: added once
+	}
+	if _, err := e.SetTagged(context.Background(), c, want, Keep{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.rules) != 2 || strings.Join(f.rules[1], " ") != "allow in proto tcp from 192.168.1.0/24 to any port 22 comment "+c {
+		t.Fatalf("rules after add: %q", f.rules)
+	}
+	// Again: nothing changes.
+	if _, err := e.SetTagged(context.Background(), c, want, Keep{}); err != nil || len(f.rules) != 2 {
+		t.Fatalf("second add: %v %q", err, f.rules)
+	}
+	// Off: only the tagged rule goes; the person's own rule stays.
+	if _, err := e.SetTagged(context.Background(), c, nil, Keep{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.rules) != 1 || f.rules[0][len(f.rules[0])-1] != "8443" {
+		t.Fatalf("rules after remove: %q", f.rules)
+	}
+	// Rules with another comment are refused.
+	if _, err := e.SetTagged(context.Background(), c, []Rule{{Action: "allow", Proto: "tcp", Port: "22", Comment: "other"}}, Keep{}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("wrong comment accepted: %v", err)
 	}
 }

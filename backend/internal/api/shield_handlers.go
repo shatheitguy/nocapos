@@ -428,8 +428,27 @@ func (s *Server) fwExposed(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// Remote login: the SSH switch in Settings owns it, so SSH shows the
+	// same on/off state here, even while the server isn't listening.
+	sshManaged, sshOn, sshScope := false, false, ""
+	if ok, _ := s.sshSupported(); ok && s.ssh.Installed() {
+		sshManaged = true
+		sshOn, _ = s.ssh.ServiceState(ctx, s.ssh.Unit(ctx))
+		add(info.SSH, "tcp", "SSH", "ssh", "", false)
+		if sshOn {
+			sshScope = "lan"
+			if s.ssh.Settings().Outside {
+				sshScope = "anywhere"
+			}
+		}
+	}
 	out := make([]firewall.Exposed, 0, len(list))
 	for _, e := range list {
+		if sshManaged && e.Kind == "ssh" {
+			e.Setting, e.Scope, e.Open = "security", sshScope, sshOn
+			out = append(out, *e)
+			continue
+		}
 		e.Open = firewall.ReachableFromAnyone(st, e.Port, e.Proto)
 		if e.Proto == "tcp" && k.Client.IsValid() && !k.Client.IsLoopback() {
 			for _, p := range k.Ports {
