@@ -133,6 +133,22 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
         )
     }
 
+    /** "Ask to link this phone": no code; someone on NoCap OS accepts it. */
+    fun askToLink(deviceName: String, username: String = ""): com.nocap.link.sync.LinkAsked {
+        val body = JSONObject().put("device_name", deviceName).put("platform", "android").put("model", deviceModel()).put("os_version", osVersion())
+        if (username.isNotBlank()) body.put("username", username.trim())
+        return com.nocap.link.sync.LinkAsk.asked(JSONObject(call("POST", "/api/v1/pair/ask", body)))
+    }
+
+    /** Where a link request stands; an accepted one hands over the device token (once). */
+    fun askState(ask: com.nocap.link.sync.LinkAsked): com.nocap.link.sync.AskState =
+        com.nocap.link.sync.LinkAsk.state(JSONObject(call("GET", "/api/v1/pair/ask/${enc(ask.id)}", secret = ask.secret)))
+
+    /** Gives up on a link request. */
+    fun askCancel(ask: com.nocap.link.sync.LinkAsked) {
+        call("DELETE", "/api/v1/pair/ask/${enc(ask.id)}", secret = ask.secret)
+    }
+
     fun me(): Me {
         val o = JSONObject(call("GET", "/api/v1/device/me"))
         return Me(
@@ -489,15 +505,16 @@ class NoCapApi(val server: String, pin: String?, private val token: String? = nu
 
     private fun info(o: JSONObject) = PairInfo(o.optString("nocap_id"), o.optString("name"), o.optString("version"), o.optString("setup"))
 
-    private fun request(method: String, path: String, body: RequestBody?): Request {
+    private fun request(method: String, path: String, body: RequestBody?, secret: String? = null): Request {
         val b = Request.Builder().url(server + path).header("Accept", "application/json")
         if (token != null) b.header("Authorization", "Device $token")
+        if (secret != null) b.header("X-Pair-Secret", secret) // a link request's own secret, never in the URL
         b.method(method, body ?: if (method == "POST" || method == "PUT") ByteArray(0).toRequestBody(null) else null)
         return b.build()
     }
 
-    internal fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http): String {
-        val req = request(method, path, raw ?: body?.toString()?.toRequestBody(JSON))
+    internal fun call(method: String, path: String, body: JSONObject? = null, raw: RequestBody? = null, client: OkHttpClient = http, secret: String? = null): String {
+        val req = request(method, path, raw ?: body?.toString()?.toRequestBody(JSON), secret)
         return guarded {
             client.newCall(req).execute().use { r ->
                 val text = r.body?.string() ?: ""
