@@ -383,6 +383,39 @@ func (s *Server) photosInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
+// photosRotate turns a photo by quarter turns clockwise ({"root", "path",
+// "turns"}, negative: anticlockwise) without re-encoding it. 409 when the
+// picture can only be turned by saving it again (the app asks first).
+func (s *Server) photosRotate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Root  string `json:"root"`
+		Path  string `json:"path"`
+		Turns int    `json:"turns"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	rel, err := files.Clean(req.Path)
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	if !s.canUse(w, r, req.Root, true, rel) {
+		return
+	}
+	o, err := s.Photos.Rotate(req.Root, rel, req.Turns)
+	if errors.Is(err, photos.ErrNoOrientation) {
+		writeError(w, http.StatusConflict, "needs_resave", err.Error())
+		return
+	}
+	s.audit(r, userFrom(r.Context()).ID, "photos.rotate", req.Root+":"+rel, err == nil, strconv.Itoa(req.Turns)+" quarter turn(s)")
+	if err != nil {
+		s.fileError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"orientation": o})
+}
+
 // photosAlbumCover sets an album's cover ({"root", "path"}), or resets it ({}).
 func (s *Server) photosAlbumCover(w http.ResponseWriter, r *http.Request) {
 	id, ok := albumID(w, r)

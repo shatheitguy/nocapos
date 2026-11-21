@@ -419,6 +419,36 @@ func (s *Service) Open(rootID, rel string) (*os.File, fs.FileInfo, error) {
 	return f, st, nil
 }
 
+// PatchAt overwrites len(b) bytes of an existing file at off, in place (a
+// photo's orientation tag, say). It never grows the file.
+func (s *Service) PatchAt(rootID, rel string, off int64, b []byte) error {
+	if rel == "." || rel == RecycleDir {
+		return ErrIsRoot
+	}
+	rt, err := s.open(rootID)
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	f, err := rt.OpenFile(native(rel), os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	st, err := f.Stat()
+	if err == nil && st.IsDir() {
+		err = ErrIsDir
+	} else if err == nil && (off < 0 || off+int64(len(b)) > st.Size()) {
+		err = ErrBadPath
+	}
+	if err == nil {
+		_, err = f.WriteAt(b, off)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
 func (s *Service) ReadText(rootID, rel string, max int64) (string, fs.FileInfo, error) {
 	f, st, err := s.Open(rootID, rel)
 	if err != nil {
