@@ -42,7 +42,8 @@ import { getUser } from '../api/client';
 import { netApi, type NetShare } from '../api/netdrive';
 import { FileLightbox } from './Viewer';
 import { OpenWithDialog } from './FilesOpenWith';
-import { appsFor, defaultAppFor, openWith } from './openWithApps';
+import { appsFor, defaultAppFor, mediaHandler, openWith } from './openWithApps';
+import { MIDDLE } from '../lib/middleClick';
 import type { HandlerId } from '../lib/openWith';
 import { linkPhones, sendFilesToPhone } from '../shell/linkActions';
 import { startArchiveJob, startTransfer, startUpload, useTransfers } from '../state/transfers';
@@ -675,11 +676,18 @@ function FilePane({
       openWithApp(app, i);
       return;
     }
+    // Pictures, clips and songs open in a player window of their own, so the
+    // Files window stays free to use (and several can play side by side).
+    const media = recycle ? null : mediaHandler(i.entry.name);
+    if (media) {
+      openWithApp(media, i);
+      return;
+    }
     const idx = lookList.findIndex((x) => x.key === i.key);
     if (idx >= 0) setLook(idx);
     else openInWindow(i);
   };
-  const openWithApp = (app: HandlerId, i: Item) => openWith(app, { root: i.root, path: i.path, name: i.entry.name }, () => void extract(i));
+  const openWithApp = (app: HandlerId, i: Item, newWindow = false) => openWith(app, { root: i.root, path: i.path, name: i.entry.name }, () => void extract(i), { newWindow });
   const openInWindow = (i: Item) => openApp('viewer', { title: i.entry.name, props: { root: i.root, path: i.path }, key: `viewer:${i.root}:${i.path}` });
   const showInFolder = (i: Item) => {
     pendingSel.current = i.entry.name;
@@ -1100,6 +1108,7 @@ function FilePane({
       push({ label: 'Open', icon: one.entry.dir ? 'folder' : 'eye', shortcut: 'Enter', onClick: () => open(one) });
       if (!one.entry.dir && !recycle && appsFor(one.entry.name).length) push({ label: tr('openwith.menu'), icon: 'layers', onClick: () => setChooser(one) });
       if (!one.entry.dir) push({ label: 'Open in Window', icon: 'external', onClick: () => openInWindow(one) });
+      if (!one.entry.dir && !recycle && mediaHandler(one.entry.name) === 'music') push({ label: tr('media.m.newPlayer'), icon: 'music', onClick: () => openWithApp('music', one, true) });
       if (special) push({ label: 'Show in Folder', icon: 'folder', onClick: () => showInFolder(one) });
     }
     push('sep');
@@ -1189,6 +1198,12 @@ function FilePane({
     onDragStart: (e: DragEvent) => dragStart(e, i),
     onClick: (ev: MouseEvent) => clickItem(ev, i.key),
     onDoubleClick: () => open(i),
+    // Middle-click a song: a player of its own instead of the shared queue.
+    onAuxClick: (ev: MouseEvent) => {
+      if (ev.button !== MIDDLE || i.entry.dir || recycle || mediaHandler(i.entry.name) !== 'music') return;
+      ev.preventDefault();
+      openWithApp('music', i, true);
+    },
     onContextMenu: (ev: MouseEvent) => onContext(ev, i.key),
     ...(i.entry.dir && !recycle && special !== 'appdata' ? folderDrop(i.key, i.root, i.path) : {}),
   });

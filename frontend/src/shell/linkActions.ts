@@ -1,5 +1,5 @@
 import { tr } from '../i18n';
-import { openApp } from '../apps/meta';
+import { openFile } from '../apps/openWithApps';
 import { toast } from '../state/toasts';
 import { linkApi, useLink, type Carry, type Phone } from '../state/link';
 
@@ -54,7 +54,7 @@ export async function openUrlOnPhone(phone: Phone, url: string): Promise<boolean
 /** Open what a phone handed off: its file in the viewer, or its web address in a new tab. */
 export function openCarry(h: Carry) {
   if (h.root && h.path) {
-    openApp('viewer', { title: baseName(h.path), props: { root: h.root, path: h.path }, key: `viewer:${h.root}:${h.path}` });
+    openFile({ root: h.root, path: h.path, name: baseName(h.path) });
     return;
   }
   const u = h.url ? webUrl(h.url) : null;

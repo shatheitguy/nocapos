@@ -59,5 +59,10 @@
   "media.m.cantPlay": "This song can’t be played here. Skip it or download it.",
   "media.m.upNext": "Up next",
   "media.m.loops": "End of the folder. Playback starts again from the top.",
-  "media.m.queueEnd": "This is the last song."
+  "media.m.queueEnd": "This is the last song.",
+  "media.m.newPlayer": "Play in a New Player",
+  "media.m.nowPlaying": "Now playing",
+  "media.m.queue": "Queue",
+  "media.m.dragHint": "Click to play, drag to reorder",
+  "media.m.remove": "Remove from queue"
 }
