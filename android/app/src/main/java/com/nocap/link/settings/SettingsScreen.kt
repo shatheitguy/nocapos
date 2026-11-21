@@ -189,7 +189,7 @@ fun SettingsScreen(a: MainActivity) {
         Sec("general", t("Glow Up", "Software Update"), t("This app and your NoCap server", "App and server versions"), "update updates version upgrade github glow up install") {
             com.nocap.link.update.UpdatesSection(a)
         },
-        Sec("devices", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update") {
+        Sec("devices", "NoCap Link", t("Your server, this phone", "Server connection"), "link server unlink pair desktop status online offline update find nocap servers nearby radar scan discover ask") {
             ServerStatus(a)
             if (linked) {
                 Action(t("Open NoCap Link", "Open NoCap Link")) { a.layer = Layer.HUB }
@@ -197,6 +197,8 @@ fun SettingsScreen(a: MainActivity) {
             } else {
                 Action(t("Link with NoCap Link", "Link with NoCap Link")) { a.layer = Layer.NONE; a.screen = Screen.LinkForm() }
             }
+            // Find NoCap servers any time: the radar, and "Ask to link this phone" (no code).
+            Action(t("Find NoCap servers", "Find NoCap servers")) { a.layer = Layer.NONE; a.screen = Screen.Find }
         },
         Sec("general", t("System Specs", "About"), null, "about version licenses fonts crash report bug privacy terms") {
             Hint("NoCap OS ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
