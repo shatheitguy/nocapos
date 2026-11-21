@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { getAccessToken } from '../api/client';
 import { usersApi, type PeopleGroup, type Person } from '../api/users';
 import { Icon, type IconName } from '../components/Icon';
-import { WinClose } from '../components/WinClose';
+import { ModalHead, useModalEscape, useModalHost } from '../components/Modal';
 import { useT, type T } from '../i18n';
 import { useAvatar } from '../lib/avatar';
 
@@ -147,14 +147,6 @@ export function statusText(p: Person, t: T, now = Date.now()): { text: string; t
 // ---------- sheet ----------
 
 /** The Settings window the page sits in, so sheets cover just that window. */
-function useHost(anchor: React.RefObject<HTMLElement | null>) {
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  useLayoutEffect(() => {
-    setHost((anchor.current?.closest('.window') as HTMLElement | null) ?? document.body);
-  }, [anchor]);
-  return host;
-}
-
 /**
  * A form sheet: a centered card in the window, or a bottom sheet when the
  * window is phone-narrow. Escape or a press outside closes it.
@@ -170,31 +162,12 @@ export function Sheet({ title, sub, icon, lead, onClose, onSubmit, footer, child
   children: ReactNode;
   wide?: boolean;
 }) {
-  const t = useT();
-  const anchor = useRef<HTMLSpanElement>(null);
-  const host = useHost(anchor);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || document.querySelector('.confirm-backdrop')) return;
-      e.stopPropagation();
-      onClose();
-    };
-    // Capture: text fields and the window manager handle keys on the way up.
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  useModalEscape(onClose);
+  const { anchorEl, host, style, fixed } = useModalHost();
 
   const body = (
     <>
-      <header className="ug-sheet-head">
-        <span className="ug-grabber" aria-hidden="true" />
-        {lead ?? (icon && <span className="ug-sheet-icon"><Icon name={icon} size={18} /></span>)}
-        <span className="ug-sheet-titles">
-          <h2>{title}</h2>
-          {sub && <span>{sub}</span>}
-        </span>
-        <WinClose onClick={onClose} label={t('common.close')} />
-      </header>
+      <ModalHead className="ug-sheet-head" title={title} sub={sub} icon={icon} lead={lead} onClose={onClose} />
       <div className="ug-sheet-body">{children}</div>
       {footer && <footer className="ug-sheet-foot">{footer}</footer>}
     </>
@@ -204,7 +177,7 @@ export function Sheet({ title, sub, icon, lead, onClose, onSubmit, footer, child
     onSubmit?.();
   };
   const sheet = (
-    <div className={`ug-backdrop ${host === document.body ? 'fixed' : ''}`} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={`ug-backdrop ${fixed ? 'fixed' : ''}`} style={style} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="ug-sheet-wrap" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
         {onSubmit ? (
           <form className={`ug-sheet ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title} onSubmit={submit} noValidate>
@@ -220,7 +193,7 @@ export function Sheet({ title, sub, icon, lead, onClose, onSubmit, footer, child
   );
   return (
     <>
-      <span ref={anchor} hidden />
+      {anchorEl}
       {host && createPortal(sheet, host)}
     </>
   );

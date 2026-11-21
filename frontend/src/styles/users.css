@@ -221,15 +221,11 @@ button.ug-link:hover:not(:disabled) { filter: none; text-decoration: underline; 
   animation: pop 0.16s ease-out;
 }
 .ug-sheet.wide { width: min(700px, 100%); }
-.ug-sheet-head { position: relative; display: flex; align-items: center; gap: 12px; padding: 18px 18px 12px 20px; }
-.ug-sheet-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ug-sheet-titles h2 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ug-sheet-titles span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ug-sheet-icon {
   width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none;
   color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
-.ug-grabber { display: none; }
+.ug-grabber, .ug-sheet-head > .modal-grabber { display: none; }
 .ug-sheet-body { padding: 4px 20px 20px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 20px; min-height: 0; }
 .ug-sheet-body > * { flex-shrink: 0; }
 .ug-sheet-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--border); }
@@ -364,12 +360,10 @@ button.ug-pick > svg { color: var(--muted); flex: none; }
     width: 100%; max-height: 94%; border-radius: 22px 22px 0 0; border-bottom: 0;
     animation: ug-sheet-up 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
   }
-  .ug-sheet-head { padding: 22px 14px 10px 16px; }
-  .ug-grabber {
+  .ug-grabber, .ug-sheet-head > .modal-grabber {
     display: block; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px;
     background: color-mix(in srgb, var(--text) 22%, transparent);
   }
-  .ug-sheet-titles h2 { font-size: 17px; }
   .ug-sheet-body { padding: 4px 16px 18px; gap: 18px; }
   .ug-sheet-foot { padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
   .ug-sheet-foot > button { flex: 1 1 auto; min-height: 44px; }

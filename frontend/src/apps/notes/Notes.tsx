@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as RKeyboardEvent } from 'react';
 import { AppIcon } from '../../components/AppTile';
+import { WinClose } from '../../components/WinClose';
 import { Icon } from '../../components/Icon';
 import { useT } from '../../i18n';
 import { confirmDialog } from '../../state/confirm';
@@ -413,7 +414,7 @@ function NoteSheet({ note, fresh, onClose, standalone = false }: { note: Note; f
       onPointerDown={(e) => !standalone && e.target === e.currentTarget && onClose()}
     >
       <div className="nt-sheet nt-tint" data-color={note.color} role="dialog" aria-label={displayTitle(note) || t('notes.untitled')} onKeyDown={onKeyDown}>
-        <div className="nt-sheet-top">
+        <div className="nt-sheet-top modal-head">
           <input
             className="nt-title"
             value={title}
@@ -436,9 +437,8 @@ function NoteSheet({ note, fresh, onClose, standalone = false }: { note: Note; f
               }
             }}
           />
-          <button type="button" className="ne-btn" title={`${t('notes.close')} (Esc)`} aria-label={t('notes.close')} onClick={onClose}>
-            <Icon name="close" size={16} />
-          </button>
+          {/* In a window of its own, the window's close button is right above. */}
+          {!standalone && <WinClose onClick={onClose} label={`${t('notes.close')} (Esc)`} />}
         </div>
         <NoteEditor note={note} autoFocus={fresh} />
         <div className="nt-sheet-foot">

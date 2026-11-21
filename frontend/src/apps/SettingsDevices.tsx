@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { getUser } from '../api/client';
 import { devicesApi, type DeviceCap, type DeviceLimits, type LinkedDevice, type PairCode, type PairInfo, type UserDeviceLimit } from '../api/devices';
 import { Icon, type IconName } from '../components/Icon';
+import { ModalHead } from '../components/Modal';
 import { tr, useT, type T } from '../i18n';
 import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
@@ -742,24 +743,17 @@ export function LinkSheet({
   return createPortal(
     <div className="confirm-backdrop ld-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="confirm-dialog glass ld-sheet" role="dialog" aria-modal="true" aria-labelledby="ld-sheet-title">
-        <span className="ld-grabber" aria-hidden="true" />
-        <div className="ld-sheet-head">
-          <span className="ld-sheet-icon">
-            <Icon name="phone" size={20} />
-          </span>
-          <h3 id="ld-sheet-title">{t('ld.sheetTitle')}</h3>
-          <button type="button" className="icon-btn neutral" aria-label={t('ld.close')} title={t('ld.close')} onClick={onClose}>
-            <Icon name="close" size={14} />
-          </button>
+        <ModalHead className="ld-sheet-head" icon="phone" title={t('ld.sheetTitle')} titleId="ld-sheet-title" closeLabel={t('ld.close')} onClose={onClose} />
+        <div className="ld-sheet-body">
+          {body}
+          {phase.kind === 'linked' && (
+            <div className="confirm-actions">
+              <button type="button" onClick={onClose}>
+                {t('ld.done')}
+              </button>
+            </div>
+          )}
         </div>
-        {body}
-        {phase.kind === 'linked' && (
-          <div className="confirm-actions">
-            <button type="button" onClick={onClose}>
-              {t('ld.done')}
-            </button>
-          </div>
-        )}
       </div>
     </div>,
     document.body,

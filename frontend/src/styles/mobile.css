@@ -32,8 +32,10 @@
 }
 @keyframes win-sheet-in { from { opacity: 0; transform: translateY(18px); } }
 :root[data-compact] .resize { display: none; }
-:root[data-compact] .titlebar { height: 48px; padding: 0 4px 0 14px; touch-action: manipulation; }
-:root[data-compact] .titlebar .title { font-size: 15px; }
+:root[data-compact] { --titlebar-h: 48px; --titlebar-pad-btn: 4px; --titlebar-pad-title: 14px; --titlebar-title-size: 15px; }
+:root[data-compact] .titlebar { touch-action: manipulation; }
+/* Phones keep the buttons on the right in either style. */
+:root[data-compact][data-title-buttons='left'] .titlebar { padding: 0 var(--titlebar-pad-btn) 0 var(--titlebar-pad-title); }
 :root[data-compact] .win-buttons { gap: 4px; }
 :root[data-compact] .win-buttons button,
 :root[data-compact][data-title-buttons='left'] .win-buttons button {

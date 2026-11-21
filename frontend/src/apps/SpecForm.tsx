@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { dockerApi, type ContainerSpec, type DockerNetwork, type EnvVar, type NetLink, type PortMap, type SpecMount } from '../api/docker';
 import { fileApi, type FileRoot } from '../api/files';
+import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
 import { toast } from '../state/toasts';
 import { tr } from '../i18n';
@@ -704,9 +705,22 @@ export function FolderPicker({ onClose, onPick }: { onClose: () => void; onPick:
     onPick(r.data.path);
   };
   return (
-    <div className="dialog-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog ce-picker" role="dialog" aria-label="Choose a folder">
-        <h3>Choose a folder</h3>
+    <Modal
+      title="Choose a folder"
+      icon="folder"
+      onClose={onClose}
+      className="ce-picker"
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" disabled={!root} onClick={() => void choose()}>
+            Use {newName.trim() ? `“${newName.trim()}”` : 'This Folder'}
+          </button>
+        </>
+      }
+    >
         <select
           value={root}
           onChange={(e) => {
@@ -748,15 +762,6 @@ export function FolderPicker({ onClose, onPick }: { onClose: () => void; onPick:
           )}
         </div>
         <input value={newName} placeholder="New folder here (optional)" onChange={(e) => setNewName(e.target.value)} />
-        <div className="dialog-actions">
-          <button type="button" className="ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" disabled={!root} onClick={() => void choose()}>
-            Use {newName.trim() ? `“${newName.trim()}”` : 'This Folder'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

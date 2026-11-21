@@ -157,8 +157,6 @@
   background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow-win); animation: pop 0.14s ease-out;
 }
 .st-sheet.wide { width: min(760px, 100%); }
-.st-sheet-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px 12px; }
-.st-sheet-head h2 { margin: 0; font-size: 18px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
 .st-sheet-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
 .st-sheet-body { padding: 4px 18px 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .st-sheet-body > * { flex-shrink: 0; }
@@ -310,7 +308,6 @@
   .st-snap > button.ghost { flex: 1 1 auto; justify-content: center; }
   .st-backdrop { padding: 8px; }
   .st-sheet, .st-sheet.wide { width: 100%; border-radius: 16px; }
-  .st-sheet-head { padding: 14px 14px 10px; }
   .st-sheet-body { padding: 4px 14px 14px; }
   .st-sheet-foot { padding: 10px 14px; }
   .st-sheet-foot > button { flex: 1 1 auto; justify-content: center; }

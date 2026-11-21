@@ -108,12 +108,10 @@
   background: linear-gradient(90deg, var(--titlebar), transparent 70%);
   border-bottom-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
-:root[data-ui='cyberdeck'] .titlebar .title {
-  font-family: var(--display);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+:root[data-ui='cyberdeck'],
+:root[data-ui='cyberdeck'][data-compact] {
+  --titlebar-title-font: var(--display); --titlebar-title-size: 11.5px; --titlebar-title-weight: 600;
+  --titlebar-title-tracking: 0.16em; --titlebar-title-case: uppercase;
 }
 /* Text-scan sweep across the focused window's title */
 :root[data-ui='cyberdeck'] .window.focused .titlebar .title {
