@@ -52,6 +52,9 @@ EOF
 fi
 install -m 0644 "$BUNDLE/nocapos.service" /etc/systemd/system/nocapos.service
 systemctl enable nocapos.service nocapos-firstboot.service nocapos-setup-hint.service nocapos-images.service
+# The image carries no SSH host keys (each machine makes its own): this
+# creates them on the first boot, before the SSH server starts.
+systemctl enable nocapos-ssh-hostkeys.service
 
 # ---------------------------------------------------------------- identity
 "$IMG/os-release-sync" --divert

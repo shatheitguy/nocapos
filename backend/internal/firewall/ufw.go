@@ -859,6 +859,11 @@ type Exposed struct {
 	// Bypass: container ports are published by the container engine, which
 	// writes its own packet-filter rules before ufw's.
 	Bypass bool `json:"bypass,omitempty"`
+	// Setting: a NoCapOS setting owns this (the Settings page to open
+	// instead of a switch here). Scope: who it's open to then ("lan" or
+	// "anywhere"; "" while it's off).
+	Setting string `json:"setting,omitempty"`
+	Scope   string `json:"scope,omitempty"`
 }
 
 // ReachableFromAnyone is Reachable for any outside address (no source rule).
@@ -940,6 +945,105 @@ func (e *Engine) SetExposed(ctx context.Context, port int, proto, name string, o
 				return err
 			}
 			return e.addAt(ctx, cur, len(cur.Rules), r)
+		}
+		return nil
+	})
+}
+
+// Tagged lists the rules carrying comment.
+func Tagged(st State, comment string) []Entry {
+	var out []Entry
+	for _, r := range st.Rules {
+		if r.Editable && r.Comment == comment && !r.Guard {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// SetTagged makes the rules carrying comment exactly want (each of which
+// must carry that comment): missing ones go in at the top (IPv6 ones at the
+// end, where ufw keeps them), the rest are deleted. Deleting while the
+// firewall runs starts the keep-or-undo window, and k stays connected.
+func (e *Engine) SetTagged(ctx context.Context, comment string, want []Rule, k Keep) (State, error) {
+	if comment == "" || sanitizeComment(comment) != comment {
+		return State{}, invalid("not a rule comment")
+	}
+	norm := make([]Rule, 0, len(want))
+	for _, r := range want {
+		n, err := Normalize(r)
+		if err != nil {
+			return State{}, err
+		}
+		if n.Comment != comment {
+			return State{}, invalid("every rule needs the same comment")
+		}
+		if !slices.Contains(norm, n) {
+			norm = append(norm, n)
+		}
+	}
+	plan := func(st State) (add []Rule, drop []Entry) {
+		have := Tagged(st, comment)
+		for _, n := range norm {
+			found := false
+			for _, h := range have {
+				if h.Rule == n {
+					found = true
+					break
+				}
+			}
+			if !found {
+				add = append(add, n)
+			}
+		}
+		for _, h := range have {
+			if !slices.Contains(norm, h.Rule) {
+				drop = append(drop, h)
+			}
+		}
+		return add, drop
+	}
+	return e.change(ctx, "remote login", func(st State) bool {
+		_, drop := plan(st)
+		return st.Active && len(drop) > 0
+	}, func(st State) error {
+		add, drop := plan(st)
+		if len(drop) > 0 {
+			var predicted []Entry
+			for _, r := range st.Rules {
+				if !slices.ContainsFunc(drop, func(d Entry) bool { return d.Raw == r.Raw }) {
+					predicted = append(predicted, r)
+				}
+			}
+			if err := e.keepIn(ctx, st, st.Incoming, predicted, st.Active, k); err != nil {
+				return err
+			}
+			for _, d := range drop {
+				cur, err := e.status(ctx)
+				if err != nil {
+					return err
+				}
+				r, _, err := find(cur, d.Raw)
+				if err != nil {
+					continue // already gone with its twin
+				}
+				if err := e.deleteEntry(ctx, cur, r); err != nil {
+					return err
+				}
+			}
+		}
+		for _, r := range add {
+			cur, err := e.status(ctx)
+			if err != nil {
+				return err
+			}
+			at := 0
+			if isV6(r.From) {
+				at = len(cur.Rules)
+			}
+			if err := e.addAt(ctx, cur, at, r); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
