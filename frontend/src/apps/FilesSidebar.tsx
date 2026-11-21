@@ -3,6 +3,7 @@ import { Fragment, useEffect, useRef, useState, type DragEvent, type MouseEvent,
 import { usePrefs } from '../state/prefs';
 import { arrangeFavs, arrangePlaces, dropIndex, moveTo, setHidden, shownPlaces, step, type SidebarLayout } from '../lib/sidebarOrder';
 import { useReceived } from '../state/received';
+import { opensUnlisted } from '../lib/fileRoots';
 import { RECYCLE, baseName, inRecycle, isAppData, type ExternalDrive, type Favorite, type FileRoot } from '../api/files';
 import type { NetShare } from '../api/netdrive';
 import { Bar } from '../components/Charts';
@@ -377,7 +378,7 @@ export function FilesSidebar({
           if (!f) return null;
           const key = `fav:${f.root}:${f.path}`;
           const name = f.path === '/' ? rootLabel(f.root) : baseName(f.path);
-          const missing = !roots.some((r) => r.id === f.root) && !isAppData(f.root);
+          const missing = !roots.some((r) => r.id === f.root) && !opensUnlisted(f.root);
           const i = favOrder.indexOf(fk);
           const b = favDrag.bind(fk);
           return (
