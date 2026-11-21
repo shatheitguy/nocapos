@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react';
 import { browserCanShow, originalUrl, photoKey, photosApi, thumbUrl, type Camera, type Photo } from '../api/photos';
 import { Icon } from '../components/Icon';
-import { useT } from '../i18n';
+import { WinClose } from '../components/WinClose';
+import { tr, useT } from '../i18n';
 import { toast } from '../state/toasts';
 import { dateTimeFmt, fmtBytes, fmtDuration, longDateFmt, Thumb, ticketFor, timeFmt, useReducedMotion, type Tickets } from './PhotosCommon';
 
@@ -75,6 +76,7 @@ export function PhotoViewer({
   onDelete,
   onRestore,
   strip: showStrip = true,
+  windowed = false,
 }: {
   photos: Photo[];
   index: number;
@@ -89,6 +91,8 @@ export function PhotoViewer({
   onRestore?: (p: Photo) => void;
   /** The filmstrip of neighbours along the bottom. */
   strip?: boolean;
+  /** In a window of its own: the window's title bar closes it (and, full screen, the same close button on the bar). */
+  windowed?: boolean;
 }) {
   const t = useT();
   const reduced = useReducedMotion();
@@ -428,9 +432,11 @@ export function PhotoViewer({
     >
       {thumb && <div className="pg-vback" style={{ backgroundImage: `url("${thumb}")` }} />}
       <header className="pg-vbar">
-        <button type="button" className="pg-vbtn" aria-label={t('photos.v.back')} title={t('photos.v.backKey')} onClick={onClose}>
-          <Icon name="chevronLeft" size={20} />
-        </button>
+        {!windowed && (
+          <button type="button" className="pg-vbtn" aria-label={t('photos.v.back')} title={t('photos.v.backKey')} onClick={onClose}>
+            <Icon name="chevronLeft" size={20} />
+          </button>
+        )}
         <div className="pg-vtitle">
           <strong>{longDateFmt.format(taken)}</strong>
           <span>
@@ -511,6 +517,16 @@ export function PhotoViewer({
             </button>
           )}
         </div>
+        {windowed && full && (
+          <WinClose
+            className="pg-vclose"
+            label={tr('common.close')}
+            onClick={() => {
+              if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+              onClose();
+            }}
+          />
+        )}
       </header>
 
       <div className="pg-vbody">

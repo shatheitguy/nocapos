@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as RKeyboardEvent, type ReactNode } from 'react';
 import { baseName, fileApi, fileKind, fileTicket, joinPath, parentPath, rawUrl, type FileEntry } from '../api/files';
 import { Icon } from '../components/Icon';
+import { ModalHead } from '../components/Modal';
 import { useT } from '../i18n';
 import { srtToVtt, subtitlesFor } from '../lib/subtitles';
 import { userKey } from '../state/prefs';
@@ -52,6 +53,7 @@ export function VideoPlayer({
   onPrev,
   onNext,
   extra,
+  onClose,
 }: {
   src: string;
   poster?: string;
@@ -65,6 +67,8 @@ export function VideoPlayer({
   onNext?: () => void;
   /** More buttons for the right of the bar (e.g. the playlist). */
   extra?: ReactNode;
+  /** Full screen: a floating title row with the window close button (closes the player). */
+  onClose?: () => void;
 }) {
   const t = useT();
   const box = useRef<HTMLDivElement>(null);
@@ -272,6 +276,17 @@ export function VideoPlayer({
         </div>
       )}
       {flash && <div className="vp-flash">{flash}</div>}
+      {full && onClose && (
+        <div className="vp-top" onPointerDown={(e) => e.stopPropagation()}>
+          <ModalHead
+            title={title ?? ''}
+            onClose={() => {
+              if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+              onClose();
+            }}
+          />
+        </div>
+      )}
       {!playing && !error && (
         <button type="button" className="vp-big" aria-label={t('media.play')} onClick={toggle}>
           <Icon name="play" size={34} />
@@ -482,6 +497,7 @@ export function VideoPlayerApp({ win }: { win: WinState }) {
         autoPlay
         subtitles={subs}
         resumeKey={`${root}:${path}`}
+        onClose={() => useWM.getState().close(win.id)}
         onEnded={at >= 0 && at < playlist.length - 1 ? () => go(at + 1) : undefined}
         onPrev={at > 0 ? () => go(at - 1) : undefined}
         onNext={at >= 0 && at < playlist.length - 1 ? () => go(at + 1) : undefined}

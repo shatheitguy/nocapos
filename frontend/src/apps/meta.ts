@@ -297,6 +297,8 @@ export function openApp(appId: string, opts: OpenOptions = {}) {
   // it to the front (with the new props, e.g. a Settings section).
   if (isNative()) {
     const props = opts.props ? JSON.stringify(opts.props) : undefined;
+    // A window per file (a picture, a clip) is a new native window; the host
+    // can't match windows by file, so the same file opened twice opens twice.
     hostSend('nocap.open', { app: appId, ...(props && props.length <= 8192 ? { props } : {}), single: !!meta.single || !opts.newWindow });
     if (!meta.hidden) useRecents.getState().push(appId);
     return;

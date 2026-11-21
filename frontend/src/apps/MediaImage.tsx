@@ -86,6 +86,7 @@ export function ImageViewerApp({ win }: { win: WinState }) {
         onIndex={setIndex}
         onClose={() => useWM.getState().close(win.id)}
         strip={false}
+        windowed
       />
     </div>
   );
