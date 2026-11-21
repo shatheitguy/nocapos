@@ -165,12 +165,22 @@ const (
 	// DefaultLimit is how many devices each person may link when an
 	// administrator hasn't said otherwise.
 	DefaultLimit = 10
-	// MaxLimit is the highest limit that can be set. 0 means no limit.
-	MaxLimit = 100
+	// MaxLimit is the highest limit that can be set: each person links at
+	// most 10 devices. There's no "no limit".
+	MaxLimit = 10
 )
 
-// ValidLimit: 0 (no limit) to MaxLimit.
-func ValidLimit(n int) bool { return n >= 0 && n <= MaxLimit }
+// ValidLimit: 1 to MaxLimit.
+func ValidLimit(n int) bool { return n >= 1 && n <= MaxLimit }
+
+// Effective is the limit that really applies to a stored value: older
+// versions allowed 0 (no limit) and up to 100; those now count as MaxLimit.
+func Effective(n int) int {
+	if n < 1 || n > MaxLimit {
+		return MaxLimit
+	}
+	return n
+}
 
 // AtLimit reports whether someone with used devices may not link another.
 func AtLimit(used, limit int) bool { return limit > 0 && used >= limit }

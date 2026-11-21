@@ -28,8 +28,8 @@ const CAPS: { id: DeviceCap; icon: IconName }[] = [
   { id: 'clipboard', icon: 'clipboard' },
   { id: 'files', icon: 'folder' },
 ];
-/** Choices offered for a limit (0 = no limit); the current value is added when it isn't one of them. */
-const LIMIT_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 50, 100];
+/** Choices offered for a limit (at most 10 devices per person). */
+const LIMIT_STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 function ago(t: T, iso: string) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -380,7 +380,6 @@ function LimitSelect({ value, fallback, max, label, onChange }: { value: number 
       onChange={(e) => onChange(e.target.value === 'default' ? null : Number(e.target.value))}
     >
       {fallback != null && <option value="default">{fallback > 0 ? t('ld.useDefault', { n: fallback }) : t('ld.useDefaultNoLimit')}</option>}
-      <option value="0">{t('ld.noLimit')}</option>
       {steps.map((n) => (
         <option key={n} value={n}>
           {n}
