@@ -13,7 +13,7 @@ import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
 import { ClipboardSettings } from './SettingsClipboard';
 import { ReceivedSettings } from './SettingsReceived';
-import { FindServersSection } from './SettingsFindServers';
+import { FindServersSection, PhoneAsksSection } from './SettingsFindServers';
 import { serverOrigin } from '../native/platform';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
@@ -29,8 +29,8 @@ const CAPS: { id: DeviceCap; icon: IconName }[] = [
   { id: 'clipboard', icon: 'clipboard' },
   { id: 'files', icon: 'folder' },
 ];
-/** Choices offered for a limit (0 = no limit); the current value is added when it isn't one of them. */
-const LIMIT_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 50, 100];
+/** Choices offered for a limit (at most 10 devices per person). */
+const LIMIT_STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 function ago(t: T, iso: string) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -179,7 +179,9 @@ export function DevicesSettings() {
       <ClipboardSettings />
       <ReceivedSettings />
       <LinkAddressesSettings />
-      {/* Other NoCap servers nearby: part of your squad of devices. */}
+      {/* Phones asking to link without a code (administrators, or the person they name). */}
+      <PhoneAsksSection onLinked={load} />
+      {/* Other NoCap servers nearby, and the ones linked with this one: part of your squad. */}
       {isAdmin && <FindServersSection />}
 
       {linking && (
@@ -379,7 +381,6 @@ function LimitSelect({ value, fallback, max, label, onChange }: { value: number 
       onChange={(e) => onChange(e.target.value === 'default' ? null : Number(e.target.value))}
     >
       {fallback != null && <option value="default">{fallback > 0 ? t('ld.useDefault', { n: fallback }) : t('ld.useDefaultNoLimit')}</option>}
-      <option value="0">{t('ld.noLimit')}</option>
       {steps.map((n) => (
         <option key={n} value={n}>
           {n}

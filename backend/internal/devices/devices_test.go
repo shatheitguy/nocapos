@@ -132,8 +132,11 @@ func TestLimitsAndCaps(t *testing.T) {
 			t.Errorf("AtLimit(%d, %d) != %v", c.used, c.limit, c.full)
 		}
 	}
-	if ValidLimit(-1) || !ValidLimit(0) || !ValidLimit(MaxLimit) || ValidLimit(MaxLimit+1) {
+	if ValidLimit(-1) || ValidLimit(0) || !ValidLimit(1) || !ValidLimit(MaxLimit) || ValidLimit(MaxLimit+1) || MaxLimit != 10 {
 		t.Error("ValidLimit bounds")
+	}
+	if Effective(0) != MaxLimit || Effective(100) != MaxLimit || Effective(3) != 3 {
+		t.Error("Effective clamps old values")
 	}
 	if got := CapsString(map[string]bool{"files": true, "notifications": true, "clipboard": false, "x": true}); got != "notifications,files" {
 		t.Errorf("CapsString = %q", got)

@@ -111,6 +111,7 @@ type Server struct {
 	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
 	osImg            *osState        // image install: whole-system updates (nil on a script install)
 	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
+	squad            squadState      // Your Squad: link requests between servers, and from phones
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -198,6 +199,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/link/discover", s.authed(s.linkDiscover))
 	mux.Handle("GET /api/v1/link/bluetooth", s.admin(s.linkBluetoothGet))
 	mux.Handle("PUT /api/v1/link/bluetooth", s.admin(s.linkBluetoothPut))
+	// Your Squad: linking with other NoCap servers; phones asking to link.
+	s.squadRoutes(mux)
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
 	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))
@@ -278,6 +281,8 @@ func (s *Server) Handler() http.Handler {
 	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.
 	mux.Handle("POST /api/v1/system/desktop/repair", s.admin(s.desktopRepair))
 	mux.Handle("GET /api/v1/system/desktop/diagnostics", s.admin(s.desktopDiagnostics))
+	mux.Handle("GET /api/v1/system/desktop/old-desktop", s.admin(s.oldDesktopGet))
+	mux.Handle("POST /api/v1/system/desktop/old-desktop", s.admin(s.oldDesktopSet))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))

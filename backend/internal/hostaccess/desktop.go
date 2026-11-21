@@ -136,6 +136,7 @@ type Desktop struct {
 
 	mirror screenMirror
 	hs     healthState
+	cs     confirmState
 }
 
 // NewDesktop wires the real machine.
