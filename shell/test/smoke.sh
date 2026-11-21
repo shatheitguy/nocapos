@@ -74,7 +74,11 @@ IDLE="$OUT/idle-fired"
 rm -f "\$IDLE"
 python3 "$OUT/run/inhibit.py" 9 >"$OUT/inhibit.log" 2>&1 &
 ipid=\$!
-sleep 2
+# The idle watch starts once the screen is kept awake.
+for i in \$(seq 1 30); do
+  grep -q "wayland idle inhibitor on" "\$LOG" 2>/dev/null && break
+  sleep 0.2
+done
 swayidle -w timeout 3 "touch \$IDLE" >"$OUT/swayidle.log" 2>&1 &
 spid=\$!
 sleep 6
