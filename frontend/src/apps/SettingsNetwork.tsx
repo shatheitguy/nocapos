@@ -6,7 +6,6 @@ import { setNetwork } from '../lib/hostActions';
 import { missing } from '../lib/settingsKit';
 import { IPv4Editor, IPv4Summary, WifiList } from './NetworkParts';
 import { Section, Toggle } from './Personalize';
-import { FindServersSection } from './SettingsFindServers';
 import { SavedNetworks } from './WifiSaved';
 
 // Settings → Network: an overview of connections, then Wi-Fi and one page
@@ -53,9 +52,29 @@ function ViewOnly({ net }: { net: NetworkState }) {
   );
 }
 
+/** Links made by containers and virtual machines, not real connections. */
+export const isVirtualLink = (name: string) => /^(veth|br-|docker|virbr|vnet|tap|cni|podman|flannel)/.test(name);
+
+function IfaceRow({ i, open, nested = false }: { i: NetInterface; open: (sub: string) => void; nested?: boolean }) {
+  return (
+    <button type="button" className={`urow ${nested ? 'set-nested' : ''}`} onClick={() => open(`iface:${i.name}`)}>
+      <span className="urow-icon set-ico" style={{ ['--c' as string]: connected(i) ? '#30d158' : '#8e8e93' }}><Icon name={ifaceIcon(i)} size={16} /></span>
+      <span className="urow-text">
+        <span className="urow-title">{i.kind === 'ethernet' ? tr('sn.ethernetName', { name: i.name }) : i.name}</span>
+        <span className="urow-desc">{connected(i) ? tr('sn.connectedIp', { ip: ipOf(i) }) : i.up ? tr('sn.noAddress') : tr('sn.notConnected')}</span>
+      </span>
+      <span className="urow-control">
+        <span className={`set-dot ${connected(i) ? 'on' : ''}`} />
+        <Icon name="chevronRight" size={16} />
+      </span>
+    </button>
+  );
+}
+
 export function NetworkHome({ open }: { open: (sub: string) => void }) {
   const { net, setNet, error } = useNetwork();
   const [busy, setBusy] = useState(false);
+  const [showVirtual, setShowVirtual] = useState(false);
   if (error) return <p className="error">{error}</p>;
   if (!net) return <p className="muted">{tr('sp.netChecking')}</p>;
   const flip = async (kind: 'wifi' | 'networking', on: boolean) => {
@@ -67,6 +86,10 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
   const primary = net.interfaces.find(connected);
   const wireless = net.interfaces.find((i) => i.kind === 'wifi');
   const wired = net.interfaces.filter((i) => i.kind !== 'wifi');
+  // Links containers and virtual machines make (one per container, often
+  // many) fold into one row, so your real connections stay easy to see.
+  const physical = wired.filter((i) => !isVirtualLink(i.name));
+  const virtual = wired.filter((i) => isVirtualLink(i.name));
   return (
     <div className="stack settings-page">
       <div className="ucard set-status">
@@ -94,19 +117,22 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
             {net.wifi.supported && <Icon name="chevronRight" size={16} />}
           </span>
         </div>
-        {wired.map((i) => (
-          <button key={i.name} type="button" className="urow" onClick={() => open(`iface:${i.name}`)}>
-            <span className="urow-icon set-ico" style={{ ['--c' as string]: connected(i) ? '#30d158' : '#8e8e93' }}><Icon name={ifaceIcon(i)} size={16} /></span>
+        {physical.map((i) => (
+          <IfaceRow key={i.name} i={i} open={open} />
+        ))}
+        {virtual.length > 0 && (
+          <button type="button" className="urow set-group-row" aria-expanded={showVirtual} onClick={() => setShowVirtual(!showVirtual)}>
+            <span className="urow-icon set-ico" style={{ ['--c' as string]: '#8e8e93' }}><Icon name="network" size={16} /></span>
             <span className="urow-text">
-              <span className="urow-title">{i.kind === 'ethernet' ? tr('sn.ethernetName', { name: i.name }) : i.name}</span>
-              <span className="urow-desc">{connected(i) ? tr('sn.connectedIp', { ip: ipOf(i) }) : i.up ? tr('sn.noAddress') : tr('sn.notConnected')}</span>
+              <span className="urow-title">{tr('sn.virtualLinks', { n: virtual.length })}</span>
+              <span className="urow-desc">{tr('sn.virtualHint')}</span>
             </span>
             <span className="urow-control">
-              <span className={`set-dot ${connected(i) ? 'on' : ''}`} />
-              <Icon name="chevronRight" size={16} />
+              <Icon name={showVirtual ? 'chevronDown' : 'chevronRight'} size={16} />
             </span>
           </button>
-        ))}
+        )}
+        {showVirtual && virtual.map((i) => <IfaceRow key={i.name} i={i} open={open} nested />)}
       </div>
 
       <div className="ucard ulist">
@@ -122,7 +148,6 @@ export function NetworkHome({ open }: { open: (sub: string) => void }) {
         </div>
       </div>
 
-      <FindServersSection />
     </div>
   );
 }
