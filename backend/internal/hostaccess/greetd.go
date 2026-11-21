@@ -12,9 +12,10 @@ import (
 // unprivileged account) and, when automatic sign-in is on, opens one
 // person's desktop once per boot without it ([initial_session]).
 
-// GreetdConfig is lib.sh's render_greetd_config.
+// GreetdConfig is lib.sh's render_greetd_config: on the first console (vt
+// 1), where the boot splash hands over to it.
 func GreetdConfig(greeterUser, autologin string) string {
-	s := "# NoCap Desktop's sign-in service (written by NoCapOS; Settings changes it).\n[terminal]\nvt = 7\n\n[default_session]\ncommand = \"" +
+	s := "# NoCap Desktop's sign-in service (written by NoCapOS; Settings changes it).\n[terminal]\nvt = 1\n\n[default_session]\ncommand = \"" +
 		greeterCmd + "\"\nuser = \"" + greeterUser + "\"\n"
 	if autologin != "" {
 		s += "\n[initial_session]\ncommand = \"" + sessionCmd + "\"\nuser = \"" + autologin + "\"\n"

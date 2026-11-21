@@ -1,0 +1,299 @@
+#!/bin/bash
+# nocap-boot: NoCapOS's silent boot, the same on every machine. Installed
+# next to lib.sh (/usr/local/lib/nocapos/desktop); run as root by the
+# installer on every install and update, by the images, and by Settings →
+# Screen Real Estate → Show boot details.
+#
+#   nocap-boot apply [--no-update]       put the saved choice in place
+#   nocap-boot details on|off [--no-update]
+#                                        Show boot details: on brings back the
+#                                        boot menu and the boot messages
+#   nocap-boot status                    prints on or off (boot details)
+#
+# What it changes (each only when it isn't that way already):
+#   GRUB         /etc/default/grub.d/nocapos.cfg (hidden menu, NoCap
+#                background and theme, quiet kernel line) and
+#                /etc/grub.d/06_nocapos (GRUB's own lines drawn invisible),
+#                then update-grub. A failed update-grub, or a grub.cfg
+#                grub-script-check doesn't accept, puts the previous files
+#                back and rebuilds grub.cfg from them: GRUB never breaks.
+#   other boot menus and the Raspberry Pi: the kernel line's quiet tokens
+#   PCs          the graphics driver loaded first in the initramfs (KMS),
+#                so the splash shows early; then update-initramfs.
+# --no-update writes the files only (image builds: the installer rebuilds
+# the boot menu and initramfs later). Kernel line tokens it adds are
+# recorded for NoCapOS's uninstaller. NOCAP_ROOT (tests) puts every path
+# under another folder.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=lib.sh
+. "$HERE/lib.sh"
+
+R="${NOCAP_ROOT:-}"
+STATE="$R/etc/nocapos/boot-details"
+RECORD="$R/var/lib/nocapos/desktop-backup/edits"
+DROPIN="$R/etc/default/grub.d/nocapos.cfg"
+SCRIPT="$R/etc/grub.d/06_nocapos"
+KMS="$R/usr/share/initramfs-tools/modules.d/nocapos-kms"
+UPDATE=1
+FAILED=0
+
+say() { printf '%s\n' "$*"; }
+has() { command -v "$1" >/dev/null 2>&1; }
+
+# record LINE: noted once for the uninstaller (when NoCapOS keeps a record).
+record() {
+  [ -d "$(dirname "$RECORD")" ] || return 0
+  grep -qsxF "$1" "$RECORD" || printf '%s\n' "$1" >>"$RECORD"
+}
+
+details_on() { [ "$(cat "$STATE" 2>/dev/null | tr -d '[:space:]')" = on ]; }
+
+# put FILE CONTENT_FILE MODE: FILE gets the content when it differs, the
+# previous version kept as FILE.nocap-prev (or noted absent) for a rollback.
+# Returns 0 when FILE changed.
+put() {
+  if [ -f "$1" ] && cmp -s "$1" "$2"; then return 1; fi
+  mkdir -p "$(dirname "$1")"
+  rm -f "$1.nocap-prev" "$1.nocap-absent"
+  if [ -f "$1" ]; then cp -p "$1" "$1.nocap-prev"; else : >"$1.nocap-absent"; fi
+  cat "$2" >"$1.nocap-tmp" && chmod "$3" "$1.nocap-tmp" && mv -f "$1.nocap-tmp" "$1"
+}
+
+# unput FILE: the version put replaced comes back.
+unput() {
+  if [ -f "$1.nocap-prev" ]; then
+    mv -f "$1.nocap-prev" "$1"
+  elif [ -f "$1.nocap-absent" ]; then
+    rm -f "$1" "$1.nocap-absent"
+  fi
+}
+
+forget() { rm -f "$1.nocap-prev" "$1.nocap-absent"; }
+
+grub_cfg() {
+  local f
+  for f in "$R/boot/grub/grub.cfg" "$R/boot/grub2/grub.cfg"; do
+    if [ -f "$f" ]; then printf '%s\n' "$f"; return 0; fi
+  done
+  printf '%s\n' "$R/boot/grub/grub.cfg"
+}
+
+# grub_mkconfig: rebuilds grub.cfg the way this system does.
+grub_mkconfig() {
+  local cfg
+  cfg="$(grub_cfg)"
+  if has update-grub; then update-grub
+  elif has grub-mkconfig; then grub-mkconfig -o "$cfg"
+  elif has grub2-mkconfig; then grub2-mkconfig -o "$cfg"
+  else say "GRUB: no update-grub here"; return 1
+  fi
+}
+
+# grub_ok: grub.cfg is there and GRUB's own checker accepts it.
+grub_ok() {
+  local cfg
+  cfg="$(grub_cfg)"
+  [ -s "$cfg" ] || return 1
+  if has grub-script-check; then grub-script-check "$cfg" || return 1
+  elif has grub2-script-check; then grub2-script-check "$cfg" || return 1
+  fi
+  return 0
+}
+
+# grub_rebuild: update-grub with the new files; on any failure the
+# previous files come back, grub.cfg is rebuilt from them and, if even that
+# fails, the previous grub.cfg itself is put back.
+grub_rebuild() {
+  local cfg log
+  cfg="$(grub_cfg)"
+  log="$(mktemp)"
+  if [ -f "$cfg" ]; then cp -p "$cfg" "$cfg.nocap-prev"; fi
+  if grub_mkconfig >"$log" 2>&1 && grub_ok >>"$log" 2>&1; then
+    rm -f "$cfg.nocap-prev" "$log"
+    forget "$DROPIN"
+    forget "$SCRIPT"
+    return 0
+  fi
+  say "GRUB: the new boot menu didn't build, so the previous one stays:"
+  sed 's/^/  /' "$log" | tail -n 15
+  unput "$DROPIN"
+  unput "$SCRIPT"
+  if ! { grub_mkconfig && grub_ok; } >/dev/null 2>&1 && [ -f "$cfg.nocap-prev" ]; then
+    cp -p "$cfg.nocap-prev" "$cfg"
+  fi
+  rm -f "$cfg.nocap-prev" "$log"
+  return 1
+}
+
+apply_grub() {
+  local mode="$1" tmp changed=0
+  grub_reads_dropins "$R" || {
+    say "GRUB: this GRUB doesn't read /etc/default/grub.d; boot menu left as it is"
+    return 0
+  }
+  tmp="$(mktemp)"
+  render_grub_dropin "$mode" >"$tmp"
+  if ! sh -n "$tmp"; then
+    say "GRUB: the boot settings didn't come out right; boot menu left as it is"
+    rm -f "$tmp"
+    FAILED=1
+    return 1
+  fi
+  if put "$DROPIN" "$tmp" 644; then changed=1; fi
+  rm -f "$tmp"
+  if [ -f "$HERE/grub-nocapos" ] && put "$SCRIPT" "$HERE/grub-nocapos" 755; then changed=1; fi
+  record "grub-cfg"
+  record "grub-script"
+  if [ "$changed" -eq 0 ] && [ "${NOCAP_GRUB_CHANGED:-0}" != 1 ]; then return 0; fi
+  if [ "$UPDATE" -eq 0 ]; then
+    forget "$DROPIN"
+    forget "$SCRIPT"
+    say "GRUB: boot menu settings written ($mode)"
+    return 0
+  fi
+  if grub_rebuild; then
+    if [ "$mode" = silent ]; then say "GRUB: silent boot (hold Shift at power-on for the menu)"; else say "GRUB: boot menu and messages shown"; fi
+    return 0
+  fi
+  FAILED=1
+  return 1
+}
+
+# Kernel lines: silent adds the quiet tokens (and EXTRA, e.g. NVIDIA's
+# modesetting) where missing, recorded for the uninstaller; details takes
+# the quiet tokens out and keeps EXTRA.
+apply_line() { # FILE MODE EXTRA...
+  local f="$1" mode="$2" add tmp
+  shift 2
+  tmp="$(mktemp)"
+  # shellcheck disable=SC2086 # token lists
+  if [ "$mode" = silent ]; then
+    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" $SPLASH_TOKENS "$@")"
+    if [ -n "$add" ]; then
+      tokens_line_with $add <"$f" >"$tmp" && cat "$tmp" >"$f" && record "line|${f#"$R"}|$add"
+    fi
+  else
+    tokens_line_without $SPLASH_TOKENS <"$f" >"$tmp" && { cmp -s "$tmp" "$f" || cat "$tmp" >"$f"; }
+    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" "$@")"
+    if [ -n "$add" ]; then tokens_line_with $add <"$f" >"$tmp" && cat "$tmp" >"$f"; fi
+  fi
+  rm -f "$tmp"
+}
+
+apply_keyword() { # FILE KEYWORD MODE EXTRA...
+  local f="$1" kw="$2" mode="$3" first add tmp
+  shift 3
+  first="$(grep -m1 -i "^[[:space:]]*$kw[[:space:]]" "$f" || true)"
+  [ -n "$first" ] || return 0
+  tmp="$(mktemp)"
+  # shellcheck disable=SC2086
+  if [ "$mode" = silent ]; then
+    add="$(tokens_missing "$first" $SPLASH_TOKENS "$@")"
+    if [ -n "$add" ]; then keyword_tokens_with "$kw" $add <"$f" >"$tmp" && cat "$tmp" >"$f" && record "keyword|${f#"$R"}|$kw|$add"; fi
+  else
+    keyword_tokens_without "$kw" $SPLASH_TOKENS <"$f" >"$tmp" && { cmp -s "$tmp" "$f" || cat "$tmp" >"$f"; }
+  fi
+  rm -f "$tmp"
+}
+
+apply_var() { # FILE VAR MODE EXTRA...
+  local f="$1" var="$2" mode="$3" cur add tmp
+  shift 3
+  cur="$(sed -n "s/^$var=//p" "$f" | tr -d "\"'")"
+  tmp="$(mktemp)"
+  # shellcheck disable=SC2086
+  if [ "$mode" = silent ]; then
+    add="$(tokens_missing "$cur" $SPLASH_TOKENS "$@")"
+    if [ -n "$add" ]; then var_tokens_with "$var" $add <"$f" >"$tmp" && cat "$tmp" >"$f" && record "var|${f#"$R"}|$var|$add"; fi
+  else
+    var_tokens_without "$var" $SPLASH_TOKENS <"$f" >"$tmp" && { cmp -s "$tmp" "$f" || cat "$tmp" >"$f"; }
+  fi
+  rm -f "$tmp"
+}
+
+apply_kms() {
+  local arch mods tmp
+  arch="${NOCAP_ARCH:-$(uname -m)}"
+  case "$arch" in x86_64 | amd64 | i?86) ;; *) return 0 ;; esac
+  [ -d "$R/usr/share/initramfs-tools" ] || return 0
+  mapfile -t mods < <(kms_modules "$R")
+  if [ "${#mods[@]}" -eq 0 ]; then
+    [ -f "$KMS" ] || return 0
+    rm -f "$KMS"
+  else
+    tmp="$(mktemp)"
+    render_kms_modules "${mods[@]}" >"$tmp"
+    if ! put "$KMS" "$tmp" 644; then rm -f "$tmp"; return 0; fi
+    forget "$KMS"
+    rm -f "$tmp"
+    record "kms"
+  fi
+  if [ "$UPDATE" -eq 1 ] && has update-initramfs; then
+    if update-initramfs -u >/dev/null 2>&1; then
+      say "Boot splash: graphics driver loads early (${mods[*]:-none})"
+    else
+      say "Boot splash: the initramfs couldn't be rebuilt; the splash shows a little later in the boot"
+    fi
+  fi
+}
+
+apply() {
+  local mode=silent m f extra
+  details_on && mode=details
+  # shellcheck disable=SC2206 # extra tokens (e.g. NVIDIA's modesetting) stay in every mode
+  extra=(${EXTRA_BOOT_TOKENS:-})
+  for m in $(boot_methods "$R"); do
+    case "$m" in
+      grub) apply_grub "$mode" ;;
+      pi)
+        for f in "$R/boot/firmware/cmdline.txt" "$R/boot/cmdline.txt"; do
+          [ -f "$f" ] || continue
+          # A serial console (on many Pi images) makes the splash fall back to text.
+          apply_line "$f" "$mode" "${extra[@]}" plymouth.ignore-serial-consoles
+          break
+        done
+        ;;
+      systemd-boot)
+        if [ -f "$R/etc/kernel/cmdline" ]; then apply_line "$R/etc/kernel/cmdline" "$mode" "${extra[@]}"; fi
+        for f in "$R"/boot/efi/loader/entries/*.conf "$R"/efi/loader/entries/*.conf "$R"/boot/loader/entries/*.conf; do
+          if [ -f "$f" ]; then apply_keyword "$f" options "$mode" "${extra[@]}"; fi
+        done
+        ;;
+      uboot-menu)
+        apply_var "$R/etc/default/u-boot" U_BOOT_PARAMETERS "$mode" "${extra[@]}"
+        if [ "$UPDATE" -eq 1 ] && has u-boot-update; then u-boot-update >/dev/null 2>&1 || true; fi
+        ;;
+      extlinux) apply_keyword "$R/boot/extlinux/extlinux.conf" append "$mode" "${extra[@]}" ;;
+      armbian) apply_var "$R/boot/armbianEnv.txt" extraargs "$mode" "${extra[@]}" ;;
+    esac
+  done
+  apply_kms
+  return "$FAILED"
+}
+
+cmd="${1:-}"
+shift || true
+for a in "$@"; do
+  if [ "$a" = --no-update ]; then UPDATE=0; fi
+done
+case "$cmd" in
+  apply) apply ;;
+  details)
+    case "${1:-}" in
+      on | off) ;;
+      *) echo "usage: nocap-boot details on|off" >&2; exit 2 ;;
+    esac
+    prev="$(cat "$STATE" 2>/dev/null || true)"
+    mkdir -p "$(dirname "$STATE")"
+    printf '%s\n' "$1" >"$STATE"
+    if ! apply; then
+      # The boot menu stays as it was, and so does the switch.
+      if [ -n "$prev" ]; then printf '%s\n' "$prev" >"$STATE"; else rm -f "$STATE"; fi
+      exit 1
+    fi
+    ;;
+  status) if details_on; then echo on; else echo off; fi ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+esac

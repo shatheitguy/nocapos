@@ -70,6 +70,9 @@ for f in nocap-session.target nocap-shell.service nocap-idle.service nocapos-acc
 rm -f /etc/pam.d/nocap-lock /usr/share/xdg-desktop-portal/nocap-portals.conf /etc/nocapos/desktop-software-rendering
 rm -rf /etc/systemd/system/greetd.service.d/nocapos.conf
 rmdir /etc/systemd/system/greetd.service.d 2>/dev/null || true
+# The boot splash's hand-off to the sign-in screen, and Show boot details.
+rm -f /etc/systemd/system/plymouth-quit.service.d/nocapos.conf /etc/nocapos/boot-details
+rmdir /etc/systemd/system/plymouth-quit.service.d 2>/dev/null || true
 # The desktop clipboard agent.
 rm -f /etc/systemd/user/graphical-session.target.wants/nocapos-clipboard.service /etc/systemd/user/nocapos-clipboard.service
 # The remote screen follower's leftovers.
@@ -105,7 +108,7 @@ has dconf && dconf update >/dev/null 2>&1
 
 # Recorded edits: boot menus, kernel command lines, hidden updaters, os-release.
 if [ -f "$BK/edits" ]; then
-  grub=0
+  grub=0 initramfs=0
   while IFS='|' read -r kind a b c; do
     # shellcheck disable=SC2086 # recorded token lists are split on purpose
     case "$kind" in
@@ -117,6 +120,8 @@ if [ -f "$BK/edits" ]; then
       armbian-bootlogo) [ -f "$a" ] && sed -i 's/^bootlogo=false/bootlogo=true/' "$a" ;;
       grub-theme) rm -rf /usr/share/grub/themes/nocapos; grub=1 ;;
       grub-cfg) rm -f /etc/default/grub.d/nocapos.cfg; grub=1 ;;
+      grub-script) rm -f /etc/grub.d/06_nocapos; grub=1 ;;
+      kms) rm -f /usr/share/initramfs-tools/modules.d/nocapos-kms; initramfs=1 ;;
       divert) if has dpkg-divert; then dpkg-divert --local --rename --remove "$a" >/dev/null 2>&1 || true; fi ;;
       os-release) [ -x "$LIB/os-release-sync" ] && "$LIB/os-release-sync" --undo ;;
       user) if id "$a" >/dev/null 2>&1 && ! pgrep -u "$a" >/dev/null 2>&1; then userdel "$a" >/dev/null 2>&1 || true; fi ;;
@@ -136,6 +141,7 @@ if [ -f "$BK/edits" ]; then
     elif has grub-mkconfig && [ -f /boot/grub/grub.cfg ]; then grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
     fi
   fi
+  if [ "$initramfs" -eq 1 ] && has update-initramfs; then update-initramfs -u >/dev/null 2>&1 || true; fi
 fi
 if [ -f "$BK/pretty-hostname" ] && has hostnamectl; then
   hostnamectl set-hostname --pretty "$(cat "$BK/pretty-hostname")" >/dev/null 2>&1 || true
