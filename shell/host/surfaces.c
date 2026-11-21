@@ -542,6 +542,8 @@ static void
 on_load_changed(WebKitWebView *v, WebKitLoadEvent ev, gpointer data)
 {
   Surface *s = data;
+  if (shell.debug && s->recovering)
+    g_message("surface %s: load event %d", conf[s->id].name, (int)ev);
   if (ev == WEBKIT_LOAD_STARTED) {
     s->loaded = FALSE;
     s->info_called = FALSE;
@@ -597,6 +599,8 @@ reload_surface(gpointer data)
 {
   Surface *s = data;
   s->reload_id = 0;
+  if (shell.debug)
+    g_message("surface %s: reloading", conf[s->id].name);
   char *uri = surface_uri(s->id);
   webkit_web_view_load_uri(s->view, uri);
   g_free(uri);
