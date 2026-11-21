@@ -45,7 +45,7 @@ func (s *Server) defaultDeviceLimit(ctx context.Context) (int, error) {
 func (s *Server) deviceLimitFor(ctx context.Context, userID string) (int, error) {
 	n, ok, err := s.Store.DeviceLimit(ctx, userID)
 	if err != nil || ok {
-		return n, err
+		return devices.Effective(n), err
 	}
 	return s.defaultDeviceLimit(ctx)
 }
