@@ -16,6 +16,7 @@ import { effectiveDock, usePrefs } from '../state/prefs';
 import { useRecents } from '../state/recents';
 import { useSystem } from '../state/system';
 import { useWM } from '../state/windows';
+import { middleOpen } from './middleOpen';
 import type { User } from '../api/types';
 import { ClockPanel } from './ClockPanel';
 import { QuickSettings } from './QuickSettings';
@@ -69,7 +70,7 @@ export function appMenuItems(appId: string, extra: MenuItem[] = []): MenuItem[] 
   return items;
 }
 
-/** Shift-click or middle-click opens another window. */
+/** Shift-click opens another window (so does middle-click: see middleOpen). */
 function clickApp(e: RMouseEvent, appId: string) {
   if (e.shiftKey && canMultiWindow(appId)) openApp(appId, { newWindow: true });
   else activate(appId);
@@ -85,16 +86,11 @@ function DockItem({ id, pinned, onMenu }: { id: string; pinned: boolean; onMenu:
       type="button"
       data-dock-pin={pinned ? id : undefined}
       className={`dock-item draggable ${active ? 'active' : ''} ${dragging ? 'dragging' : ''}`}
-      title={`${APPS[id].title}${canMultiWindow(id) ? ' — Shift+click for a new window' : ''}`}
+      title={canMultiWindow(id) ? tr('dock.newWindowHint', { app: APPS[id].title }) : APPS[id].title}
       aria-label={APPS[id].title}
       onPointerDown={(e) => pressApp(e, id, 'dock')}
       onClick={(e) => clickApp(e, id)}
-      onAuxClick={(e) => {
-        if (e.button === 1 && canMultiWindow(id)) {
-          e.preventDefault();
-          openApp(id, { newWindow: true });
-        }
-      }}
+      {...middleOpen(id)}
       onContextMenu={(e) => onMenu(e, id)}
     >
       <AppIcon app={APPS[id]} size={size} />

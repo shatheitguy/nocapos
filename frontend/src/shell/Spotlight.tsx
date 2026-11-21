@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { logOutClean } from '../lib/signOut';
 import { fileKind } from '../api/files';
 import { openApp, visibleApps } from '../apps/meta';
+import { middleOpen } from './middleOpen';
 import { settingsPages } from '../apps/settingsPages';
 import { AppIcon } from '../components/AppTile';
 import { Icon, type IconName } from '../components/Icon';
@@ -38,6 +39,8 @@ interface Result {
   details?: [string, string][];
   score: number;
   run: () => void;
+  /** A built-in app: middle-click opens a new window of it. */
+  appId?: string;
 }
 
 /** How well `text` matches the query: 0 = no match. */
@@ -125,6 +128,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         details: [['Kind', 'App']],
         score: s + 6,
         run: go(() => openApp(a.id)),
+        appId: a.id,
       });
     }
     if (!needle) return out.slice(0, 8);
@@ -304,6 +308,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
                       className={`sl-row ${i === sel ? 'on' : ''}`}
                       onMouseMove={() => i !== sel && setSel(i)}
                       onClick={r.run}
+                      {...(r.appId ? middleOpen(r.appId, close) : {})}
                     >
                       <span className="sl-row-icon">{r.icon}</span>
                       <span className="sl-row-text">

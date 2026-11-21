@@ -102,7 +102,7 @@ export interface AppData {
 
 /** Names for app data locations ("media · /config"), filled in when App data is listed. */
 export const appDataNames = new Map<string, string>();
-export const isAppData = (root: string) => root === 'appdata' || root.startsWith('app:');
+export { isAppData, isHomeDir } from '../lib/fileRoots';
 
 /** A file or folder found by search or listed in Recents. */
 export interface FileHit {

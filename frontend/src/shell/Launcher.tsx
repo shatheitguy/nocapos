@@ -20,6 +20,7 @@ import type { NativeApp } from '../api/nativeApps';
 import { launchNativeApp, nativeKey, useNativeApps } from '../state/nativeApps';
 import { NativeTile } from './NativeTile';
 import { appMenuItems } from './Shelf';
+import { middleOpen } from './middleOpen';
 
 const OPENS_WINDOW = new Set(['Open', 'Show', 'New window']);
 
@@ -415,6 +416,7 @@ export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () =
         title={tr('lp.appTitle')}
         onPointerDown={(e) => pressApp(e, a.id, 'launchpad', { touchHold: TOUCH_HOLD, onStart: () => setMenu(null) })}
         onClick={(e) => launch(a.id, e.shiftKey)}
+        {...middleOpen(a.id, onClose)}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, items: appMenu(a.id) });
