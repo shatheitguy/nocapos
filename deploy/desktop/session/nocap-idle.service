@@ -1,12 +1,18 @@
 # NoCap Desktop: locks the screen after 10 minutes without input and
-# before the machine sleeps (written by NoCapOS).
+# before the machine sleeps (written by NoCapOS). While an app keeps the
+# screen awake (a video playing: Wayland idle inhibit, or
+# org.freedesktop.ScreenSaver, which NoCap Shell answers), labwc holds the
+# idle timer back; the lock before sleep still happens.
 [Unit]
 Description=NoCap Desktop idle lock
 PartOf=graphical-session.target
 ConditionPathExists=/usr/bin/swayidle
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/swayidle -w timeout 600 '/usr/libexec/nocapos/nocap-lock-start' before-sleep '/usr/libexec/nocapos/nocap-lock-start' lock '/usr/libexec/nocapos/nocap-lock-start'
 Restart=on-failure
 RestartSec=5
+RestartSteps=4
+RestartMaxDelaySec=60

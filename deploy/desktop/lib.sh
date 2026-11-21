@@ -174,6 +174,21 @@ OLD_DESKTOP_PACKAGES="gdm3 gdm gnome-shell gnome-session gnome-remote-desktop"
 # earlier versions' one and the distributions' own).
 OLD_DISPLAY_MANAGERS="gdm3.service gdm.service lightdm.service sddm.service lxdm.service slim.service xdm.service nodm.service"
 
+# render_greetd_dropin: greetd's drop-in (greetd.service.d/nocapos.conf):
+# the sign-in screen after the boot splash, and never next to another
+# sign-in service (starting it stops them first, so two never fight over
+# the screen). alfad's Repair writes the same file (GreetdDropIn).
+render_greetd_dropin() {
+  cat <<EOF
+# NoCap Desktop (written by NoCapOS): the sign-in screen after the boot splash,
+# and never next to another sign-in service (starting it stops them first).
+[Unit]
+After=plymouth-quit-wait.service systemd-user-sessions.service
+Conflicts=$OLD_DISPLAY_MANAGERS
+After=$OLD_DISPLAY_MANAGERS
+EOF
+}
+
 # shell_build_packages FAMILY: what building NoCap Shell's two programs on
 # the machine itself needs (the release bundle carries them built for
 # amd64, arm64 and armv7; this is the fallback when those can't run here).
@@ -659,7 +674,9 @@ pam_with_keyring() {
 }
 
 # render_portals_conf: which portal answers what in the NoCap session
-# (screen sharing and screenshots: wlr; files and the rest: gtk).
+# (screen sharing and screenshots: wlr; files and the rest: gtk). Inhibit
+# (an app keeping the screen awake) goes to gtk, which hands it on to
+# org.freedesktop.ScreenSaver: NoCap Shell answers that.
 render_portals_conf() {
   cat <<'EOF'
 # NoCap Desktop (written by NoCapOS).
@@ -668,6 +685,7 @@ default=gtk
 org.freedesktop.impl.portal.ScreenCast=wlr
 org.freedesktop.impl.portal.Screenshot=wlr
 org.freedesktop.impl.portal.Secret=gnome-keyring
+org.freedesktop.impl.portal.Inhibit=gtk
 EOF
 }
 

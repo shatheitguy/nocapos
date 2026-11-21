@@ -277,6 +277,8 @@ func (s *Server) Handler() http.Handler {
 	// Is NoCap Desktop really on the screen: repair it, read its diagnostics.
 	mux.Handle("POST /api/v1/system/desktop/repair", s.admin(s.desktopRepair))
 	mux.Handle("GET /api/v1/system/desktop/diagnostics", s.admin(s.desktopDiagnostics))
+	mux.Handle("GET /api/v1/system/desktop/old-desktop", s.admin(s.oldDesktopGet))
+	mux.Handle("POST /api/v1/system/desktop/old-desktop", s.admin(s.oldDesktopSet))
 
 	// Users & roles (admin). Real Linux accounts on native Linux installs.
 	mux.Handle("GET /api/v1/users", s.admin(s.usersList))

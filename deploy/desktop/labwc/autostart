@@ -3,8 +3,22 @@
 # environment goes to systemd's user manager and D-Bus, then
 # nocap-session.target starts NoCap Shell, the idle lock, the portals and
 # the clipboard agent as user services (restarted if they stop).
-dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DISPLAY >/dev/null 2>&1
-systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP DISPLAY >/dev/null 2>&1
+#
+# The user manager outlives a session, so what this session doesn't set
+# (software rendering from an earlier sign-in, say) is taken out of it
+# first; otherwise the shell would start with the earlier session's values.
+VARS="WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP XCURSOR_THEME XCURSOR_SIZE GTK_THEME QT_QPA_PLATFORMTHEME WLR_RENDERER WLR_NO_HARDWARE_CURSORS LIBGL_ALWAYS_SOFTWARE"
+set_vars=""
+unset_vars=""
+for v in $VARS; do
+  if eval "[ -n \"\${$v+x}\" ]"; then set_vars="$set_vars $v"; else unset_vars="$unset_vars $v"; fi
+done
+# shellcheck disable=SC2086 # lists of names
+[ -z "$unset_vars" ] || systemctl --user unset-environment $unset_vars >/dev/null 2>&1
+# shellcheck disable=SC2086
+dbus-update-activation-environment --systemd $set_vars >/dev/null 2>&1
+# shellcheck disable=SC2086
+systemctl --user import-environment $set_vars >/dev/null 2>&1
 if ! systemctl --user start nocap-session.target >/dev/null 2>&1; then
   # No systemd user manager: run the shell directly.
   /usr/libexec/nocapos/nocap-shell >/dev/null 2>&1 &
