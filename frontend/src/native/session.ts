@@ -31,10 +31,12 @@ async function fromHost(method: 'session.get' | 'session.refresh'): Promise<Sess
 
 /**
  * Signs this surface in as the person on the screen. Retries while alfad is
- * still starting (the desktop can come up before it). Resolves false only
- * after a long wait.
+ * still starting or restarting (the desktop can come up before it, and an
+ * update restarts it): the person is already signed in on the screen, so
+ * the surface never falls back to a sign-in form. Resolves false only after
+ * maxWaitMs (by default never).
  */
-export async function nativeSignIn(maxWaitMs = 120_000): Promise<boolean> {
+export async function nativeSignIn(maxWaitMs = Number.POSITIVE_INFINITY): Promise<boolean> {
   useSessionSource(() => fromHost('session.refresh'));
   const start = Date.now();
   let delay = 500;

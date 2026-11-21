@@ -20,6 +20,7 @@
 
 #include <gtk-layer-shell.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef struct {
   const char *name;
@@ -47,8 +48,10 @@ typedef struct {
   gboolean shown_once;
   gboolean info_called;
   gboolean ready_printed;
-  guint restarts;
-  gint64 restart_window;
+  guint restarts;       /* reloads after a crash or a failed load, this window */
+  gint64 restart_window; /* when the window started (monotonic us) */
+  guint reload_id;       /* a reload is scheduled */
+  gboolean recovering;   /* reloading after a crash or failed load */
   /* the last pointer press on the view (window moves and resizes) */
   double press_x, press_y;
   guint press_button;
@@ -60,6 +63,7 @@ static WebKitWebContext *web_ctx;
 static WebKitSettings *web_settings;
 static WebKitWebView *first_view;
 static GtkWidget *zone_win[4]; /* top, bottom, left, right */
+static int zone_size[4];       /* what the page asked for (kept across screen changes) */
 static guint replace_id;
 
 #define SHELL_PAGE_PREFIX "nocap-shell://shell/"
@@ -262,6 +266,7 @@ surface_set_input(SurfaceId id, JsonArray *rects, gboolean full)
 static void
 zone_set(int i, int size)
 {
+  zone_size[i] = size;
   if (zone_win[i] == NULL)
     return;
   GtkWindow *w = GTK_WINDOW(zone_win[i]);
@@ -425,9 +430,15 @@ replace_all(gpointer unused)
   GdkMonitor *m = pick_monitor();
   if (m == NULL)
     return G_SOURCE_REMOVE; /* wait for monitor-added */
-  for (int i = 0; i < 4; i++)
-    if (zone_win[i] != NULL)
-      gtk_layer_set_monitor(GTK_WINDOW(zone_win[i]), m);
+  for (int i = 0; i < 4; i++) {
+    if (zone_win[i] == NULL)
+      continue;
+    gtk_layer_set_monitor(GTK_WINDOW(zone_win[i]), m);
+    /* A screen that went away took the zones with it: maximized windows
+     * keep clear of the menu bar and dock again. */
+    if (zone_size[i] > 0 && !gtk_widget_get_visible(zone_win[i]))
+      gtk_widget_show_all(zone_win[i]);
+  }
   for (int i = 0; i < SURF_COUNT; i++) {
     Surface *s = &surf[i];
     if (s->win == NULL || !conf[i].layer)
@@ -531,6 +542,8 @@ static void
 on_load_changed(WebKitWebView *v, WebKitLoadEvent ev, gpointer data)
 {
   Surface *s = data;
+  if (shell.debug && s->recovering)
+    g_message("surface %s: load event %d", conf[s->id].name, (int)ev);
   if (ev == WEBKIT_LOAD_STARTED) {
     s->loaded = FALSE;
     s->info_called = FALSE;
@@ -538,18 +551,32 @@ on_load_changed(WebKitWebView *v, WebKitLoadEvent ev, gpointer data)
     s->loaded = TRUE;
     if (s->want_visible)
       present(s);
+    if (s->recovering) {
+      s->recovering = FALSE;
+      g_message("surface %s: back", conf[s->id].name);
+      if (shell.test)
+        g_print("nocap-shell: reloaded %s\n", conf[s->id].name);
+    }
     check_ready(s);
   }
 }
 
-static gboolean
-reload_surface(gpointer data);
+static void
+schedule_reload(Surface *s, const char *why);
 
 static gboolean
 on_load_failed(WebKitWebView *v, WebKitLoadEvent ev, char *uri, GError *err, gpointer data)
 {
   Surface *s = data;
   g_warning("surface %s: load of %s failed: %s", conf[s->id].name, uri, err ? err->message : "?");
+  /* A newer load replaced this one: nothing to do. */
+  if (err != NULL && (g_error_matches(err, WEBKIT_NETWORK_ERROR, WEBKIT_NETWORK_ERROR_CANCELLED) ||
+                      g_error_matches(err, WEBKIT_POLICY_ERROR, WEBKIT_POLICY_ERROR_FRAME_LOAD_INTERRUPTED_BY_POLICY_CHANGE)))
+    return FALSE;
+  /* The page itself didn't load (its files were being replaced by an
+   * update, say): try again, never leave the surface empty. */
+  if (uri != NULL && g_str_has_prefix(uri, SHELL_PAGE_PREFIX))
+    schedule_reload(s, "load failed");
   return FALSE;
 }
 
@@ -571,27 +598,57 @@ static gboolean
 reload_surface(gpointer data)
 {
   Surface *s = data;
+  s->reload_id = 0;
+  if (shell.debug)
+    g_message("surface %s: reloading", conf[s->id].name);
   char *uri = surface_uri(s->id);
   webkit_web_view_load_uri(s->view, uri);
   g_free(uri);
   return G_SOURCE_REMOVE;
 }
 
+/* How long to wait before the n-th reload in a row (within RELOAD_WINDOW_S):
+ * at once for the first few, then slower, but never giving up: a surface
+ * that stays empty is a black or bar-less screen. */
+#define RELOAD_WINDOW_S 120
+static guint
+reload_delay_ms(guint n)
+{
+  if (n <= 3)
+    return 1000;
+  if (n <= 6)
+    return 5000;
+  return 30000;
+}
+
+static void
+schedule_reload(Surface *s, const char *why)
+{
+  if (s->reload_id != 0)
+    return; /* one is on its way */
+  gint64 now = g_get_monotonic_time();
+  if (s->restart_window == 0 || now - s->restart_window > (gint64)RELOAD_WINDOW_S * G_USEC_PER_SEC) {
+    s->restart_window = now;
+    s->restarts = 0;
+  }
+  guint delay = reload_delay_ms(++s->restarts);
+  s->recovering = TRUE;
+  g_warning("surface %s: %s, reloading in %u s (%u in a row)", conf[s->id].name, why, delay / 1000, s->restarts);
+  s->reload_id = g_timeout_add(delay, reload_surface, s);
+}
+
 static void
 on_web_process_terminated(WebKitWebView *v, WebKitWebProcessTerminationReason reason, gpointer data)
 {
   Surface *s = data;
-  gint64 now = g_get_monotonic_time();
-  if (now - s->restart_window > 60 * G_USEC_PER_SEC) {
-    s->restart_window = now;
-    s->restarts = 0;
-  }
-  if (++s->restarts > 5) {
-    g_warning("surface %s: web process keeps failing, giving up", conf[s->id].name);
-    return;
-  }
-  g_warning("surface %s: web process ended (%d), reloading", conf[s->id].name, (int)reason);
-  g_timeout_add(1000, reload_surface, s);
+  const char *why = "web process crashed";
+#if WEBKIT_CHECK_VERSION(2, 34, 0)
+  if (reason == WEBKIT_WEB_PROCESS_EXCEEDED_MEMORY_LIMIT)
+    why = "web process used too much memory";
+  else if (reason == WEBKIT_WEB_PROCESS_TERMINATED_BY_API)
+    why = "web process ended";
+#endif
+  schedule_reload(s, why);
 }
 
 static void
@@ -627,25 +684,56 @@ on_script_message(WebKitUserContentManager *ucm, WebKitJavascriptResult *res, gp
   g_free(text);
 }
 
+/* Each web process cleans up its caches early once it uses more than a
+ * third of the memory (512 MB to 3 GB), so one heavy page can't push the
+ * whole machine into swap. NULL: WebKit's own defaults. */
+static WebKitMemoryPressureSettings *
+memory_limits(void)
+{
+#if WEBKIT_CHECK_VERSION(2, 34, 0)
+  long pages = sysconf(_SC_PHYS_PAGES), size = sysconf(_SC_PAGESIZE);
+  if (pages <= 0 || size <= 0)
+    return NULL;
+  guint64 mb = (guint64)pages * (guint64)size / (1024 * 1024) / 3;
+  mb = CLAMP(mb, 512, 3072);
+  WebKitMemoryPressureSettings *m = webkit_memory_pressure_settings_new();
+  webkit_memory_pressure_settings_set_memory_limit(m, (guint)mb);
+  return m;
+#else
+  return NULL;
+#endif
+}
+
 static WebKitWebContext *
 make_context(void)
 {
   /* The person's own NoCap OS keeps what it keeps in a browser (its local
    * storage: wallpapers they added, window and widget state) in their home;
    * the sign-in screen keeps nothing. */
-  WebKitWebContext *ctx;
+  WebKitWebsiteDataManager *dm;
   if (shell.greeter) {
-    ctx = webkit_web_context_new_ephemeral();
+    dm = webkit_website_data_manager_new_ephemeral();
   } else {
     char *data = g_build_filename(g_get_user_data_dir(), "nocapos", "shell", NULL);
     char *cache = g_build_filename(g_get_user_cache_dir(), "nocapos", "shell", NULL);
-    WebKitWebsiteDataManager *dm =
-        webkit_website_data_manager_new("base-data-directory", data, "base-cache-directory", cache, NULL);
-    ctx = webkit_web_context_new_with_website_data_manager(dm);
-    g_object_unref(dm);
+    dm = webkit_website_data_manager_new("base-data-directory", data, "base-cache-directory", cache, NULL);
     g_free(data);
     g_free(cache);
   }
+  WebKitWebContext *ctx;
+#if WEBKIT_CHECK_VERSION(2, 34, 0)
+  WebKitMemoryPressureSettings *mem = memory_limits();
+  if (mem != NULL) {
+    ctx = WEBKIT_WEB_CONTEXT(g_object_new(WEBKIT_TYPE_WEB_CONTEXT, "website-data-manager", dm,
+                                          "memory-pressure-settings", mem, NULL));
+    webkit_memory_pressure_settings_free(mem);
+  } else {
+    ctx = webkit_web_context_new_with_website_data_manager(dm);
+  }
+#else
+  ctx = webkit_web_context_new_with_website_data_manager(dm);
+#endif
+  g_object_unref(dm);
   webkit_web_context_set_cache_model(ctx, WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER);
   webkit_web_context_set_spell_checking_enabled(ctx, FALSE);
 

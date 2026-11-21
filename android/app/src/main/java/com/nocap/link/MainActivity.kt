@@ -285,7 +285,7 @@ class MainActivity : ComponentActivity() {
                     }
                     Screen.Find -> {
                         BackHandler { screen = afterLinkForm() }
-                        com.nocap.link.sync.FindScreen(this, onBack = { screen = afterLinkForm() })
+                        com.nocap.link.sync.FindScreen(this, onBack = { screen = afterLinkForm() }, onLinked = { linked() })
                     }
                     is Screen.NewServer -> com.nocap.link.sync.NewServerScreen(this, s, onBack = { screen = Screen.Find })
                     Screen.Scan -> {

@@ -345,7 +345,12 @@ func (s *Server) signedIn(r *http.Request, sess *auth.Session, device *store.Dev
 
 // devicePaired tells the account a phone was just linked to it.
 func (s *Server) devicePaired(r *http.Request, u *store.User, d *store.Device) {
-	ip := clientIP(r, s.Config.TrustedProxies)
+	s.devicePairedFrom(r, u, d, clientIP(r, s.Config.TrustedProxies))
+}
+
+// devicePairedFrom is devicePaired for a phone at ip (it asked to link and
+// someone accepted the request on another device).
+func (s *Server) devicePairedFrom(r *http.Request, u *store.User, d *store.Device, ip string) {
 	if err := s.Store.SetDeviceIP(r.Context(), d.ID, ip); err != nil {
 		s.Log.Warn("device address not saved", "err", err)
 	}

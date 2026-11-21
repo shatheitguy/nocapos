@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -20,14 +21,16 @@ type fakeHost struct {
 	active  map[string]bool
 	tools   map[string]bool
 	session string // loginctl show-session output ("" = nobody)
-	failRun map[string]bool
-	calls   []string
-	stdins  []string
-	open    map[int]bool
-	linked  string // what display-manager.service points at
-	target  string // systemctl get-default
-	removed []string
-	proxies []string // the screen proxy's "password socket" per start
+	// sessions: every session (loginctl list-sessions), id -> show-session output
+	sessions map[string]string
+	failRun  map[string]bool
+	calls    []string
+	stdins   []string
+	open     map[int]bool
+	linked   string // what display-manager.service points at
+	target   string // systemctl get-default
+	removed  []string
+	proxies  []string // the screen proxy's "password socket" per start
 }
 
 type closerFunc func() error
@@ -64,10 +67,35 @@ func (f *fakeHost) run(_ context.Context, name string, args ...string) ([]byte, 
 		}
 		return []byte("disabled\n"), errors.New("exit 1")
 	case name == "systemctl" && args[0] == "is-active":
-		if f.active[args[1]] {
-			return []byte("active\n"), nil
+		var out strings.Builder
+		all := true
+		for _, u := range args[1:] {
+			if f.active[u] {
+				out.WriteString("active\n")
+			} else {
+				out.WriteString("inactive\n")
+				all = false
+			}
 		}
-		return []byte("inactive\n"), errors.New("exit 3")
+		if !all {
+			return []byte(out.String()), errors.New("exit 3")
+		}
+		return []byte(out.String()), nil
+	case name == "systemctl" && (args[0] == "stop" || args[0] == "start" || args[0] == "restart") && len(args) == 2 && args[1] != ScreenUnit:
+		f.active[args[1]] = args[0] != "stop"
+	case name == "loginctl" && args[0] == "list-sessions":
+		ids := make([]string, 0, len(f.sessions))
+		for id := range f.sessions {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		var out strings.Builder
+		for _, id := range ids {
+			out.WriteString(" " + id + " 1000 someone seat0 tty2\n")
+		}
+		return []byte(out.String()), nil
+	case name == "loginctl" && args[0] == "show-session" && f.sessions[args[1]] != "":
+		return []byte(f.sessions[args[1]]), nil
 	case name == "loginctl" && args[0] == "show-seat":
 		if f.session == "" {
 			return []byte("\n"), nil
