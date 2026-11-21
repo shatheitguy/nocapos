@@ -22,6 +22,9 @@ OUT="${OUT:-/out}"
 }
 export DEBIAN_FRONTEND=noninteractive
 mkdir -p "$OUT"
+# What lands in /out is root's (grub.cfg copies are 0600): readable for the
+# CI runner that uploads it, however this ends.
+trap 'chmod -R a+rX "$OUT" 2>/dev/null || true' EXIT
 FAILS=0
 fail() { echo "FAIL: $*"; FAILS=$((FAILS + 1)); }
 ok() { echo "ok: $*"; }
