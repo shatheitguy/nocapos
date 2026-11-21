@@ -1,0 +1,49 @@
+/* The shared dialog frame (components/Modal.tsx): a title row with the
+ * window close button, placed like window title bars place it. */
+
+/* ---------- the close button: always the window's, wherever it's drawn ---------- */
+/* Restated with a stronger selector so styles of the place a dialog is opened
+ * from (a sidebar's buttons, a toolbar's) never reshape it. */
+.win-close-solo > button.close {
+  width: 34px; height: 30px; padding: 0; min-width: 0; min-height: 0; flex: none; margin: 0;
+  border: 0; border-radius: 8px; line-height: 0; display: inline-grid; place-items: center;
+  background: transparent; color: var(--muted); font: inherit; box-shadow: none;
+}
+.win-buttons.win-close-solo > button.close { padding: 0; min-width: 0; min-height: 0; }
+.win-buttons.win-close-solo > button.close svg { width: 14px; height: 14px; flex: none; }
+:root[data-title-buttons='left']:not([data-compact]) .win-buttons.win-close-solo > button.close svg { width: 8px; height: 8px; }
+
+/* ---------- the title row ---------- */
+.modal-head { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.modal-head-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.modal-head-titles h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-head-sub { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modal-head-icon {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
+  color: var(--accent); background: var(--accent-soft);
+}
+.modal-head > .win-close-solo { margin-left: 0; }
+.modal-grabber { display: none; }
+
+/* ---------- the dialog ---------- */
+.dialog-backdrop.fixed { position: fixed; z-index: 1000; }
+:root .dialog.modal {
+  width: min(560px, calc(100% - 32px)); max-height: calc(100% - 40px);
+  padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column;
+}
+:root .dialog.modal.wide { width: min(760px, calc(100% - 32px)); }
+.dialog.modal > .modal-head { padding: 14px 14px 10px 18px; border-bottom: 1px solid var(--border); }
+:root[data-title-buttons='left'] .dialog.modal > .modal-head { padding-left: 16px; }
+.modal-body { overflow: auto; overscroll-behavior: contain; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.modal-body > * { flex-shrink: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--border); }
+
+/* ---------- phones: a bottom sheet with a grabber, same close button ---------- */
+:root[data-compact] .dialog.modal { max-height: calc(100% - 8px); border-radius: 22px 22px 0 0; padding: 0; }
+:root[data-compact] .dialog-backdrop.modal-backdrop { padding: 0; }
+:root[data-compact] .dialog.modal > .modal-head { padding-top: 22px; }
+:root[data-compact] .dialog.modal > .modal-head > .modal-grabber {
+  display: block; position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+}
+:root[data-compact] .modal-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }

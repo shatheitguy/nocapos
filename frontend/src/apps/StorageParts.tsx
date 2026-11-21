@@ -1,6 +1,7 @@
 import { DryRun } from './StorageExtras';
 import { tr } from '../i18n';
-import { WinClose } from '../components/WinClose';
+import { createPortal } from 'react-dom';
+import { ModalHead, useModalEscape, useModalHost } from '../components/Modal';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import {
@@ -123,27 +124,27 @@ export function Donut({ pct, size = 92, children }: { pct: number; size?: number
   );
 }
 
-/** A modal sheet inside the Storage window. */
+/** A modal sheet inside the Storage (or Virtual Desk) window, drawn over the whole window body. */
 export function Sheet({ title, icon, onClose, wide, children, footer }: {
   title: string; icon?: IconName; onClose: () => void; wide?: boolean; children: ReactNode; footer?: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="st-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`st-sheet ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
-        <header className="st-sheet-head">
-          {icon && <span className="st-sheet-icon"><Icon name={icon} size={18} /></span>}
-          <h2>{title}</h2>
-          <WinClose onClick={onClose} label={tr('common.close')} />
-        </header>
+  useModalEscape(onClose);
+  // Over the Storage (or Virtual Desk) app, which styles what's inside its sheets.
+  const { anchorEl, host, style, fixed } = useModalHost('.st-app');
+  const sheet = (
+    <div className={`st-backdrop ${fixed ? 'fixed' : ''}`} style={style} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={`st-sheet ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+        <ModalHead className="st-sheet-head" title={title} icon={icon} onClose={onClose} />
         <div className="st-sheet-body">{children}</div>
         {footer && <footer className="st-sheet-foot">{footer}</footer>}
       </div>
     </div>
+  );
+  return (
+    <>
+      {anchorEl}
+      {host && createPortal(sheet, host)}
+    </>
   );
 }
 
