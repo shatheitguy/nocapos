@@ -488,15 +488,21 @@ render_kms_modules() {
 # render_greetd_dropin: greetd.service.d/nocapos.conf. The sign-in screen
 # takes the first console over from the boot splash (vt 1, see
 # render_greetd_config): no text login there while it runs, and the text
-# login comes back if the sign-in screen keeps failing.
+# login comes back if the sign-in screen keeps failing. It never runs next
+# to another sign-in service either: starting it stops them first, so two
+# never fight over the screen. alfad's Repair writes the same file
+# (hostaccess.GreetdDropIn).
 render_greetd_dropin() {
-  cat <<'EOF'
+  cat <<EOF
 # NoCap Desktop (written by NoCapOS): the sign-in screen takes the first
-# console over from the boot splash.
+# console over from the boot splash, and never runs next to another sign-in
+# service (starting it stops them first).
 [Unit]
 After=plymouth-quit-wait.service systemd-user-sessions.service getty@tty1.service
 Conflicts=getty@tty1.service
 OnFailure=getty@tty1.service
+Conflicts=$OLD_DISPLAY_MANAGERS
+After=$OLD_DISPLAY_MANAGERS
 EOF
 }
 
@@ -805,7 +811,9 @@ pam_with_keyring() {
 }
 
 # render_portals_conf: which portal answers what in the NoCap session
-# (screen sharing and screenshots: wlr; files and the rest: gtk).
+# (screen sharing and screenshots: wlr; files and the rest: gtk). Inhibit
+# (an app keeping the screen awake) goes to gtk, which hands it on to
+# org.freedesktop.ScreenSaver: NoCap Shell answers that.
 render_portals_conf() {
   cat <<'EOF'
 # NoCap Desktop (written by NoCapOS).
@@ -814,6 +822,7 @@ default=gtk
 org.freedesktop.impl.portal.ScreenCast=wlr
 org.freedesktop.impl.portal.Screenshot=wlr
 org.freedesktop.impl.portal.Secret=gnome-keyring
+org.freedesktop.impl.portal.Inhibit=gtk
 EOF
 }
 

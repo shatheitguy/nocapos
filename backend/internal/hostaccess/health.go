@@ -98,6 +98,8 @@ const (
 	ProblemNoXwayland   = "no_xwayland" // works; older X11 apps don't open
 	ProblemKioskLeft    = "kiosk_left"
 	ProblemServicesHeld = "services_held"
+	// Another sign-in service (the earlier desktop's) still runs.
+	ProblemOtherDM = "other_dm"
 )
 
 // HealthProblem is one thing wrong.
@@ -114,6 +116,10 @@ type DesktopHealth struct {
 	Problems []HealthProblem `json:"problems,omitempty"`
 	// Fallback in use: "" or software.
 	Fallback string `json:"fallback,omitempty"`
+	// RestartNeeded: someone is still signed in on the earlier desktop;
+	// the screen moves to NoCap Desktop when the machine restarts.
+	RestartNeeded   bool     `json:"restart_needed,omitempty"`
+	OldSessionUsers []string `json:"old_session_users,omitempty"`
 }
 
 // HealthInputs is everything Health looks at, gathered from the machine.
@@ -136,6 +142,10 @@ type HealthInputs struct {
 	ServicesHeld   bool
 	Fallback       string
 	Hints          []string // from the journal (JournalHints)
+	// OtherDMs: other sign-in services running; OldUsers: people signed in
+	// through them.
+	OtherDMs []string
+	OldUsers []string
 }
 
 // EvaluateHealth turns the inputs into a verdict.
@@ -177,6 +187,13 @@ func EvaluateHealth(in HealthInputs) DesktopHealth {
 	}
 	if in.ServicesHeld {
 		add(ProblemServicesHeld, "/usr/sbin/policy-rc.d")
+	}
+	if len(in.OtherDMs) > 0 {
+		add(ProblemOtherDM, strings.Join(in.OtherDMs, ", "))
+		if len(in.OldUsers) > 0 {
+			h.RestartNeeded = true
+			h.OldSessionUsers = in.OldUsers
+		}
 	}
 	starting := false
 	switch in.DMActive {
@@ -404,6 +421,9 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 		in.HaveSessions = in.HaveSessions && d.exists(p)
 	}
 	in.HaveXwayland = d.lookPath("Xwayland")
+	if in.OtherDMs = d.otherDMs(ctx, c.DMUnit); len(in.OtherDMs) > 0 {
+		in.OldUsers = d.oldDesktopUsers(ctx)
+	}
 	now := d.now()
 	d.hs.mu.Lock()
 	if in.ShellRunning || (in.DMActive != "active" && in.DMActive != "reloading") {
@@ -570,6 +590,25 @@ func (d *Desktop) Ensure(ctx context.Context) []string {
 	if !settled {
 		return did
 	}
+	// The earlier sign-in service still runs (an update left it for the
+	// next restart, or something started it). Someone signed in through
+	// it: leave the screen alone until the restart, and never start greetd
+	// next to it. Only its sign-in screen: switch to NoCap Desktop now.
+	if h.Has(ProblemOtherDM) {
+		if len(in.OldUsers) > 0 {
+			return did
+		}
+		did = append(did, d.retireOldDMs(ctx, in.OtherDMs, true)...)
+		d.ensureGreetdDropIn(ctx)
+		_, _ = d.Run(ctx, "systemctl", "reset-failed", c.DMUnit)
+		verb := "start"
+		if in.DMActive == "active" || in.DMActive == "reloading" {
+			verb = "restart" // it lost the screen to the other one
+		}
+		_, _ = d.Run(ctx, "systemctl", "--no-block", verb, c.DMUnit)
+		d.resetShellTimer()
+		return append(did, verb+"ed "+c.DMUnit)
+	}
 	// Nothing on the screen: start the sign-in screen (never over someone
 	// signed in on the console).
 	if h.Has(ProblemDMStopped) || h.Has(ProblemDMFailed) {
@@ -609,13 +648,20 @@ func (d *Desktop) resetShellTimer() {
 type RepairResult struct {
 	Actions []string      `json:"actions"`
 	Health  DesktopHealth `json:"health"`
+	// RestartNeeded: someone is signed in on the earlier desktop, so the
+	// screen wasn't restarted; NoCap Desktop starts with the next restart.
+	RestartNeeded   bool     `json:"restart_needed,omitempty"`
+	OldSessionUsers []string `json:"old_session_users,omitempty"`
 }
 
 // Repair puts NoCap Desktop back on the screen: the boot link, the
 // graphical target, the session file, greetd's settings for NoCap's sign-in
 // screen, leftovers of the old web full screen, and, when the screen
-// wasn't coming up, software rendering. Then the sign-in screen restarts
-// (whoever is signed in on the screen is signed out).
+// wasn't coming up, software rendering. An earlier sign-in service that
+// still runs is stopped and switched off first, unless someone is signed
+// in through it: then nothing on the screen changes and the result says a
+// restart is needed. Otherwise the sign-in screen restarts (whoever is
+// signed in on NoCap Desktop is signed out).
 func (d *Desktop) Repair(ctx context.Context) (RepairResult, error) {
 	c := d.conf()
 	if !d.Native || !c.Full {
@@ -664,7 +710,20 @@ func (d *Desktop) Repair(ctx context.Context) (RepairResult, error) {
 			}
 		}
 	}
+	if d.ensureGreetdDropIn(ctx) {
+		note("sign-in service settings")
+	}
 	_ = d.writeFile(DesktopModePath, []byte(ModeFull+"\n"), 0o644)
+	if len(in.OtherDMs) > 0 {
+		if len(in.OldUsers) > 0 {
+			// Never sign anyone out: the earlier sign-in service is off from
+			// the next restart, and NoCap Desktop starts then.
+			d.retireOldDMs(ctx, in.OtherDMs, false)
+			note("the earlier sign-in screen is off from the next restart")
+			return RepairResult{Actions: did, Health: d.Health(ctx), RestartNeeded: true, OldSessionUsers: in.OldUsers}, nil
+		}
+		did = append(did, d.retireOldDMs(ctx, in.OtherDMs, true)...)
+	}
 	_, _ = d.Run(ctx, "systemctl", "reset-failed", c.DMUnit)
 	if out, err := d.Run(ctx, "systemctl", "restart", c.DMUnit); err != nil {
 		return RepairResult{Actions: did, Health: d.Health(ctx)}, fmt.Errorf("systemctl restart %s: %s", c.DMUnit, strings.TrimSpace(string(out)))

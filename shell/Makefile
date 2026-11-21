@@ -27,16 +27,19 @@ endif
 WL_PROTOCOLS_DIR := $(shell $(PKG_CONFIG) --variable=pkgdatadir wayland-protocols 2>/dev/null)
 SESSION_LOCK_XML := $(firstword $(wildcard $(WL_PROTOCOLS_DIR)/staging/ext-session-lock/ext-session-lock-v1.xml) protocols/ext-session-lock-v1.xml)
 TOPLEVEL_XML := protocols/wlr-foreign-toplevel-management-unstable-v1.xml
+IDLE_XML := $(firstword $(wildcard $(WL_PROTOCOLS_DIR)/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml) protocols/idle-inhibit-unstable-v1.xml)
 
 PROTO := $(BUILD)/proto
 TOPLEVEL_H := $(PROTO)/wlr-foreign-toplevel-management-unstable-v1-client-protocol.h
 TOPLEVEL_C := $(PROTO)/wlr-foreign-toplevel-management-unstable-v1-protocol.c
+IDLE_H := $(PROTO)/idle-inhibit-unstable-v1-client-protocol.h
+IDLE_C := $(PROTO)/idle-inhibit-unstable-v1-protocol.c
 LOCK_H := $(PROTO)/ext-session-lock-v1-client-protocol.h
 LOCK_C := $(PROTO)/ext-session-lock-v1-protocol.c
 
 HOST_SRC := $(wildcard host/*.c)
 LOCK_SRC := $(wildcard lock/*.c)
-HOST_OBJ := $(patsubst host/%.c,$(BUILD)/host/%.o,$(HOST_SRC)) $(BUILD)/proto/toplevel-protocol.o
+HOST_OBJ := $(patsubst host/%.c,$(BUILD)/host/%.o,$(HOST_SRC)) $(BUILD)/proto/toplevel-protocol.o $(BUILD)/proto/idle-protocol.o
 LOCK_OBJ := $(patsubst lock/%.c,$(BUILD)/lock/%.o,$(LOCK_SRC)) $(BUILD)/proto/lock-protocol.o
 
 .PHONY: all test install clean
@@ -50,6 +53,10 @@ $(TOPLEVEL_H): $(TOPLEVEL_XML) | $(PROTO)
 	$(WAYLAND_SCANNER) client-header $< $@
 $(TOPLEVEL_C): $(TOPLEVEL_XML) | $(PROTO)
 	$(WAYLAND_SCANNER) private-code $< $@
+$(IDLE_H): $(IDLE_XML) | $(PROTO)
+	$(WAYLAND_SCANNER) client-header $< $@
+$(IDLE_C): $(IDLE_XML) | $(PROTO)
+	$(WAYLAND_SCANNER) private-code $< $@
 $(LOCK_H): $(SESSION_LOCK_XML) | $(PROTO)
 	$(WAYLAND_SCANNER) client-header $< $@
 $(LOCK_C): $(SESSION_LOCK_XML) | $(PROTO)
@@ -57,10 +64,12 @@ $(LOCK_C): $(SESSION_LOCK_XML) | $(PROTO)
 
 $(BUILD)/proto/toplevel-protocol.o: $(TOPLEVEL_C)
 	$(CC) $(ALL_CFLAGS) $$($(PKG_CONFIG) --cflags wayland-client) -c $< -o $@
+$(BUILD)/proto/idle-protocol.o: $(IDLE_C)
+	$(CC) $(ALL_CFLAGS) $$($(PKG_CONFIG) --cflags wayland-client) -c $< -o $@
 $(BUILD)/proto/lock-protocol.o: $(LOCK_C)
 	$(CC) $(ALL_CFLAGS) $$($(PKG_CONFIG) --cflags wayland-client) -c $< -o $@
 
-$(BUILD)/host/%.o: host/%.c host/*.h $(TOPLEVEL_H)
+$(BUILD)/host/%.o: host/%.c host/*.h $(TOPLEVEL_H) $(IDLE_H)
 	@mkdir -p $(dir $@)
 	$(CC) $(ALL_CFLAGS) -I$(PROTO) $$($(PKG_CONFIG) --cflags $(HOST_PKGS)) -c $< -o $@
 

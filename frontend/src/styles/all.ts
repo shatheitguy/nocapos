@@ -11,6 +11,7 @@ import './files.css';
 import './appstore.css';
 import './settings.css';
 import './devices.css';
+import './squad.css';
 import './storage.css';
 import './containers.css';
 import './containers-app.css';

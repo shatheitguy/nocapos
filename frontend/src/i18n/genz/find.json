@@ -20,5 +20,15 @@
   "find.btOn": "On the air rn. Only for finding it: linking still needs your OK and goes over your network.",
   "find.btNoAdapter": "No Bluetooth here, or it's switched off. Phones still find this server on your Wi-Fi.",
   "find.btUnsupported": "Needs NoCapOS installed straight on Linux. Phones still find this server on your Wi-Fi.",
-  "find.btFailed": "Couldn't change the Bluetooth setting"
+  "find.btFailed": "Couldn't change the Bluetooth setting",
+  "find.searching": "Scanning the network… ({n} found)",
+  "find.radarIdle": "NoCap radar, waiting to scan",
+  "find.needsHttps": "Linking servers needs this one on HTTPS. Turn on built-in HTTPS first.",
+  "find.sendRequest": "Send link request",
+  "find.sent": "Request sent",
+  "find.sentHint": "Waiting on {name}'s admins to say yes. Expires in {m} min.",
+  "find.declined": "Passed",
+  "find.linked": "Linked",
+  "find.asking": "Wants to link",
+  "find.askingHint": "This one already asked you. Answer it under Link requests."
 }
