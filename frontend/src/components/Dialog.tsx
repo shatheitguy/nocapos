@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { useModalEscape } from './Modal';
 
 export type DialogSpec =
   | {
@@ -36,16 +37,8 @@ export function Dialog({ spec, onClose }: { spec: DialogSpec; onClose: () => voi
     }
   }, [spec]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  // Escape is Cancel, the same as for every other dialog.
+  useModalEscape(onClose);
 
   const submit = () => {
     if (spec.kind === 'prompt') {
