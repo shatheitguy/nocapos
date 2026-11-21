@@ -5,6 +5,7 @@ import { tr } from '../i18n';
 import { defaultFor, handlersFor, setAvailableHandlers, withDefault, type HandlerId } from '../lib/openWith';
 import { usePrefs } from '../state/prefs';
 import { toast } from '../state/toasts';
+import { mediaOpen, type MediaOpenOptions } from '../lib/mediaOpen';
 import { openApp } from './meta';
 
 export interface OpenTarget {
@@ -45,19 +46,18 @@ export function setDefaultApp(name: string, id: HandlerId | null) {
  * Open a file with an app. `extract` is how Files unpacks an archive here
  * (only Files can, as it knows where to put the result).
  */
-export function openWith(id: HandlerId, f: OpenTarget, extract?: () => void) {
+export function openWith(id: HandlerId, f: OpenTarget, extract?: () => void, opts: MediaOpenOptions = {}) {
   const key = `${f.root}:${f.path}`;
   switch (id) {
     case 'photo':
-      openApp('imageviewer', { title: f.name, props: { root: f.root, path: f.path }, key: `imageviewer:${key}` });
-      return;
     case 'video':
-      openApp('videoplayer', { title: f.name, props: { root: f.root, path: f.path }, key: `videoplayer:${key}` });
+    case 'music': {
+      // A window of the player app: one per picture or clip, and one music
+      // player whose queue new songs join (unless a new window is asked for).
+      const r = mediaOpen(id, f, opts);
+      openApp(r.appId, { title: r.title, props: r.props, key: r.key, newWindow: r.newWindow });
       return;
-    case 'music':
-      // One music player: a new song replaces what was playing.
-      openApp('musicplayer', { title: f.name, props: { root: f.root, path: f.path }, key: 'musicplayer' });
-      return;
+    }
     case 'text':
       openApp('viewer', { title: f.name, props: { root: f.root, path: f.path, mode: 'text' }, key: `text:${key}` });
       return;
@@ -85,4 +85,20 @@ export function openWith(id: HandlerId, f: OpenTarget, extract?: () => void) {
     default:
       openApp('viewer', { title: f.name, props: { root: f.root, path: f.path }, key: `viewer:${key}` });
   }
+}
+
+/** The player app for a picture, clip or song (null for other files). */
+export function mediaHandler(name: string): 'photo' | 'video' | 'music' | null {
+  const kind = fileKind(name);
+  return kind === 'image' ? 'photo' : kind === 'video' ? 'video' : kind === 'audio' ? 'music' : null;
+}
+
+/** The app a file opens in by default: the person's choice, else the player for media, else the viewer. */
+export function defaultHandler(name: string): HandlerId {
+  return defaultAppFor(name) ?? mediaHandler(name) ?? 'quicklook';
+}
+
+/** Open a file the way double-clicking it does (search, Drops, received files). */
+export function openFile(f: OpenTarget, opts: MediaOpenOptions = {}) {
+  openWith(defaultHandler(f.name), f, undefined, opts);
 }

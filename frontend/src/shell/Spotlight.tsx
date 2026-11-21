@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { logOutClean } from '../lib/signOut';
 import { fileKind } from '../api/files';
 import { openApp, visibleApps } from '../apps/meta';
+import { openFile } from '../apps/openWithApps';
 import { middleOpen } from './middleOpen';
 import { settingsPages } from '../apps/settingsPages';
 import { AppIcon } from '../components/AppTile';
@@ -237,7 +238,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
         run: go(() =>
           f.dir
             ? openApp('files', { props: { root: f.root, path: f.path }, newWindow: true })
-            : openApp('viewer', { title: f.name, props: { root: f.root, path: f.path }, key: `viewer:${f.root}:${f.path}` }),
+            : openFile({ root: f.root, path: f.path, name: f.name }),
         ),
       });
     }
