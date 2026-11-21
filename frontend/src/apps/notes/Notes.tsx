@@ -5,12 +5,15 @@ import { useT } from '../../i18n';
 import { confirmDialog } from '../../state/confirm';
 import { userKey, workArea } from '../../state/prefs';
 import { toast } from '../../state/toasts';
-import type { WinState } from '../../state/windows';
+import { useWM, type WinState } from '../../state/windows';
 import { APPS } from '../meta';
 import { MOD, NoteEditor } from './NoteEditor';
 import { ColorDots, NoteBody, Popover, ReminderMenu, agoLabel, whenLabel } from './NoteParts';
 import { MAX_TITLE, displayTitle, isEmptyNote, nextDeskSpot, todoProgress, visibleNotes, type Note, type NoteSort, type NoteView } from './noteDoc';
 import { flushNote, useNotes, type SaveStatus } from './notesStore';
+import { openNote } from './openNote';
+
+export { openNote };
 
 // Sticky Notes: a board (or list) of your notes with search, pins, colours,
 // archive and trash; a note opens in a sheet where it's edited in place and
@@ -43,8 +46,6 @@ export function Notes({ win }: { win: WinState }) {
   const [query, setQuery] = useState('');
   const [sort, setSortState] = useState<NoteSort>(() => readPref('nocap.notes.sort', ['edited', 'created'] as const, 'edited'));
   const [layout, setLayoutState] = useState<Layout>(() => readPref('nocap.notes.layout', ['board', 'list'] as const, 'board'));
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [fresh, setFresh] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
   const setSort = (s: NoteSort) => {
@@ -61,13 +62,13 @@ export function Notes({ win }: { win: WinState }) {
   const wantAt = win.props?.at;
   useEffect(() => {
     if (!wantNote) return;
-    setOpenId(wantNote);
+    openNote(wantNote);
     setView('notes');
   }, [wantNote, wantAt]);
   const focusId = useNotes((s) => s.focusId);
   useEffect(() => {
     if (!focusId) return;
-    setOpenId(focusId);
+    openNote(focusId);
     useNotes.getState().setFocus(null);
   }, [focusId]);
 
@@ -83,24 +84,12 @@ export function Notes({ win }: { win: WinState }) {
     }
     return { notes: active, archive: archived, trash };
   }, [notes]);
-  const open = openId ? (notes.find((n) => n.id === openId) ?? null) : null;
 
   const newNote = () => {
     const n = useNotes.getState().create();
     setView('notes');
     setQuery('');
-    setFresh(n.id);
-    setOpenId(n.id);
-  };
-
-  const close = () => {
-    if (open) {
-      flushNote(open.id);
-      // A note opened fresh and left empty isn't kept.
-      if (open.id === fresh && isEmptyNote(open) && !open.pinned && open.remind_at == null) void useNotes.getState().removeForever(open.id);
-    }
-    setFresh(null);
-    setOpenId(null);
+    openNote(n.id, true);
   };
 
   const onKeyDown = (e: RKeyboardEvent<HTMLDivElement>) => {
@@ -111,14 +100,10 @@ export function Notes({ win }: { win: WinState }) {
       newNote();
     } else if ((mod && e.key.toLowerCase() === 'f') || (!typing && e.key === '/')) {
       e.preventDefault();
-      if (open) close();
       search.current?.focus();
       search.current?.select();
     } else if (e.key === 'Escape' && !e.defaultPrevented) {
-      if (open) {
-        e.preventDefault();
-        close();
-      } else if (query) {
+      if (query) {
         e.preventDefault();
         setQuery('');
       }
@@ -158,7 +143,6 @@ export function Notes({ win }: { win: WinState }) {
                 className={view === v ? 'on' : ''}
                 onClick={() => {
                   setView(v);
-                  setOpenId(null);
                 }}
               >
                 <Icon name={icon} size={16} />
@@ -219,17 +203,16 @@ export function Notes({ win }: { win: WinState }) {
                 {pinned.length > 0 && (
                   <>
                     <h3 className="nt-section">{t('notes.pinned')}</h3>
-                    <Grid notes={pinned} layout={layout} onOpen={setOpenId} />
+                    <Grid notes={pinned} layout={layout} onOpen={openNote} />
                     <h3 className="nt-section">{t('notes.others')}</h3>
                   </>
                 )}
-                <Grid notes={others} layout={layout} onOpen={setOpenId} />
+                <Grid notes={others} layout={layout} onOpen={openNote} />
               </>
             )}
           </div>
         </main>
 
-        {open && <NoteSheet key={open.id} note={open} fresh={open.id === fresh} onClose={close} />}
       </div>
     </div>
   );
@@ -366,7 +349,30 @@ export function toggleDesk(note: Note) {
   s.moveDesk(note.id, nextDeskSpot(taken, workArea()));
 }
 
-function NoteSheet({ note, fresh, onClose }: { note: Note; fresh: boolean; onClose: () => void }) {
+/** The "note" app: one note filling its own movable, resizable window. */
+export function NoteWindow({ win }: { win: WinState }) {
+  const t = useT();
+  const id = win.props?.note ?? '';
+  const fresh = win.props?.fresh === '1';
+  const note = useNotes((s) => s.notes.find((n) => n.id === id) ?? null);
+  const loaded = useNotes((s) => s.loaded);
+  const close = () => useWM.getState().close(win.id);
+  // Leaving: save now, and drop a new note that was never written in.
+  useEffect(
+    () => () => {
+      flushNote(id);
+      const n = useNotes.getState().notes.find((x) => x.id === id);
+      if (fresh && n && isEmptyNote(n) && !n.pinned && n.remind_at == null) void useNotes.getState().removeForever(id);
+    },
+    [id, fresh],
+  );
+  if (!note) {
+    return <div className="nt-window-empty muted">{loaded ? t('notes.gone') : t('notes.loading')}</div>;
+  }
+  return <NoteSheet note={note} fresh={fresh} onClose={close} standalone />;
+}
+
+function NoteSheet({ note, fresh, onClose, standalone = false }: { note: Note; fresh: boolean; onClose: () => void; standalone?: boolean }) {
   const t = useT();
   const status = useNotes((s) => s.status[note.id]);
   const s = useNotes.getState();
@@ -402,7 +408,10 @@ function NoteSheet({ note, fresh, onClose }: { note: Note; fresh: boolean; onClo
   };
 
   return (
-    <div className="nt-sheet-scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className={standalone ? 'nt-sheet-window' : 'nt-sheet-scrim'}
+      onPointerDown={(e) => !standalone && e.target === e.currentTarget && onClose()}
+    >
       <div className="nt-sheet nt-tint" data-color={note.color} role="dialog" aria-label={displayTitle(note) || t('notes.untitled')} onKeyDown={onKeyDown}>
         <div className="nt-sheet-top">
           <input

@@ -92,5 +92,10 @@
   "notes.key.markdown": "Start a line with - for a bullet, or [ ] for a checklist item.",
   "notes.movedTitle": "My desktop note",
   "notes.widgetEmpty": "No notes yet. Tap to dump one.",
-  "notes.widgetNext": "Next note"
+  "notes.widgetNext": "Next note",
+  "notes.openWindow": "Pop it out",
+  "notes.widgetCount": "Note {n} of {total}",
+  "notes.widgetPrev": "Back one",
+  "notes.widgetPlaceholder": "Spill it…",
+  "notes.gone": "This note got yeeted."
 }
