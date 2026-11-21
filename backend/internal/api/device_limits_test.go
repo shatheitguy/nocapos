@@ -123,12 +123,18 @@ func TestDeviceLimitDefaultAndOverride(t *testing.T) {
 		t.Fatalf("over the limit: %d", rec.Code)
 	}
 
-	// 0 = no limit.
-	if rec := withPath(t, w, w.s.devicesSetUserLimit, boss, "PUT", "user", alex.ID, map[string]int{"limit": 0}); rec.Code != http.StatusNoContent {
-		t.Fatalf("unlimited: %d", rec.Code)
+	// There's no "no limit" any more, and nothing above 10.
+	for _, n := range []int{0, devices.MaxLimit + 1, 100} {
+		if rec := withPath(t, w, w.s.devicesSetUserLimit, boss, "PUT", "user", alex.ID, map[string]int{"limit": n}); rec.Code != http.StatusBadRequest {
+			t.Fatalf("limit %d accepted: %d", n, rec.Code)
+		}
+	}
+	// The most allowed: 10, so alex can link more again.
+	if rec := withPath(t, w, w.s.devicesSetUserLimit, boss, "PUT", "user", alex.ID, map[string]int{"limit": devices.MaxLimit}); rec.Code != http.StatusNoContent {
+		t.Fatalf("limit 10: %d", rec.Code)
 	}
 	if rec := pairOne(t, w, alex, "Watch"); rec.Code != http.StatusCreated {
-		t.Fatalf("pair unlimited: %d %s", rec.Code, rec.Body)
+		t.Fatalf("pair under 10: %d %s", rec.Code, rec.Body)
 	}
 }
 
