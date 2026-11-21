@@ -2670,6 +2670,8 @@ button.nd-addr code { font-size: 12.5px; }
 .dialog.fn-modal { width: min(640px, calc(100% - 32px)); max-height: calc(100% - 40px); padding: 0; gap: 0; overflow: hidden; }
 .fn-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px 18px; border-bottom: 1px solid var(--border); }
 .fn-modal-head h3 { margin: 0; font-size: 16px; }
+/* Mac-style buttons: the close light sits first, with the title beside it. */
+:root[data-title-buttons='left'] .fn-modal-head { justify-content: flex-start; gap: 12px; }
 .fn-modal-body { overflow: auto; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
 .fn-modal-body .settings-section { margin: 0; }
 .fn-intro { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
