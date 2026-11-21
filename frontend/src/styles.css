@@ -1444,7 +1444,7 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
 :root[data-square] .dock, :root[data-square] .tray, :root[data-square] .widget, :root[data-square] .glass,
 :root[data-square] .popover, :root[data-square] .context-menu, :root[data-square] .launcher-panel { border-radius: 6px; }
 
-/* macOS-style window buttons on the left */
+/* Window buttons on the left (traffic-light style) */
 :root[data-title-buttons='left'] { --titlebar-pad-btn: 12px; }
 :root[data-title-buttons='left'] .titlebar { padding: 0 var(--titlebar-pad-title) 0 var(--titlebar-pad-btn); }
 :root[data-title-buttons='left'] .titlebar > .app-icon { display: none; }
