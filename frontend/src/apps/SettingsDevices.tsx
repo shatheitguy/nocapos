@@ -12,6 +12,7 @@ import { copyWithToast, missing } from '../lib/settingsKit';
 import { LinkAddressesSettings } from './SettingsLinkAddresses';
 import { ClipboardSettings } from './SettingsClipboard';
 import { ReceivedSettings } from './SettingsReceived';
+import { FindServersSection } from './SettingsFindServers';
 import { serverOrigin } from '../native/platform';
 
 // Settings → Linked Devices: a meter of how many devices you've linked out
@@ -177,6 +178,8 @@ export function DevicesSettings() {
       <ClipboardSettings />
       <ReceivedSettings />
       <LinkAddressesSettings />
+      {/* Other NoCap servers nearby: part of your squad of devices. */}
+      {isAdmin && <FindServersSection />}
 
       {linking && (
         <LinkSheet
