@@ -331,6 +331,10 @@ func (d *Desktop) WatchSession(ctx context.Context, envFile string) {
 		if n%5 == 0 {
 			d.Ensure(ctx)
 		}
+		// Every minute: how long NoCap Desktop has worked here.
+		if n%30 == 15 {
+			d.TrackConfirm(ctx)
+		}
 		d.SyncSessionEnv(ctx, envFile)
 		d.FollowScreen(ctx)
 		select {

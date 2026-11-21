@@ -262,13 +262,10 @@ desk_greetd() {
     pam_with_keyring </etc/pam.d/greetd >/etc/pam.d/greetd.nocap.tmp && cat /etc/pam.d/greetd.nocap.tmp >/etc/pam.d/greetd
     rm -f /etc/pam.d/greetd.nocap.tmp
   fi
-  # The sign-in screen comes after the boot splash.
+  # The sign-in screen comes after the boot splash, and never runs next to
+  # another sign-in service.
   mkdir -p "$DESK_UNITS/greetd.service.d"
-  cat >"$DESK_UNITS/greetd.service.d/nocapos.conf" <<'EOF'
-# NoCap Desktop (written by NoCapOS): the sign-in screen after the boot splash.
-[Unit]
-After=plymouth-quit-wait.service systemd-user-sessions.service
-EOF
+  render_greetd_dropin >"$DESK_UNITS/greetd.service.d/nocapos.conf"
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
 

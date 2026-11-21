@@ -281,7 +281,12 @@ func (s *Server) desktopRepair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "desktop_repair_failed", "NoCap Desktop couldn't be repaired: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"actions": res.Actions, "health": res.Health, "state": s.hostAccessState(r)})
+	if res.RestartNeeded {
+		// Settings → Software Update and the update result say so too.
+		s.markRestartNeeded()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"actions": res.Actions, "health": res.Health, "state": s.hostAccessState(r),
+		"restart_needed": res.RestartNeeded, "old_session_users": res.OldSessionUsers})
 }
 
 // desktopDiagnostics is the text bundle for a black screen: health, the

@@ -85,6 +85,7 @@ on_activate(GtkApplication *app, gpointer u)
   system_init();
   notify_init();
   control_own();
+  idle_init();
   polkit_agent_start();
 }
 

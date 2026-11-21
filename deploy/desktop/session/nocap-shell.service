@@ -1,15 +1,20 @@
 # NoCap Shell: the top bar, dock, launcher, notifications and control
-# center of NoCap Desktop (written by NoCapOS). Restarted if it stops; the
+# center of NoCap Desktop (written by NoCapOS). Started again whenever it
+# fails, quickly at first and then at most every 30 seconds, but never
+# given up on while the session lasts (an empty screen is worse). The
 # screen lock is separate and stays locked if the shell restarts.
 [Unit]
 Description=NoCap Shell
 PartOf=graphical-session.target
 After=graphical-session-pre.target
-StartLimitIntervalSec=60
-StartLimitBurst=5
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 ExecStart=/usr/libexec/nocapos/nocap-shell
-Restart=always
+Restart=on-failure
 RestartSec=2
+RestartSteps=5
+RestartMaxDelaySec=30
+# Its web views go first if memory runs out (never labwc or the lock).
+OOMScoreAdjust=200
