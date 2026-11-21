@@ -60,8 +60,8 @@ body[data-wallpaper='midnight'] { background: #05070d url('/wallpapers/midnight.
 :root[data-ui='glass'] .window:not(.focused) .titlebar { opacity: 0.7; }
 :root[data-ui='glass'] .window.tiled { border-radius: 0; }
 :root[data-ui='glass'][data-square] .window { border-radius: 10px; }
-:root[data-ui='glass'] .titlebar { height: 50px; padding: 0 12px 0 20px; border-bottom: 0; }
-:root[data-ui='glass'] .titlebar .title { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
+:root[data-ui='glass'] { --titlebar-h: 50px; --titlebar-pad-btn: 12px; --titlebar-pad-title: 20px; --titlebar-title-size: 15px; --titlebar-title-weight: 650; --titlebar-title-tracking: -0.015em; }
+:root[data-ui='glass'] .titlebar { border-bottom: 0; }
 :root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons { gap: 6px; }
 :root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons button { width: 28px; height: 28px; border-radius: 50%; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); }
 :root[data-ui='glass']:not([data-title-buttons='left']) .win-buttons button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); color: #fff; }

@@ -339,19 +339,27 @@ button.widget:active { transform: none; }
 .window:not(.focused) .titlebar { opacity: 0.86; }
 @keyframes win-open { from { opacity: 0; transform: scale(0.97) translateY(6px); } }
 
+/* Title bar metrics, shared with the title row of every dialog and sheet
+ * (styles/modal.css) so a dialog's close button sits exactly where a
+ * window's does. "btn" is the side the window buttons are on. */
+:root {
+  --titlebar-h: 42px; --titlebar-pad-btn: 6px; --titlebar-pad-title: 12px; --titlebar-gap: 10px;
+  --titlebar-title-size: 13px; --titlebar-title-weight: 600; --titlebar-title-tracking: normal;
+  --titlebar-title-font: inherit; --titlebar-title-case: none;
+}
 .titlebar {
-  height: 42px;
+  height: var(--titlebar-h);
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 6px 0 12px;
+  gap: var(--titlebar-gap);
+  padding: 0 var(--titlebar-pad-btn) 0 var(--titlebar-pad-title);
   background: var(--titlebar);
   border-bottom: 1px solid var(--border);
   cursor: default;
   touch-action: none;
 }
-.titlebar .title { flex: 1; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar .title { flex: 1; font-weight: var(--titlebar-title-weight); font-size: var(--titlebar-title-size); letter-spacing: var(--titlebar-title-tracking); font-family: var(--titlebar-title-font); text-transform: var(--titlebar-title-case); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .win-buttons { display: flex; gap: 2px; }
 .win-buttons button {
   width: 34px;
@@ -1437,7 +1445,8 @@ body[data-wallpaper='custom'] { background-color: #10131c; background-size: cove
 :root[data-square] .popover, :root[data-square] .context-menu, :root[data-square] .launcher-panel { border-radius: 6px; }
 
 /* macOS-style window buttons on the left */
-:root[data-title-buttons='left'] .titlebar { padding: 0 12px; }
+:root[data-title-buttons='left'] { --titlebar-pad-btn: 12px; }
+:root[data-title-buttons='left'] .titlebar { padding: 0 var(--titlebar-pad-title) 0 var(--titlebar-pad-btn); }
 :root[data-title-buttons='left'] .titlebar > .app-icon { display: none; }
 :root[data-title-buttons='left'] .titlebar .title { text-align: center; padding-right: 54px; }
 :root[data-title-buttons='left'] .win-buttons { order: -1; gap: 8px; }
@@ -2755,7 +2764,7 @@ button.ce-add-line { align-self: flex-start; }
 .ce-inline { display: flex; gap: 6px; flex-wrap: wrap; }
 .ce-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--surface); }
 .ce-foot .error { margin: 0; }
-.dialog.ce-picker { width: min(480px, calc(100% - 32px)); }
+:root .dialog.modal.ce-picker { width: min(480px, calc(100% - 32px)); }
 .dn { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
 .dn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .dn-head p { margin: 0; }

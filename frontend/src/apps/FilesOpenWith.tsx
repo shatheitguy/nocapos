@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { fileKind } from '../api/files';
 import { Icon } from '../components/Icon';
+import { ModalHead, useModalEscape } from '../components/Modal';
 import { useT } from '../i18n';
 import { extOf, type HandlerId } from '../lib/openWith';
 import { appsFor, defaultAppFor, HANDLER_ICON, handlerHint, handlerName, setDefaultApp } from './openWithApps';
@@ -17,6 +18,7 @@ export function OpenWithDialog({ name, onOpen, onClose }: { name: string; onOpen
   const [always, setAlways] = useState(!!current);
   const ext = extOf(name);
   const kind = fileKind(name);
+  useModalEscape(onClose);
 
   const open = () => {
     if (!pick) return;
@@ -34,25 +36,14 @@ export function OpenWithDialog({ name, onOpen, onClose }: { name: string; onOpen
         aria-modal="true"
         aria-label={t('openwith.title')}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation();
-            onClose();
-          }
           if (e.key === 'Enter' && pick) {
             e.preventDefault();
             open();
           }
         }}
       >
-        <header className="ow-head">
-          <span className="ow-file">
-            <Icon name="file" size={18} />
-          </span>
-          <div>
-            <h2>{t('openwith.title')}</h2>
-            <p className="ellipsis">{name}</p>
-          </div>
-        </header>
+        <ModalHead icon="file" title={t('openwith.title')} sub={name} onClose={onClose} />
+        <div className="ow-body">
         {apps.length ? (
           <div className="ow-list" role="radiogroup" aria-label={t('openwith.apps')}>
             {apps.map((id, i) => (
@@ -99,6 +90,7 @@ export function OpenWithDialog({ name, onOpen, onClose }: { name: string; onOpen
             {t('openwith.open')}
           </button>
         </footer>
+        </div>
       </div>
     </div>
   );

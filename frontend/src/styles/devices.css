@@ -132,11 +132,9 @@
 .ld-person-none { margin: 0; padding: 4px 14px 12px 60px; }
 
 /* ---------- pairing sheet ---------- */
-.ld-sheet { width: min(440px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; gap: 14px; }
-.ld-grabber { display: none; }
-.ld-sheet-head { display: flex; align-items: center; gap: 10px; }
-.ld-sheet-head h3 { flex: 1; }
-.ld-sheet-icon { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: var(--accent); background: var(--accent-soft); }
+/* The shared title row (components/Modal) at the card's edge, the content padded below it. */
+:root .confirm-dialog.ld-sheet { width: min(440px, 100%); max-height: calc(100dvh - 32px); padding: 0; gap: 0; overflow: hidden; }
+.ld-sheet-body { padding: 14px 22px 22px; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
 .ld-steps { margin: 0; padding: 0; list-style: none; counter-reset: ld; display: flex; flex-direction: column; gap: 6px; }
 .ld-steps li { counter-increment: ld; display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); }
 .ld-steps li::before { content: counter(ld); width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); }
@@ -187,8 +185,9 @@
   .ld-person-none { padding-left: 12px; }
 
   .ld-backdrop { place-items: end stretch; padding: 0; }
-  .ld-sheet { width: 100%; border-radius: 22px 22px 0 0; padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 92dvh; animation: ld-rise 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
-  .ld-grabber { display: block; width: 40px; height: 4px; border-radius: 999px; background: var(--border); margin: 0 auto 2px; }
+  :root .confirm-dialog.ld-sheet { width: 100%; border-radius: 22px 22px 0 0; max-height: 92dvh; animation: ld-rise 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
+  .ld-sheet-body { padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .ld-sheet-head > .modal-grabber { display: block; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 999px; background: var(--border); }
   .ld-digits span { width: 34px; height: 44px; font-size: 22px; }
   .ld-qr { width: 172px; height: 172px; }
   @keyframes ld-scan { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(170px); } }
