@@ -59,6 +59,10 @@ export interface Exposed {
   open: boolean;
   locked?: boolean;
   bypass?: boolean;
+  /** A Settings page owns it (remote login): open that instead of a switch. */
+  setting?: string;
+  /** Who it's open to while on. */
+  scope?: 'lan' | 'anywhere';
 }
 
 export interface BlockedConn {
