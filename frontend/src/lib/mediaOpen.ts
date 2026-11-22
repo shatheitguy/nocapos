@@ -22,8 +22,8 @@ export interface MediaOpenRequest {
 export interface MediaOpenOptions {
   /** Middle-click or "New Window": a song gets a player of its own. */
   newWindow?: boolean;
-  /** Pictures: step through these instead of the file's folder (an album, a search). */
-  album?: string;
+  /** Pictures from Photos: step through this set (lib/photoSet) instead of the file's folder. */
+  set?: string;
   /** Changes on every open, so opening the same song again plays it again. */
   now?: number;
 }
@@ -46,7 +46,7 @@ export function mediaOpen(kind: MediaHandler, f: MediaFile, opts: MediaOpenOptio
     props.at = String(opts.now ?? Date.now());
     return { appId, title: f.name, key: MAIN_PLAYER, props, newWindow: false };
   }
-  if (kind === 'photo' && opts.album) props.album = opts.album;
+  if (kind === 'photo' && opts.set) props.set = opts.set;
   return { appId, title: f.name, key: `${appId}:${f.root}:${f.path}`, props, newWindow: true };
 }
 

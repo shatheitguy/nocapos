@@ -6,14 +6,15 @@ import { Icon, type IconName } from '../components/Icon';
 import { tr, useT } from '../i18n';
 import { linkPhones, sendFilesToPhone } from '../shell/linkActions';
 import { confirmDialog } from '../state/confirm';
-import { toast, toastAction } from '../state/toasts';
+import { toast } from '../state/toasts';
 import { startUpload, useTransfers } from '../state/transfers';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { countText, itemsText, Thumb, ticketFor, type Tickets } from './PhotosCommon';
 import { addedOf, deletedOf, Memories, PeriodCards, PhotoGrid, type Grouping } from './PhotosGrid';
-import { pictureMenu, saveEdited, saveTurns } from './photoActions';
-import { PhotoViewer, ticketLinks } from './PhotosViewer';
+import { onPhotosChanged } from './photoActions';
+import { mediaOpen } from '../lib/mediaOpen';
+import { encodeSet, keysSet, pickSet, RECENT_DAYS, type PhotoSet } from '../lib/photoSet';
 
 type View =
   | { kind: 'library' }
@@ -27,7 +28,6 @@ type View =
 type Zoom = 'years' | 'months' | 'days' | 'all';
 
 const MEDIA = /\.(jpe?g|png|gif|webp|bmp|heic|heif|mp4|mov|m4v|webm)$/i;
-const RECENT_DAYS = 30;
 const SHARE_MAX = 10;
 
 function loadZoom(): Zoom {
@@ -58,7 +58,6 @@ export function Photos(_: { win: WinState }) {
   const [jump, setJump] = useState<{ key: string; seq: number } | undefined>();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
-  const [viewer, setViewer] = useState<{ keys: string[]; index: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [renaming, setRenaming] = useState<number | null>(null);
   const [dropping, setDropping] = useState(false);
@@ -95,6 +94,16 @@ export function Photos(_: { win: WinState }) {
     setUploadTo(l.data.upload);
     if (a.ok) setAlbums(a.data.albums);
   }, []);
+
+  // A picture window changed the library (a favorite, a delete, a turn).
+  useEffect(
+    () =>
+      onPhotosChanged(() => {
+        void load();
+        void loadTrash();
+      }),
+    [load, loadTrash],
+  );
 
   useEffect(() => {
     void load();
@@ -159,38 +168,9 @@ export function Photos(_: { win: WinState }) {
     [byKey],
   );
 
-  const shown = useMemo(() => {
-    const all = items ?? [];
-    let list: Photo[];
-    switch (view.kind) {
-      case 'favorites':
-        list = all.filter((p) => p.favorite);
-        break;
-      case 'videos':
-        list = all.filter((p) => p.video);
-        break;
-      case 'recent': {
-        const since = Date.now() - RECENT_DAYS * 86_400_000;
-        list = all.filter((p) => new Date(p.mod_time).getTime() >= since).sort((a, b) => (a.mod_time < b.mod_time ? 1 : -1));
-        break;
-      }
-      case 'album': {
-        const keys = new Set((albumById?.items ?? []).map(photoKey));
-        list = all.filter((p) => keys.has(photoKey(p)));
-        break;
-      }
-      case 'trash':
-        list = trash ?? [];
-        break;
-      case 'albums':
-        list = [];
-        break;
-      default:
-        list = all;
-    }
-    const q = query.trim().toLowerCase();
-    return q ? list.filter((p) => p.path.toLowerCase().includes(q)) : list;
-  }, [items, trash, view, albumById, query]);
+  // What a picture window opened from this view steps through.
+  const viewSet = useMemo((): PhotoSet => ({ view: view.kind === 'albums' ? 'library' : view.kind, ...(view.kind === 'album' ? { album: view.id } : {}), ...(query.trim() ? { q: query } : {}) }), [view, query]);
+  const shown = useMemo(() => (view.kind === 'albums' ? [] : pickSet(viewSet, items ?? [], albums, trash ?? [])), [view.kind, viewSet, items, albums, trash]);
 
   // A new view starts with nothing selected.
   useEffect(() => {
@@ -234,7 +214,16 @@ export function Photos(_: { win: WinState }) {
       return next;
     });
   }, []);
-  const onOpen = useCallback((i: number) => setViewer({ keys: shownRef.current.map(photoKey), index: i }), []);
+  // Each picture opens in a window of its own, stepping through this view (or a memory).
+  const openViewer = useCallback((list: Photo[], i: number, set: PhotoSet | null) => {
+    const p = list[i];
+    if (!p) return;
+    const r = mediaOpen('photo', p, { set: encodeSet(set ?? keysSet(list, i).set) });
+    openApp(r.appId, { title: r.title, props: r.props, key: r.key, newWindow: r.newWindow });
+  }, []);
+  const viewSetRef = useRef(viewSet);
+  viewSetRef.current = viewSet;
+  const onOpen = useCallback((i: number) => openViewer(shownRef.current, i, viewSetRef.current), [openViewer]);
   const onLongPress = useCallback(
     (i: number) => {
       setSelectMode(true);
@@ -279,37 +268,6 @@ export function Photos(_: { win: WinState }) {
     void load();
     void loadTrash();
     return true;
-  };
-
-  // From the viewer: straight to Recently deleted, with an Undo on the toast.
-  const removeWithUndo = async (p: Photo) => {
-    const r = await photosApi.remove([p]);
-    if (!r.ok) {
-      toast('error', tr('photos.toast.deleteFail'), r.error);
-      return false;
-    }
-    const k = photoKey(p);
-    setItems((v) => v?.filter((x) => photoKey(x) !== k) ?? v);
-    void load();
-    void loadTrash();
-    const bare = (s: string) => s.replace(/^\/+/, '');
-    toastAction('success', tr('pv.trashed', { name: p.name }), {
-      label: tr('pv.undo'),
-      run: () =>
-        void (async () => {
-          const bin = await photosApi.trash();
-          const hit = bin.ok ? bin.data.items.filter((x) => x.root === p.root && bare(x.orig_path) === bare(p.path)).sort((a, b) => b.id - a.id)[0] : undefined;
-          if (!hit) return toast('error', tr('pv.undoFail'));
-          await restore([fromTrash(hit)]);
-        })(),
-    });
-    return true;
-  };
-
-  // A saved turn or edit: read the library again (twice: the index catches up a moment later).
-  const refreshSoon = () => {
-    void load();
-    window.setTimeout(() => void load(), 2000);
   };
 
   const restore = async (list: Photo[]) => {
@@ -527,9 +485,6 @@ export function Photos(_: { win: WinState }) {
   const dateOf = view.kind === 'recent' ? addedOf : view.kind === 'trash' ? deletedOf : undefined;
   const periods = library && (zoom === 'years' || zoom === 'months') && !query;
 
-  const links = useMemo(() => ticketLinks(tickets), [tickets]);
-  const viewerList = viewer ? viewer.keys.map((k) => byKey.get(k)).filter((p): p is Photo => !!p) : [];
-  const viewerIndex = viewer ? Math.min(viewer.index, viewerList.length - 1) : -1;
 
   const emptyView = () => {
     if (query.trim()) return <EmptyNote icon="search" title={t('photos.empty.search')} text={t('photos.empty.searchText', { q: query.trim() })} />;
@@ -596,11 +551,11 @@ export function Photos(_: { win: WinState }) {
         onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropping(false)}
         onDrop={onDrop}
         onKeyDown={(e) => {
-          if (e.key === 'Escape' && selecting && !viewer) {
+          if (e.key === 'Escape' && selecting) {
             clearSelection();
             e.stopPropagation();
           }
-          if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !viewer && shown.length && !(e.target instanceof HTMLInputElement)) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'a' && shown.length && !(e.target instanceof HTMLInputElement)) {
             e.preventDefault();
             setSelected(new Set(shown.map(photoKey)));
           }
@@ -800,7 +755,7 @@ export function Photos(_: { win: WinState }) {
               onOpen={onOpen}
               onLongPress={onLongPress}
               jump={jump}
-              top={library && !query ? <Memories items={items} tickets={tickets} onOpen={(list) => setViewer({ keys: list.map(photoKey), index: 0 })} /> : undefined}
+              top={library && !query ? <Memories items={items} tickets={tickets} onOpen={(list) => openViewer(list, 0, null)} /> : undefined}
               empty={emptyView()}
             />
           )}
@@ -841,37 +796,6 @@ export function Photos(_: { win: WinState }) {
           )}
         </div>
 
-        {viewer && viewerList.length > 0 && viewerIndex >= 0 && (
-          <PhotoViewer
-            photos={viewerList}
-            index={viewerIndex}
-            links={links}
-            rootName={rootName}
-            onIndex={(i) => setViewer((v) => (v ? { ...v, index: i } : v))}
-            onClose={() => setViewer(null)}
-            onFavorite={(p) => void setFavorite([p], !p.favorite)}
-            onAlbum={(e, p) => albumMenu(e, [p])}
-            onShare={(e, p) => shareMenu(e, [p])}
-            onDelete={async (p) => {
-              const done = p.trash ? await purge([p]) : await removeWithUndo(p);
-              if (done && viewerList.length <= 1) setViewer(null);
-            }}
-            onRotate={async (p, turns) => {
-              const ok = await saveTurns(p, links.full(p), turns);
-              if (ok) refreshSoon();
-              return ok;
-            }}
-            onSaveEdit={async (p, file, replace) => {
-              const saved = await saveEdited(p, file, replace);
-              if (saved) refreshSoon();
-              return !!saved;
-            }}
-            moreItems={(p) => (p.trash ? [] : pictureMenu(p, links.full(p), { video: p.video }))}
-            onRestore={async (p) => {
-              if ((await restore([p])) && viewerList.length <= 1) setViewer(null);
-            }}
-          />
-        )}
         {picker && (
           <AlbumPicker
             album={picker}

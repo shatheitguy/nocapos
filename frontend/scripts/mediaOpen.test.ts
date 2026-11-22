@@ -19,8 +19,8 @@ test('pictures and clips get one window per file', () => {
   const v = mediaOpen('video', f('/Clips/x.mp4', 'usb'));
   assert.equal(v.appId, 'videoplayer');
   assert.equal(v.key, 'videoplayer:usb:/Clips/x.mp4');
-  assert.equal(mediaOpen('photo', f('/a.jpg'), { album: 'fav' }).props.album, 'fav');
-  assert.equal(mediaOpen('video', f('/a.mp4'), { album: 'fav' }).props.album, undefined);
+  assert.equal(mediaOpen('photo', f('/a.jpg'), { set: '{"view":"favorites"}' }).props.set, '{"view":"favorites"}');
+  assert.equal(mediaOpen('video', f('/a.mp4'), { set: '{"view":"favorites"}' }).props.set, undefined);
 });
 
 test('songs go to the one player unless a new window is asked for', () => {
