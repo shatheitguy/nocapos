@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -118,6 +119,7 @@ func (s *Server) failoverLoop(ctx context.Context) {
 		case <-f.kick:
 		}
 		s.failoverSyncOnce(ctx, false)
+		s.failoverTakeoverTick(ctx) // is the other server there; take over or stand back (failover_takeover.go)
 	}
 }
 
@@ -345,6 +347,7 @@ type failoverPairJSON struct {
 	Conflicts  int                    `json:"conflicts"`
 	Categories []failoverCategoryJSON `json:"categories"`
 	Files      *failoverFilesJSON     `json:"files,omitempty"`
+	Takeover   *takeoverJSON          `json:"takeover,omitempty"`
 }
 
 // failoverGet: the pair (if any), how each category stands, and what
@@ -402,6 +405,7 @@ func (s *Server) failoverPairJSON(ctx context.Context, p *store.FailoverPair) (*
 		if j.Files, err = s.failoverFilesJSON(ctx, p); err != nil {
 			return nil, err
 		}
+		j.Takeover = s.takeoverJSON(ctx, p)
 	}
 	return j, nil
 }
@@ -566,6 +570,12 @@ func (s *Server) failoverEnd(ctx context.Context, nocapID string) error {
 	if err := s.Store.FileIndex().ClearFileIndex(ctx); err != nil {
 		return err
 	}
+	// Each server goes back to running its own apps as it is now; the shared
+	// address is left.
+	_ = s.setFlag(ctx, keyFailoverActive, false)
+	_ = s.setFlag(ctx, keyFailoverYielded, false)
+	s.applyVIP(ctx, failoverOptions{}, false)
+	s.discovery.bump()
 	return s.Store.SetServerLinkRole(ctx, nocapID, store.RoleLinkPeer)
 }
 
@@ -896,7 +906,9 @@ func (s *Server) failoverPeerStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	seq, _ := s.Store.SyncSeq(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"state": p.State, "seq": seq, "paused": p.Paused})
+	host, _ := os.Hostname()
+	writeJSON(w, http.StatusOK, peerFailoverStatus{State: p.State, Seq: seq, Paused: p.Paused, Active: s.flag(r.Context(), keyFailoverActive), Hostname: host,
+		Running: s.runsApps(r.Context(), p)})
 }
 
 func (s *Server) failoverRoutes(mux *http.ServeMux) {
@@ -909,6 +921,9 @@ func (s *Server) failoverRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/failover/conflicts", s.admin(s.failoverConflicts))
 	mux.Handle("POST /api/v1/failover/conflicts/{id}", s.admin(s.failoverResolve))
 	mux.Handle("PUT /api/v1/failover/files", s.admin(s.failoverSetFiles))
+	mux.Handle("PUT /api/v1/failover/takeover", s.admin(s.failoverSetTakeover))
+	mux.Handle("POST /api/v1/failover/take-over", s.admin(s.failoverTakeOverNow))
+	mux.Handle("POST /api/v1/failover/hand-back", s.admin(s.failoverHandBack))
 	failoverPeerRoutes(s, mux)
 }
 
@@ -923,6 +938,7 @@ func failoverPeerRoutes(s *Server, mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/failover/peer/status", s.peer(s.failoverPeerStatus))
 	mux.Handle("GET /api/v1/failover/peer/system-accounts", s.peer(s.failoverPeerAccounts))
 	mux.Handle("POST /api/v1/failover/peer/options", s.peer(s.failoverPeerOptions))
+	mux.Handle("POST /api/v1/failover/peer/handback", s.peer(s.failoverPeerHandBack))
 	mux.Handle("GET /api/v1/failover/peer/files/changes", s.peer(s.failoverPeerFileChanges))
 	mux.Handle("GET /api/v1/failover/peer/files/file", s.peer(s.failoverPeerFile))
 }

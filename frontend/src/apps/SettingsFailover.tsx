@@ -8,7 +8,7 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { relTime } from '../state/notifications';
 import { fmtBytes } from '../lib/format';
-import { changedFields, filesChoice, syncHealth, type FailoverFiles, type FailoverInfo, type FailoverPair, type FilesChoice, type SyncConflict, type SyncHealth } from '../lib/failover';
+import { changedFields, filesChoice, syncHealth, takeoverPhase, type FailoverFiles, type Takeover, type FailoverInfo, type FailoverPair, type FilesChoice, type SyncConflict, type SyncHealth } from '../lib/failover';
 import type { LinkedServer } from '../lib/squad';
 import { Section } from './Personalize';
 
@@ -25,6 +25,9 @@ export const failoverApi = {
   pause: (paused: boolean) => api<FailoverInfo>('/api/v1/failover/pause', { method: 'POST', body: { paused } }),
   syncNow: () => api<FailoverInfo>('/api/v1/failover/sync', { method: 'POST' }),
   conflicts: () => api<SyncConflict[]>('/api/v1/failover/conflicts'),
+  setTakeover: (b: { auto: boolean; after_min: number; vip: string; vip_iface: string }) => api<FailoverInfo>('/api/v1/failover/takeover', { method: 'PUT', body: b }),
+  takeOver: () => api<FailoverInfo>('/api/v1/failover/take-over', { method: 'POST' }),
+  handBack: () => api<FailoverInfo>('/api/v1/failover/hand-back', { method: 'POST' }),
   setFiles: (c: FilesChoice) => api<FailoverInfo>('/api/v1/failover/files', { method: 'PUT', body: c }),
   resolve: (id: number, keep: 'mine' | 'theirs') => api<{ ok: boolean }>(`/api/v1/failover/conflicts/${id}`, { method: 'POST', body: { keep } }),
 };
@@ -258,6 +261,8 @@ export function FailoverSection({ info, onChanged }: { info: FailoverInfo | null
         </div>
       )}
 
+      {p.state === 'active' && p.takeover && <TakeoverPanel t={t} tk={p.takeover} name={name} onChanged={onChanged} />}
+
       {p.state === 'active' && p.files && <FilesPanel t={t} files={p.files} onSaved={(i) => onChanged(i)} />}
 
       {conflicts.length > 0 && (
@@ -404,6 +409,81 @@ function FilesPanel({ t, files, onSaved }: { t: T; files: FailoverFiles; onSaved
       <div className="squad-actions">
         <button type="button" className="small" disabled={!dirty || busy} onClick={() => void save()}>
           {busy ? <span className="spinner sm" /> : <Icon name="save" size={14} />} {t('fo.filesSave')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Who runs the apps, taking over when the primary is gone, and handing back. */
+function TakeoverPanel({ t, tk, name, onChanged }: { t: T; tk: Takeover; name: string; onChanged: (i?: FailoverInfo) => void }) {
+  const [auto, setAuto] = useState(tk.auto);
+  const [after, setAfter] = useState(String(tk.after_min));
+  const [vip, setVip] = useState(tk.vip);
+  const [iface, setIface] = useState(tk.vip_iface);
+  const [busy, setBusy] = useState<string | null>(null);
+  const phase = takeoverPhase(tk);
+  const dirty = auto !== tk.auto || Number(after) !== tk.after_min || vip.trim() !== tk.vip || iface.trim() !== tk.vip_iface;
+
+  const run = async (key: string, fn: () => Promise<ApiResult<FailoverInfo>>, failKey: string, okMsg: string) => {
+    setBusy(key);
+    const r = await fn();
+    setBusy(null);
+    if (!r.ok) return toast('error', tr(failKey), r.error);
+    toast('success', okMsg);
+    onChanged(r.data);
+  };
+  const takeOver = async () => {
+    const ok = await confirmDialog({ title: tr('fo.takeOverTitle'), message: tr('fo.takeOverMsg', { name }), confirmLabel: tr('fo.takeOver'), danger: true });
+    if (ok) void run('take', failoverApi.takeOver, 'fo.takeOverFail', tr('fo.tookOver'));
+  };
+  const handBack = async () => {
+    const ok = await confirmDialog({ title: tr('fo.handBackTitle', { name }), message: tr('fo.handBackMsg', { name }), confirmLabel: tr('fo.handBack') });
+    if (ok) void run('back', failoverApi.handBack, 'fo.handBackFail', tr('fo.handedBack', { name }));
+  };
+  const save = () =>
+    void run('save', () => failoverApi.setTakeover({ auto, after_min: Math.max(1, Math.round(Number(after) || 5)), vip: vip.trim(), vip_iface: iface.trim() }), 'fo.takeoverFail', tr('fo.takeoverSaved'));
+
+  return (
+    <div className="fo-files">
+      <h4>{t('fo.takeoverTitle')}</h4>
+      <p className={`squad-card-sub${phase === 'took_over' || phase === 'primary_down' ? ' fo-error' : ''}`}>{t(`fo.phase.${phase}`, { name })}</p>
+      <p className="muted small">{tk.role === 'primary' ? t('fo.rolePrimary', { name }) : t('fo.roleStandby', { name })}</p>
+      <div className="squad-actions">
+        {tk.role === 'standby' && !tk.running && (
+          <button type="button" className="small ghost danger" disabled={!!busy || tk.busy} onClick={() => void takeOver()}>
+            <Icon name="power" size={14} /> {t('fo.takeOver')}
+          </button>
+        )}
+        {tk.can_hand_back && (
+          <button type="button" className="small" disabled={!!busy || tk.busy} onClick={() => void handBack()}>
+            {busy === 'back' ? <span className="spinner sm" /> : <Icon name="swap" size={14} />} {t('fo.handBack')}
+          </button>
+        )}
+      </div>
+      <label className="fo-check">
+        <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+        <span>{t('fo.auto')}</span>
+      </label>
+      <div className="fo-files-opts">
+        <label>
+          <span>{t('fo.after')}</span>
+          <input type="number" min={1} max={1440} inputMode="numeric" value={after} disabled={!auto} onChange={(e) => setAfter(e.target.value)} />
+        </label>
+        <label>
+          <span>{t('fo.vip')}</span>
+          <input value={vip} placeholder="192.168.1.50/24" spellCheck={false} onChange={(e) => setVip(e.target.value)} />
+        </label>
+        <label>
+          <span>{t('fo.vipIface')}</span>
+          <input value={iface} placeholder="eth0" spellCheck={false} onChange={(e) => setIface(e.target.value)} />
+        </label>
+      </div>
+      <p className="muted small">{t('fo.vipHint')}</p>
+      <p className="muted small">{t('fo.splitHint')}</p>
+      <div className="squad-actions">
+        <button type="button" className="small" disabled={!dirty || !!busy} onClick={save}>
+          <Icon name="save" size={14} /> {t('fo.filesSave')}
         </button>
       </div>
     </div>
