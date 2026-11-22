@@ -54,6 +54,11 @@ func Open(ctx context.Context, dataDir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// Failover pairs: the change log's triggers (replicate.go).
+	if err := s.prepareSync(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("sync log: %w", err)
+	}
 	return s, nil
 }
 
