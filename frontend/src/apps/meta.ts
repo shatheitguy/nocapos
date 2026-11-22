@@ -222,7 +222,7 @@ export const APPS: Record<string, AppMeta> = {
   },
   notes: {
     id: 'notes',
-    // "Brain Dump" / "Sticky Notes", in the voice in use.
+    // "NoCap Notes" (the same name in both voices).
     get title() {
       return tr('notes.appTitle');
     },
@@ -231,7 +231,7 @@ export const APPS: Record<string, AppMeta> = {
     size: { w: 1040, h: 700 },
     description: 'Glass sticky notes with checklists and reminders, stuck to your desktop if you like',
     single: true,
-    keywords: 'sticky notes stickies brain dump memo jot todo to-do checklist list reminder',
+    keywords: 'nocap notes sticky notes stickies brain dump memo jot todo to-do checklist list reminder',
   },
   // One note in a window of its own (moved, resized, kept open next to the
   // app). Opened from Sticky Notes, the desktop widget and reminders.

@@ -1,6 +1,6 @@
 {
-  "notes.appTitle": "Sticky Notes",
-  "notes.widgetName": "Sticky note",
+  "notes.appTitle": "NoCap Notes",
+  "notes.widgetName": "NoCap Note",
   "notes.new": "New note",
   "notes.view.notes": "Notes",
   "notes.view.archive": "Archive",
@@ -64,7 +64,7 @@
   "notes.unstick": "Remove from desktop",
   "notes.onDesktop": "On the desktop",
   "notes.dragHint": "Drag to move",
-  "notes.openInApp": "Open in Sticky Notes",
+  "notes.openInApp": "Open in NoCap Notes",
   "notes.progress": "{done} of {total} done",
   "notes.tick": "Done",
   "notes.remind.title": "Reminder",
