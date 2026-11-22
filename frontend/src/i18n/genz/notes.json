@@ -1,6 +1,6 @@
 {
-  "notes.appTitle": "Brain Dump",
-  "notes.widgetName": "Brain Dump note",
+  "notes.appTitle": "NoCap Notes",
+  "notes.widgetName": "NoCap Note",
   "notes.new": "New note",
   "notes.view.notes": "Notes",
   "notes.view.archive": "The vault",
@@ -64,7 +64,7 @@
   "notes.unstick": "Unstick from the desktop",
   "notes.onDesktop": "Stuck on the desktop",
   "notes.dragHint": "Drag to move",
-  "notes.openInApp": "Open in Brain Dump",
+  "notes.openInApp": "Open in NoCap Notes",
   "notes.progress": "{done} of {total} done",
   "notes.tick": "Done",
   "notes.remind.title": "Remind me",
