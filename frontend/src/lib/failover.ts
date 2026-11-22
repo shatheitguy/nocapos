@@ -31,6 +31,35 @@ export interface FailoverPair {
   conflicts: number;
   categories: FailoverCategory[];
   files?: FailoverFiles;
+  takeover?: Takeover;
+}
+
+export interface Takeover {
+  role: 'primary' | 'standby';
+  /** this server runs the apps now */
+  running: boolean;
+  peer_running: boolean;
+  peer_up: boolean;
+  last_contact?: string;
+  auto: boolean;
+  after_min: number;
+  vip: string;
+  vip_iface: string;
+  vip_held: boolean;
+  can_hand_back: boolean;
+  busy: boolean;
+}
+
+export type TakeoverPhase = 'normal' | 'took_over' | 'stood_back' | 'primary_down' | 'standby_down';
+
+/** Where the pair stands on running the apps, from this server's side. */
+export function takeoverPhase(t: Takeover): TakeoverPhase {
+  if (t.role === 'standby') {
+    if (t.running) return 'took_over';
+    return t.peer_up ? 'normal' : 'primary_down';
+  }
+  if (!t.running) return 'stood_back';
+  return t.peer_up ? 'normal' : 'standby_down';
 }
 
 export interface FileLocation {

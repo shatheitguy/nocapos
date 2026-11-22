@@ -1,7 +1,7 @@
 // Failover page logic: run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changedFields, filesChoice, syncHealth, type FailoverPair, type SyncConflict } from '../src/lib/failover.ts';
+import { changedFields, filesChoice, syncHealth, takeoverPhase, type Takeover, type FailoverPair, type SyncConflict } from '../src/lib/failover.ts';
 
 const now = Date.parse('2026-11-22T10:00:00Z');
 const pair = (over: Partial<FailoverPair> = {}): FailoverPair => ({
@@ -67,4 +67,16 @@ test('filesChoice: only switched-on locations, never "always" ones, sane limit a
   assert.deepEqual(c, { files: ['appdata'], limit_kbps: 0, window_from: '', window_to: '' });
   const d = filesChoice({ ...f, locations: [...f.locations] }, {}, '512.4', '22:00', '06:00');
   assert.deepEqual(d, { files: ['drive'], limit_kbps: 512, window_from: '22:00', window_to: '06:00' });
+});
+
+test('takeoverPhase: from each side', () => {
+  const t = (over: Partial<Takeover>): Takeover => ({
+    role: 'standby', running: false, peer_running: true, peer_up: true, auto: true, after_min: 5, vip: '', vip_iface: '', vip_held: false, can_hand_back: false, busy: false, ...over,
+  });
+  assert.equal(takeoverPhase(t({})), 'normal');
+  assert.equal(takeoverPhase(t({ peer_up: false })), 'primary_down');
+  assert.equal(takeoverPhase(t({ running: true })), 'took_over');
+  assert.equal(takeoverPhase(t({ role: 'primary', running: true })), 'normal');
+  assert.equal(takeoverPhase(t({ role: 'primary', running: true, peer_up: false })), 'standby_down');
+  assert.equal(takeoverPhase(t({ role: 'primary', running: false })), 'stood_back');
 });

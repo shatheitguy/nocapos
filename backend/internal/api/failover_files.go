@@ -55,6 +55,11 @@ type failoverOptions struct {
 	LimitKBps  int      `json:"limit_kbps"`  // download limit, 0 = none
 	WindowFrom string   `json:"window_from"` // "HH:MM": files only sync from…
 	WindowTo   string   `json:"window_to"`   // …to (empty = any time)
+	// Taking over (failover_takeover.go).
+	TakeoverAuto *bool  `json:"takeover_auto,omitempty"` // nil = on
+	TakeoverMin  int    `json:"takeover_min,omitempty"`  // 0 = 5 minutes
+	VIP          string `json:"vip,omitempty"`           // the pair's shared address, "192.168.1.50/24"
+	VIPIface     string `json:"vip_iface,omitempty"`
 }
 
 func parseFailoverOptions(s string) failoverOptions {
@@ -702,9 +707,11 @@ func (s *Server) failoverPeerOptions(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONLimit(w, r, &o, 8<<10) {
 		return
 	}
-	cur := parseFailoverOptions(p.Options)
-	cur.Files, cur.LimitKBps, cur.WindowFrom, cur.WindowTo = o.Files, o.LimitKBps, o.WindowFrom, o.WindowTo
-	if err := s.saveFailoverOptions(r.Context(), p, cur, false); err != nil {
+	if o.VIP != "" && validVIP(o.VIP, o.VIPIface) != nil {
+		writeError(w, http.StatusBadRequest, "validation", "bad shared address")
+		return
+	}
+	if err := s.saveFailoverOptions(r.Context(), p, o, false); err != nil {
 		s.internalError(w, r, err)
 		return
 	}

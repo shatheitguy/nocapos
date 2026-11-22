@@ -45,3 +45,10 @@ func (s *Store) CountAudit(ctx context.Context, userID, action string) (int, err
 		`SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = ?`, userID, action).Scan(&n)
 	return n, err
 }
+
+// CountAuditAction counts entries of an action, whoever (or nothing) did it.
+func (s *Store) CountAuditAction(ctx context.Context, action string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM audit_log WHERE action = ?`, action).Scan(&n)
+	return n, err
+}

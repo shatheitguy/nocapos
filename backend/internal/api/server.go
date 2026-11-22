@@ -114,6 +114,7 @@ type Server struct {
 	squad            squadState         // Your Squad: link requests between servers, and from phones
 	failover         failoverState      // failover pair: keeping a linked server in sync
 	failoverFiles    failoverFilesState // and its files (failover_files.go)
+	failoverTake     takeoverState      // and taking over (failover_takeover.go)
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
