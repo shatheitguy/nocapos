@@ -112,6 +112,7 @@ type Server struct {
 	osImg            *osState        // image install: whole-system updates (nil on a script install)
 	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
 	squad            squadState      // Your Squad: link requests between servers, and from phones
+	failover         failoverState   // failover pair: keeping a linked server in sync
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -162,7 +163,8 @@ func New(ctx context.Context, d Deps) *Server {
 	s.versionSince()       // note when this version first ran (stale update results go by it)
 	s.initOSImage(ctx)     // image install: Glow Up updates the whole system (os_update_handlers.go)
 	if d.Store != nil {
-		go s.notesLoop(ctx) // Sticky Notes reminders and old trash
+		go s.notesLoop(ctx)    // Sticky Notes reminders and old trash
+		go s.failoverLoop(ctx) // a failover pair's sync (failover.go)
 	}
 	return s
 }
@@ -201,6 +203,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("PUT /api/v1/link/bluetooth", s.admin(s.linkBluetoothPut))
 	// Your Squad: linking with other NoCap servers; phones asking to link.
 	s.squadRoutes(mux)
+	s.failoverRoutes(mux) // and keeping one in sync as a failover pair
 	mux.Handle("GET /api/v1/devices", s.authed(s.devicesList))
 	mux.Handle("DELETE /api/v1/devices/{id}", s.authed(s.devicesRevoke))
 	mux.Handle("PATCH /api/v1/devices/{id}", s.authed(s.devicesRename))

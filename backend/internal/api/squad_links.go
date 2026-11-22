@@ -288,6 +288,11 @@ func peerClient(pin string, seen *string, remote bool) *http.Client {
 
 // peerCall sends body (JSON) to base+path and reads the JSON answer into out.
 func peerCall(ctx context.Context, c *http.Client, method, base, path, token string, body, out any) error {
+	return peerCallMax(ctx, c, method, base, path, token, body, out, squadMaxBody)
+}
+
+// peerCallMax is peerCall with answers up to limit bytes.
+func peerCallMax(ctx context.Context, c *http.Client, method, base, path, token string, body, out any, limit int64) error {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -312,7 +317,7 @@ func peerCall(ctx context.Context, c *http.Client, method, base, path, token str
 		return err
 	}
 	defer res.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(res.Body, squadMaxBody))
+	data, err := io.ReadAll(io.LimitReader(res.Body, limit))
 	if err != nil {
 		return err
 	}

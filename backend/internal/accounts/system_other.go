@@ -27,3 +27,8 @@ func (s *System) Verify(context.Context, string, string) (bool, error) { return 
 func (s *System) RoleOf(context.Context, string) (string, bool, error) {
 	return "", false, ErrNotFound
 }
+
+func (s *System) ExportAccounts(context.Context) ([]SystemEntry, error) {
+	return nil, errors.New("unsupported")
+}
+func (s *System) ImportAccount(context.Context, SystemEntry) error { return errors.New("unsupported") }
