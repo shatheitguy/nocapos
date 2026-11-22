@@ -81,6 +81,7 @@ function DockItem({ id, pinned, onMenu }: { id: string; pinned: boolean; onMenu:
   const active = useWM((s) => s.windows.some((w) => w.appId === id && w.id === s.focused && !w.minimized));
   const dragging = useAppDrag((s) => s.drag?.appId === id && s.drag.source === 'dock');
   const size = usePrefs((s) => s.dockSize);
+  usePrefs((s) => s.lingo); // the app's name follows the voice
   return (
     <button
       type="button"

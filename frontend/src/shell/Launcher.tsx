@@ -15,7 +15,7 @@ import { folderKey, ungroup, useFolders, type AppFolder } from '../state/folders
 import { FolderView } from './FolderView';
 import { StoreTile, useWiggleEscape } from './StoreAppGrid';
 import { launchStoreApp, shownOnHome, storeKey, useStoreApps } from '../state/storeApps';
-import { isCompact } from '../state/prefs';
+import { isCompact, usePrefs } from '../state/prefs';
 import type { NativeApp } from '../api/nativeApps';
 import { launchNativeApp, nativeKey, useNativeApps } from '../state/nativeApps';
 import { NativeTile } from './NativeTile';
@@ -50,6 +50,7 @@ function gridFor(w: number, h: number) {
 
 export function Launcher({ isAdmin, onClose }: { isAdmin: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
+  usePrefs((s) => s.lingo); // app names follow the voice
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [openFolder, setOpenFolder] = useState<string | null>(null);
   const folders = useFolders((s) => s.folders);

@@ -23,6 +23,7 @@ export function DesktopIcons({ isAdmin }: { isAdmin: boolean }) {
   const nativeApps = useNativeApps((s) => s.apps);
   const nativeLoaded = useNativeApps((s) => s.loaded);
   usePrefs((s) => s.iconSize); // re-render when the icon size changes
+  usePrefs((s) => s.lingo); // or the voice (app names follow it)
   const cell = iconCell();
   const dragging = useAppDrag((s) => (s.drag?.source === 'desktop' ? s.drag.appId : null));
   const target = useAppDrag((s) => {
