@@ -1,6 +1,6 @@
 name: Container template
 
-# Builds the NoCapOS container template for Proxmox VE (a system container:
+# Builds the NoCapOS container template for hypervisors (a system container:
 # Debian 13 with NoCapOS in server mode, see image/lxc/) from this checkout's
 # NoCapOS bundle, built here exactly as the release workflow builds it:
 #   nocapos-<version>-lxc-amd64.tar.zst
