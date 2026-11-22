@@ -61,7 +61,7 @@ async function common(page: Page) {
 
 const BACKDROP = `
   :root, :root body, html[data-native-surface] body, html[data-native-surface] { background: #1d2733 !important; background-image: none !important; }
-  .desktop-surface, .desktop-icons, .home-header, .widget-layer, .stuck-notes, .window-layer, .welcome { display: none !important; }
+  .desktop-surface, .desktop-icons, .widget-layer, .stuck-notes, .window-layer, .welcome { display: none !important; }
   *, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }
 `;
 

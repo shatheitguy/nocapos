@@ -176,44 +176,6 @@ body[data-wallpaper='midnight'] { background: #05070d url('/wallpapers/midnight.
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ---------- home: greeting and search ---------- */
-.home-header {
-  position: absolute;
-  top: calc(var(--res-top, 0px) + 7vh);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-  text-align: center;
-  pointer-events: none;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.35);
-  max-width: 90vw;
-}
-.home-date { font-size: 14px; font-weight: 500; opacity: 0.75; }
-.home-greet { margin: 0; font-size: clamp(28px, 3.4vw, 44px); font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; }
-button.home-search {
-  pointer-events: auto;
-  align-self: center;
-  width: auto;
-  border-radius: 999px;
-  margin-top: 14px;
-  padding: 7px 10px 7px 14px;
-  gap: 8px;
-  font-weight: 500;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(28, 29, 34, 0.38);
-  backdrop-filter: blur(30px) saturate(1.7);
-  -webkit-backdrop-filter: blur(30px) saturate(1.7);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  text-shadow: none;
-}
-button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); filter: none; }
-.home-search kbd { font: inherit; font-size: 11px; padding: 1px 7px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.65); }
 :root[data-ui='glass'] .clock-greet { display: none; }
 
 /* ---------- universal search ---------- */
@@ -270,10 +232,9 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 /* ---------- Reduce transparency ----------
    Every floating surface turns solid: widgets, the dock and tray, the menu
    bar, search, menus and the Control Center, notifications and toasts. */
-:root[data-solid] :is(.widget, .dock, .tray, .menubar, .home-search, .spotlight, .context-menu, .popover, .toast, .nb, .nc.windows, .nc-card, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x, .update-ready) {
+:root[data-solid] :is(.widget, .dock, .tray, .menubar, .spotlight, .context-menu, .popover, .toast, .nb, .nc.windows, .nc-card, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x, .update-ready) {
   background: var(--glass-strong) !important;
 }
-:root[data-solid] button.home-search:hover:not(:disabled) { background: color-mix(in srgb, var(--glass-strong) 88%, var(--text) 12%) !important; }
 :root[data-solid] .nc-card.mac:hover { background: color-mix(in srgb, var(--glass-strong) 90%, var(--text) 10%) !important; }
 :root[data-solid] .nc-peek { background: color-mix(in srgb, var(--glass-strong) 85%, #000) !important; }
 
@@ -286,11 +247,11 @@ button.home-search:hover:not(:disabled) { background: rgba(40, 41, 47, 0.55); fi
 :root { --tint: var(--surface); }
 :root[data-ui='glass'] { --tint: rgb(24, 25, 30); }
 :root[data-tuned] .window { --b: 0.66; }
-:root[data-tuned] :is(.widget, .home-search) { --b: 0.4; }
+:root[data-tuned] .widget { --b: 0.4; }
 :root[data-tuned] :is(.dock, .tray, .nb.mac, .nc-card.mac, .nc-peek, .nc-none) { --b: 0.5; }
 :root[data-tuned] :is(.toast, .update-ready, .nc-pill, .nc-round, .nb-x) { --b: 0.7; }
 :root[data-tuned] :is(.spotlight, .context-menu, .popover, .dialog, .nb.windows, .nc.windows) { --b: 0.8; }
-:root[data-tuned] :is(.window, .widget, .home-search, .dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
+:root[data-tuned] :is(.window, .widget, .dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
   --a: calc((var(--b) + (1 - var(--b)) * (1 - var(--clear, 1))) * 100%);
   background: color-mix(in srgb, var(--tint) var(--a), transparent) !important;
 }
