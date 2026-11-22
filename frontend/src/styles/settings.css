@@ -88,6 +88,14 @@
 .glowup-details > summary::-webkit-details-marker { display: none; }
 .glowup-details > summary::before { content: '\25B8'; font-size: 11px; color: var(--muted); transition: transform 0.15s; }
 .glowup-details[open] > summary::before { transform: rotate(90deg); }
+/* The one list of what will change: NoCapOS, apps, system packages. */
+.glowup-group { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.glowup-group + .glowup-group { border-top: 1px solid var(--border); }
+.glowup-group-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.glowup-badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #e8232b; color: #fff; font-size: 11px; line-height: 18px; text-align: center; letter-spacing: 0; }
+.glowup-app { display: inline-flex; align-items: center; gap: 8px; }
+.glowup-notes > summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+.glowup-notes .set-notes { margin-top: 8px; }
 .glowup-details > summary .muted { font-weight: 500; text-transform: none; letter-spacing: 0; }
 .glowup-details > .settings-card { margin-top: 8px; }
 .glowup-note { margin: 0; padding: 0 4px; }

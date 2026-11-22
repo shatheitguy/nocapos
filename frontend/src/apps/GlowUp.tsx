@@ -8,14 +8,19 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { missing } from '../lib/settingsKit';
 import { openUpdate, resumeRunningUpdate, useUpdate, vtag, type UpdateRunStatus } from '../state/update';
-import { confirmChange, RepairCard, splitKernel, type PkgHealth } from './PackagesRepair';
+import { useStoreApps } from '../state/storeApps';
+import type { StoreApp } from '../api/appstore';
+import { AppIcon } from '../components/AppTile';
+import { confirmChange, splitKernel, type PkgHealth } from './PackagesRepair';
 import { ImageGlowUp, type OSStatus } from './GlowUpImage';
 
-// Settings → Glow Up: one place for every update. One check looks at
-// NoCapOS and the system's packages together, one summary says what's
-// waiting, and one button installs it all as a single run on the server
-// (POST /api/v1/system/update/all): repair the packages if needed, the
-// system updates, then NoCapOS itself, which restarts it.
+// Settings → Glow Up: one update for everything. One check looks at
+// NoCapOS, the system's packages and the App Store apps together; one list
+// says what will change (grouped, details folded away); one button installs
+// it all as a single run on the server (POST /api/v1/system/update/all): the
+// apps, then a package repair when needed (automatic: it only asks when
+// something would be removed), the system updates, then NoCapOS itself,
+// which restarts it; and one result.
 
 interface UpdateInfo {
   current: string;
@@ -67,11 +72,14 @@ interface SysStatus {
 interface AllRun {
   started: string;
   ended?: string;
-  phase: 'packages' | 'nocapos' | 'done';
+  phase: 'apps' | 'packages' | 'nocapos' | 'done';
   packages: number;
   security: number;
   repair?: boolean;
   kernel?: boolean;
+  apps?: string[];
+  apps_done?: number;
+  apps_failed?: string[];
   from?: string;
   target?: string;
   ok: boolean;
@@ -112,6 +120,26 @@ async function waitJob(id: string) {
   }
 }
 
+/** The count on the folded list: "NoCapOS · 2 apps · 14 packages". */
+function changeCount(t: (k: string, v?: Record<string, string | number>) => string, noc: boolean, apps: number, pkgs: number, repair: boolean) {
+  return [noc ? 'NoCapOS' : '', apps ? t('gu.partApps', { n: apps }) : '', pkgs ? t('gu.partSys', { n: pkgs }) : '', repair && !pkgs ? t('gu.stepRepair') : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** What changes for an app: its version, or a newer image of the same one. */
+function appChange(t: (k: string, v?: Record<string, string | number>) => string, a: StoreApp) {
+  const cur = a.installed?.version ?? '';
+  if (a.installed?.image_update && cur === a.version) return t('au.newImage', { version: a.version });
+  return `v${cur} → v${a.version}`;
+}
+
+/** Asks the App Store apps' registries too (a check is one check for everything). */
+async function storeApiCheck() {
+  await api('/api/v1/appstore/updates/check', { method: 'POST' });
+  await useStoreApps.getState().load();
+}
+
 function ScriptGlowUp() {
   const t = useT();
   const [u, setU] = useState<UpdateInfo | null>(null);
@@ -124,6 +152,9 @@ function ScriptGlowUp() {
   const [relErr, setRelErr] = useState<string | null>(null);
   const updating = useUpdate((s) => s.phase !== 'idle');
   const logRef = useRef<HTMLPreElement>(null);
+  // App Store apps with an update (a newer version or a newer image).
+  const storeApps = useStoreApps((s) => s.apps);
+  const appUps = storeApps.filter((a) => a.installed?.update_available && !(a.job && !a.job.done));
 
   const loadRelease = async (refresh: boolean) => {
     const r = await api<UpdateInfo>(`/api/v1/system/update${refresh ? '?refresh=1' : ''}`);
@@ -154,6 +185,7 @@ function ScriptGlowUp() {
     void loadRelease(false);
     void loadSys();
     void loadAll();
+    void useStoreApps.getState().load();
   }, []);
   useEffect(() => {
     if (updating) return;
@@ -187,6 +219,7 @@ function ScriptGlowUp() {
           else toast('error', tr('gu.doneFail'), st?.error);
           void loadSys();
           void loadRelease(false);
+          void useStoreApps.getState().load();
           return;
         }
       }
@@ -212,7 +245,7 @@ function ScriptGlowUp() {
           if (r.ok) await waitJob(r.data.job.id);
         })
       : Promise.resolve();
-    await Promise.all([loadRelease(true), refresh]);
+    await Promise.all([loadRelease(true), refresh, storeApiCheck()]);
     await loadSys();
     setChecking(false);
   };
@@ -222,15 +255,16 @@ function ScriptGlowUp() {
   const security = pending.filter((x) => x.security).length;
   const broken = !!sys?.health?.broken;
   const kernel = pending.some((x) => x.kernel);
-  const anything = nocPending || pending.length > 0 || broken;
+  const anything = nocPending || pending.length > 0 || broken || appUps.length > 0;
   const busy = checking || starting || allRunning || updating || !!sys?.job?.running || !!run?.running;
 
   // One button: everything at once.
   const updateAll = async () => {
     const target = nocPending ? u!.latest! : '';
     const what = [
-      ...(target ? [t('gu.askNoc', { version: vtag(target) })] : []),
+      ...(appUps.length ? [t('gu.askApps', { n: appUps.length })] : []),
       ...(pending.length ? [t('gu.askSys', { n: pending.length })] : []),
+      ...(target ? [t('gu.askNoc', { version: vtag(target) })] : []),
     ].join(' + ');
     let message = t('gu.askMsg', { what: what || t('gu.stepRepair') });
     if (broken) message += ' ' + t('gu.bodyRepair');
@@ -244,7 +278,7 @@ function ScriptGlowUp() {
     if (allow === null) return setStarting(false);
     const r = await api<{ run: AllRun }>('/api/v1/system/update/all', {
       method: 'POST',
-      body: { target: target || undefined, allow_remove: allow },
+      body: { target: target || undefined, allow_remove: allow, apps: appUps.map((a) => a.id) },
     });
     setStarting(false);
     if (r.ok) {
@@ -271,7 +305,12 @@ function ScriptGlowUp() {
   const ar = all?.run;
   if (allRunning && ar) {
     headline = t('gu.running');
-    detail = ar.phase === 'packages' ? t('gu.runningBody') : '';
+    detail =
+      ar.phase === 'apps'
+        ? t('gu.runningApps', { done: Math.min((ar.apps_done ?? 0) + 1, ar.apps?.length ?? 0), n: ar.apps?.length ?? 0 })
+        : ar.phase === 'packages'
+          ? t('gu.runningBody')
+          : '';
   } else if (checking) {
     headline = t('gu.checking');
   } else if (!u && relErr) {
@@ -279,13 +318,17 @@ function ScriptGlowUp() {
     detail = relErr;
   } else if (!u || !sys) {
     headline = t('gu.checking');
-  } else if (nocPending && pending.length) {
-    headline = t('gu.sumBoth', { version: vtag(u.latest), n: pending.length }) + (security ? t('gu.sec', { n: security }) : '');
-  } else if (nocPending) {
-    headline = u.dev ? t('sp.updDev') : t('gu.sumNoc', { version: vtag(u.latest) });
-    if (u.dev) detail = t('sp.updDevBody', { current: u.current, latest: vtag(u.latest) });
-  } else if (pending.length) {
-    headline = t('gu.sumSys', { n: pending.length }) + (security ? t('gu.sec', { n: security }) : '');
+  } else if (nocPending && u.dev && !pending.length && !appUps.length) {
+    headline = t('sp.updDev');
+    detail = t('sp.updDevBody', { current: u.current, latest: vtag(u.latest) });
+  } else if (nocPending || pending.length || appUps.length) {
+    // One line for everything waiting.
+    const parts = [
+      ...(nocPending ? [t('gu.partNoc', { version: vtag(u.latest) })] : []),
+      ...(pending.length ? [t('gu.partSys', { n: pending.length }) + (security ? t('gu.sec', { n: security }) : '')] : []),
+      ...(appUps.length ? [t('gu.partApps', { n: appUps.length })] : []),
+    ];
+    headline = t('gu.sumParts', { parts: parts.join(' · ') });
   } else if (broken) {
     headline = t('gu.sumRepair');
   } else if (u.error) {
@@ -303,16 +346,19 @@ function ScriptGlowUp() {
   const lastChecked = checked.length ? new Date(Math.min(...checked)) : null;
 
   // ---- the progress view
-  const steps: { id: string; label: string; state: 'done' | 'now' | 'todo' | 'bad' }[] = [];
+  type StepState = 'done' | 'now' | 'todo' | 'bad';
+  const steps: { id: string; label: string; state: StepState }[] = [];
   if (ar && (allRunning || ar.phase === 'done')) {
-    const order = { packages: 0, nocapos: 1, done: 2 }[ar.phase];
+    const order = { apps: 0, packages: 1, nocapos: 2, done: 3 }[ar.phase];
     const hasSys = ar.packages > 0 || !!ar.repair;
-    const failedAt = ar.phase === 'done' && !ar.ok ? (hasSys && !all?.job?.ok ? 0 : 1) : -1;
-    const st = (i: number) => (failedAt === i ? 'bad' : order > i ? 'done' : order === i ? 'now' : 'todo');
-    if (hasSys) {
-      steps.push({ id: 'sys', label: ar.packages > 0 ? t('gu.stepSys', { n: ar.packages }) : t('gu.stepRepair'), state: st(0) });
-    }
-    if (ar.target) steps.push({ id: 'noc', label: t('gu.stepNoc', { version: vtag(ar.target) }), state: st(1) });
+    const failed = ar.phase === 'done' && !ar.ok;
+    const appsBad = !!ar.apps_failed?.length;
+    const sysBad = failed && hasSys && !!all?.job && !all.job.ok;
+    const st = (i: number, bad: boolean): StepState => (order === i ? 'now' : order < i ? 'todo' : bad ? 'bad' : 'done');
+    if (ar.apps?.length) steps.push({ id: 'apps', label: t('gu.stepApps', { n: ar.apps.length }), state: st(0, appsBad) });
+    if (ar.repair) steps.push({ id: 'repair', label: t('gu.stepRepair'), state: st(1, sysBad) });
+    if (ar.packages > 0) steps.push({ id: 'sys', label: t('gu.stepSys', { n: ar.packages }), state: st(1, sysBad) });
+    if (ar.target) steps.push({ id: 'noc', label: t('gu.stepNoc', { version: vtag(ar.target) }), state: st(2, failed && !sysBad && !appsBad) });
   }
   const restartNeeded = !!(all?.restart_needed || sys?.restart_needed);
 
@@ -387,7 +433,6 @@ function ScriptGlowUp() {
           </div>
         )}
 
-        {sys?.health && !allRunning && <RepairCard health={sys.health} />}
 
         {(all?.job?.output || (run?.log && !ar)) && (
           <details className="set-update-log" open={allRunning}>
@@ -399,63 +444,100 @@ function ScriptGlowUp() {
         )}
       </div>
 
-      {sys?.supported && sys.updates.length > 0 && !allRunning && (
+      {anything && !allRunning && (
         <details className="settings-section glowup-details">
           <summary className="settings-section-title">
-            {t('gu.details')} <span className="muted">{t('gu.sysHeader', { n: pending.length }) + (sys.manager ? ` · ${sys.manager}` : '')}</span>
+            {t('gu.details')} <span className="muted">{changeCount(t, nocPending, appUps.length, pending.length, broken)}</span>
           </summary>
           <div className="settings-card">
-            <div className="settings-row full sysupd">
-              <ul className="sysupd-list">
-                {kernelUps.length > 0 && (
-                  <li className="sysupd-kernel">
-                    <span className="sysupd-name">{t('pkg.kernelRow')}</span>
-                    {kernelUps.some((x) => x.security) && <span className="sysupd-tag sec">{t('gu.tagSecurity')}</span>}
-                    <span className="sysupd-tag">{t('gu.tagRestart')}</span>
-                    <span className="sysupd-ver" title={kernelUps.map((x) => `${x.name} ${x.available}`).join('\n')}>
-                      {t('pkg.kernelPkgs', { n: kernelUps.length, names: kernelUps.map((x) => x.name).join(', ') })}
-                    </span>
-                  </li>
-                )}
-                {list.map((x) => (
-                  <li key={x.name}>
-                    <span className="sysupd-name">{x.name}</span>
-                    {x.security && <span className="sysupd-tag sec">{t('gu.tagSecurity')}</span>}
-                    {x.held && <span className="sysupd-tag">{t('gu.tagHeld')}</span>}
+            {nocPending && u && (
+              <div className="settings-row full glowup-group">
+                <span className="glowup-group-title">NoCapOS</span>
+                <ul className="sysupd-list">
+                  <li>
+                    <span className="sysupd-name">NoCapOS</span>
                     <span className="sysupd-ver">
-                      {x.current ? `${x.current} → ` : ''}
-                      {x.available}
+                      {vtag(u.current)} → {vtag(u.latest)}
                     </span>
                   </li>
-                ))}
-              </ul>
-              {rows > SHOWN && (
-                <button type="button" className="ghost small sysupd-more" onClick={() => setShowAll((a) => !a)}>
-                  {showAll ? t('gu.showFewer') : t('gu.showAll', { n: rows })}
-                </button>
-              )}
-            </div>
+                </ul>
+                {u.notes && !u.error && (
+                  <details className="glowup-notes">
+                    <summary>{t('sp.whatsNew', { version: vtag(u.latest) })}</summary>
+                    <pre className="set-notes">{plainNotes(u.notes)}</pre>
+                    {u.url && (
+                      <a className="set-link" href={u.url} target="_blank" rel="noreferrer">
+                        {t('sp.viewGithub')} <Icon name="external" size={12} />
+                      </a>
+                    )}
+                  </details>
+                )}
+              </div>
+            )}
+            {appUps.length > 0 && (
+              <div className="settings-row full glowup-group">
+                <span className="glowup-group-title">
+                  {t('gu.groupApps')} <span className="glowup-badge">{appUps.length}</span>
+                </span>
+                <ul className="sysupd-list">
+                  {appUps.map((a) => (
+                    <li key={a.id}>
+                      <span className="sysupd-name glowup-app">
+                        <AppIcon app={a} size={20} /> {a.name}
+                      </span>
+                      <span className="sysupd-ver">{appChange(t, a)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(broken || (sys?.supported && sys.updates.length > 0)) && (
+              <div className="settings-row full sysupd glowup-group">
+                <span className="glowup-group-title">
+                  {t('gu.groupSys')}
+                  {sys?.manager && <span className="muted"> · {sys.manager}</span>}
+                </span>
+                <ul className="sysupd-list">
+                  {broken && (
+                    <li className="sysupd-kernel">
+                      <span className="sysupd-name">{t('gu.repairRow')}</span>
+                      <span className="sysupd-tag">{t('gu.tagAuto')}</span>
+                    </li>
+                  )}
+                  {kernelUps.length > 0 && (
+                    <li className="sysupd-kernel">
+                      <span className="sysupd-name">{t('pkg.kernelRow')}</span>
+                      {kernelUps.some((x) => x.security) && <span className="sysupd-tag sec">{t('gu.tagSecurity')}</span>}
+                      <span className="sysupd-tag">{t('gu.tagRestart')}</span>
+                      <span className="sysupd-ver" title={kernelUps.map((x) => `${x.name} ${x.available}`).join('\n')}>
+                        {t('pkg.kernelPkgs', { n: kernelUps.length, names: kernelUps.map((x) => x.name).join(', ') })}
+                      </span>
+                    </li>
+                  )}
+                  {list.map((x) => (
+                    <li key={x.name}>
+                      <span className="sysupd-name">{x.name}</span>
+                      {x.security && <span className="sysupd-tag sec">{t('gu.tagSecurity')}</span>}
+                      {x.held && <span className="sysupd-tag">{t('gu.tagHeld')}</span>}
+                      <span className="sysupd-ver">
+                        {x.current ? `${x.current} → ` : ''}
+                        {x.available}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {rows > SHOWN && (
+                  <button type="button" className="ghost small sysupd-more" onClick={() => setShowAll((a) => !a)}>
+                    {showAll ? t('gu.showFewer') : t('gu.showAll', { n: rows })}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </details>
       )}
       {sys && !sys.supported && sys.reason && <p className="muted small glowup-note">{sys.reason}</p>}
       {sys?.error && <p className="muted small glowup-note">{sys.error}</p>}
-
-      {u?.notes && !u.error && nocPending && (
-        <details className="settings-section glowup-details">
-          <summary className="settings-section-title">{t('sp.whatsNew', { version: vtag(u.latest) })}</summary>
-          <div className="settings-card">
-            <div className="settings-row full">
-              <pre className="set-notes">{plainNotes(u.notes)}</pre>
-              {u.url && (
-                <a className="set-link" href={u.url} target="_blank" rel="noreferrer">
-                  {t('sp.viewGithub')} <Icon name="external" size={12} />
-                </a>
-              )}
-            </div>
-          </div>
-        </details>
-      )}
     </div>
   );
 }

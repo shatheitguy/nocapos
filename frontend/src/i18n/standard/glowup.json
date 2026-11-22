@@ -2,9 +2,6 @@
   "gu.checking": "Checking for updates…",
   "gu.upToDate": "Everything is up to date",
   "gu.upToDateBody": "NoCapOS {version} and the system's packages are current.",
-  "gu.sumBoth": "NoCapOS {version} + {n} system updates",
-  "gu.sumNoc": "NoCapOS {version} is available",
-  "gu.sumSys": "{n} system updates available",
   "gu.sec": ", {n} security",
   "gu.sumRepair": "The system's packages need a repair",
   "gu.bodySec": "Security fixes are included; install them soon.",
@@ -79,5 +76,16 @@
   "gi.autoSec": "Install security updates automatically",
   "gi.autoSecHint": "Security updates install by themselves around {time} and the machine restarts. New versions still wait for you.",
   "gi.autoTime": "Time",
-  "gi.aboutImage": "NoCapOS {version} · system packages from Debian as of {snapshot}. The system is read-only and updates as a whole."
+  "gi.aboutImage": "NoCapOS {version} · system packages from Debian as of {snapshot}. The system is read-only and updates as a whole.",
+  "gu.sumParts": "Updates ready: {parts}",
+  "gu.partNoc": "NoCapOS {version}",
+  "gu.partSys": "{n} system update(s)",
+  "gu.partApps": "{n} app update(s)",
+  "gu.askApps": "{n} app update(s)",
+  "gu.runningApps": "Updating apps ({done} of {n}). Their data and settings are kept.",
+  "gu.stepApps": "App updates ({n})",
+  "gu.groupApps": "Apps",
+  "gu.groupSys": "System packages",
+  "gu.repairRow": "Repair half-installed packages first",
+  "gu.tagAuto": "Automatic"
 }

@@ -2,9 +2,6 @@
   "gu.checking": "Checking what's new…",
   "gu.upToDate": "Everything's fresh. No cap.",
   "gu.upToDateBody": "NoCapOS {version} and the system packages are all caught up.",
-  "gu.sumBoth": "NoCapOS {version} + {n} system updates",
-  "gu.sumNoc": "NoCapOS {version} just dropped",
-  "gu.sumSys": "{n} system updates ready",
   "gu.sec": ", {n} security",
   "gu.sumRepair": "The system packages need a fix-up",
   "gu.bodySec": "Security patches inside, don't sleep on them.",
@@ -79,5 +76,16 @@
   "gi.autoSec": "Install security patches on autopilot",
   "gi.autoSecHint": "Security patches install by themselves around {time} and the machine restarts. New versions still wait for you.",
   "gi.autoTime": "Time",
-  "gi.aboutImage": "NoCapOS {version} · system packages from Debian as of {snapshot}. The system is read-only and updates as a whole."
+  "gi.aboutImage": "NoCapOS {version} · system packages from Debian as of {snapshot}. The system is read-only and updates as a whole.",
+  "gu.sumParts": "Fresh stuff ready: {parts}",
+  "gu.partNoc": "NoCapOS {version}",
+  "gu.partSys": "{n} system update(s)",
+  "gu.partApps": "{n} app update(s)",
+  "gu.askApps": "{n} app update(s)",
+  "gu.runningApps": "Updating apps ({done} of {n}). Their data and settings stay put.",
+  "gu.stepApps": "App updates ({n})",
+  "gu.groupApps": "Apps",
+  "gu.groupSys": "System packages",
+  "gu.repairRow": "Fix half-installed packages first",
+  "gu.tagAuto": "Automatic"
 }
