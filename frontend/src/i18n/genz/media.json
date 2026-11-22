@@ -59,5 +59,10 @@
   "media.m.cantPlay": "This one won’t play here. Skip it or download it.",
   "media.m.upNext": "Up next",
   "media.m.loops": "That’s the lot. It loops back to the top.",
-  "media.m.queueEnd": "That’s the last one."
+  "media.m.queueEnd": "That’s the last one.",
+  "media.m.newPlayer": "Play in a fresh player",
+  "media.m.nowPlaying": "On rotation",
+  "media.m.queue": "Queue",
+  "media.m.dragHint": "Tap to play, drag to shuffle it around",
+  "media.m.remove": "Drop from queue"
 }

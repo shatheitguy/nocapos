@@ -19,7 +19,7 @@ import {
 import { copyPicture, MAX_CLIP_TEXT } from '../state/clipSync';
 import { carryLabel, openCarry } from './linkActions';
 import { closeReceivedBanner, showInFiles, useReceived } from '../state/received';
-import { openApp } from '../apps/meta';
+import { openFile } from '../apps/openWithApps';
 import '../styles/link.css';
 
 // NoCap Link in the Notification Center: the phones' notifications (grouped
@@ -504,7 +504,7 @@ export function ReceivedBanner({ look }: { look: Look }) {
   };
   const open = () => {
     const p = e.paths[0];
-    openApp('viewer', { title: fileName(p), props: { root: e.root, path: p }, key: `viewer:${e.root}:${p}` });
+    openFile({ root: e.root, path: p, name: fileName(p) });
     closeReceivedBanner();
   };
   return (
