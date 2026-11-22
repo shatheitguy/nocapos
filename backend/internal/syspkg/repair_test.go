@@ -135,7 +135,9 @@ func TestParseAptSim(t *testing.T) {
 func argsOf(steps []Step) [][]string {
 	var a [][]string
 	for _, s := range steps {
-		if s.Fn != nil {
+		if s.Fn != nil && s.Label == GrubBootDiskStep().Label {
+			a = append(a, []string{"<grub>"})
+		} else if s.Fn != nil {
 			a = append(a, []string{"<guard>"})
 		} else {
 			a = append(a, s.Args)
@@ -152,6 +154,7 @@ func TestAptStepsUpgradeAll(t *testing.T) {
 	q := []string{"apt-get", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "-y", "--no-remove"}
 	want := [][]string{
 		{"apt-get", "update"},
+		{"<grub>"},
 		dpkgConfigure,
 		{"<guard>"},
 		append(append([]string{}, q...), "--fix-broken", "install"),
@@ -161,7 +164,7 @@ func TestAptStepsUpgradeAll(t *testing.T) {
 	if got := argsOf(steps); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}
-	if !steps[1].Optional || steps[4].Optional || steps[5].Optional {
+	if !steps[1].Optional || !steps[2].Optional || steps[5].Optional || steps[6].Optional {
 		t.Error("only the first configure -a may fail")
 	}
 	for _, s := range steps {
@@ -184,12 +187,12 @@ func TestAptStepsUpgradeNamesAndRepair(t *testing.T) {
 	if last := got[len(got)-1]; !reflect.DeepEqual(last, []string{"apt-mark", "auto", "linux-headers-rpi-2712"}) || !steps[len(steps)-1].Optional {
 		t.Errorf("auto marks: %v", last)
 	}
-	if got[0][0] != "dpkg" || got[1][0] != "<guard>" {
-		t.Errorf("repair and guard come first: %q", got)
+	if got[0][0] != "<grub>" || got[1][0] != "dpkg" || got[2][0] != "<guard>" {
+		t.Errorf("boot disk check, repair and guard come first: %q", got)
 	}
 
 	steps, _ = AptSteps(ActRepair, Options{}, nil)
-	want := [][]string{dpkgConfigure, {"<guard>"},
+	want := [][]string{{"<grub>"}, dpkgConfigure, {"<guard>"},
 		{"apt-get", "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold", "-y", "--no-remove", "--fix-broken", "install"},
 		dpkgConfigure}
 	if got := argsOf(steps); !reflect.DeepEqual(got, want) {

@@ -402,6 +402,35 @@ apt_confirm_remove() {
   [[ "$a" =~ ^[Yy] ]]
 }
 
+# grub_boot_disk: BIOS PCs boot with grub-pc, which must know which disk to
+# write itself to on every update. Installs that never recorded it leave
+# the answer empty, and then a grub-pc update stops half way (updates can't
+# ask) and blocks every later install. Fill it in with the disk(s) the
+# system starts from. Does nothing on UEFI, without grub-pc, or when set.
+grub_boot_disk() {
+  local src disks d link best devs=""
+  [ -d /sys/firmware/efi ] && return 0
+  dpkg-query -W -f='${Status}' grub-pc 2>/dev/null | grep -q install || return 0
+  command -v debconf-show >/dev/null 2>&1 || return 0
+  if debconf-show grub-pc 2>/dev/null | sed -n 's/^[ *]*grub-pc\/install_devices:[[:space:]]*//p' | grep -q .; then return 0; fi
+  src="$(findmnt -n -o SOURCE --target /boot 2>/dev/null || findmnt -n -o SOURCE --target / 2>/dev/null)"
+  src="${src%%[*}"
+  case "$src" in /dev/*) ;; *) return 0 ;; esac
+  disks="$(lsblk -s -n -l -o NAME,TYPE "$src" 2>/dev/null | awk '$2 == "disk" {print $1}' | sort -u)"
+  [ -n "$disks" ] || return 0
+  for d in $disks; do
+    best=""
+    for link in /dev/disk/by-id/ata-* /dev/disk/by-id/nvme-* /dev/disk/by-id/scsi-* /dev/disk/by-id/virtio-* /dev/disk/by-id/usb-* /dev/disk/by-id/*; do
+      [ -e "$link" ] || continue
+      case "$link" in *-part*) continue ;; esac
+      if [ "$(readlink -f "$link")" = "/dev/$d" ]; then best="$link"; break; fi
+    done
+    devs="${devs:+$devs, }${best:-/dev/$d}"
+  done
+  printf 'grub-pc grub-pc/install_devices multiselect %s\n' "$devs" | debconf-set-selections 2>/dev/null &&
+    printf '    boot loader disk set to %s\n' "$devs"
+}
+
 # apt_repair: finishes what dpkg left half-done and fixes unmet
 # dependencies, like the in-app repair. Fails (after saying why) when the
 # package system is still broken.
@@ -410,6 +439,7 @@ apt_repair() {
   info "Repairing the package system first (an earlier install or update didn't finish)"
   [ -z "$APT_BROKEN_PKGS" ] || printf '    broken: %s\n' "$APT_BROKEN_PKGS"
   apt_wait_lock || true
+  grub_boot_disk || true
   # A package whose dependency is missing can't be configured yet, so this
   # may fail; --fix-broken below installs what's missing.
   LC_ALL=C DEBIAN_FRONTEND=noninteractive dpkg --force-confdef --force-confold --configure -a >"$PKG_LOG2" 2>&1 || true
