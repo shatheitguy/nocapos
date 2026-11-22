@@ -1,0 +1,50 @@
+# Packages in the NoCapOS container template (a system container on a
+# hypervisor), on top of Debian 13's minimal base. Same format and rule as
+# os/packages/*.list: one package per line, then "#" and the NoCapOS feature
+# that uses it; image/lxc/build.sh stops on a line without a reason.
+#   name     required          a|b    the first one apt has
+#   ?name    optional          Recommends are never installed.
+#
+# Left out on purpose, because the host owns them in a container: the kernel,
+# firmware and boot loader, the boot splash, NoCap Desktop (no screen),
+# NetworkManager and Wi-Fi (the host sets up the container's network), the
+# clock (systemd-timesyncd doesn't run in containers), ZFS, SMART, disk sleep
+# and disk pooling tools (the host keeps the physical disks), and SMB/NFS
+# mounts (a container may not mount network drives; mount them on the host
+# and pass them in). Virtual Desk and Flatpak aren't preinstalled either:
+# NoCapOS offers them in Packages when the container can use them (Virtual
+# Desk needs /dev/kvm passed through).
+
+# ---- base system
+systemd                    # service manager: runs NoCapOS and everything it manages
+systemd-sysv               # makes systemd the container's init
+dbus                       # system bus: logind, hostnamed, timedated, Docker
+libpam-systemd             # user sessions: terminals as your own user
+ifupdown                   # brings up the network the host writes into /etc/network/interfaces
+dhcpcd-base                # DHCP for that network (IPv4 and IPv6)
+iproute2                   # network status in Settings (ip, ss)
+procps                     # Activity (ps, free) and the health check
+tzdata                     # Settings > Date & Time
+ca-certificates            # HTTPS to GitHub (Glow Up), app stores and cloud backups
+curl                       # downloads in app installs, updates and the first-boot check
+sudo                       # admins run admin commands from their own terminal
+unattended-upgrades        # Debian security updates install themselves every day
+zstd                       # backup and export archives
+xz-utils                   # compressed downloads
+gzip                       # backup and export archives
+
+# ---- network
+avahi-daemon               # http://nocap.local and finding devices on the network
+avahi-utils                # publishing NoCapOS and app addresses (avahi-publish)
+libnss-mdns                # *.local names resolve on the server too
+ufw                        # Shield firewall
+wireguard-tools            # NoCap Link VPN (wg; the host's kernel has WireGuard)
+samba                      # Sharing: folders shared to Windows, macOS and phones
+?wsdd2|wsdd                # shared folders show up in Windows' Network view
+
+# ---- apps and media
+docker.io                  # App Store apps (Docker, nested in the container)
+docker-compose             # App Store stacks (docker compose)
+ffmpeg                     # Photos and Media: video thumbnails and streaming
+rclone                     # Cloud import and cloud backups
+restic                     # Backups

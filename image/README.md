@@ -8,9 +8,11 @@ own: an image you write to a USB stick or SD card, boot, and get NoCapOS.
 | --- | --- | --- |
 | `nocapos-<version>-amd64.iso` | 64-bit PCs, mini PCs, servers, VMs (BIOS and UEFI) | Debian 13 "trixie" + live-build; graphical installer (Calamares) + text-mode debian-installer |
 | `nocapos-<version>-rpi-arm64.img.xz` | Raspberry Pi 3, 4, 5, 400, 500, Zero 2 W, CM4/CM5 | Raspberry Pi OS Lite arm64 (trixie) + pi-gen |
+| `nocapos-<version>-lxc-amd64.tar.zst`, `-lxc-arm64.tar.zst` | A system container on Proxmox VE (see [Container template](#container-template-proxmox-ve)) | Debian 13 "trixie" + mmdebstrap |
 
-`.github/workflows/image.yml` builds both on GitHub Actions and attaches them
-to the release.
+`.github/workflows/image.yml` builds the first two on GitHub Actions and
+attaches them to the release; `.github/workflows/lxc.yml` builds the
+container templates (by hand only).
 
 ## Architecture
 
@@ -356,6 +358,115 @@ drive only, so it can't use a mirrored system drive.
 An existing ZFS-on-root install can add the second disk later from
 Storage → Boot drive → "Mirror my boot drive"; a system installed on ext4
 can't be converted safely in place, and the app says so.
+
+## Container template (Proxmox VE)
+
+`nocapos-<version>-lxc-<arch>.tar.zst` is NoCapOS as a system container: a
+whole Debian 13 system with its own systemd, NoCapOS in server mode (the web
+OS, Docker for the App Store, Sharing with Samba, `nocap.local` with Avahi,
+Shield with ufw, backups with restic and rclone) and no NoCap Desktop, since
+a container has no screen. The host keeps the hardware, so NoCapOS explains
+instead of offering what can't work there: Storage leaves pools, formatting,
+disk health, disk sleep and the boot drive mirror to the host; Settings says
+the network and Wi-Fi are set up on the host; NoCap Desktop and the boot
+details switch are off; Virtual Desk works only when `/dev/kvm` is passed in.
+NoCapOS finds out by itself (`backend/internal/virt`; `ALFA_CONTAINER=lxc`
+previews it anywhere, `ALFA_CONTAINER=none` turns it off).
+
+### Install it
+
+1. Get the template onto the host. In the web interface: your storage (one
+   with "Container template" content, e.g. `local`) → **CT Templates** →
+   **Upload**, and pick the `.tar.zst`; or on the host's shell:
+
+   ```bash
+   cd /var/lib/vz/template/cache
+   wget https://github.com/shatheitguy/nocapos/releases/download/v<version>/nocapos-<version>-lxc-amd64.tar.zst
+   wget https://github.com/shatheitguy/nocapos/releases/download/v<version>/nocapos-<version>-lxc-amd64.tar.zst.sha256
+   sha256sum -c nocapos-<version>-lxc-amd64.tar.zst.sha256
+   ```
+
+2. **Create CT** with these settings:
+
+   | Setting | Value | Why |
+   | --- | --- | --- |
+   | Unprivileged container | yes (the default) | safer; everything in the template works unprivileged |
+   | Features | `nesting=1,keyctl=1` | Docker inside the container (App Store) and systemd's sandboxing need both |
+   | Template | `nocapos-<version>-lxc-amd64.tar.zst` | |
+   | Disk | 16 GB or more | the system takes about 1.5 GB; apps and their data go here too unless you add a mount point |
+   | CPU | 2 cores | |
+   | Memory | 2048 MB (1024 MB works without apps), swap 512 MB | |
+   | Network | a bridge (`vmbr0`), IPv4 DHCP or a static address | the host sets up the container's network |
+   | Password / SSH key | anything | the template has no root password; use `pct enter` or the console |
+
+   The same from the host's shell (pick your own ID, storage and size):
+
+   ```bash
+   pct create 120 local:vztmpl/nocapos-<version>-lxc-amd64.tar.zst      --hostname nocap --unprivileged 1 --features nesting=1,keyctl=1      --cores 2 --memory 2048 --swap 512 --rootfs local-lvm:16      --net0 name=eth0,bridge=vmbr0,ip=dhcp --onboot 1
+   pct start 120
+   ```
+
+   The OS type is found from the template (Debian). Use a host version that
+   knows Debian 13 containers.
+
+3. **First start.** The first boot finishes the setup by itself in about a
+   minute (`journalctl -u nocapos-firstboot -f` inside the container). Then
+   open `https://<container address>/` (`pct exec 120 -- hostname -I`) or
+   `http://nocap.local` from a device on your network and create the
+   administrator. From outside the local network, setup also asks for the
+   one-time token on the container's console (`pct console 120`) or in
+   `journalctl -u nocapos`.
+
+### Options for more
+
+- **Your files on the host's disks:** add a mount point (Resources → Add →
+  Mount Point, or `pct set 120 -mp0 /tank/media,mp=/srv/media`) and add the
+  folder in Files. In an unprivileged container the files show up owned by
+  `nobody` unless they belong to the host's mapped IDs (100000 and up).
+- **Virtual machines (Virtual Desk):** pass `/dev/kvm` in
+  (`pct set 120 -dev0 /dev/kvm`); Virtual Desk then offers to install
+  what it needs.
+- **Shield (ufw)** works in the container's own network; the host's firewall
+  for the container (in the host's container settings) also applies.
+- **Network drives:** an unprivileged container may not mount SMB or NFS
+  shares. Mount them on the host and pass them in as a mount point.
+- **Backups:** the host's container backups and snapshots cover the whole
+  NoCapOS system; NoCapOS Backups covers your files and apps.
+- **Updates** work as on any NoCapOS server: Settings → Glow Up (NoCapOS
+  and Debian's packages); security updates install themselves.
+
+### Build it
+
+On GitHub: Actions → **Container template** → Run workflow, with the
+version and, to put the templates on the release, "attach". Each run builds
+the amd64 and arm64 templates on runners of that architecture, boots each one
+with `systemd-nspawn` (the first-boot setup has to finish and NoCapOS has to
+answer on its HTTPS port) and keeps them as workflow artifacts.
+
+Locally (root on Debian 13, or in a privileged `debian:trixie` container, on
+a machine of the target architecture):
+
+```bash
+apt-get install -y mmdebstrap zstd curl
+image/lxc/build.sh 0.14.6 amd64 out          # the bundle from release v0.14.6
+NOCAP_DIST=dist image/lxc/build.sh 0.14.6 amd64 out   # or from scripts/package.sh
+sudo image/lxc/boot-test.sh out/nocapos-0.14.6-lxc-amd64.tar.zst
+```
+
+The root filesystem is Debian 13 from a fixed snapshot
+(`os/config/snapshot.toml`, or `NOCAP_SNAPSHOT`), with timestamps from
+`SOURCE_DATE_EPOCH`, so the same inputs give the same packages. Its packages
+are `image/lxc/packages.list`, each with the feature that needs it (the same
+rule as `os/packages`); the installed system then uses Debian's own mirrors.
+
+```
+image/lxc/
+  build.sh        mmdebstrap + the NoCapOS layer, then the .tar.zst
+  customize.sh    runs in the root filesystem: packages, NoCapOS, identity
+  packages.list   every package, with its reason
+  boot-test.sh    boots a template with systemd-nspawn and checks NoCapOS
+  rootfs/         files copied as-is (first-boot settings)
+```
 
 ## Roadmap
 

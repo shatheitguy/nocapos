@@ -52,6 +52,20 @@ jobs:
       - name: Installer package repair (Debian trixie container)
         run: docker run --rm -v "$PWD:/src:ro" debian:trixie bash /src/backend/internal/deploytest/testdata/apt-trixie.sh
 
+  # The container template's scripts (the template itself is built by hand:
+  # lxc.yml). Every package in it names the feature that needs it.
+  lxc-scripts:
+    name: Container template scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck and package reasons
+        run: |
+          shellcheck -S warning -x -s bash image/lxc/*.sh image/common/rootfs/usr/lib/nocapos/image/firstboot.sh
+          if grep -nvE '^[[:space:]]*($|#)|#[[:space:]]*[^[:space:]]' image/lxc/packages.list; then
+            echo "image/lxc/packages.list: every package needs a reason after #"; exit 1
+          fi
+
   # The silent boot against Debian 13's real update-grub scripts (with the
   # distribution wallpaper package installed) and Plymouth, which draws the
   # NoCapOS splash into a virtual screen: screenshots of the boot, the disk

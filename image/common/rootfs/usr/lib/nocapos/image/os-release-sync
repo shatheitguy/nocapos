@@ -34,7 +34,7 @@ if [ -f /usr/lib/nocapos/image/image-release ]; then
   IMAGE_VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' /usr/lib/nocapos/image/image-release)"
   IMAGE_PLATFORM="$(sed -n 's/^NOCAP_IMAGE_PLATFORM=//p' /usr/lib/nocapos/image/image-release)"
 fi
-case "$IMAGE_PLATFORM" in rpi) variant="Raspberry Pi" ;; *) variant="PC" ;; esac
+case "$IMAGE_PLATFORM" in rpi) variant="Raspberry Pi" ;; lxc) variant="Container" ;; *) variant="PC" ;; esac
 
 tmp="$(mktemp "$TARGET.XXXXXX")"
 {

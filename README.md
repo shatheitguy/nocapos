@@ -22,6 +22,7 @@ and the NoCap OS phone app keeps your phone and your server connected.
 |---|---|
 | **PC installer (x86)** | `nocapos-<version>-amd64.iso` from [the latest release](https://github.com/shatheitguy/nocapos/releases/latest). Write it to a USB stick and boot: it starts the NoCap Desktop with an **Install NoCapOS** app. A text-mode installer is included for servers without a screen. |
 | **Raspberry Pi image** | `nocapos-<version>-rpi-arm64.img.xz` from [the latest release](https://github.com/shatheitguy/nocapos/releases/latest). Flash it to an SD card or SSD for a Raspberry Pi 4 or 5. |
+| **Proxmox VE container** | `nocapos-<version>-lxc-amd64.tar.zst` (or `-arm64`) from the release, when attached. Upload it as a CT template and create an unprivileged container with `nesting=1,keyctl=1`: NoCapOS in server mode. Steps in [image/README.md](image/README.md#container-template-proxmox-ve). |
 | **Phone app** | [`nocap-os.apk`](https://github.com/shatheitguy/nocapos/releases/latest/download/nocap-os.apk) |
 
 Every download has a SHA-256 checksum next to it in the release. Kernel and security updates come
