@@ -113,3 +113,64 @@ export async function trashWithUndo(p: Pic, after: (restored: boolean) => void):
   });
   return true;
 }
+
+// ---------- the Photos library ----------
+
+const CHANNEL = 'nocap-photos';
+
+/** Tells Photos and its picture windows (in this tab or another window) that the library changed. */
+export function photosChanged() {
+  try {
+    const ch = new BroadcastChannel(CHANNEL);
+    ch.postMessage('changed');
+    ch.close();
+  } catch {
+    /* an older browser: the others catch up when focused */
+  }
+  window.dispatchEvent(new Event(CHANNEL));
+}
+
+/** Runs `cb` when the library changes elsewhere; returns the unsubscribe. */
+export function onPhotosChanged(cb: () => void): () => void {
+  let ch: BroadcastChannel | null = null;
+  try {
+    ch = new BroadcastChannel(CHANNEL);
+    ch.onmessage = () => cb();
+  } catch {
+    ch = null;
+  }
+  window.addEventListener(CHANNEL, cb);
+  return () => {
+    ch?.close();
+    window.removeEventListener(CHANNEL, cb);
+  };
+}
+
+/**
+ * Moves a library picture to Recently deleted and offers Undo. `after` runs
+ * once it's gone and again once it's back.
+ */
+export async function photoTrashWithUndo(p: Pic, after: (restored: boolean) => void): Promise<boolean> {
+  const r = await photosApi.remove([p]);
+  if (!r.ok) {
+    toast('error', tr('photos.toast.deleteFail'), r.error);
+    return false;
+  }
+  after(false);
+  photosChanged();
+  const bare = (s: string) => s.replace(/^\/+/, '');
+  toastAction('success', tr('pv.trashed', { name: p.name }), {
+    label: tr('pv.undo'),
+    run: () =>
+      void (async () => {
+        const bin = await photosApi.trash();
+        const hit = bin.ok ? bin.data.items.filter((x) => x.root === p.root && bare(x.orig_path) === bare(p.path)).sort((a, b) => b.id - a.id)[0] : undefined;
+        if (!hit) return toast('error', tr('pv.undoFail'));
+        const back = await photosApi.restore([hit.id]);
+        if (!back.ok) return toast('error', tr('photos.toast.restoreFail'), back.error);
+        after(true);
+        photosChanged();
+      })(),
+  });
+  return true;
+}

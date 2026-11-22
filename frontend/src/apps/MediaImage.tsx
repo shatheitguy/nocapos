@@ -5,14 +5,27 @@ import { useT } from '../i18n';
 import { toast } from '../state/toasts';
 import { useWM, type WinState } from '../state/windows';
 import { pictureMenu, saveEdited, saveTurns, trashWithUndo } from './photoActions';
+import { PhotoSetWindow } from './PhotoSetWindow';
 import { PhotoViewer, type ViewerLinks } from './PhotosViewer';
+import { decodeSet } from '../lib/photoSet';
 
 /**
- * The photo viewer for any picture in Files, in a window of its own: the
- * same viewer as Photos (zoom, pan, rotate, slideshow, info, edit), with a
- * filmstrip of the pictures in the file's folder.
+ * A picture in a window of its own. From Photos it steps through the view it
+ * was opened from (an album, favorites, a search); from Files, through the
+ * pictures in the file's folder.
  */
 export function ImageViewerApp({ win }: { win: WinState }) {
+  const raw = win.props?.set;
+  const set = useMemo(() => decodeSet(raw), [raw]);
+  return set ? <PhotoSetWindow win={win} set={set} /> : <FolderViewer win={win} />;
+}
+
+/**
+ * The photo viewer for any picture in Files: the same viewer as Photos (zoom,
+ * pan, rotate, slideshow, info, edit), with a filmstrip of the pictures in
+ * the file's folder.
+ */
+function FolderViewer({ win }: { win: WinState }) {
   const t = useT();
   const root = win.props?.root ?? '';
   const path = win.props?.path ?? '';
