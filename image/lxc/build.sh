@@ -102,6 +102,8 @@ install -m 0644 "$C/etc/systemd/system/nocapos-firstboot.service" "$C/etc/system
   "$STAGE/etc/systemd/system/"
 install -m 0644 "$C"/etc/apt/apt.conf.d/* "$STAGE/etc/apt/apt.conf.d/"
 cp -R "$HERE/rootfs/." "$STAGE/"
+# Settings files: plain 0644 whatever the checkout gave them.
+find "$STAGE/etc/nocapos" -type f -exec chmod 0644 {} +
 cat >"$STAGE/usr/lib/nocapos/image/image-release" <<EOF
 # Written when this NoCapOS container template was built.
 NOCAP_IMAGE_VERSION=$VERSION
