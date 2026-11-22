@@ -158,6 +158,7 @@ func (s *Server) RunNotifications(ctx context.Context) {
 	}
 	if s.Docker != nil && s.AppStore != nil {
 		go s.watchAppCrashes(ctx)
+		s.startAppImageUpdates(ctx)
 	}
 	if s.VMs != nil {
 		go s.watchVMs(ctx)

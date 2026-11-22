@@ -21,6 +21,7 @@ import (
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/hardware"
 	"alfaos/alfad/internal/hostaccess"
+	"alfaos/alfad/internal/imageupdates"
 	"alfaos/alfad/internal/nativeapps"
 	"alfaos/alfad/internal/netdrive"
 	"alfaos/alfad/internal/notify"
@@ -75,8 +76,9 @@ type Deps struct {
 
 type Server struct {
 	Deps
-	appData         *appdata.Manager // each Docker app's data folders in Files
-	appMover        *appdata.Mover   // the App data folder: moving apps into it, and it
+	appData         *appdata.Manager      // each Docker app's data folders in Files
+	imageUpdates    *imageupdates.Checker // newer images for the App Store's apps
+	appMover        *appdata.Mover        // the App data folder: moving apps into it, and it
 	hub             *ws.Hub
 	tickets         *auth.TicketStore
 	fileTickets     fileTicketStore
@@ -345,6 +347,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/appstore/jobs/{job}", s.admin(s.appstoreJob))
 	mux.Handle("GET /api/v1/appstore/templates/{id}", s.admin(s.appstoreTemplate))
 	mux.Handle("POST /api/v1/appstore/{id}/{action}", s.admin(s.appstoreAction))
+	mux.Handle("GET /api/v1/appstore/updates", s.admin(s.appImageUpdatesGet))
+	mux.Handle("PUT /api/v1/appstore/updates", s.admin(s.appImageUpdatesSet))
+	mux.Handle("POST /api/v1/appstore/updates/check", s.admin(s.appImageUpdatesCheck))
 
 	// Quick Script Launcher: saved scripts run on the host (admin, audited).
 	mux.Handle("GET /api/v1/scripts", s.admin(s.scriptsList))

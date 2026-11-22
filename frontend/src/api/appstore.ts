@@ -18,6 +18,8 @@ export interface StoreInstalled {
   web_port: number;
   status: 'running' | 'stopped' | 'partial' | 'missing';
   update_available: boolean;
+  /** The same version in the catalog, but its publisher has a newer image. */
+  image_update?: boolean;
   containers: { service: string; id: string; state: string }[] | null;
   credentials?: { username?: string; password?: string };
   installed_at: string;
@@ -80,8 +82,19 @@ export interface AppTemplate {
 
 const path = (id: string) => `/api/v1/appstore/${encodeURIComponent(id)}`;
 
+export interface AppUpdateSettings {
+  /** A notification when newer app images are found. */
+  notify: boolean;
+  /** When the registries were last asked. */
+  checked_at?: string;
+}
+
 export const storeApi = {
   list: () => api<{ apps: StoreApp[]; docker: boolean }>('/api/v1/appstore'),
+  updateSettings: () => api<AppUpdateSettings>('/api/v1/appstore/updates'),
+  setUpdateSettings: (s: { notify: boolean }) => api<AppUpdateSettings>('/api/v1/appstore/updates', { method: 'PUT', body: s }),
+  /** Ask the registries now (ones that asked to slow down are left alone). */
+  checkUpdates: () => api<AppUpdateSettings>('/api/v1/appstore/updates/check', { method: 'POST' }),
   /** The app's containers as a form (defaults = the catalog's alone). */
   template: (id: string, defaults = false) => api<AppTemplate>(`/api/v1/appstore/templates/${encodeURIComponent(id)}${defaults ? '?defaults=1' : ''}`),
   /** Install with changes made first, by service. */
