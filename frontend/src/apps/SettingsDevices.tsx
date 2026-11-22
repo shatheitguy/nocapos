@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import QRCode from 'qrcode';
+import { StyledQr } from '../components/StyledQr';
 import { getUser } from '../api/client';
 import { devicesApi, type DeviceCap, type DeviceLimits, type LinkedDevice, type PairCode, type PairInfo, type UserDeviceLimit } from '../api/devices';
 import { Icon, type IconName } from '../components/Icon';
@@ -530,7 +530,7 @@ type Phase =
   | { kind: 'full' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'code'; pc: PairCode; qr: string }
+  | { kind: 'code'; pc: PairCode }
   | { kind: 'linked'; name: string };
 
 export function LinkSheet({
@@ -565,14 +565,8 @@ export function LinkSheet({
       return setPhase({ kind: 'full' });
     }
     if (!r.ok) return setPhase({ kind: 'error', message: r.error ?? tr('ld.codeFail') });
-    let qr = '';
-    try {
-      qr = await QRCode.toDataURL(r.data.pair_url, { margin: 1, width: 240 });
-    } catch {
-      /* the code alone still works */
-    }
     setNow(Date.now());
-    setPhase({ kind: 'code', pc: r.data, qr });
+    setPhase({ kind: 'code', pc: r.data });
   }, [onChanged]);
 
   useEffect(() => {
@@ -692,10 +686,9 @@ export function LinkSheet({
           <li>{t('ld.step3')}</li>
         </ol>
         <div className={`ld-code ${expired ? 'expired' : ''}`}>
-          {phase.qr && (
+          {phase.pc.pair_url && (
             <span className="ld-qr-frame">
-              <img src={phase.qr} alt={t('ld.qrAlt')} className="ld-qr" />
-              <i className="ld-scan" aria-hidden="true" />
+              <StyledQr text={phase.pc.pair_url} label={t('ld.qrAlt')} className="ld-qr" />
             </span>
           )}
           <div className="ld-digits" aria-label={t('ld.codeAria', { code: code.split('').join(' ') })}>

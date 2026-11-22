@@ -139,16 +139,17 @@
 .ld-steps li { counter-increment: ld; display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); }
 .ld-steps li::before { content: counter(ld); width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; color: var(--accent); background: var(--accent-soft); }
 .ld-code { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); }
-.ld-qr-frame { position: relative; display: block; padding: 8px; border-radius: 16px; background: #fff; box-shadow: 0 0 0 1px var(--border), 0 10px 30px -12px var(--accent); overflow: hidden; }
-.ld-qr { display: block; width: 188px; height: 188px; image-rendering: pixelated; }
-.ld-scan { position: absolute; left: 8px; right: 8px; top: 8px; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.7; animation: ld-scan 2.4s ease-in-out infinite; }
-@keyframes ld-scan { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(186px); } }
-:root[data-reduce-motion] .ld-scan { display: none; }
+/* The pairing QR: a white card (scanners need the contrast) in a subtle glass frame. */
+.ld-qr-frame { position: relative; display: block; padding: 9px; border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 14px 34px -14px rgba(232, 35, 43, 0.55); }
+.ld-qr { display: block; width: 204px; height: 204px; border-radius: 15px; }
 .ld-digits { display: flex; gap: 6px; user-select: all; }
 .ld-digits span { width: 38px; height: 48px; display: grid; place-items: center; border-radius: 10px; font-family: var(--mono); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); background: var(--surface-3); border: 1px solid var(--border); }
 .ld-digits span.gap { margin-left: 8px; }
 .ld-code.expired .ld-qr-frame, .ld-code.expired .ld-digits { opacity: 0.28; filter: blur(1.5px); }
-.ld-code.expired .ld-scan { display: none; }
 .ld-timer { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ld-timer-bar { width: 100%; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .ld-timer-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--violet)); transition: width 0.5s linear; }
@@ -189,8 +190,7 @@
   .ld-sheet-body { padding: 10px 16px calc(18px + env(safe-area-inset-bottom)); }
   .ld-sheet-head > .modal-grabber { display: block; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 999px; background: var(--border); }
   .ld-digits span { width: 34px; height: 44px; font-size: 22px; }
-  .ld-qr { width: 172px; height: 172px; }
-  @keyframes ld-scan { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(170px); } }
+  .ld-qr { width: 184px; height: 184px; }
 }
 @keyframes ld-rise { from { transform: translateY(40px); opacity: 0; } }
 :root[data-reduce-motion] .ld-sheet { animation: none; }
