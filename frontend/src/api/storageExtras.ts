@@ -4,7 +4,7 @@ import type { Disk, Job, Pool } from './storage';
 // Storage extras: boot drive, dry-run plans, speed-boost drives, spin-down,
 // snapshot schedules, encrypted folders and the flexible array.
 
-export type BootWhy = 'not-zfs' | 'pi' | 'sd' | 'arch' | 'already' | 'unknown';
+export type BootWhy = 'not-zfs' | 'pi' | 'sd' | 'arch' | 'already' | 'unknown' | 'container';
 
 export interface BootPoolMember {
   pool: string;

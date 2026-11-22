@@ -870,6 +870,15 @@ enable_host_services() {
 
 display_connected() { grep -qsx connected /sys/class/drm/*/status; }
 
+# A system container (LXC and the like, with its own systemd) has no screen
+# and boots with its host: no NoCap Desktop, boot splash or boot menu there.
+system_container() {
+  case "$(cat /run/systemd/container 2>/dev/null)" in
+    lxc | lxc-libvirt | systemd-nspawn | incus | openvz) return 0 ;;
+  esac
+  return 1
+}
+
 # Someone logged in on tty1 right now (maybe running this installer there):
 # starting the desktop would take that console away from them.
 tty1_in_use() { has who && who 2>/dev/null | awk '$2 == "tty1" {found=1} END {exit !found}'; }
@@ -890,6 +899,10 @@ fi
 setup_desktop() {
   local want="" chosen
   [ "$DESKTOP_FULL_OK" -eq 1 ] || { warn "this bundle has no NoCap Desktop files; skipped"; return 0; }
+  if system_container; then
+    [ "$DESKTOP" != full ] || warn "NoCap Desktop needs a screen, and this system container has none; skipped"
+    return 0
+  fi
   desk_remove_kiosk
   case "$DESKTOP" in
     full) want=full ;;
@@ -1479,7 +1492,9 @@ EOF
   setup_mdns
   if [ "$BRANDING" -eq 1 ]; then
     brand_console
-    setup_bootsplash || warn "the boot splash couldn't be set up; NoCapOS itself is fine"
+    if ! system_container; then
+      setup_bootsplash || warn "the boot splash couldn't be set up; NoCapOS itself is fine"
+    fi
   fi
   local url="https://HOST/"
   [ "$PORT" = 443 ] || url="https://HOST:$PORT/"

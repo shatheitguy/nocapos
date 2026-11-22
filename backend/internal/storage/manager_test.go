@@ -139,7 +139,7 @@ func newTestManager(t *testing.T) (*Manager, *fakeRunner, *Host, *memStore) {
 	}
 	st := &memStore{locs: map[string]store.StorageLocation{}, set: map[string]string{}}
 	m := NewManager(Options{Backend: h, Store: st, DataDir: "/var/lib/nocapos/data", Native: func() bool { return true },
-		CanInstall: func() bool { return true }, PkgManager: func() string { return "apt" }})
+		CanInstall: func() bool { return true }, PkgManager: func() string { return "apt" }, Container: func() string { return "" }})
 	return m, fr, h, st
 }
 

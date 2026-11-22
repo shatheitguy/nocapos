@@ -44,6 +44,7 @@ import (
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/tlsutil"
+	"alfaos/alfad/internal/virt"
 	"alfaos/alfad/internal/vm"
 	"alfaos/alfad/internal/webapps"
 )
@@ -87,6 +88,10 @@ func serve() error {
 	slog.SetDefault(log)
 	log.Info("starting alfad", "version", version, "listen", cfg.ListenAddr, "data", cfg.DataDir,
 		"host_proc", cfg.HostProc, "host_sys", cfg.HostSys)
+	if k := virt.Kind(); k != "" {
+		// Disks, the screen and the network belong to the host here.
+		log.Info("running in a system container", "container", k)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

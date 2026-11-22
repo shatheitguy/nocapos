@@ -246,7 +246,7 @@ function Unavailable({ status, installing, onInstall }: { status: VmStatus; inst
             {installing ? <><span className="spinner sm" /> Installing…</> : <><Icon name="download" size={14} /> Install</>}
           </button>
         )}
-        {native && status.missing?.includes('kvm') && (
+        {native && !status.container && status.missing?.includes('kvm') && (
           <p className="st-note warn"><Icon name="alert" size={14} /> /dev/kvm is missing, so machines can’t use the processor’s virtualization. Turn on Intel VT-x or AMD-V in the firmware settings.</p>
         )}
         <div className="ucard ulist">

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"alfaos/alfad/internal/syspkg"
+	"alfaos/alfad/internal/virt"
 )
 
 // Dir is where Virtual Desk keeps machines' disks (and isos/) under the data
@@ -37,6 +38,8 @@ type Options struct {
 	// Host checks, replaceable in tests.
 	Native     func() bool
 	CanInstall func() bool
+	// Container is the system container NoCapOS runs in ("lxc", ...) or "".
+	Container func() string
 }
 
 type Manager struct {
@@ -47,6 +50,7 @@ type Manager struct {
 	demo    bool
 	native  func() bool
 	canInst func() bool
+	ctr     func() string
 
 	mu       sync.Mutex
 	busy     map[string]string    // uuid -> what's running
@@ -77,10 +81,13 @@ func NewManager(o Options) *Manager {
 	if o.Log == nil {
 		o.Log = slog.Default()
 	}
+	if o.Container == nil {
+		o.Container = virt.Kind
+	}
 	if o.Roots == nil {
 		o.Roots = func() []string { return nil }
 	}
-	return &Manager{be: o.Backend, dir: o.Dir, roots: o.Roots, log: o.Log, demo: o.Demo, native: o.Native, canInst: o.CanInstall,
+	return &Manager{be: o.Backend, dir: o.Dir, roots: o.Roots, log: o.Log, demo: o.Demo, native: o.Native, canInst: o.CanInstall, ctr: o.Container,
 		busy: map[string]string{}, samples: map[string]cpuSample{}, expected: map[string]time.Time{}}
 }
 
@@ -144,6 +151,14 @@ func (m *Manager) Status(ctx context.Context) Status {
 	}
 	// Install also adds the optional UEFI firmware and TPM emulator.
 	st.CanInstall = (m.demo || m.canInst()) && (pkgs || !t.OVMF || !t.Swtpm)
+	// In a system container virtual machines need the host's /dev/kvm passed
+	// through; without it nothing installed here would help.
+	if !m.demo && m.ctr != nil {
+		st.Container = m.ctr()
+	}
+	if st.Container != "" && !t.KVM {
+		st.Hint, st.CanInstall = virt.VMReason, false
+	}
 	st.Host = m.be.Host(ctx)
 	if !st.Available {
 		st.Reason = "Virtual Desk isn't ready on this server yet."

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"alfaos/alfad/internal/virt"
 )
 
 // Manager side of the Extras: every rule is checked here before the backend
@@ -126,6 +128,10 @@ func (m *Manager) Boot(ctx context.Context) (*BootDrive, error) {
 	x, err := m.ex()
 	if err != nil {
 		return nil, err
+	}
+	if m.container() != "" {
+		// The system disk is a volume on the host: nothing to mirror here.
+		return &BootDrive{Platform: "pc", Disks: []Disk{}, Candidates: []string{}, Why: "container", WhyText: virt.BootMirrorReason}, nil
 	}
 	bf, err := x.BootFacts(ctx)
 	if err != nil {
@@ -292,6 +298,9 @@ func (m *Manager) PlanBootMirror(ctx context.Context, req BootMirrorRequest) (*B
 }
 
 func (m *Manager) MirrorBoot(ctx context.Context, req BootMirrorRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	x, err := m.ex()
 	if err != nil {
 		return nil, err
@@ -368,6 +377,9 @@ func normLayout(layout string, n int) (string, error) {
 }
 
 func (m *Manager) PlanPool(ctx context.Context, req PlanRequest) (*PoolPlan, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if err := m.needZFS(ctx); err != nil {
 		return nil, err
 	}
@@ -488,6 +500,9 @@ type SupportRequest struct {
 }
 
 func (m *Manager) AddSupport(ctx context.Context, pool string, req SupportRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	x, err := m.ex()
 	if err != nil {
 		return nil, err
@@ -661,6 +676,10 @@ func (m *Manager) Spindown(ctx context.Context) ([]SpindownDisk, error) {
 	if _, err := m.ex(); err != nil {
 		return nil, err
 	}
+	if m.container() != "" {
+		// The host decides when its drives sleep.
+		return []SpindownDisk{}, nil
+	}
 	sc, err := m.scanAll(ctx)
 	if err != nil {
 		return nil, err
@@ -677,6 +696,9 @@ func (m *Manager) Spindown(ctx context.Context) ([]SpindownDisk, error) {
 }
 
 func (m *Manager) SetSpindown(ctx context.Context, name string, minutes int) error {
+	if err := m.needDisks(); err != nil {
+		return err
+	}
 	x, err := m.ex()
 	if err != nil {
 		return err
@@ -1210,6 +1232,9 @@ func (m *Manager) flexDisks(ctx context.Context, req FlexRequest) ([]Disk, []Dis
 }
 
 func (m *Manager) PlanFlex(ctx context.Context, req FlexRequest) (*FlexPlan, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if _, err := m.ex(); err != nil {
 		return nil, err
 	}
@@ -1226,6 +1251,9 @@ func (m *Manager) PlanFlex(ctx context.Context, req FlexRequest) (*FlexPlan, err
 }
 
 func (m *Manager) CreateFlex(ctx context.Context, req FlexRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	x, err := m.ex()
 	if err != nil {
 		return nil, err

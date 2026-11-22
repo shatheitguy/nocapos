@@ -37,7 +37,8 @@ type BootState struct {
 
 // Boot reports the switch.
 func (d *Desktop) Boot() BootState {
-	st := BootState{Supported: d.Native && d.exists(BootToolPath)}
+	// A system container starts with the host: it has no boot menu of its own.
+	st := BootState{Supported: d.Native && !d.inContainer() && d.exists(BootToolPath)}
 	if b, err := d.readFile(BootDetailsPath); err == nil {
 		st.Details = strings.TrimSpace(string(b)) == "on"
 	}
