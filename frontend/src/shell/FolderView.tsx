@@ -7,6 +7,7 @@ import { pressApp, TOUCH_HOLD, useAppDrag } from '../state/appDrag';
 import { useFlip } from '../lib/flip';
 import { preview } from '../lib/launcherOrder';
 import { takeOut, useFolders } from '../state/folders';
+import { usePrefs } from '../state/prefs';
 import { appMenuItems } from './Shelf';
 import { middleOpen } from './middleOpen';
 
@@ -34,6 +35,7 @@ export function FolderView({
 }) {
   const folder = useFolders((s) => s.folders.find((f) => f.id === folderId));
   const rename = useFolders((s) => s.rename);
+  usePrefs((s) => s.lingo); // app names follow the voice
   const [name, setName] = useState(folder?.name ?? '');
   const [menu, setMenu] = useState<{ x: number; y: number; appId: string } | null>(null);
   const box = useRef<HTMLDivElement>(null);

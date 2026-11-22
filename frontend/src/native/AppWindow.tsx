@@ -3,8 +3,9 @@
 // component with the same title bar, filling the native window; moving,
 // resizing, minimizing and maximizing go to the compositor.
 import { useEffect } from 'react';
-import { APPS } from '../apps/meta';
+import { APPS, winTitle } from '../apps/meta';
 import { Window } from '../shell/Window';
+import { usePrefs } from '../state/prefs';
 import { useWM } from '../state/windows';
 import { hostOn, hostSend } from './platform';
 
@@ -43,7 +44,7 @@ export function NativeAppWindow() {
       resize: () => {},
       restoreLayout: () => {},
     });
-    wm.open({ appId, title: meta.title, props: parseProps(q.get('props')), key: NATIVE_WINDOW_ID, size: meta.size });
+    wm.open({ appId, title: meta.title, auto: 1, props: parseProps(q.get('props')), key: NATIVE_WINDOW_ID, size: meta.size });
     const offProps = hostOn('app.props', (p) => {
       const props = parseProps(typeof p === 'string' ? p : null);
       if (props) useWM.setState((s) => ({ windows: s.windows.map((w) => (w.id === NATIVE_WINDOW_ID ? { ...w, props } : w)) }));
@@ -56,15 +57,23 @@ export function NativeAppWindow() {
         windows: s.windows.map((w) => (w.id === NATIVE_WINDOW_ID ? { ...w, maximized: !!st.maximized || !!st.tiled } : w)),
       }));
     });
-    // The window's title follows the app's (Files shows the folder, say).
+    // The window's title follows the app's (Files shows the folder, say),
+    // and the voice in use.
     let lastTitle = '';
-    const offTitle = useWM.subscribe((s) => {
-      const w = s.windows.find((x) => x.id === NATIVE_WINDOW_ID);
-      if (w && w.title !== lastTitle) {
-        lastTitle = w.title;
-        hostSend('window.title', { title: w.title.slice(0, 256) });
+    const sendTitle = () => {
+      const w = useWM.getState().windows.find((x) => x.id === NATIVE_WINDOW_ID);
+      const title = w ? winTitle(w) : '';
+      if (w && title !== lastTitle) {
+        lastTitle = title;
+        hostSend('window.title', { title: title.slice(0, 256) });
       }
-    });
+    };
+    const offWindows = useWM.subscribe(sendTitle);
+    const offVoice = usePrefs.subscribe(sendTitle);
+    const offTitle = () => {
+      offWindows();
+      offVoice();
+    };
     return () => {
       offProps();
       offState();

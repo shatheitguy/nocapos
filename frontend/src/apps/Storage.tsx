@@ -40,6 +40,7 @@ import {
   diskTitle,
   fmtSize,
 } from './StorageParts';
+import { AppName } from '../components/AppName';
 
 // Storage: every disk and its health, ZFS pools (RAID), datasets and
 // snapshots, and single disks used as storage. Admin only. All the safety
@@ -144,7 +145,7 @@ export function Storage({ win }: { win: WinState }) {
     <div className="st-app app-split">
       <nav className="sidebar st-side">
         <div className="st-side-head">
-          <h1 className="app-title">Storage</h1>
+          <h1 className="app-title"><AppName id="storage" /></h1>
           {status?.demo && <span className="chip warn st-demo" title="Made-up disks for trying the app; nothing real is changed">Demo data</span>}
         </div>
         {nav.map((n) => (
@@ -248,7 +249,7 @@ function Unsupported({ reason }: { reason?: string }) {
     <div className="st-app st-unsupported">
       <div className="st-unsupported-card">
         <span className="st-hero-icon"><Icon name="hdd" size={34} /></span>
-        <h1 className="app-title">Storage</h1>
+        <h1 className="app-title"><AppName id="storage" /></h1>
         <p className="st-lead">{reason}</p>
         <div className="ucard ulist">
           {[

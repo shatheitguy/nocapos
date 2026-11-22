@@ -18,6 +18,8 @@ export interface WinState extends Rect {
   id: string;
   appId: string;
   title: string;
+  /** Named after its app (the nth window of it): the name follows the voice in use. */
+  auto?: number;
   props?: Record<string, string>;
   z: number;
   minimized: boolean;
@@ -28,6 +30,8 @@ export interface WinState extends Rect {
 export interface OpenRequest {
   appId: string;
   title: string;
+  /** Named after its app: the nth window of it. */
+  auto?: number;
   props?: Record<string, string>;
   /** Windows with the same key are reused instead of duplicated. */
   key?: string;
@@ -104,6 +108,7 @@ export const useWM = create<WM>((set, get) => {
         id,
         appId: req.appId,
         title: req.title,
+        ...(req.auto ? { auto: req.auto } : {}),
         props: req.props,
         x: Math.max(8, (vw - w) / 2 + (n % 6) * 28 - 70),
         y: Math.max(8, (vh - h) / 2 + (n % 6) * 24 - 50),
