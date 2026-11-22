@@ -42,6 +42,7 @@ import (
 	"alfaos/alfad/internal/stacks"
 	"alfaos/alfad/internal/storage"
 	"alfaos/alfad/internal/store"
+	"alfaos/alfad/internal/syspkg"
 	"alfaos/alfad/internal/terminal"
 	"alfaos/alfad/internal/tlsutil"
 	"alfaos/alfad/internal/vm"
@@ -233,6 +234,19 @@ func serve() error {
 		}
 		return dc.RemoveContainer(ctx, name)
 	})
+	// BIOS PCs: make sure the boot loader knows its boot disk before any
+	// update needs it (installs that never recorded it block every update
+	// once grub-pc itself is updated).
+	if os.Geteuid() == 0 {
+		go func() {
+			var b strings.Builder
+			if err := syspkg.GrubBootDiskStep().Fn(ctx, &b); err != nil {
+				log.Warn("boot loader disk check", "err", err)
+			} else if msg := strings.TrimSpace(b.String()); msg != "" {
+				log.Info(msg)
+			}
+		}()
+	}
 	nativeApps := nativeapps.New(cfg.DataDir, appStreams)
 	guacd := rdp.NewGuacd(log, dc, cfg.GuacdAddr)
 

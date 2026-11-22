@@ -280,6 +280,9 @@ func AptSteps(action string, o Options, run func(ctx context.Context, args ...st
 		steps = append(steps, Step{Args: []string{"apt-get", "update"}})
 	}
 	first, repair := aptRepairCmds(noRemove)
+	// Before anything else: a boot loader with no recorded boot disk can't
+	// finish installing, and blocks every repair and update after it.
+	steps = append(steps, GrubBootDiskStep())
 	steps = append(steps, Step{Args: first, Optional: true})
 	steps = append(steps, RemovalGuard(sim, o.AllowRemove, run))
 	for _, r := range repair {
