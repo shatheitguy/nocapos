@@ -483,6 +483,7 @@ export function PhotoViewer({
   // The bars fade away while nothing moves (not while the pointer rests on them, or a panel is open).
   const chromeOff = !editing && (hidden || (idle && !overBar && !info && !menu && !keysHelp));
   calmRef.current = chromeOff;
+  const more = moreItems?.(p) ?? [];
   const canEdit = !!onSaveEdit && !p.video && !deleted && browserCanShow(p) && !!src;
   const moving = !gesturing && !reduced;
   const imgStyle = {
@@ -622,7 +623,7 @@ export function PhotoViewer({
           <button type="button" className="pg-vbtn hide-narrow" aria-label={full ? t('photos.v.exitFull') : t('photos.v.full')} title={full ? t('photos.v.exitFull') : t('photos.v.full')} onClick={toggleFull}>
             <Icon name={full ? 'fullscreenExit' : 'fullscreen'} size={18} />
           </button>
-          {moreItems && (
+          {more.length > 0 && (
             <button
               type="button"
               className={`pg-vbtn${menu ? ' on' : ''}`}
@@ -852,7 +853,7 @@ export function PhotoViewer({
           }}
         />
       )}
-      {menu && moreItems && <ContextMenu x={menu.x} y={menu.y} items={moreItems(p)} onClose={() => setMenu(null)} />}
+      {menu && more.length > 0 && <ContextMenu x={menu.x} y={menu.y} items={more} onClose={() => setMenu(null)} />}
       {keysHelp && (
         <Modal title={t('pv.keys.title')} icon="grid" onClose={() => setKeysHelp(false)} className="pv-keys">
           <dl className="pv-keys-list">
