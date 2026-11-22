@@ -138,7 +138,7 @@ fun NotesScreen(a: NotesActivity) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable { a.finish() }, contentAlignment = Alignment.Center) {
                 NcIcon("chevronLeft", NoCap.Text, 22.dp, desc = t("Back", "Back"))
             }
-            Text(t("Brain Dump", "Sticky Notes"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontSize = 22.sp))
+            Text("NoCap Notes", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium.copy(fontSize = 22.sp))
             if (view == NoteDoc.View.NOTES) {
                 Box(
                     Modifier.size(44.dp).clip(CircleShape).background(NoCap.Red).clickable {
