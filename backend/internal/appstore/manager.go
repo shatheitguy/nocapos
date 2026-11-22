@@ -61,6 +61,11 @@ type Store interface {
 }
 
 type Manager struct {
+	// ImageUpdates reports whether an installed app's images have newer
+	// ones in their registry; AfterUpdate is told when an app was updated.
+	ImageUpdates func(id string) bool
+	AfterUpdate  func(id string)
+
 	apps   []App
 	byID   map[string]*App
 	engine Engine
@@ -132,13 +137,16 @@ type ContainerState struct {
 
 // Installed describes an installed app for the UI.
 type Installed struct {
-	Version         string           `json:"version"`
-	WebPort         int              `json:"web_port"`
-	Status          string           `json:"status"` // running | stopped | partial | missing
-	UpdateAvailable bool             `json:"update_available"`
-	Containers      []ContainerState `json:"containers"`
-	Credentials     *Credentials     `json:"credentials,omitempty"`
-	InstalledAt     time.Time        `json:"installed_at"`
+	Version         string `json:"version"`
+	WebPort         int    `json:"web_port"`
+	Status          string `json:"status"` // running | stopped | partial | missing
+	UpdateAvailable bool   `json:"update_available"`
+	// The catalog's version is the same, but its publisher has a newer
+	// image for the same tag (internal/imageupdates).
+	ImageUpdate bool             `json:"image_update,omitempty"`
+	Containers  []ContainerState `json:"containers"`
+	Credentials *Credentials     `json:"credentials,omitempty"`
+	InstalledAt time.Time        `json:"installed_at"`
 	// Storage: "bind" = folders in App data, "volume" = Docker volumes.
 	Storage string `json:"storage"`
 	// Filled in by the API: where "Open" goes when it isn't this server's
@@ -158,6 +166,10 @@ func (m *Manager) Status(ctx context.Context) (map[string]*Installed, error) {
 		in := &Installed{Version: row.Version, WebPort: row.WebPort, InstalledAt: row.InstalledAt, Status: "missing", Storage: row.Storage}
 		if a, ok := m.byID[id]; ok {
 			in.UpdateAvailable = a.Version != row.Version
+			if m.ImageUpdates != nil && m.ImageUpdates(id) {
+				in.ImageUpdate = true
+				in.UpdateAvailable = true
+			}
 			if a.Credentials != nil {
 				in.Credentials = &Credentials{
 					Username: expand(a.Credentials.Username, row.Secrets, func() string { return "" }),
@@ -394,7 +406,13 @@ func (m *Manager) Update(ctx context.Context, id string, onDone func(error)) (st
 		if err := m.createAll(ctx, a, row, j); err != nil {
 			return err
 		}
-		return m.db.SaveInstalledApp(ctx, row)
+		if err := m.db.SaveInstalledApp(ctx, row); err != nil {
+			return err
+		}
+		if m.AfterUpdate != nil {
+			m.AfterUpdate(id)
+		}
+		return nil
 	}, onDone)
 }
 

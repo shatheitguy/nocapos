@@ -477,6 +477,18 @@ func (c *Client) ImageID(ctx context.Context, ref string) (string, error) {
 	return out.ID, nil
 }
 
+// ImageRepoDigests lists the digests a local image was pulled with
+// ("nginx@sha256:…"); none for an image built or loaded here.
+func (c *Client) ImageRepoDigests(ctx context.Context, ref string) ([]string, error) {
+	var out struct {
+		RepoDigests []string `json:"RepoDigests"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/images/"+url.PathEscape(ref)+"/json", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.RepoDigests, nil
+}
+
 // NetworkDrivers maps each network's name to its driver (bridge, macvlan…)
 // with a single list call.
 func (c *Client) NetworkDrivers(ctx context.Context) (map[string]string, error) {

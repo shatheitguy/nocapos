@@ -12,6 +12,7 @@ import { useClock, useViewport } from '../lib/hooks';
 import { pressApp, useAppDrag } from '../state/appDrag';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { useDock } from '../state/dock';
+import { useStoreApps } from '../state/storeApps';
 import { effectiveDock, usePrefs } from '../state/prefs';
 import { useRecents } from '../state/recents';
 import { useSystem } from '../state/system';
@@ -82,6 +83,8 @@ function DockItem({ id, pinned, onMenu }: { id: string; pinned: boolean; onMenu:
   const dragging = useAppDrag((s) => s.drag?.appId === id && s.drag.source === 'dock');
   const size = usePrefs((s) => s.dockSize);
   usePrefs((s) => s.lingo); // the app's name follows the voice
+  // The App Store: how many installed apps have an update.
+  const updates = useStoreApps((s) => (id === 'appcenter' ? s.apps.filter((a) => a.installed?.update_available).length : 0));
   return (
     <button
       type="button"
@@ -96,6 +99,11 @@ function DockItem({ id, pinned, onMenu }: { id: string; pinned: boolean; onMenu:
     >
       <AppIcon app={APPS[id]} size={size} />
       {count > 0 && <span className={`dot ${count > 1 ? 'multi' : ''}`} />}
+      {updates > 0 && (
+        <span className="dock-badge" aria-label={tr('au.badge', { n: updates })}>
+          {updates}
+        </span>
+      )}
     </button>
   );
 }

@@ -5,6 +5,7 @@ import { useT } from '../i18n';
 import { toast } from '../state/toasts';
 import { Section, Toggle } from './Personalize';
 import { AppDataSettings } from './AppDataPanel';
+import { AppUpdatesSettings } from './SettingsAppUpdates';
 
 // Settings → Containers → Local addresses: give every container a name on
 // the home network (http(s)://<name>.nocap.local), and download NoCapOS's
@@ -38,6 +39,7 @@ export function ContainersSettings() {
     return (
       <div className="stack settings-page">
         <AppDataSettings />
+        <AppUpdatesSettings />
         <p className="error">{error}</p>
       </div>
     );
@@ -47,6 +49,7 @@ export function ContainersSettings() {
   return (
     <div className="stack settings-page">
       <AppDataSettings />
+      <AppUpdatesSettings />
       <Section title={t('ctr.la.title')} hint={t('ctr.la.hint')}>
         <Toggle label={t('ctr.la.toggle')} hint={t('ctr.la.toggleHint')} checked={state.enabled} disabled={busy} onChange={(v) => void toggle(v)} />
       </Section>

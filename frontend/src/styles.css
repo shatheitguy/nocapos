@@ -453,6 +453,10 @@ button.widget:active { transform: none; }
 }
 .dock-item.active .dot { background: var(--accent); width: 14px; margin-left: -7px; }
 .dock-item .dot.multi { width: 12px; margin-left: -6px; }
+/* An app with updates waiting (the App Store). */
+.dock-item .dock-badge { position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: #e8232b; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 0 0 2px var(--surface-1), 0 4px 10px -4px rgba(232, 35, 43, 0.7); pointer-events: none; }
 
 .tray { margin-left: auto; height: 44px; border-radius: 22px; padding: 0 8px 0 14px; gap: 10px; font-weight: 500; }
 .tray:hover:not(:disabled), .tray.open { filter: none; background: var(--glass); }

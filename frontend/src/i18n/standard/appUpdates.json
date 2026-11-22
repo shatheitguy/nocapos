@@ -1,0 +1,16 @@
+{
+  "au.title": "App updates",
+  "au.hint": "NoCapOS checks the App Store apps' publishers for newer images at start and every 6 hours, and shows what it finds in the App Store and in Software Update.",
+  "au.notify": "Notify me about app updates",
+  "au.notifyHint": "A notification when an app you installed has a newer image.",
+  "au.check": "Last check",
+  "au.checkedAt": "Checked {when}",
+  "au.notYet": "Not checked yet: the first check runs a few minutes after start.",
+  "au.checkNow": "Check now",
+  "au.found": "{n} app update(s) available",
+  "au.none": "All your apps are up to date",
+  "au.saveFail": "Couldn't save the setting",
+  "au.checkFail": "Couldn't check for app updates",
+  "au.newImage": "v{version} · newer image",
+  "au.badge": "{n} app update(s)"
+}

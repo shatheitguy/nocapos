@@ -770,7 +770,7 @@ function DockerUpdates({
                 <span className="as-row-text">
                   <b>{a.name}</b>
                   <span>
-                    v{a.installed?.version} → v{a.version}
+                    {a.installed?.image_update && a.installed.version === a.version ? tr('au.newImage', { version: a.version }) : `v${a.installed?.version} → v${a.version}`}
                   </span>
                 </span>
               </button>

@@ -1,0 +1,16 @@
+{
+  "au.title": "App updates",
+  "au.hint": "NoCapOS checks your App Store apps for fresh images on its own, at start and every 6 hours, and drops what it finds in the App Store and Glow Up.",
+  "au.notify": "Ping me about app updates",
+  "au.notifyHint": "A heads-up when an app you installed has a fresh image.",
+  "au.check": "Last check",
+  "au.checkedAt": "Checked {when}",
+  "au.notYet": "Not checked yet: the first check runs a few minutes after start.",
+  "au.checkNow": "Check now",
+  "au.found": "{n} app update(s) ready",
+  "au.none": "All your apps are fresh. No cap.",
+  "au.saveFail": "Couldn't save that",
+  "au.checkFail": "Couldn't check for app updates",
+  "au.newImage": "v{version} · fresh image",
+  "au.badge": "{n} app update(s)"
+}
