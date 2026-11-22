@@ -30,6 +30,51 @@ export interface FailoverPair {
   queued: number;
   conflicts: number;
   categories: FailoverCategory[];
+  files?: FailoverFiles;
+}
+
+export interface FileLocation {
+  id: string;
+  name: string;
+  kind: 'drive' | 'homes' | 'appdata' | 'config';
+  on: boolean;
+  /** syncs with the settings, can't be turned off */
+  always?: boolean;
+  /** bytes; -1 while it's added up */
+  size: number;
+  files: number;
+  queued: number;
+  queued_bytes: number;
+  scanned?: string;
+  synced?: string;
+  error?: string;
+  received: number;
+}
+
+export interface FailoverFiles {
+  locations: FileLocation[];
+  limit_kbps: number;
+  window_from: string;
+  window_to: string;
+  in_window: boolean;
+}
+
+export interface FilesChoice {
+  files: string[];
+  limit_kbps: number;
+  window_from: string;
+  window_to: string;
+}
+
+/** What an administrator's file choices would send (only switched-on, choosable locations). */
+export function filesChoice(f: FailoverFiles, on: Record<string, boolean>, limit: string, from: string, to: string): FilesChoice {
+  const kbps = Math.max(0, Math.round(Number(limit) || 0));
+  return {
+    files: f.locations.filter((l) => !l.always && (on[l.id] ?? l.on)).map((l) => l.id),
+    limit_kbps: kbps,
+    window_from: from && to ? from : '',
+    window_to: from && to ? to : '',
+  };
 }
 
 export interface FailoverInfo {

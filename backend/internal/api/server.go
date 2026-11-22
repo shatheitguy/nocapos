@@ -99,20 +99,21 @@ type Server struct {
 	desktop          *hostaccess.Desktop // NoCap Desktop on this machine's screen
 	agents           agentsState         // NoCap MCP: approvals and the screen
 	linkOnce         sync.Once
-	linkSync         *linkHub        // NoCap Link: phone notifications, clipboard, events
-	sessions         sessionFeed     // sign-in alerts and session list changes, live
-	linkFeed         linkFeed        // the person's phones changed, or handed a link over
-	mirror           mirrorState     // phone mirroring: rooms and viewer tickets
-	shield           *shieldState    // Shield: firewall (ufw) and DNS blocker
-	ssh              *sshd.Manager   // remote login (SSH): the switch and people's keys
-	localAddr        *localAddrState // containers' local addresses (*.nocap.local)
-	dockerUsageCache usageCache      // Docker's disk usage, briefly cached
-	pulls            pullJobs        // image downloads in progress
-	dohS             dohState        // Shield on the phone: DNS-over-HTTPS for linked devices
-	osImg            *osState        // image install: whole-system updates (nil on a script install)
-	noteFeed         noteFeed        // Sticky Notes changes and reminders, live
-	squad            squadState      // Your Squad: link requests between servers, and from phones
-	failover         failoverState   // failover pair: keeping a linked server in sync
+	linkSync         *linkHub           // NoCap Link: phone notifications, clipboard, events
+	sessions         sessionFeed        // sign-in alerts and session list changes, live
+	linkFeed         linkFeed           // the person's phones changed, or handed a link over
+	mirror           mirrorState        // phone mirroring: rooms and viewer tickets
+	shield           *shieldState       // Shield: firewall (ufw) and DNS blocker
+	ssh              *sshd.Manager      // remote login (SSH): the switch and people's keys
+	localAddr        *localAddrState    // containers' local addresses (*.nocap.local)
+	dockerUsageCache usageCache         // Docker's disk usage, briefly cached
+	pulls            pullJobs           // image downloads in progress
+	dohS             dohState           // Shield on the phone: DNS-over-HTTPS for linked devices
+	osImg            *osState           // image install: whole-system updates (nil on a script install)
+	noteFeed         noteFeed           // Sticky Notes changes and reminders, live
+	squad            squadState         // Your Squad: link requests between servers, and from phones
+	failover         failoverState      // failover pair: keeping a linked server in sync
+	failoverFiles    failoverFilesState // and its files (failover_files.go)
 }
 
 // New builds the API server. ctx bounds the lifetime of WebSocket feeds.
@@ -163,8 +164,9 @@ func New(ctx context.Context, d Deps) *Server {
 	s.versionSince()       // note when this version first ran (stale update results go by it)
 	s.initOSImage(ctx)     // image install: Glow Up updates the whole system (os_update_handlers.go)
 	if d.Store != nil {
-		go s.notesLoop(ctx)    // Sticky Notes reminders and old trash
-		go s.failoverLoop(ctx) // a failover pair's sync (failover.go)
+		go s.notesLoop(ctx)         // Sticky Notes reminders and old trash
+		go s.failoverLoop(ctx)      // a failover pair's sync (failover.go)
+		go s.failoverFilesLoop(ctx) // and its files (failover_files.go)
 	}
 	return s
 }

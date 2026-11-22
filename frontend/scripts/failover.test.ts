@@ -1,7 +1,7 @@
 // Failover page logic: run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { changedFields, syncHealth, type FailoverPair, type SyncConflict } from '../src/lib/failover.ts';
+import { changedFields, filesChoice, syncHealth, type FailoverPair, type SyncConflict } from '../src/lib/failover.ts';
 
 const now = Date.parse('2026-11-22T10:00:00Z');
 const pair = (over: Partial<FailoverPair> = {}): FailoverPair => ({
@@ -49,4 +49,22 @@ test('changedFields: only what differs, sorted', () => {
   };
   assert.deepEqual(changedFields(c), ['full_name', 'role', 'theme']);
   assert.deepEqual(changedFields({ ...c, mine: null }), ['role', 'theme', 'username']);
+});
+
+test('filesChoice: only switched-on locations, never "always" ones, sane limit and window', () => {
+  const f = {
+    locations: [
+      { id: 'drive', name: 'NoCap Drive', kind: 'drive', on: true, size: 1, files: 1, queued: 0, queued_bytes: 0, received: 0 },
+      { id: 'appdata', name: 'App data', kind: 'appdata', on: false, size: 1, files: 1, queued: 0, queued_bytes: 0, received: 0 },
+      { id: 'config', name: 'Containers', kind: 'config', on: true, always: true, size: 1, files: 1, queued: 0, queued_bytes: 0, received: 0 },
+    ],
+    limit_kbps: 0,
+    window_from: '',
+    window_to: '',
+    in_window: true,
+  } as const;
+  const c = filesChoice({ ...f, locations: [...f.locations] }, { appdata: true, drive: false }, '-5', '01:00', '');
+  assert.deepEqual(c, { files: ['appdata'], limit_kbps: 0, window_from: '', window_to: '' });
+  const d = filesChoice({ ...f, locations: [...f.locations] }, {}, '512.4', '22:00', '06:00');
+  assert.deepEqual(d, { files: ['drive'], limit_kbps: 512, window_from: '22:00', window_to: '06:00' });
 });

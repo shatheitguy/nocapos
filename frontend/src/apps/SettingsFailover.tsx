@@ -8,7 +8,7 @@ import { confirmDialog } from '../state/confirm';
 import { toast } from '../state/toasts';
 import { relTime } from '../state/notifications';
 import { fmtBytes } from '../lib/format';
-import { changedFields, syncHealth, type FailoverInfo, type FailoverPair, type SyncConflict, type SyncHealth } from '../lib/failover';
+import { changedFields, filesChoice, syncHealth, type FailoverFiles, type FailoverInfo, type FailoverPair, type FilesChoice, type SyncConflict, type SyncHealth } from '../lib/failover';
 import type { LinkedServer } from '../lib/squad';
 import { Section } from './Personalize';
 
@@ -25,6 +25,7 @@ export const failoverApi = {
   pause: (paused: boolean) => api<FailoverInfo>('/api/v1/failover/pause', { method: 'POST', body: { paused } }),
   syncNow: () => api<FailoverInfo>('/api/v1/failover/sync', { method: 'POST' }),
   conflicts: () => api<SyncConflict[]>('/api/v1/failover/conflicts'),
+  setFiles: (c: FilesChoice) => api<FailoverInfo>('/api/v1/failover/files', { method: 'PUT', body: c }),
   resolve: (id: number, keep: 'mine' | 'theirs') => api<{ ok: boolean }>(`/api/v1/failover/conflicts/${id}`, { method: 'POST', body: { keep } }),
 };
 
@@ -257,6 +258,8 @@ export function FailoverSection({ info, onChanged }: { info: FailoverInfo | null
         </div>
       )}
 
+      {p.state === 'active' && p.files && <FilesPanel t={t} files={p.files} onSaved={(i) => onChanged(i)} />}
+
       {conflicts.length > 0 && (
         <div className="fo-conflicts">
           <h4>{t('fo.conflictsTitle')}</h4>
@@ -322,5 +325,87 @@ function ConflictDiff({ t, c, name }: { t: T; c: SyncConflict; name: string }) {
         )}
       </tbody>
     </table>
+  );
+}
+
+const KIND_ICON = { drive: 'drive', homes: 'home', appdata: 'appData', config: 'containers' } as const;
+
+/** Which folders sync (with their size), the bandwidth limit and the schedule. */
+function FilesPanel({ t, files, onSaved }: { t: T; files: FailoverFiles; onSaved: (i: FailoverInfo) => void }) {
+  const [on, setOn] = useState<Record<string, boolean>>({});
+  const [limit, setLimit] = useState(String(files.limit_kbps || ''));
+  const [from, setFrom] = useState(files.window_from);
+  const [to, setTo] = useState(files.window_to);
+  const [busy, setBusy] = useState(false);
+  const choice = filesChoice(files, on, limit, from, to);
+  const current = filesChoice(files, {}, String(files.limit_kbps), files.window_from, files.window_to);
+  const dirty = JSON.stringify(choice) !== JSON.stringify(current);
+  const needed = files.locations.filter((l) => !l.always && (on[l.id] ?? l.on) && l.size > 0).reduce((n, l) => n + l.size, 0);
+
+  const save = async () => {
+    setBusy(true);
+    const r = await failoverApi.setFiles(choice);
+    setBusy(false);
+    if (!r.ok) return toast('error', tr('fo.filesFail'), r.error);
+    setOn({});
+    toast('success', tr('fo.filesSaved'));
+    onSaved(r.data);
+  };
+
+  return (
+    <div className="fo-files">
+      <h4>{t('fo.filesTitle')}</h4>
+      <p className="muted small">{t('fo.filesHint')}</p>
+      {!files.in_window && <p className="fo-error">{t('fo.outsideWindow', { from: files.window_from, to: files.window_to })}</p>}
+      <div className="fo-locs">
+        {files.locations.map((l) => {
+          const checked = l.always || (on[l.id] ?? l.on);
+          return (
+            <label key={l.id} className={`fo-loc${checked ? ' on' : ''}`}>
+              <input type="checkbox" checked={checked} disabled={l.always || busy} onChange={(e) => setOn({ ...on, [l.id]: e.target.checked })} />
+              <Icon name={KIND_ICON[l.kind] ?? 'folder'} size={18} />
+              <span className="fo-loc-text">
+                <b>{l.name}</b>
+                <span className="muted small">
+                  {t(`fo.kind.${l.kind}`)} · {l.size < 0 ? t('fo.sizing') : fmtBytes(l.size)}
+                </span>
+                {l.on && (
+                  <span className="muted small">
+                    {l.error
+                      ? l.error
+                      : l.queued > 0
+                        ? t('fo.filesQueued', { n: l.queued, size: fmtBytes(l.queued_bytes) })
+                        : l.synced
+                          ? t('fo.filesSynced', { when: when(l.synced) })
+                          : t('fo.filesWaiting')}
+                  </span>
+                )}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {needed > 0 && <p className="muted small">{t('fo.filesSpace', { size: fmtBytes(needed) })}</p>}
+      <div className="fo-files-opts">
+        <label>
+          <span>{t('fo.limit')}</span>
+          <input type="number" min={0} step={64} inputMode="numeric" placeholder={t('fo.noLimit')} value={limit} onChange={(e) => setLimit(e.target.value)} />
+        </label>
+        <label>
+          <span>{t('fo.windowFrom')}</span>
+          <input type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label>
+          <span>{t('fo.windowTo')}</span>
+          <input type="time" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+      </div>
+      <p className="muted small">{t('fo.windowHint')}</p>
+      <div className="squad-actions">
+        <button type="button" className="small" disabled={!dirty || busy} onClick={() => void save()}>
+          {busy ? <span className="spinner sm" /> : <Icon name="save" size={14} />} {t('fo.filesSave')}
+        </button>
+      </div>
+    </div>
   );
 }

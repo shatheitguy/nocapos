@@ -344,6 +344,7 @@ type failoverPairJSON struct {
 	Queued     int                    `json:"queued"` // this server's changes the other hasn't read yet
 	Conflicts  int                    `json:"conflicts"`
 	Categories []failoverCategoryJSON `json:"categories"`
+	Files      *failoverFilesJSON     `json:"files,omitempty"`
 }
 
 // failoverGet: the pair (if any), how each category stands, and what
@@ -398,6 +399,9 @@ func (s *Server) failoverPairJSON(ctx context.Context, p *store.FailoverPair) (*
 			return nil, err
 		}
 		j.Conflicts = n
+		if j.Files, err = s.failoverFilesJSON(ctx, p); err != nil {
+			return nil, err
+		}
 	}
 	return j, nil
 }
@@ -559,6 +563,9 @@ func (s *Server) failoverEnd(ctx context.Context, nocapID string) error {
 	if err := s.Store.DeleteFailoverPair(ctx, nocapID); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
+	if err := s.Store.FileIndex().ClearFileIndex(ctx); err != nil {
+		return err
+	}
 	return s.Store.SetServerLinkRole(ctx, nocapID, store.RoleLinkPeer)
 }
 
@@ -606,6 +613,7 @@ func (s *Server) failoverSyncNow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "Failover isn't on.")
 		return
 	}
+	go func() { _ = s.failoverFilesOnce(context.WithoutCancel(r.Context()), true) }() // files take their time
 	if err := s.failoverSyncOnce(r.Context(), true); err != nil {
 		msg := err.Error()
 		var pe *peerError
@@ -900,6 +908,7 @@ func (s *Server) failoverRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/failover/sync", s.admin(s.failoverSyncNow))
 	mux.Handle("GET /api/v1/failover/conflicts", s.admin(s.failoverConflicts))
 	mux.Handle("POST /api/v1/failover/conflicts/{id}", s.admin(s.failoverResolve))
+	mux.Handle("PUT /api/v1/failover/files", s.admin(s.failoverSetFiles))
 	failoverPeerRoutes(s, mux)
 }
 
@@ -913,4 +922,7 @@ func failoverPeerRoutes(s *Server, mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/failover/peer/changes", s.peer(s.failoverPeerChanges))
 	mux.Handle("GET /api/v1/failover/peer/status", s.peer(s.failoverPeerStatus))
 	mux.Handle("GET /api/v1/failover/peer/system-accounts", s.peer(s.failoverPeerAccounts))
+	mux.Handle("POST /api/v1/failover/peer/options", s.peer(s.failoverPeerOptions))
+	mux.Handle("GET /api/v1/failover/peer/files/changes", s.peer(s.failoverPeerFileChanges))
+	mux.Handle("GET /api/v1/failover/peer/files/file", s.peer(s.failoverPeerFile))
 }
