@@ -55,8 +55,9 @@ export const fileApi = {
     api<{ path: string }>('/api/v1/files/mkdir', { method: 'POST', body: { root, path, name } }),
   rename: (root: string, path: string, name: string) =>
     api<{ path: string }>('/api/v1/files/rename', { method: 'POST', body: { root, path, name } }),
+  /** Moves to the recycle bin (recycled: where each went, for Undo), or deletes for good. */
   remove: (root: string, paths: string[], permanent = false) =>
-    api('/api/v1/files/delete', { method: 'POST', body: { root, paths, permanent } }),
+    api<{ recycled?: string[] }>('/api/v1/files/delete', { method: 'POST', body: { root, paths, permanent } }),
   transfer: (root: string, paths: string[], dest: string, move: boolean, conflict: Conflict = 'rename') =>
     api<{ paths: string[]; skipped: string[] }>('/api/v1/files/transfer', { method: 'POST', body: { root, paths, dest, move, conflict } }),
   transferJob: (root: string, paths: string[], dest: string, move: boolean, conflict: Conflict) =>
