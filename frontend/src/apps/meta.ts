@@ -2,7 +2,7 @@
 import type { IconName } from '../components/Icon';
 import { useRecents } from '../state/recents';
 import { useWM } from '../state/windows';
-import { tr } from '../i18n';
+import { tr, translate } from '../i18n';
 import { hostSend, isNative } from '../native/platform';
 
 export interface AppMeta {
@@ -24,10 +24,9 @@ export interface AppMeta {
   keywords?: string;
 }
 
-export const APPS: Record<string, AppMeta> = {
+const DEFS: Record<string, Omit<AppMeta, 'title'>> = {
   assistant: {
     id: 'assistant',
-    title: 'AI Assistant',
     icon: 'sparkles',
     tile: ['#8a5cf6', '#5b3bd6'],
     size: { w: 1040, h: 720 },
@@ -35,7 +34,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   files: {
     id: 'files',
-    title: 'Files',
     icon: 'folder',
     tile: ['#ffc53d', '#f08c00'],
     size: { w: 1000, h: 640 },
@@ -43,7 +41,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   photos: {
     id: 'photos',
-    title: 'Photos',
     icon: 'image',
     tile: ['#ff8a5c', '#e2366f'],
     size: { w: 1080, h: 700 },
@@ -51,7 +48,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   backups: {
     id: 'backups',
-    title: 'Backups',
     icon: 'rewind',
     tile: ['#2fc6a0', '#137a63'],
     size: { w: 1040, h: 700 },
@@ -61,7 +57,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   storage: {
     id: 'storage',
-    title: 'Storage',
     icon: 'hdd',
     tile: ['#5b8cff', '#2c46b8'],
     size: { w: 1080, h: 720 },
@@ -71,7 +66,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   monitor: {
     id: 'monitor',
-    title: 'Resource Monitor',
     icon: 'monitor',
     tile: ['#2fb4ff', '#3b6bff'],
     size: { w: 920, h: 640 },
@@ -79,7 +73,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   containers: {
     id: 'containers',
-    title: 'Containers',
     icon: 'containers',
     tile: ['#2ec5a6', '#138a8a'],
     size: { w: 1040, h: 660 },
@@ -88,7 +81,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   appcenter: {
     id: 'appcenter',
-    title: 'App Store',
     icon: 'store',
     tile: ['#ff9f43', '#ee5a24'],
     size: { w: 1040, h: 700 },
@@ -97,7 +89,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   nativeapp: {
     id: 'nativeapp',
-    title: 'Linux app',
     icon: 'linux',
     tile: ['#7c8aa5', '#3b4458'],
     size: { w: 1200, h: 780 },
@@ -106,7 +97,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   remotedesktop: {
     id: 'remotedesktop',
-    title: 'Remote Desktop',
     icon: 'desktop',
     tile: ['#2f6bff', '#1b3f9e'],
     size: { w: 1080, h: 700 },
@@ -116,7 +106,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   nocapdesktop: {
     id: 'nocapdesktop',
-    title: 'NoCap Desktop',
     icon: 'desktop',
     tile: ['#e5383b', '#7a0f12'],
     size: { w: 1280, h: 800 },
@@ -128,7 +117,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   virtualdesk: {
     id: 'virtualdesk',
-    title: 'Virtual Desk',
     icon: 'vm',
     tile: ['#22d3ee', '#1e40af'],
     size: { w: 1100, h: 720 },
@@ -138,7 +126,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   vmscreen: {
     id: 'vmscreen',
-    title: 'Virtual Desk',
     icon: 'vm',
     tile: ['#22d3ee', '#1e40af'],
     size: { w: 1100, h: 740 },
@@ -148,7 +135,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   shield: {
     id: 'shield',
-    title: 'Shield',
     icon: 'shield',
     tile: ['#e8232b', '#7a0f12'],
     size: { w: 1000, h: 720 },
@@ -158,7 +144,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   settings: {
     id: 'settings',
-    title: 'Settings',
     icon: 'settings',
     tile: ['#8e9bb5', '#556179'],
     size: { w: 940, h: 680 },
@@ -167,7 +152,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   terminal: {
     id: 'terminal',
-    title: 'Terminal',
     icon: 'terminal',
     tile: ['#2f3748', '#11151d'],
     size: { w: 860, h: 540 },
@@ -176,7 +160,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   scripts: {
     id: 'scripts',
-    title: 'Scripts',
     icon: 'fileCode',
     tile: ['#36c26b', '#1d7a43'],
     size: { w: 980, h: 640 },
@@ -186,7 +169,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   viewer: {
     id: 'viewer',
-    title: 'Viewer',
     icon: 'eye',
     tile: ['#4f7cff', '#2d4fd6'],
     size: { w: 900, h: 620 },
@@ -195,7 +177,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   imageviewer: {
     id: 'imageviewer',
-    title: 'Photo Viewer',
     icon: 'image',
     tile: ['#e8232b', '#7a0f12'],
     size: { w: 1000, h: 680 },
@@ -204,7 +185,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   videoplayer: {
     id: 'videoplayer',
-    title: 'Video Player',
     icon: 'fileVideo',
     tile: ['#ff8a3d', '#c2410c'],
     size: { w: 1040, h: 640 },
@@ -213,7 +193,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   musicplayer: {
     id: 'musicplayer',
-    title: 'Music Player',
     icon: 'music',
     tile: ['#f472b6', '#9d174d'],
     size: { w: 760, h: 520 },
@@ -222,10 +201,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   notes: {
     id: 'notes',
-    // "NoCap Notes" (the same name in both voices).
-    get title() {
-      return tr('notes.appTitle');
-    },
     icon: 'stickyNote',
     tile: ['#ff5a5f', '#b3121a'],
     size: { w: 1040, h: 700 },
@@ -237,9 +212,6 @@ export const APPS: Record<string, AppMeta> = {
   // app). Opened from Sticky Notes, the desktop widget and reminders.
   note: {
     id: 'note',
-    get title() {
-      return tr('notes.untitled');
-    },
     icon: 'stickyNote',
     tile: ['#ff5a5f', '#b3121a'],
     size: { w: 460, h: 520 },
@@ -249,10 +221,6 @@ export const APPS: Record<string, AppMeta> = {
   // The id stays "phone" so older links, pins and desktop icons keep working.
   phone: {
     id: 'phone',
-    // "Device Screens" / "Screen Squad", in the voice in use.
-    get title() {
-      return tr('ds.appTitle');
-    },
     icon: 'devices',
     tile: ['#34d399', '#0f766e'],
     size: { w: 980, h: 760 },
@@ -261,7 +229,6 @@ export const APPS: Record<string, AppMeta> = {
   },
   logs: {
     id: 'logs',
-    title: 'Logs',
     icon: 'logs',
     tile: ['#5f6b85', '#2f3748'],
     size: { w: 900, h: 560 },
@@ -270,6 +237,29 @@ export const APPS: Record<string, AppMeta> = {
     hidden: true,
   },
 };
+
+/** Where an app's name is in the i18n files, when it isn't "app.<id>". */
+const NAME_KEY: Record<string, string> = { notes: 'notes.appTitle', note: 'notes.untitled', phone: 'ds.appTitle' };
+
+/** The i18n key of an app's name. */
+export const appNameKey = (id: string) => NAME_KEY[id] ?? `app.${id}`;
+
+/**
+ * Every app, named in the voice in use (each has a Standard and a Gen Z name
+ * in the i18n files). Search finds an app by its name in either voice.
+ */
+export const APPS: Record<string, AppMeta> = Object.fromEntries(
+  Object.entries(DEFS).map(([id, def]) => {
+    const key = appNameKey(id);
+    const meta = { ...def } as AppMeta;
+    Object.defineProperty(meta, 'title', { get: () => tr(key), enumerable: true });
+    Object.defineProperty(meta, 'keywords', {
+      get: () => [def.keywords, translate('standard', key), translate('genz', key)].filter(Boolean).join(' '),
+      enumerable: true,
+    });
+    return [id, meta];
+  }),
+);
 
 export const PINNED = ['assistant', 'files', 'monitor', 'remotedesktop', 'appcenter', 'settings'];
 
@@ -314,21 +304,38 @@ export function openApp(appId: string, opts: OpenOptions = {}) {
 
   // Number extra windows ("Files 2") so they're easy to tell apart.
   let title = opts.title ?? meta.title;
+  let auto = opts.title ? 0 : 1;
   if (!opts.title && !meta.single && mine.length) {
-    const used = new Set(mine.map((w) => w.title));
+    const used = new Set(mine.map((w) => winTitle(w)));
     let n = 2;
     while (used.has(`${meta.title} ${n}`)) n++;
     title = `${meta.title} ${n}`;
+    auto = n;
   }
 
   wm.open({
     appId,
     title,
+    ...(auto ? { auto } : {}),
     props: opts.props,
     key: opts.key ?? (meta.single ? appId : undefined),
     size: meta.size,
   });
   if (!meta.hidden) useRecents.getState().push(appId);
+}
+
+/**
+ * A window's name: its own (a file, a folder) or its app's, in the voice in
+ * use ("Files 2" for the second one). A window an app has renamed since
+ * (to the picture on show, say) keeps that name.
+ */
+export function winTitle(w: { appId: string; title: string; auto?: number }): string {
+  const meta = APPS[w.appId];
+  if (!meta || !w.auto) return w.title;
+  const key = appNameKey(w.appId);
+  const n = w.auto > 1 ? ` ${w.auto}` : '';
+  const named = w.title === translate('standard', key) + n || w.title === translate('genz', key) + n;
+  return named ? meta.title + n : w.title;
 }
 
 /** Whether an app can have more than one window. */

@@ -47,6 +47,7 @@ func newSquadNode(t *testing.T) *squadNode {
 	mux.HandleFunc("POST /api/v1/squad/answer", s.squadAnswer)
 	mux.Handle("GET /api/v1/squad/peer", s.peer(s.squadPeerHello))
 	mux.Handle("DELETE /api/v1/squad/peer", s.peer(s.squadPeerUnlink))
+	failoverPeerRoutes(s, mux)
 	n.ts = httptest.NewUnstartedServer(mux)
 	n.ts.TLS = &tls.Config{Certificates: []tls.Certificate{cert}}
 	n.ts.StartTLS()

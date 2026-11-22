@@ -23,6 +23,7 @@ import { openApp } from './meta';
 import { Sheet, TypeConfirm } from './StorageParts';
 import { baseName, IsoShelf, OsBadge, PathField, StateChip, UsageBar } from './VirtualDeskParts';
 import { NewVmWizard } from './VirtualDeskWizard';
+import { AppName } from '../components/AppName';
 
 // Virtual Desk: virtual machines on this server. Machines are listed as cards
 // with live load; a machine's page has its overview, settings (most of them
@@ -168,7 +169,7 @@ export function VirtualDesk({ win }: { win: WinState }) {
     <div className="vd-app st-app app-split">
       <nav className="sidebar st-side vd-side">
         <div className="st-side-head">
-          <h1 className="app-title">Virtual Desk</h1>
+          <h1 className="app-title"><AppName id="virtualdesk" /></h1>
           {status?.demo && <span className="chip warn st-demo" title="Sample machines for trying the app; nothing real runs">Demo data</span>}
         </div>
         <button type="button" className={!current ? 'on' : ''} onClick={() => setSelected(null)} title="All machines">
@@ -235,7 +236,7 @@ function Unavailable({ status, installing, onInstall }: { status: VmStatus; inst
     <div className="vd-app st-app st-unsupported">
       <div className="st-unsupported-card">
         <span className="st-hero-icon vd-hero"><Icon name="vm" size={34} /></span>
-        <h1 className="app-title">Virtual Desk</h1>
+        <h1 className="app-title"><AppName id="virtualdesk" /></h1>
         <p className="st-lead">
           {native
             ? status.hint ?? status.reason

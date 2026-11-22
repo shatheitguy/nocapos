@@ -76,6 +76,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
   const [filesInfo, setFilesInfo] = useState<{ building: boolean; indexed: number } | null>(null);
   const [store, setStore] = useState<StoreApp[]>([]);
   const recents = useRecents((s) => s.recents);
+  const lingo = usePrefs((s) => s.lingo); // app names follow the voice
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
@@ -252,7 +253,7 @@ export function Spotlight({ isAdmin, onLock }: { isAdmin: boolean; onLock: () =>
     const grouped = order.flatMap((g) => (g === 'Top hit' ? (top ? [top] : []) : rest.filter((r) => r.group === g).slice(0, g === 'Files' ? 12 : 6)));
     return grouped;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, files, store, isAdmin, recents]);
+  }, [q, files, store, isAdmin, recents, lingo]);
 
   useEffect(() => setSel(0), [q]);
   useEffect(() => {

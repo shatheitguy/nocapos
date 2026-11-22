@@ -1,6 +1,6 @@
 import { memo, Suspense, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import { tr } from '../i18n';
-import { APPS, canMultiWindow, openApp } from '../apps/meta';
+import { APPS, canMultiWindow, openApp, winTitle } from '../apps/meta';
 import { APP_COMPONENTS } from '../apps/components';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { ErrorBoundary } from '../components/ErrorBoundary';
@@ -176,7 +176,7 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
         style={native ? undefined : { left: r.x, top: r.y, width: r.w, height: r.h, zIndex: win.z }}
         onPointerDownCapture={() => !focused && wm.focus(win.id)}
         role="dialog"
-        aria-label={win.title}
+        aria-label={winTitle(win)}
       >
         <div
           className="titlebar"
@@ -197,7 +197,7 @@ function WindowFrame({ win, compact }: { win: WinState; compact: boolean }) {
           }}
         >
           <AppIcon app={meta} size={20} />
-          <span className="title">{win.title}</span>
+          <span className="title">{winTitle(win)}</span>
           <div className="win-buttons">
             <button type="button" aria-label={tr('win.minimize')} title={tr('win.minimize')} onClick={() => wm.minimize(win.id)}>
               <Icon name="minimize" size={14} />

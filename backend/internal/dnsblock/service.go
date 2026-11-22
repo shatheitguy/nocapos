@@ -891,3 +891,13 @@ func serveTCP(ctx context.Context, c net.Conn, res *Resolver) {
 		}
 	}
 }
+
+// Reload reads the settings and personal lists from disk again (a failover
+// pair synced them from the other server) and puts them into effect.
+func (s *Service) Reload() error {
+	s.mu.Lock()
+	s.personal = nil // reopened on next use
+	s.mu.Unlock()
+	_, err := s.Apply(loadSettings(s.dir))
+	return err
+}

@@ -119,3 +119,47 @@
 }
 :root[data-reduce-motion] .ncr-pulse, :root[data-reduce-motion] .ncr-sweep { display: none; }
 :root[data-reduce-motion] .ncr-blip, :root[data-reduce-motion] .ncr.scanning .ncr-core, :root[data-reduce-motion] .squad-card.fresh { animation: none; }
+
+/* Settings → Your Squad → Failover */
+.fo-card { margin: 12px 12px 0; }
+.fo-error { margin: 0; font-size: 12px; color: var(--danger, #e8232b); overflow-wrap: anywhere; }
+.fo-facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 12.5px; }
+.fo-facts dt { color: var(--muted); }
+.fo-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.fo-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 8px; padding: 12px; }
+.fo-cat { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--surface-2) 72%, transparent); border: 1px solid var(--border); }
+.fo-cat b { flex: 1; font-size: 13px; }
+.fo-cat .muted { flex-basis: 100%; }
+.fo-conflicts { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.fo-conflicts h4 { margin: 4px 0 0; font-size: 13.5px; }
+.fo-conflicts > p { margin: 0; }
+.fo-conflict { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, #e8232b 40%, var(--border)); background: color-mix(in srgb, var(--surface-2) 72%, transparent); }
+.fo-conflict-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.fo-conflict-head code { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.fo-conflict-head .muted { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fo-diff { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.fo-diff th, .fo-diff td { text-align: left; padding: 4px 6px; border-top: 1px solid var(--border); overflow-wrap: anywhere; vertical-align: top; }
+.fo-diff thead th { border-top: 0; color: var(--muted); font-weight: 600; }
+.fo-diff tbody th { color: var(--muted); font-weight: 500; font-family: var(--mono); font-size: 11px; }
+.fo-sheet { max-width: min(520px, calc(100vw - 32px)); text-align: left; max-height: calc(100vh - 48px); overflow-y: auto; }
+.fo-sheet .win-close-solo { position: absolute; top: 10px; right: 10px; }
+.fo-sheet h3, .fo-sheet .confirm-icon { align-self: flex-start; }
+.fo-what { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; }
+.fo-what li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
+.fo-what li svg { color: var(--ok); align-self: center; }
+.fo-primary { border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px 10px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.fo-primary legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; }
+.fo-primary label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.fo-primary label > span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.fo-files { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.fo-files h4 { margin: 4px 0 0; font-size: 13.5px; }
+.fo-files > p { margin: 0; }
+.fo-locs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 8px; }
+.fo-loc { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: color-mix(in srgb, var(--surface-2) 72%, transparent); cursor: pointer; }
+.fo-loc.on { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.fo-loc > svg { flex: none; color: var(--muted); margin-top: 1px; }
+.fo-loc.on > svg { color: var(--ok); }
+.fo-loc-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.fo-files-opts { display: flex; flex-wrap: wrap; gap: 10px; }
+.fo-files-opts label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 140px; }
+.fo-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }

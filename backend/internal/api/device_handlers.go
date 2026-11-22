@@ -127,6 +127,17 @@ type pairInfo struct {
 	// Setup: "new" while the server waits for its first administrator (the
 	// phone app offers to set it up), "done" after.
 	Setup string `json:"setup,omitempty"`
+	// Failover: the other server of this one's failover pair, which the
+	// phone app can switch to when this one doesn't answer (same accounts
+	// and linked devices; its own certificate).
+	Failover *pairFailover `json:"failover,omitempty"`
+}
+
+type pairFailover struct {
+	NocapID     string `json:"nocap_id"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	Fingerprint string `json:"fingerprint"`
 }
 
 func (s *Server) pairInfo(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +146,13 @@ func (s *Server) pairInfo(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version, Setup: setupWord(s.setupNew(r.Context()))})
+	info := pairInfo{NocapID: id, Name: s.serverName(), Version: s.Version, Setup: setupWord(s.setupNew(r.Context()))}
+	if p, err := s.theFailover(r.Context()); err == nil && p != nil && p.State == store.FailoverActive {
+		if l, err := s.Store.ServerLink(r.Context(), p.NocapID); err == nil {
+			info.Failover = &pairFailover{NocapID: l.NocapID, Name: l.Name, URL: l.URL, Fingerprint: l.Fingerprint}
+		}
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 var sixDigits = regexp.MustCompile(`^[0-9]{6}$`)

@@ -20,7 +20,6 @@ import { ConfirmHost } from '../components/ConfirmHost';
 import { applyPrefs, compactSize, hasMenuBar, useMenubarAuto } from '../state/prefs';
 import { DesktopIcons } from './DesktopIcons';
 import { DragGhost } from './DragGhost';
-import { HomeHeader } from './HomeHeader';
 import { watchStoreApps } from '../state/storeApps';
 import { watchNativeApps } from '../state/nativeApps';
 import { useNotifications, watchNotifications } from '../state/notifications';
@@ -90,7 +89,6 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
   const [saverOn, setSaverOn] = useState(false);
   const [deskMenu, setDeskMenu] = useState<{ x: number; y: number } | null>(null);
   const isAdmin = user.role === 'admin';
-  const glass = usePrefs((s) => s.uiTheme === 'glass');
   // First start: once this person's prefs are back from the server, an
   // administrator who hasn't finished (or skipped) the welcome sees it.
   const prefsSynced = usePrefsSynced((s) => s.synced);
@@ -271,11 +269,6 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
             )}
           </div>
 
-          {glass && !compact && !launcher && (
-            <ErrorBoundary title="Home header" fallback="hidden">
-              <HomeHeader username={user.username} />
-            </ErrorBoundary>
-          )}
           {!compact && (
             <ErrorBoundary title="Desktop icons" fallback="hidden">
               <DesktopIcons isAdmin={isAdmin} />

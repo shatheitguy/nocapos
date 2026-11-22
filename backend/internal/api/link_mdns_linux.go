@@ -33,7 +33,7 @@ func (s *Server) advertiseLink(ctx context.Context) {
 	for ctx.Err() == nil {
 		changed := s.discovery.wait()
 		name := "NoCap " + s.serverName()
-		args := append([]string{"-s", name, linkService, port}, linkTXT(id, scheme, s.Version, s.setupNew(ctx))...)
+		args := append([]string{"-s", name, linkService, port}, append(linkTXT(id, scheme, s.Version, s.setupNew(ctx)), s.failoverTXT(ctx)...)...)
 		run, stop := context.WithCancel(ctx)
 		done := make(chan struct{})
 		go func() {

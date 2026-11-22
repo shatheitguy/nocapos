@@ -16,6 +16,7 @@ import { LinuxApps } from './LinuxApps';
 import { InstallEditor } from './InstallEditor';
 import { SystemUpdates, useSystemUpdates } from './SystemUpdates';
 import { serverHost } from '../native/platform';
+import { AppName } from '../components/AppName';
 
 // App Store: two families of apps, each with Discover and Installed —
 // Docker apps (self-hosted, from the catalog, as containers with their own
@@ -263,7 +264,7 @@ export function AppCenter({ win }: { win?: WinState }) {
     <div className="as" ref={scroller}>
       <header className="as-head">
         <div className="as-head-row">
-          <h1 className="app-title">App Store</h1>
+          <h1 className="app-title"><AppName id="appcenter" /></h1>
           <nav className="as-family" aria-label="Kind of app">
             <button type="button" className={family === 'docker' && tab !== 'updates' ? 'on' : ''} onClick={() => goFamily('docker')}>
               <Icon name="containers" size={15} />

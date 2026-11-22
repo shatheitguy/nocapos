@@ -20,6 +20,8 @@ import {
   type Squad,
   type SquadStatus,
 } from '../lib/squad';
+import type { FailoverInfo } from '../lib/failover';
+import { FailoverSection, FailoverSheet, failoverApi } from './SettingsFailover';
 import { Section, Toggle } from './Personalize';
 
 // Settings → Your Squad: other NoCap servers on this network (found over
@@ -98,6 +100,8 @@ export function FindServersSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [bt, setBt] = useState<Bluetooth | null>(null);
   const [btBusy, setBtBusy] = useState(false);
+  const [fo, setFo] = useState<FailoverInfo | null>(null);
+  const [foFor, setFoFor] = useState<LinkedServer | null>(null);
 
   useEffect(() => {
     if (isAdmin) void findApi.bluetooth().then((r) => r.ok && setBt(r.data));
@@ -106,7 +110,9 @@ export function FindServersSection() {
   const loadSquad = useCallback(() => {
     if (!isAdmin) return;
     void squadApi.get().then((r) => r.ok && setSquad(r.data));
+    void failoverApi.get().then((r) => r.ok && setFo(r.data));
   }, [isAdmin]);
+  const foChanged = (i?: FailoverInfo) => (i ? setFo(i) : loadSquad());
   usePoll(loadSquad, POLL_MS);
 
   const look = async () => {
@@ -261,6 +267,8 @@ export function FindServersSection() {
         </Section>
       )}
 
+      <FailoverSection info={fo} onChanged={foChanged} />
+
       {squad && (
         <Section title={t('squad.linkedTitle')} hint={t('squad.linkedHint')}>
           {squad.linked.length === 0 ? (
@@ -283,6 +291,7 @@ export function FindServersSection() {
                         </span>
                         {l.linked_by && <span className="squad-card-sub">{t('squad.byUser', { user: l.linked_by })}</span>}
                       </span>
+                      {l.role === 'failover' && <span className="squad-chip red">{t('fo.chipFailover')}</span>}
                       <span className={`squad-chip${l.online ? ' on' : ''}`}>{l.online ? t('squad.online') : t('squad.offline')}</span>
                     </div>
                     <div className="squad-fp">
@@ -295,6 +304,11 @@ export function FindServersSection() {
                           {t('find.open')} <Icon name="external" size={13} />
                         </a>
                       )}
+                      {fo && !fo.pair && (
+                        <button type="button" className="small" disabled={!l.online} title={l.online ? undefined : t('fo.needsOnline')} onClick={() => setFoFor(l)}>
+                          <Icon name="swap" size={14} /> {t('fo.make')}
+                        </button>
+                      )}
                       <button type="button" className="small ghost danger" disabled={busy === 'link:' + l.nocap_id} onClick={() => void unlink(l)}>
                         {t('squad.unlink')}
                       </button>
@@ -305,6 +319,17 @@ export function FindServersSection() {
             </div>
           )}
         </Section>
+      )}
+      {foFor && (
+        <FailoverSheet
+          server={foFor}
+          info={fo}
+          onClose={() => setFoFor(null)}
+          onDone={(i) => {
+            setFoFor(null);
+            setFo(i);
+          }}
+        />
       )}
     </>
   );
