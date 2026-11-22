@@ -337,7 +337,7 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 	if s.Spaces != nil && !s.Spaces.Recycles(req.Root) {
 		req.Permanent = true // this shared folder has its recycle bin turned off
 	}
-	err = s.Files.Delete(req.Root, rels, req.Permanent)
+	moved, err := s.Files.DeleteTo(req.Root, rels, req.Permanent)
 	detail := "to recycle bin"
 	if req.Permanent {
 		detail = "permanent"
@@ -348,7 +348,11 @@ func (s *Server) filesDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.FileIndex.Remove(req.Root, rels)
-	w.WriteHeader(http.StatusNoContent)
+	// Where each item went in the recycle bin, so the caller can offer Undo.
+	for i := range moved {
+		moved[i] = display(moved[i])
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"recycled": moved})
 }
 
 type transferRequest struct {

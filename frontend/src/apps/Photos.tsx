@@ -6,12 +6,13 @@ import { Icon, type IconName } from '../components/Icon';
 import { tr, useT } from '../i18n';
 import { linkPhones, sendFilesToPhone } from '../shell/linkActions';
 import { confirmDialog } from '../state/confirm';
-import { toast } from '../state/toasts';
+import { toast, toastAction } from '../state/toasts';
 import { startUpload, useTransfers } from '../state/transfers';
 import type { WinState } from '../state/windows';
 import { openApp } from './meta';
 import { countText, itemsText, Thumb, ticketFor, type Tickets } from './PhotosCommon';
 import { addedOf, deletedOf, Memories, PeriodCards, PhotoGrid, type Grouping } from './PhotosGrid';
+import { pictureMenu, saveEdited, saveTurns } from './photoActions';
 import { PhotoViewer, ticketLinks } from './PhotosViewer';
 
 type View =
@@ -278,6 +279,37 @@ export function Photos(_: { win: WinState }) {
     void load();
     void loadTrash();
     return true;
+  };
+
+  // From the viewer: straight to Recently deleted, with an Undo on the toast.
+  const removeWithUndo = async (p: Photo) => {
+    const r = await photosApi.remove([p]);
+    if (!r.ok) {
+      toast('error', tr('photos.toast.deleteFail'), r.error);
+      return false;
+    }
+    const k = photoKey(p);
+    setItems((v) => v?.filter((x) => photoKey(x) !== k) ?? v);
+    void load();
+    void loadTrash();
+    const bare = (s: string) => s.replace(/^\/+/, '');
+    toastAction('success', tr('pv.trashed', { name: p.name }), {
+      label: tr('pv.undo'),
+      run: () =>
+        void (async () => {
+          const bin = await photosApi.trash();
+          const hit = bin.ok ? bin.data.items.filter((x) => x.root === p.root && bare(x.orig_path) === bare(p.path)).sort((a, b) => b.id - a.id)[0] : undefined;
+          if (!hit) return toast('error', tr('pv.undoFail'));
+          await restore([fromTrash(hit)]);
+        })(),
+    });
+    return true;
+  };
+
+  // A saved turn or edit: read the library again (twice: the index catches up a moment later).
+  const refreshSoon = () => {
+    void load();
+    window.setTimeout(() => void load(), 2000);
   };
 
   const restore = async (list: Photo[]) => {
@@ -821,9 +853,20 @@ export function Photos(_: { win: WinState }) {
             onAlbum={(e, p) => albumMenu(e, [p])}
             onShare={(e, p) => shareMenu(e, [p])}
             onDelete={async (p) => {
-              const done = p.trash ? await purge([p]) : await remove([p]);
+              const done = p.trash ? await purge([p]) : await removeWithUndo(p);
               if (done && viewerList.length <= 1) setViewer(null);
             }}
+            onRotate={async (p, turns) => {
+              const ok = await saveTurns(p, links.full(p), turns);
+              if (ok) refreshSoon();
+              return ok;
+            }}
+            onSaveEdit={async (p, file, replace) => {
+              const saved = await saveEdited(p, file, replace);
+              if (saved) refreshSoon();
+              return !!saved;
+            }}
+            moreItems={(p) => (p.trash ? [] : pictureMenu(p, links.full(p), { video: p.video }))}
             onRestore={async (p) => {
               if ((await restore([p])) && viewerList.length <= 1) setViewer(null);
             }}

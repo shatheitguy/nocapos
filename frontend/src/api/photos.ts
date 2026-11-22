@@ -63,6 +63,8 @@ export const photosApi = {
   tickets: () =>
     api<{ tickets: Record<string, string>; trash?: Record<string, string>; expires_at: string }>('/api/v1/photos/tickets', { method: 'POST' }),
   info: (p: PhotoKey) => api<{ camera?: Camera }>(`/api/v1/photos/info?${qs({ root: p.root, path: p.path })}`),
+  /** Turn a photo by quarter turns clockwise without re-encoding it (409: it can only be turned by saving it again). */
+  rotate: (p: PhotoKey, turns: number) => api<{ orientation: number }>('/api/v1/photos/rotate', { method: 'POST', body: { root: p.root, path: p.path, turns } }),
   favorite: (list: PhotoKey[], on: boolean) => api<void>('/api/v1/photos/favorite', { method: 'POST', body: { items: items(list), on } }),
   remove: (list: PhotoKey[]) => api<void>('/api/v1/photos/delete', { method: 'POST', body: { items: items(list) } }),
   albums: () => api<{ albums: Album[] }>('/api/v1/photos/albums'),

@@ -208,7 +208,7 @@ func TestFilesAccessForPeople(t *testing.T) {
 	}
 
 	// Trash: deleting in your home goes to your home's own recycle bin.
-	expect("alex", s.filesDelete, "POST", "/api/v1/files/delete", map[string]any{"root": home, "paths": []string{"/notes.txt"}}, http.StatusNoContent)
+	expect("alex", s.filesDelete, "POST", "/api/v1/files/delete", map[string]any{"root": home, "paths": []string{"/notes.txt"}}, http.StatusOK)
 	if ents, _ := os.ReadDir(filepath.Join(w.drive, spaces.HomesDir, "alex", files.RecycleDir)); len(ents) != 1 {
 		t.Errorf("home recycle bin has %d items", len(ents))
 	}

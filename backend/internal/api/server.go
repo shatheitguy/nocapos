@@ -472,6 +472,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/photos/albums/{id}/items", s.authed(s.photosAlbumItems))
 	mux.Handle("PUT /api/v1/photos/albums/{id}/cover", s.authed(s.photosAlbumCover))
 	mux.Handle("GET /api/v1/photos/info", s.authed(s.photosInfo))
+	mux.Handle("POST /api/v1/photos/rotate", s.authed(s.touchIndex(s.photosRotate)))
 	mux.Handle("GET /api/v1/photos/trash", s.authed(s.photosTrash))
 	mux.Handle("POST /api/v1/photos/trash/restore", s.authed(s.touchIndex(s.photosRestore)))
 	mux.Handle("POST /api/v1/photos/trash/purge", s.authed(s.touchIndex(s.photosPurge)))

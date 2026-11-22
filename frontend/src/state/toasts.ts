@@ -7,6 +7,8 @@ export interface Toast {
   kind: ToastKind;
   title: string;
   body?: string;
+  /** A button on the toast (Undo, say). */
+  action?: { label: string; run: () => void };
 }
 
 interface ToastStore {
@@ -22,10 +24,14 @@ export const useToasts = create<ToastStore>((set, get) => ({
   push: (t) => {
     const id = nextId++;
     set({ toasts: [...get().toasts, { ...t, id }].slice(-4) });
-    window.setTimeout(() => get().dismiss(id), t.kind === 'error' ? 8000 : 4500);
+    window.setTimeout(() => get().dismiss(id), t.kind === 'error' || t.action ? 8000 : 4500);
   },
   dismiss: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
 }));
 
 export const toast = (kind: ToastKind, title: string, body?: string) =>
   useToasts.getState().push({ kind, title, body });
+
+/** A toast with a button, e.g. "Moved to Trash · Undo". */
+export const toastAction = (kind: ToastKind, title: string, action: { label: string; run: () => void }, body?: string) =>
+  useToasts.getState().push({ kind, title, body, action });

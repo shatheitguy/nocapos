@@ -17,6 +17,19 @@ export function Toasts() {
             <b>{t.title}</b>
             {t.body && <div className="small muted">{t.body}</div>}
           </div>
+          {t.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                dismiss(t.id);
+                t.action?.run();
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

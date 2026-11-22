@@ -338,3 +338,31 @@ func TestResolvedLocationInsideProtected(t *testing.T) {
 		t.Errorf("unknown = %v", err)
 	}
 }
+
+func TestDeleteToReportsRecycledPathForUndo(t *testing.T) {
+	s, dir := newTestService(t)
+	if err := os.MkdirAll(filepath.Join(dir, "pics"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "pics", "a.jpg"), []byte("x"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := s.DeleteTo("t", []string{"pics/a.jpg"}, false)
+	if err != nil || len(moved) != 1 || !strings.HasPrefix(moved[0], RecycleDir+"/") || !strings.HasSuffix(moved[0], "_a.jpg") {
+		t.Fatalf("recycled: %v %v", moved, err)
+	}
+	// Undo: move it back next to where it was, then give it its name again.
+	back, err := s.Transfer("t", moved, "pics", true)
+	if err != nil || len(back) != 1 {
+		t.Fatalf("move back: %v %v", back, err)
+	}
+	if _, err := s.Rename("t", back[0], "a.jpg"); err != nil {
+		t.Fatalf("rename back: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pics", "a.jpg")); err != nil {
+		t.Fatalf("not restored: %v", err)
+	}
+	if gone, err := s.DeleteTo("t", []string{"pics/a.jpg"}, true); err != nil || len(gone) != 0 {
+		t.Fatalf("permanent delete reports nothing: %v %v", gone, err)
+	}
+}

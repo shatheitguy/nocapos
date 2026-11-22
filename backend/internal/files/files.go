@@ -419,6 +419,36 @@ func (s *Service) Open(rootID, rel string) (*os.File, fs.FileInfo, error) {
 	return f, st, nil
 }
 
+// PatchAt overwrites len(b) bytes of an existing file at off, in place (a
+// photo's orientation tag, say). It never grows the file.
+func (s *Service) PatchAt(rootID, rel string, off int64, b []byte) error {
+	if rel == "." || rel == RecycleDir {
+		return ErrIsRoot
+	}
+	rt, err := s.open(rootID)
+	if err != nil {
+		return err
+	}
+	defer rt.Close()
+	f, err := rt.OpenFile(native(rel), os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	st, err := f.Stat()
+	if err == nil && st.IsDir() {
+		err = ErrIsDir
+	} else if err == nil && (off < 0 || off+int64(len(b)) > st.Size()) {
+		err = ErrBadPath
+	}
+	if err == nil {
+		_, err = f.WriteAt(b, off)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
 func (s *Service) ReadText(rootID, rel string, max int64) (string, fs.FileInfo, error) {
 	f, st, err := s.Open(rootID, rel)
 	if err != nil {
@@ -520,45 +550,54 @@ func (s *Service) Rename(rootID, rel, newName string) (string, error) {
 // Delete moves items to the recycle bin, or removes them for good when
 // permanent is set or they are already in the bin.
 func (s *Service) Delete(rootID string, rels []string, permanent bool) error {
+	_, err := s.DeleteTo(rootID, rels, permanent)
+	return err
+}
+
+// DeleteTo is Delete that also says where each item went in the recycle bin
+// (in order; nothing for items removed for good), so a delete can be undone.
+func (s *Service) DeleteTo(rootID string, rels []string, permanent bool) ([]string, error) {
 	for _, rel := range rels {
 		if err := s.guard(rootID, rel); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	rt, err := s.open(rootID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rt.Close()
+	var moved []string
 	stamp := time.Now().Format("20060102-150405")
 	for _, rel := range rels {
 		if rel == "." {
-			return ErrIsRoot
+			return moved, ErrIsRoot
 		}
 		if permanent || inRecycle(rel) {
 			if rel == RecycleDir { // empty the bin, keep the folder
 				if err := rt.RemoveAll(native(rel)); err != nil {
-					return err
+					return moved, err
 				}
 				if err := rt.Mkdir(native(RecycleDir), 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
-					return err
+					return moved, err
 				}
 				continue
 			}
 			if err := rt.RemoveAll(native(rel)); err != nil {
-				return err
+				return moved, err
 			}
 			continue
 		}
 		if err := rt.MkdirAll(native(RecycleDir), 0o755); err != nil {
-			return err
+			return moved, err
 		}
 		dst := uniqueName(rt, RecycleDir, stamp+"_"+path.Base(rel))
 		if err := rt.Rename(native(rel), native(dst)); err != nil {
-			return err
+			return moved, err
 		}
+		moved = append(moved, dst)
 	}
-	return nil
+	return moved, nil
 }
 
 // Transfer copies or moves items into destDir, renaming on conflict. It
