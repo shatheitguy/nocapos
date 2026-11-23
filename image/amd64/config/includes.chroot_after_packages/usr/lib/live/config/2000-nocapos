@@ -21,7 +21,28 @@ if [ -f /usr/share/applications/calamares-install-debian.desktop ]; then
     /usr/share/applications/calamares-install-debian.desktop >/usr/local/share/applications/calamares-install-debian.desktop
 fi
 
-# The installer opens once, at sign-in.
+# "Install NoCapOS" in the boot menu (nocapos.install): the full-screen
+# setup starts before any desktop, in place of the sign-in screen, and comes
+# back if it's closed. Nothing else of the live session is set up.
+case " $(cat /proc/cmdline) " in
+  *" nocapos.install "*)
+    if [ -f /etc/greetd/config.toml ]; then
+      cat >/etc/greetd/config.toml <<TOML
+# NoCapOS setup from the USB stick (written by the live session): the
+# installer on the whole screen, no desktop.
+[terminal]
+vt = 1
+
+[default_session]
+command = "$LIVE/nocapos-install-screen"
+user = "root"
+TOML
+    fi
+    exit 0
+    ;;
+esac
+
+# "Try NoCapOS": the live desktop; the installer opens once, at sign-in.
 mkdir -p /etc/xdg/autostart
 cat >/etc/xdg/autostart/nocapos-live-welcome.desktop <<DESKTOP
 [Desktop Entry]

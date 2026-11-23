@@ -2,10 +2,9 @@
 # live-build binary hook (runs in binary/, after the boot menus and splash
 # were generated, before the ISO is made): NoCapOS's own boot menus, with
 # NoCapOS's colours and art, for BIOS (syslinux) and UEFI (GRUB):
-#   Try or Install NoCapOS                    live NoCap Desktop + graphical installer
-#   Install NoCapOS (text mode, for servers)  debian-installer with NoCapOS's preseed
-#   Try or Install NoCapOS (safe graphics)    the live session with nomodeset
-#   Memory test                               when memtest86+ is on the medium
+#   Install NoCapOS   the full-screen setup, no desktop (default)
+#   Try NoCapOS       live NoCap Desktop (+ "Install NoCapOS" app)
+#   Memory test       when memtest86+ is on the medium
 set -e
 ART=../config/nocapos-art
 VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' ../chroot/usr/lib/nocapos/image/image-release)"
@@ -62,20 +61,14 @@ THEME
   {
     echo "# NoCapOS $VERSION boot menu (UEFI and BIOS through GRUB)."
     echo "source /boot/grub/config.cfg"
-    echo "set timeout=30"
+    echo "set timeout=5"
     echo
-    echo "menuentry \"Try or Install NoCapOS\" --hotkey=t {"
-    echo "	linux	$kernel $LIVE_APPEND"
+    echo "menuentry \"Install NoCapOS\" --hotkey=i {"
+    echo "	linux	$kernel $LIVE_APPEND nocapos.install"
     echo "	initrd	$initrd"
     echo "}"
-    if [ -n "$di_kernel" ]; then
-      echo "menuentry \"Install NoCapOS (text mode, for servers)\" --hotkey=i {"
-      echo "	linux	$di_kernel $DI_APPEND"
-      echo "	initrd	/install/initrd.gz"
-      echo "}"
-    fi
-    echo "menuentry \"Try or Install NoCapOS (safe graphics)\" --hotkey=s {"
-    echo "	linux	$kernel $LIVE_APPEND nomodeset"
+    echo "menuentry \"Try NoCapOS\" --hotkey=t {"
+    echo "	linux	$kernel $LIVE_APPEND"
     echo "	initrd	$initrd"
     echo "}"
     if [ -f live/memtest.bin ]; then
@@ -92,11 +85,6 @@ THEME
       echo "	}"
       echo "fi"
     fi
-    echo "if [ \"\${grub_platform}\" = \"efi\" ]; then"
-    echo "	menuentry \"UEFI firmware settings\" --hotkey=f {"
-    echo "		fwsetup"
-    echo "	}"
-    echo "fi"
   } >boot/grub/grub.cfg
 fi
 
@@ -112,26 +100,18 @@ if [ -d isolinux ]; then
     echo "menu title NoCapOS $VERSION"
     echo "include stdmenu.cfg"
     echo
-    echo "label live"
-    echo "	menu label ^Try or Install NoCapOS"
+    echo "label setup"
+    echo "	menu label ^Install NoCapOS"
     echo "	menu default"
     echo "	linux $kernel"
     echo "	initrd $initrd"
-    echo "	append $LIVE_APPEND"
-    if [ -n "$di_kernel" ]; then
-      echo
-      echo "label install"
-      echo "	menu label ^Install NoCapOS (text mode, for servers)"
-      echo "	linux $di_kernel"
-      echo "	initrd /install/initrd.gz"
-      echo "	append $DI_APPEND"
-    fi
+    echo "	append $LIVE_APPEND nocapos.install"
     echo
-    echo "label safe"
-    echo "	menu label Try or Install NoCapOS (^safe graphics)"
+    echo "label live"
+    echo "	menu label ^Try NoCapOS"
     echo "	linux $kernel"
     echo "	initrd $initrd"
-    echo "	append $LIVE_APPEND nomodeset"
+    echo "	append $LIVE_APPEND"
     if [ -f live/memtest.bin ]; then
       echo
       echo "label memtest"
@@ -141,8 +121,8 @@ if [ -d isolinux ]; then
     echo
     echo "menu clear"
   } >isolinux/menu.cfg
-  # Starts the first entry by itself after 30 seconds.
-  if [ -f isolinux/isolinux.cfg ]; then sed -i 's/^timeout .*/timeout 300/' isolinux/isolinux.cfg; fi
+  # Starts the setup by itself after 5 seconds.
+  if [ -f isolinux/isolinux.cfg ]; then sed -i 's/^timeout .*/timeout 50/' isolinux/isolinux.cfg; fi
 fi
 
 if [ -d .disk ]; then

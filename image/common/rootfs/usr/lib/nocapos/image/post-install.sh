@@ -42,7 +42,7 @@ EOF
 # The installers remove the live-only packages (live-boot, live-config, the
 # graphical installer); their settings and NoCapOS's live-session helpers go
 # too.
-for p in calamares calamares-settings-debian live-boot live-boot-doc \
+for p in calamares calamares-settings-debian cage live-boot live-boot-doc \
   live-config live-config-doc live-config-systemd live-tools; do
   if dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^i'; then
     DEBIAN_FRONTEND=noninteractive apt-get purge -y -q "$p" >/dev/null 2>&1 || true
