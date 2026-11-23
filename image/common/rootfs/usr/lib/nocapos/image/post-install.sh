@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Runs inside a freshly installed NoCapOS PC, at the end of either installer:
-# the graphical one (a Calamares job) or the text-mode one (debian-installer's
-# late_command). Both copy the live system, so NoCapOS, its packages and NoCap
+# Runs inside a freshly installed NoCapOS PC, at the end of the installer (a
+# Calamares job). It copies the live system, so NoCapOS, its packages and NoCap
 # Desktop are already in place; this makes it an installed system:
 #   - Debian's standard package sources (trixie, trixie-updates,
 #     trixie-security; main, contrib, non-free-firmware), nothing else
@@ -42,7 +41,7 @@ EOF
 # The installers remove the live-only packages (live-boot, live-config, the
 # graphical installer); their settings and NoCapOS's live-session helpers go
 # too.
-for p in calamares calamares-settings-debian live-boot live-boot-doc \
+for p in calamares calamares-settings-debian cage live-boot live-boot-doc \
   live-config live-config-doc live-config-systemd live-tools; do
   if dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^i'; then
     DEBIAN_FRONTEND=noninteractive apt-get purge -y -q "$p" >/dev/null 2>&1 || true

@@ -5,7 +5,7 @@ componentName: nocapos
 
 welcomeStyleCalamares: false
 welcomeExpandingLogo: true
-windowExpanding: normal
+windowExpanding: fullscreen
 windowSize: 960px,640px
 windowPlacement: center
 sidebar: widget

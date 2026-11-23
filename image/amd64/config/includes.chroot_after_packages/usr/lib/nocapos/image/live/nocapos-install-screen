@@ -1,0 +1,17 @@
+#!/bin/sh
+# The full-screen NoCapOS setup, straight from the USB stick before any
+# desktop starts (boot menu "Install NoCapOS", kernel option
+# nocapos.install). greetd runs it as root in place of the sign-in screen:
+# a kiosk compositor (cage) with only the installer on the whole screen.
+# Closing the installer brings it back; "Try NoCapOS" in the boot menu is the
+# live desktop.
+set -u
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
+mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+export QT_QPA_PLATFORM=wayland
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+# Safe graphics (nomodeset) and virtual machines have no GPU renderer.
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+export XCURSOR_SIZE=24
+# -s: switching to a text console stays possible (Ctrl+Alt+F2).
+exec cage -s -- calamares

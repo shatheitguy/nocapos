@@ -3,3 +3,7 @@
 # installers remove these from the installed system.
 calamares
 calamares-settings-debian
+cage
+# The installer draws on the screen through Wayland (NoCap Desktop and the
+# full-screen setup have no X server).
+qt6-wayland

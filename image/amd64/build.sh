@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds the NoCapOS PC image: a hybrid ISO (USB stick or DVD, BIOS and UEFI)
 # that boots into a live NoCap Desktop with the graphical NoCapOS installer
-# (Debian's Calamares in NoCapOS's look), plus debian-installer in text mode
-# for servers. Debian stable (trixie) base, built with live-build.
+# (Debian's Calamares in NoCapOS's look), which "Install NoCapOS" in the boot
+# menu starts full screen. Debian stable (trixie) base, built with live-build.
 #
 #   sudo image/amd64/build.sh VERSION [OUT_DIR]
 #
@@ -56,7 +56,6 @@ sys.exit(bad)
 PY
 
 LIVE_APPEND="boot=live components quiet splash hostname=nocap username=nocap"
-INSTALL_APPEND="vga=788 quiet --- quiet"
 
 if [ -d "$WORK" ]; then (cd "$WORK" && lb clean --purge >/dev/null 2>&1 || true); fi
 rm -rf "$WORK"
@@ -71,9 +70,7 @@ lb config \
   --security true \
   --updates true \
   --binary-images iso-hybrid \
-  --debian-installer live \
-  --debian-installer-distribution "$DIST" \
-  --debian-installer-gui false \
+  --debian-installer none \
   --firmware-binary false \
   --firmware-chroot true \
   --memtest memtest86+ \
@@ -83,25 +80,16 @@ lb config \
   --iso-application "NoCapOS" \
   --iso-publisher "NoCapOS; https://github.com/shatheitguy/nocapos" \
   --iso-volume "NoCapOS ${VERSION}" \
-  --bootappend-live "$LIVE_APPEND" \
-  --bootappend-install "quiet"
+  --bootappend-live "$LIVE_APPEND"
 # Smaller root filesystem image: bigger blocks and the x86 code filter.
 export MKSQUASHFS_OPTIONS="-b 1M -Xbcj x86"
 
-# Our config tree (package list, hooks, preseed) over the generated one.
+# Our config tree (package lists, hooks) over the generated one.
 cp -R "$HERE/config/." config/
 
-# Artwork: boot menus, installer banner, GRUB theme, graphical installer.
+# Artwork: boot menus, GRUB theme, graphical installer.
 python3 "$COMMON/make-art.py" config/nocapos-art
 printf '%s\n' "$LIVE_APPEND" >config/nocapos-art/boot-append-live
-printf '%s\n' "$INSTALL_APPEND" >config/nocapos-art/boot-append-install
-mkdir -p config/includes.installer/usr/share/graphics
-for f in logo_installer.png logo_debian.png; do
-  cp config/nocapos-art/installer-banner.png "config/includes.installer/usr/share/graphics/$f"
-done
-for f in logo_installer_dark.png logo_debian_dark.png; do
-  cp config/nocapos-art/installer-banner-dark.png "config/includes.installer/usr/share/graphics/$f"
-done
 
 # The graphical installer: Debian's Calamares with NoCapOS's settings and
 # branding in /etc/calamares (live session only).
@@ -114,7 +102,8 @@ cp config/nocapos-art/calamares-logo.png "$cal/branding/nocapos/logo.png"
 cp config/nocapos-art/calamares-welcome.png "$cal/branding/nocapos/welcome.png"
 chmod 0755 config/includes.chroot_after_packages/usr/lib/live/config/2000-nocapos \
   config/includes.chroot_after_packages/usr/lib/nocapos/image/live/nocapos-install \
-  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/live-welcome
+  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/live-welcome \
+  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/nocapos-install-screen
 
 # The NoCapOS layer (release bundle, checked against SHA256SUMS).
 bash "$COMMON/stage-overlay.sh" "$VERSION" amd64 pc config/includes.chroot_after_packages config/nocapos-art
