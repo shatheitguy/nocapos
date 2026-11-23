@@ -1,0 +1,10 @@
+{
+  "term.connecting": "Connecting…",
+  "term.disconnected": "Disconnected",
+  "term.ended": "session ended",
+  "term.retry": "Try again",
+  "term.err.start": "Could not start the terminal.",
+  "term.err.noAnswer": "NoCapOS did not answer in time, so the terminal could not open.",
+  "term.err.timeout": "The shell did not start within {seconds} seconds.",
+  "term.err.unreachable": "Could not connect to the shell."
+}
