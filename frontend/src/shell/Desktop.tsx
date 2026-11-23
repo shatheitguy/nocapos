@@ -264,7 +264,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
           >
             {widgets && compact && (
               <ErrorBoundary title="Widgets" fallback="hidden">
-                <WidgetLayer username={user.username} compact />
+                <WidgetLayer compact />
               </ErrorBoundary>
             )}
           </div>
@@ -276,7 +276,7 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
           )}
           {widgets && !compact && (
             <ErrorBoundary title="Widgets" fallback="hidden">
-              <WidgetLayer username={user.username} compact={false} />
+              <WidgetLayer compact={false} />
             </ErrorBoundary>
           )}
           {!compact && (

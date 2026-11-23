@@ -176,8 +176,6 @@ body[data-wallpaper='midnight'] { background: #05070d url('/wallpapers/midnight.
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-:root[data-ui='glass'] .clock-greet { display: none; }
-
 /* ---------- universal search ---------- */
 :root[data-ui='glass'] .spotlight { border-radius: 24px; background: rgba(26, 27, 33, 0.78); backdrop-filter: blur(48px) saturate(1.8); -webkit-backdrop-filter: blur(48px) saturate(1.8); border: 1px solid rgba(255, 255, 255, 0.1); }
 :root[data-ui='glass'] .sl-input input,
