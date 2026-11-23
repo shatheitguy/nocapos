@@ -206,7 +206,6 @@ body { background-attachment: fixed; background-size: cover; }
 
 .clock-time { font-size: 64px; font-weight: 300; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
 .clock-date { font-size: 17px; opacity: 0.9; margin-top: 6px; }
-.clock-greet { font-size: 14px; opacity: 0.8; margin-top: 4px; }
 
 .avatar {
   display: inline-grid;
@@ -1130,7 +1129,7 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 .widget-frame .analog { max-width: none; max-height: none; }
 .widget-frame .clock-time { font-size: clamp(24px, min(20cqw, 44cqh), 72px); }
 .widget-frame .clock-date { font-size: clamp(12px, min(5.4cqw, 13cqh), 18px); }
-.widget-frame :is(.clock-time, .clock-date, .clock-greet) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.widget-frame :is(.clock-time, .clock-date) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .widget-frame .uptime-widget .big { font-size: clamp(18px, 12cqw, 30px); }
 .widget-frame .cont-stat .big { font-size: clamp(20px, 14cqw, 34px); }
 
@@ -1138,9 +1137,6 @@ a.btn.small { padding: 5px 10px; font-size: 12px; }
 @container widget (max-height: 239px) {
   .system-widget .system-disks { display: none; }
   .widget .ring-sub { display: none; }
-}
-@container widget (max-height: 129px) {
-  .clock-greet { display: none; }
 }
 /* Small: the key number only. */
 @container widget (max-width: 239px) or (max-height: 169px) {

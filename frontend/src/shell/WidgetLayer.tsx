@@ -12,7 +12,7 @@ import { tr } from '../i18n';
 import { SessionsWidget } from './Signins';
 import { CoreHeatmapWidget, MemoryRingsWidget, NetWaveWidget, StorageGaugesWidget } from './HoloWidgets';
 
-export function WidgetLayer({ username, compact }: { username: string; compact: boolean }) {
+export function WidgetLayer({ compact }: { compact: boolean }) {
   const all = useWidgets((s) => s.widgets);
   const isAdmin = getUser()?.role === 'admin';
   const widgets = isAdmin ? all : all.filter((w) => !widgetDef(w.type).adminOnly);
@@ -24,7 +24,7 @@ export function WidgetLayer({ username, compact }: { username: string; compact: 
       <div className="widget-stack">
         {widgets.map((w) => (
           <div key={w.type} className="widget-static">
-            <SafeWidget type={w.type} username={username} />
+            <SafeWidget type={w.type} />
           </div>
         ))}
       </div>
@@ -36,14 +36,14 @@ export function WidgetLayer({ username, compact }: { username: string; compact: 
       {editing && <EditToolbar />}
       <div className={`widget-layer ${editing ? 'editing' : ''}`}>
         {widgets.map((w) => (
-          <WidgetFrame key={w.type} w={w} username={username} editing={editing} />
+          <WidgetFrame key={w.type} w={w} editing={editing} />
         ))}
       </div>
     </>
   );
 }
 
-function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: string; editing: boolean }) {
+function WidgetFrame({ w, editing }: { w: WidgetInstance; editing: boolean }) {
   const wm = useWidgets.getState();
   const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
 
@@ -100,7 +100,7 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
         </>
       )}
       <div className="widget-content">
-        <SafeWidget type={w.type} username={username} />
+        <SafeWidget type={w.type} />
       </div>
       {editing && <div className="widget-resize" onPointerDown={onResizeDown} />}
     </div>
@@ -111,18 +111,18 @@ function WidgetFrame({ w, username, editing }: { w: WidgetInstance; username: st
  * A widget's content: memoized so moving or resizing its frame doesn't
  * re-render it, and isolated so a broken widget only hides itself.
  */
-const SafeWidget = memo(function SafeWidget({ type, username }: { type: WidgetType; username: string }) {
+const SafeWidget = memo(function SafeWidget({ type }: { type: WidgetType }) {
   return (
     <ErrorBoundary title={`${widgetName(type)} widget`} fallback="hidden">
-      <WidgetBody type={type} username={username} />
+      <WidgetBody type={type} />
     </ErrorBoundary>
   );
 });
 
-function WidgetBody({ type, username }: { type: WidgetType; username: string }) {
+function WidgetBody({ type }: { type: WidgetType }) {
   switch (type) {
     case 'clock':
-      return <ClockWidget username={username} />;
+      return <ClockWidget />;
     case 'analog':
       return <AnalogClock />;
     case 'calendar':

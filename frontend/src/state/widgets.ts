@@ -40,7 +40,7 @@ export interface WidgetDef {
 // Every widget reflows to its size (container queries in styles.css), so the
 // minimums are small: a small widget shows just its key number.
 export const WIDGETS: WidgetDef[] = [
-  { type: 'clock', name: 'Clock & greeting', icon: 'auto', min: { w: 150, h: 80 }, max: { w: 560, h: 260 }, default: { w: 320, h: 150 } },
+  { type: 'clock', name: 'Clock', nameKey: 'desk.widgetClock', icon: 'auto', min: { w: 150, h: 80 }, max: { w: 560, h: 260 }, default: { w: 320, h: 150 } },
   { type: 'analog', name: 'Analog clock', icon: 'auto', min: { w: 100, h: 100 }, max: { w: 320, h: 320 }, default: { w: 180, h: 180 } },
   { type: 'calendar', name: 'Calendar', icon: 'calendar', min: { w: 200, h: 200 }, max: { w: 420, h: 360 }, default: { w: 280, h: 250 } },
   { type: 'notes', name: 'Sticky note', nameKey: 'notes.widgetName', icon: 'stickyNote', min: { w: 150, h: 100 }, max: { w: 480, h: 400 }, default: { w: 280, h: 220 } },
@@ -88,10 +88,11 @@ const GUTTER = 20;
 let key: string | null = null;
 
 function defaultLayout(): WidgetInstance[] {
-  // A tidy column down the left, matching the old sidebar.
+  // A tidy column down the left. No clock: the menu bar shows the time, and
+  // the Clock widget is there in Edit widgets for anyone who wants one.
   let y = GUTTER;
   const out: WidgetInstance[] = [];
-  for (const t of ['clock', 'system', 'network'] as WidgetType[]) {
+  for (const t of ['system', 'network'] as WidgetType[]) {
     const d = widgetDef(t).default;
     out.push({ type: t, x: GUTTER, y, w: d.w, h: d.h });
     y += d.h + 14;
@@ -164,11 +165,26 @@ export const useWidgets = create<WidgetStore>((set, get) => {
       } catch {
         saved = null;
       }
-      const widgets = Array.isArray(saved)
+      let widgets = Array.isArray(saved)
         ? saved
             .filter((w) => WIDGETS.some((d) => d.type === w.type))
             .map((w) => ({ ...w, ...clampPos(w.x, w.y, w.w, w.h) }))
         : defaultLayout();
+      // The desktop used to come with a clock. Take that one away once, so
+      // the home screen has no clock unless the user adds the Clock widget.
+      const clockKey = `${key}.clockDropped`;
+      try {
+        if (!localStorage.getItem(clockKey)) {
+          localStorage.setItem(clockKey, '1');
+          if (widgets.some((w) => w.type === 'clock')) {
+            widgets = widgets.filter((w) => w.type !== 'clock');
+            // Saved now, not batched: other NoCap Desktop surfaces read it too.
+            localStorage.setItem(key, JSON.stringify(widgets));
+          }
+        }
+      } catch {
+        /* storage unavailable: nothing saved to change */
+      }
       set({ widgets, editing: false });
     },
 

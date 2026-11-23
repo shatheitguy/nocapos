@@ -3,23 +3,17 @@ import { Bar, Ring, Sparkline } from '../components/Charts';
 import { Icon } from '../components/Icon';
 import { fmtBytes, fmtRate, fmtUptime } from '../lib/format';
 import { useClock } from '../lib/hooks';
-import { fmtDate, fmtTime, useTimePrefs, zoned } from '../lib/time';
+import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
 import { useSystem } from '../state/system';
 
-export function ClockWidget({ username }: { username: string }) {
+/** The Clock widget: the time and date, added from Edit widgets. */
+export function ClockWidget() {
   const now = useClock(1000);
   const tp = useTimePrefs();
-  const hour = zoned(now, tp.timeZone).hour;
-  const greeting = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   return (
     <div className="clock-widget">
       <div className="clock-time">{fmtTime(now, tp)}</div>
-      <div className="clock-date">
-        {fmtDate(now, tp)}
-      </div>
-      <div className="clock-greet">
-        {greeting}, {username}
-      </div>
+      <div className="clock-date">{fmtDate(now, tp)}</div>
     </div>
   );
 }
