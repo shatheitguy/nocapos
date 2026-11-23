@@ -1220,6 +1220,7 @@ setup_bootsplash() {
     if [ -n "$add" ]; then
       [ -f "$SPLASH_DIR/cmdline.txt" ] || cp -p "$f" "$SPLASH_DIR/cmdline.txt"
       # shellcheck disable=SC2086 # add is a list of tokens
+      # shellcheck disable=SC2086 # add is a list of tokens
       cmdline_with $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f" && rm -f "$f.nocap.tmp"
       echo "$add" >>"$SPLASH_DIR/cmdline-added"
     fi
@@ -1464,6 +1465,112 @@ clear_stale_update_lock() {
   if [ -z "$unit" ] || ! systemctl is-active --quiet "$unit" 2>/dev/null; then rm -f "$lock"; fi
 }
 
+# ---------------------------------------------------------------- boot safety
+# boot_safety: on every install and update (never in a container), so a PC
+# that stops partway through starting heals itself or offers a way out:
+#   - the boot loader knows its disk (grub_boot_disk), so its updates finish;
+#   - a disk check at start repairs what it finds instead of stopping at an
+#     emergency prompt (fsck.repair=yes, read by the initramfs and systemd);
+#   - when a start doesn't finish, the next one shows the boot menu for ten
+#     seconds (the previous kernel is under Advanced options), and it hides
+#     again once a start finishes (nocapos-boot-ok.service).
+BOOT_SAFE_CFG=/etc/default/grub.d/nocapos-safe.cfg
+BOOT_FAILSAFE=/etc/grub.d/09_nocapos_failsafe
+BOOT_OK_UNIT=/etc/systemd/system/nocapos-boot-ok.service
+
+render_boot_safe_cfg() {
+  cat <<'EOF'
+# NoCapOS (written by NoCapOS): a disk check at start repairs what it finds
+# instead of stopping at an emergency prompt. update-grub reads this file.
+case " ${GRUB_CMDLINE_LINUX:-} " in
+  *" fsck.repair="*) ;;
+  *) GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX:+$GRUB_CMDLINE_LINUX }fsck.repair=yes" ;;
+esac
+EOF
+}
+
+# The menu part only where GRUB can write its environment block: /boot/grub
+# on a plain ext2/3/4 partition (not LVM, RAID, encrypted or ZFS).
+render_boot_failsafe() {
+  cat <<'EOF'
+#!/bin/sh
+# NoCapOS (written by NoCapOS): after a start that didn't finish, the boot
+# menu shows for ten seconds; nocapos-boot-ok.service marks a finished start.
+fs="$(grub-probe --target=fs /boot/grub 2>/dev/null || true)"
+abstraction="$(grub-probe --target=abstraction /boot/grub 2>/dev/null || true)"
+[ "$fs" = ext2 ] && [ -z "$abstraction" ] || exit 0
+cat <<'GRUB'
+if [ -s $prefix/grubenv ]; then load_env nocap_ok; fi
+if [ "${nocap_ok}" = "0" ]; then
+  set timeout_style=menu
+  set timeout=10
+fi
+if [ "${nocap_ok}" = "1" ]; then
+  set nocap_ok=0
+  save_env nocap_ok
+fi
+GRUB
+EOF
+}
+
+render_boot_ok_unit() {
+  cat <<'EOF'
+# NoCapOS (written by NoCapOS): this start finished, so the boot menu stays
+# hidden next time (see /etc/grub.d/09_nocapos_failsafe).
+[Unit]
+Description=NoCapOS: mark this start as finished
+After=multi-user.target
+ConditionPathExists=/boot/grub/grubenv
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/grub-editenv /boot/grub/grubenv set nocap_ok=1
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# write_if_changed FILE MODE: stdin to FILE when it differs; true if written.
+write_if_changed() {
+  local tmp
+  tmp="$(mktemp)"
+  cat >"$tmp"
+  if [ -f "$1" ] && cmp -s "$tmp" "$1"; then rm -f "$tmp"; return 1; fi
+  mkdir -p "$(dirname "$1")"
+  install -m "$2" "$tmp" "$1"
+  rm -f "$tmp"
+}
+
+boot_safety() {
+  system_container && return 0
+  grub_boot_disk || true
+  local f add changed=0
+  if f="$(pi_cmdline)"; then
+    add="$(tokens_missing "$(tr '\r\n' '  ' <"$f")" fsck.repair=yes)"
+    if [ -n "$add" ]; then
+      # shellcheck disable=SC2086 # add is a list of tokens
+      cmdline_with $add <"$f" >"$f.nocap.tmp" && cat "$f.nocap.tmp" >"$f"
+      rm -f "$f.nocap.tmp"
+    fi
+    return 0
+  fi
+  has update-grub && [ -d /etc/default/grub.d ] || return 0
+  render_boot_safe_cfg | write_if_changed "$BOOT_SAFE_CFG" 0644 && changed=1
+  render_boot_failsafe | write_if_changed "$BOOT_FAILSAFE" 0755 && changed=1
+  if render_boot_ok_unit | write_if_changed "$BOOT_OK_UNIT" 0644; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+  systemctl enable nocapos-boot-ok.service >/dev/null 2>&1 || true
+  if [ "$changed" -eq 1 ]; then
+    if update-grub >/dev/null 2>&1; then
+      printf '    boot safety on (disk checks repair themselves; the menu shows after a failed start)\n'
+    else
+      warn "update-grub failed; boot safety takes effect after the next boot loader update"
+    fi
+  fi
+}
+
 install_native_mode() {
   detach_from_service
   clear_stale_update_lock
@@ -1520,6 +1627,7 @@ EOF
   fi
   setup_desktop
   setup_mdns
+  boot_safety || warn "boot safety couldn't be set up; NoCapOS itself is fine"
   if [ "$BRANDING" -eq 1 ]; then
     brand_console
     if ! system_container; then
