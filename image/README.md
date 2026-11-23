@@ -6,7 +6,7 @@ own: an image you write to a USB stick or SD card, boot, and get NoCapOS.
 
 | Image | Hardware | Built with |
 | --- | --- | --- |
-| `nocapos-<version>-amd64.iso` | 64-bit PCs, mini PCs, servers, VMs (BIOS and UEFI) | Debian 13 "trixie" + live-build; graphical installer (Calamares) + text-mode debian-installer |
+| `nocapos-<version>-amd64.iso` | 64-bit PCs, mini PCs, servers, VMs (BIOS and UEFI) | Debian 13 "trixie" + live-build; the full-screen NoCapOS setup (Calamares) |
 | `nocapos-<version>-rpi-arm64.img.xz` | Raspberry Pi 3, 4, 5, 400, 500, Zero 2 W, CM4/CM5 | Raspberry Pi OS Lite arm64 (trixie) + pi-gen |
 | `nocapos-<version>-lxc-amd64.tar.zst`, `-lxc-arm64.tar.zst` | A system container on Proxmox VE (see [Container template](#container-template-proxmox-ve)) | Debian 13 "trixie" + mmdebstrap |
 
@@ -57,8 +57,7 @@ rebuilds NoCapOS's version after every dpkg run
   `amd64/config/hooks/normal/9000-nocapos-boot-menu.hook.binary`):
   "Install NoCapOS" (the default after 5 seconds: the full-screen setup,
   no desktop), "Try NoCapOS" and "Memory test". ISO volume label `NoCapOS <version>`.
-- Installers: the graphical NoCapOS installer (below) and debian-installer
-  with the NoCapOS title and preseed; both name the machine `nocap`.
+- Installer: the full-screen NoCapOS setup (below); it names the machine `nocap`.
 - Console: NoCapOS banner on the login screen with the addresses to open, and
   the first-run setup token until the first admin account exists (only needed
   when setting up from outside the local network).
@@ -96,14 +95,10 @@ rebuilds NoCapOS's version after every dpkg run
    address on the console) from any device and sign in with the same
    account.
 
-**Text mode, for servers.** "Install NoCapOS (text mode, for servers)" in
-the boot menu starts debian-installer with the NoCapOS title and preseed
-(`amd64/config/includes.installer/preseed.cfg`). It asks the same questions
-in a text interface and copies the same live system, so the result is the
-same NoCapOS (switch the desktop off afterwards in Settings if the machine
-has no screen).
+**Servers without a screen** use the same setup (switch the desktop off
+afterwards in Settings).
 
-**After either installer** `post-install.sh` runs inside the new system:
+**After the installer** `post-install.sh` runs inside the new system:
 Debian's standard package sources, NoCapOS's services and first-boot setup
 on, live-only packages (live-boot, live-config, the graphical installer,
 desktop icons) and their settings removed, initramfs and boot menu rebuilt.
@@ -266,8 +261,8 @@ image/
     build.sh           lb config + lb build, then check-image.sh in the result
     calamares/         graphical installer: settings, modules, NoCapOS branding + slideshow
     config/            live-build tree: package lists, hooks, boot menus,
-                       live-session launcher (includes.chroot_after_packages),
-                       text installer preseed
+                       live-session launcher and full-screen setup
+                       (includes.chroot_after_packages)
   rpi/
     build.sh           clones pi-gen (arm64 branch), adds the stage, builds in Docker
     config             pi-gen settings

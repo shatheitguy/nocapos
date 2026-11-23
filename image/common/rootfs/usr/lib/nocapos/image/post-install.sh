@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Runs inside a freshly installed NoCapOS PC, at the end of either installer:
-# the graphical one (a Calamares job) or the text-mode one (debian-installer's
-# late_command). Both copy the live system, so NoCapOS, its packages and NoCap
+# Runs inside a freshly installed NoCapOS PC, at the end of the installer (a
+# Calamares job). It copies the live system, so NoCapOS, its packages and NoCap
 # Desktop are already in place; this makes it an installed system:
 #   - Debian's standard package sources (trixie, trixie-updates,
 #     trixie-security; main, contrib, non-free-firmware), nothing else

@@ -9,15 +9,12 @@ set -e
 ART=../config/nocapos-art
 VERSION="$(sed -n 's/^NOCAP_IMAGE_VERSION=//p' ../chroot/usr/lib/nocapos/image/image-release)"
 LIVE_APPEND="$(cat "$ART/boot-append-live")"
-DI_APPEND="$(cat "$ART/boot-append-install")"
 
 kernel="$(find live -maxdepth 1 -name 'vmlinuz-*' | sort | tail -1)"
 initrd="$(find live -maxdepth 1 -name 'initrd.img-*' | sort | tail -1)"
 [ -n "$kernel" ] && [ -n "$initrd" ] || { echo "boot menu: no live kernel/initrd in binary/live" >&2; exit 1; }
 kernel="/$kernel"
 initrd="/$initrd"
-di_kernel=""
-if [ -f install/vmlinuz ] && [ -f install/initrd.gz ]; then di_kernel=/install/vmlinuz; fi
 
 # ---------------------------------------------------------------- UEFI: GRUB
 if [ -d boot/grub ]; then
@@ -128,4 +125,4 @@ fi
 if [ -d .disk ]; then
   echo "NoCapOS ${VERSION} amd64" >.disk/info
 fi
-echo "boot menus: NoCapOS $VERSION ($kernel${di_kernel:+, text installer}$( [ -f live/memtest.bin ] && echo ', memory test'))"
+echo "boot menus: NoCapOS $VERSION ($kernel$( [ -f live/memtest.bin ] && echo ', memory test'))"

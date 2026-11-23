@@ -6,8 +6,6 @@
 Writes, all on the brand's near-black:
   isolinux-splash.png       640x480   BIOS boot menu of the ISO (syslinux)
   grub-live-splash.png      800x600   UEFI boot menu of the ISO (GRUB)
-  installer-banner.png      800x75    debian-installer banner (light theme)
-  installer-banner-dark.png 800x75    debian-installer banner (dark theme)
   calamares-welcome.png     720x300   graphical installer's welcome page
   calamares-logo.png        256x256   graphical installer's logo and window icon
 The installed system's GRUB art comes from scripts/make-boot-art.py.
@@ -46,19 +44,6 @@ def splash(lockup, size, box_h, top):
     return canvas.convert("RGB")
 
 
-def banner(mark, dark):
-    w, h = 800, 75
-    bg = BG if dark else (16, 16, 22)
-    canvas = Image.new("RGBA", (w, h), bg + (255,))
-    m = fit(mark, 60, 60)
-    canvas.alpha_composite(m, (16, (h - m.height) // 2))
-    d = ImageDraw.Draw(canvas)
-    d.text((16 + m.width + 14, h // 2), "NoCapOS", font=font(30), fill=(255, 255, 255), anchor="lm")
-    d.text((w - 16, h // 2), "Installer", font=font(16), fill=(229, 56, 59), anchor="rm")
-    d.line([(0, h - 2), (w, h - 2)], fill=(229, 56, 59), width=2)
-    return canvas.convert("RGB")
-
-
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "art"
     os.makedirs(out, exist_ok=True)
@@ -67,8 +52,6 @@ def main():
     # syslinux draws its menu from row ~12 (16px rows), so the art stays above.
     splash(lockup, (640, 480), 0.36, 0.03).save(os.path.join(out, "isolinux-splash.png"))
     splash(lockup, (800, 600), 0.44, 0.04).save(os.path.join(out, "grub-live-splash.png"))
-    banner(mark, False).save(os.path.join(out, "installer-banner.png"))
-    banner(mark, True).save(os.path.join(out, "installer-banner-dark.png"))
     welcome = Image.new("RGBA", (720, 300), (0, 0, 0, 0))
     art = fit(lockup, 640, 220)
     welcome.alpha_composite(art, ((720 - art.width) // 2, (300 - art.height) // 2))
