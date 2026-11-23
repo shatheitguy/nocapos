@@ -5,7 +5,8 @@
 import { useEffect } from 'react';
 import { APPS, winTitle } from '../apps/meta';
 import { Window } from '../shell/Window';
-import { usePrefs } from '../state/prefs';
+import { followPrefs, usePrefs } from '../state/prefs';
+import { connect, disconnect } from '../api/socket';
 import { useWM } from '../state/windows';
 import { hostOn, hostSend } from './platform';
 
@@ -80,6 +81,18 @@ export function NativeAppWindow() {
       offTitle();
     };
   }, [appId, meta]);
+
+  // Settings changed in another window (Settings itself, say) show here
+  // straight away: alfad's live feed says when to load them again.
+  useEffect(() => {
+    if (!meta) return;
+    void connect();
+    const offPrefs = followPrefs();
+    return () => {
+      offPrefs();
+      disconnect();
+    };
+  }, [meta]);
 
   if (!meta) return null;
   return <Window id={NATIVE_WINDOW_ID} compact={false} />;

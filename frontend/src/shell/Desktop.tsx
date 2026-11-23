@@ -9,7 +9,7 @@ import { ContextMenu, type MenuItem } from '../components/ContextMenu';
 import { useDocumentVisible, useViewport } from '../lib/hooks';
 import { takeHubApp } from '../lib/hub';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { usePrefs, usePrefsSynced } from '../state/prefs';
+import { followPrefs, usePrefs, usePrefsSynced } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { useFolders } from '../state/folders';
 import { useDock } from '../state/dock';
@@ -108,9 +108,11 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     void api<SystemInfo>('/api/v1/system/info').then((r) => r.ok && sys.setInfo(r.data));
     void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
     void connect();
+    const offPrefs = followPrefs();
     const offStatus = onSocketStatus(sys.setOnline);
     return () => {
       offNative.forEach((f) => f());
+      offPrefs();
       offStatus();
       disconnect();
       useWM.getState().reset();
