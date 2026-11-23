@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ import (
 	"alfaos/alfad/internal/files"
 	"alfaos/alfad/internal/store"
 	"alfaos/alfad/internal/syspkg"
+	"alfaos/alfad/internal/virt"
 )
 
 // LocationStore persists Files locations and settings (the server store).
@@ -47,6 +49,8 @@ type Options struct {
 	Native     func() bool
 	CanInstall func() bool
 	PkgManager func() string
+	// Container is the system container NoCapOS runs in ("lxc", ...) or "".
+	Container func() string
 }
 
 type Manager struct {
@@ -59,6 +63,7 @@ type Manager struct {
 	native  func() bool
 	canInst func() bool
 	pkgMgr  func() string
+	ctr     func() string
 
 	// InUse lists folders apps keep data in (set by the API from Docker).
 	InUse func(ctx context.Context) []PathUse
@@ -100,11 +105,14 @@ func NewManager(o Options) *Manager {
 	if o.PkgManager == nil {
 		o.PkgManager = syspkg.Manager
 	}
+	if o.Container == nil {
+		o.Container = virt.Kind
+	}
 	if o.Log == nil {
 		o.Log = slog.Default()
 	}
 	return &Manager{be: o.Backend, st: o.Store, files: o.Files, dataDir: filepath.ToSlash(o.DataDir), log: o.Log, demo: o.Demo,
-		native: o.Native, canInst: o.CanInstall, pkgMgr: o.PkgManager,
+		native: o.Native, canInst: o.CanInstall, pkgMgr: o.PkgManager, ctr: o.Container,
 		busy: map[string]string{}, smart: map[string]smartEntry{}, subs: map[chan []Alert]struct{}{},
 		tests: map[string]*runningTest{}, testPoll: 15 * time.Second}
 }
@@ -145,6 +153,10 @@ type Status struct {
 	Demo      bool        `json:"demo"`
 	ZFS       ZFSStatus   `json:"zfs"`
 	Smart     SmartStatus `json:"smart"`
+	// Container: NoCapOS runs in a system container ("lxc", ...), where the
+	// host keeps the physical disks; ContainerNote says what that means.
+	Container     string `json:"container,omitempty"`
+	ContainerNote string `json:"container_note,omitempty"`
 }
 
 func (m *Manager) supported() bool { return m.demo || m.native() }
@@ -180,7 +192,32 @@ func (m *Manager) Status(ctx context.Context) Status {
 		CanInstall: m.demo || (m.native() && m.pkgMgr() == "apt")}
 	st.ZFS.Hint = zfsHint(st.ZFS)
 	st.Smart = SmartStatus{Installed: t.SmartInstalled, CanInstall: m.demo || m.canInst()}
+	if c := m.container(); c != "" {
+		st.Container, st.ContainerNote = c, virt.DisksReason
+		st.ZFS.CanInstall, st.Smart.CanInstall = false, false
+		if !st.ZFS.Installed || !st.ZFS.Module {
+			st.ZFS.Hint = virt.DisksReason
+		}
+	}
 	return st
+}
+
+// container is the system container NoCapOS runs in, or "" (never in demo
+// mode, which shows every feature).
+func (m *Manager) container() string {
+	if m.demo || m.ctr == nil {
+		return ""
+	}
+	return m.ctr()
+}
+
+// needDisks refuses changes to physical disks inside a system container:
+// the host owns them there.
+func (m *Manager) needDisks() error {
+	if m.container() != "" {
+		return &Error{http.StatusConflict, virt.DisksReason}
+	}
+	return nil
 }
 
 func (m *Manager) ready() error {
@@ -213,6 +250,9 @@ func (m *Manager) Install(ctx context.Context, tool string) error {
 	}
 	if !installable[tool] {
 		return bad("unknown tool %q", tool)
+	}
+	if err := m.needDisks(); err != nil {
+		return err
 	}
 	return m.be.Install(ctx, tool)
 }
@@ -516,6 +556,9 @@ func (m *Manager) SmartDetail(ctx context.Context, name string) (*SmartReport, e
 }
 
 func (m *Manager) SmartTest(ctx context.Context, name, kind string, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if kind != "short" && kind != "long" {
 		return nil, bad("test type must be short or long")
 	}
@@ -558,6 +601,9 @@ type FormatRequest struct {
 
 func (m *Manager) Format(ctx context.Context, name string, req FormatRequest, done func(error)) (*Job, error) {
 	if err := m.ready(); err != nil {
+		return nil, err
+	}
+	if err := m.needDisks(); err != nil {
 		return nil, err
 	}
 	if err := checkConfirm(req.Confirm, "ERASE"); err != nil {
@@ -697,6 +743,9 @@ type CreatePoolRequest struct {
 }
 
 func (m *Manager) CreatePool(ctx context.Context, req CreatePoolRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if err := m.needZFS(ctx); err != nil {
 		return nil, err
 	}
@@ -790,6 +839,9 @@ type AddVdevRequest struct {
 }
 
 func (m *Manager) AddVdev(ctx context.Context, pool string, req AddVdevRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if err := checkConfirm(req.Confirm, "ERASE"); err != nil {
 		return nil, err
 	}
@@ -848,6 +900,9 @@ func findLeaf(vs []Vdev, old string) *Vdev {
 }
 
 func (m *Manager) Replace(ctx context.Context, pool string, req ReplaceRequest, done func(error)) (*Job, error) {
+	if err := m.needDisks(); err != nil {
+		return nil, err
+	}
 	if err := checkConfirm(req.Confirm, "ERASE"); err != nil {
 		return nil, err
 	}

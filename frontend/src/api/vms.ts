@@ -93,6 +93,8 @@ export interface VmStatus {
   missing?: string[];
   hint?: string;
   can_install: boolean;
+  /** NoCapOS runs in a system container ("lxc", ...). */
+  container?: string;
   tools: { virsh: boolean; qemu_img: boolean; kvm: boolean; libvirtd: boolean; swtpm: boolean; ovmf: boolean; version?: string };
   host: { cpus: number; memory_mib: number; interfaces: HostIface[]; iso_dir: string; isos: IsoFile[] };
   presets: VmPreset[];

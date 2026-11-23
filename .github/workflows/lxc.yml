@@ -1,0 +1,179 @@
+name: Container template
+
+# Builds the NoCapOS container template for hypervisors (a system container:
+# Debian 13 with NoCapOS in server mode, see image/lxc/) from this checkout's
+# NoCapOS bundle, built here exactly as the release workflow builds it:
+#   nocapos-<version>-lxc-amd64.tar.zst
+#   nocapos-<version>-lxc-arm64.tar.zst
+# Each one is booted with systemd-nspawn before it's kept: the first-boot
+# setup has to finish and NoCapOS has to answer on its HTTPS port.
+#
+# Only run by hand. Every run uploads the templates as workflow artifacts;
+# they're attached to release v<version> only when "attach" is ticked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'NoCapOS release to build, e.g. 0.14.6 (empty: the VERSION file)'
+        required: false
+        default: ''
+      attach:
+        description: 'Attach the templates to release v<version>'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lxc-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      attach: ${{ steps.v.outputs.attach }}
+      epoch: ${{ steps.v.outputs.epoch }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_ATTACH: ${{ inputs.attach }}
+        run: |
+          version="${INPUT_VERSION:-$(cat VERSION)}"
+          version="${version#v}"
+          case "$version" in
+            *[!0-9A-Za-z.+-]* | '') echo "bad version: '$version'" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "attach=${INPUT_ATTACH:-false}" >>"$GITHUB_OUTPUT"
+          # Timestamps in the template: the commit's, so a rebuild matches.
+          echo "epoch=$(git log -1 --format=%ct)" >>"$GITHUB_OUTPUT"
+          echo "Building the container template for NoCapOS $version (attach to release: ${INPUT_ATTACH:-false})"
+
+  # The release bundles (scripts/package.sh). A container has no screen, so
+  # NoCap Desktop's native programs aren't needed.
+  bundle:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Build the bundles
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          bash scripts/package.sh "$VERSION"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lxc-bundle
+          path: |
+            dist/nocapos-linux-amd64.tar.gz
+            dist/nocapos-linux-arm64.tar.gz
+            dist/SHA256SUMS
+          compression-level: 0
+          if-no-files-found: error
+
+  template:
+    needs: [meta, bundle]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    # Native runners: each template is built and booted without CPU emulation.
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lxc-bundle
+          path: bundle
+
+      - name: Build the template (mmdebstrap in debian:trixie)
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.epoch }}
+        run: |
+          docker run --rm --privileged \
+            -v "$GITHUB_WORKSPACE:/src" -w /src \
+            -e VERSION -e ARCH -e SOURCE_DATE_EPOCH -e NOCAP_DIST=/src/bundle \
+            docker.io/library/debian:trixie \
+            bash -c 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+                       mmdebstrap zstd curl ca-certificates \
+                     && bash image/lxc/build.sh "$VERSION" "$ARCH" /src/out'
+          sudo chown -R "$(id -u):$(id -g)" out
+          ls -lh out
+
+      - name: Boot it (systemd-nspawn)
+        env:
+          TPL: out/nocapos-${{ needs.meta.outputs.version }}-lxc-${{ matrix.arch }}.tar.zst
+        run: |
+          sudo apt-get update -q
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends systemd-container zstd
+          sudo bash image/lxc/boot-test.sh "$TPL" "$PWD/boot-logs"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nocapos-${{ needs.meta.outputs.version }}-lxc-${{ matrix.arch }}
+          path: |
+            out/*.tar.zst
+            out/*.sha256
+            out/*.packages
+          compression-level: 0
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-logs-lxc-${{ matrix.arch }}
+          path: boot-logs/
+          if-no-files-found: ignore
+
+  attach:
+    needs: [meta, template]
+    if: needs.meta.outputs.attach == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nocapos-${{ needs.meta.outputs.version }}-lxc-*
+          merge-multiple: true
+          path: templates
+
+      - name: Attach to release v${{ needs.meta.outputs.version }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          cd templates
+          ls -lh
+          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber \
+            "nocapos-$VERSION-lxc-amd64.tar.zst" "nocapos-$VERSION-lxc-amd64.tar.zst.sha256" \
+            "nocapos-$VERSION-lxc-arm64.tar.zst" "nocapos-$VERSION-lxc-arm64.tar.zst.sha256"

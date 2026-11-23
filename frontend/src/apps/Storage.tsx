@@ -275,6 +275,20 @@ function Unsupported({ reason }: { reason?: string }) {
 // ---------------- Overview ----------------
 
 function ToolsCard({ status, installing, onInstall }: { status: StorageStatus; installing: string | null; onInstall: (t: 'zfs' | 'smart') => void }) {
+  // In a system container the host owns the disks: say so once instead of
+  // offering tools that can't reach them.
+  if (status.container_note)
+    return (
+      <div className="ucard ulist">
+        <div className="urow">
+          <span className="urow-icon"><Icon name="info" size={17} /></span>
+          <span className="urow-text">
+            <span className="urow-title">Disks are managed on the host</span>
+            <span className="urow-desc">{status.container_note}</span>
+          </span>
+        </div>
+      </div>
+    );
   const items: { tool: 'zfs' | 'smart'; title: string; desc: string; can: boolean }[] = [];
   if (!status.zfs.installed || !status.zfs.module)
     items.push({

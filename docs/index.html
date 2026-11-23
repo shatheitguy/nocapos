@@ -376,6 +376,15 @@ footer a:hover{color:#fff}
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px">
+    <h3 style="margin-top:0">Running Proxmox VE?</h3>
+    <p>Releases with a container template carry <code class="k">nocapos-&lt;version&gt;-lxc-amd64.tar.zst</code> (and <code class="k">-arm64</code>): NoCapOS in server mode as a system container. Upload it under <b>CT Templates</b>, then create an unprivileged container with <code class="k">nesting=1,keyctl=1</code> (for Docker apps), 2 cores, 2 GB of memory and a 16 GB disk, and open its address in your browser. Disks, network and the screen stay with the host. <a href="https://github.com/shatheitguy/nocapos/blob/main/image/README.md#container-template-proxmox-ve">All the steps</a></p>
+    <div class="cmd">
+      <code id="cmd-ct">pct create 120 local:vztmpl/nocapos-&lt;version&gt;-lxc-amd64.tar.zst --hostname nocap --unprivileged 1 --features nesting=1,keyctl=1 --cores 2 --memory 2048 --rootfs local-lvm:16 --net0 name=eth0,bridge=vmbr0,ip=dhcp</code>
+      <button class="copy" type="button" data-copy="cmd-ct">Copy</button>
+    </div>
+  </div>
+
   <div class="steps">
     <div class="step"><h3><span>01</span>Open it</h3><p>Go to the address shown on the screen from any device on your network, or use the NoCap Desktop. From outside your network, setup also asks for a one-time token.</p></div>
     <div class="step"><h3><span>02</span>Make it yours</h3><p>Create your admin account, then pick a voice, theme, name, network, time zone and updates. Skip anything and change it later in Settings.</p></div>

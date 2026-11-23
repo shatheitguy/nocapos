@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"alfaos/alfad/internal/virt"
 )
 
 // ---- NoCap Desktop ----
@@ -108,6 +110,9 @@ type Desktop struct {
 	WriteFile func(string, []byte, os.FileMode) error
 	// Native: NoCapOS runs on Linux as root outside a container.
 	Native bool
+	// Container is the system container NoCapOS runs in ("lxc", ...) or ""
+	// (nil: not in one). A system container has no screen to draw on.
+	Container func() string
 	// DataDir holds the remote screen's credentials and certificate.
 	DataDir string
 	// DRMDir is /sys/class/drm (monitors), RuntimeRoot /run/user.
@@ -141,8 +146,11 @@ type Desktop struct {
 
 // NewDesktop wires the real machine.
 func NewDesktop(native bool, dataDir string) *Desktop {
-	return &Desktop{Run: ExecRunner, RunInput: ExecInputRunner, Native: native, DataDir: dataDir}
+	return &Desktop{Run: ExecRunner, RunInput: ExecInputRunner, Native: native, DataDir: dataDir, Container: virt.Kind}
 }
+
+// inContainer: NoCapOS runs in a system container, which has no screen.
+func (d *Desktop) inContainer() bool { return d.Container != nil && d.Container() != "" }
 
 // DesktopState is what Settings shows.
 type DesktopState struct {
@@ -232,6 +240,10 @@ func (d *Desktop) State(ctx context.Context) DesktopState {
 		st.Reason = "NoCap Desktop needs NoCapOS installed straight on Linux (not in Docker)."
 		return st
 	}
+	if d.inContainer() {
+		st.Reason = virt.DesktopReason
+		return st
+	}
 	st.Modes = d.Modes()
 	if len(st.Modes) == 0 {
 		st.Reason = notSetUp
@@ -285,7 +297,7 @@ func ModeCommands(mode string, c DesktopConf) [][]string {
 
 // SetMode switches NoCap Desktop on (full) or off.
 func (d *Desktop) SetMode(ctx context.Context, mode string) error {
-	if !d.Native {
+	if !d.Native || d.inContainer() {
 		return ErrDesktopUnavailable
 	}
 	modes := d.Modes()

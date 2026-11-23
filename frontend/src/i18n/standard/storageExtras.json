@@ -39,6 +39,7 @@
   "stx.boot.why.sd": "The system runs from an SD or eMMC card, which can't be mirrored to a second drive. Keep a backup of the card instead.",
   "stx.boot.why.arch": "Boot drive mirroring is supported on 64-bit PCs and 64-bit ARM boards that start with UEFI.",
   "stx.boot.why.unknown": "NoCapOS couldn't determine which drive the system starts from, so it won't change it.",
+  "stx.boot.why.container": "NoCapOS is running in a system container: its system disk is a volume on the host. Protect it there, with mirrored host storage and the host's container backups.",
   "stx.boot.noCandidates": "No free drive is large enough. Connect a drive of at least {size}.",
   "stx.boot.resilver": "Copying the system to the new drive: {pct}%",
   "stx.boot.drives": "System drives",

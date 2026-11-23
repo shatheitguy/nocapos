@@ -144,9 +144,11 @@ type Status struct {
 	Missing    []string `json:"missing,omitempty"`
 	Hint       string   `json:"hint,omitempty"`
 	CanInstall bool     `json:"can_install"`
-	Tools      Tools    `json:"tools"`
-	Host       HostInfo `json:"host"`
-	Presets    []Preset `json:"presets"`
+	// Container: NoCapOS runs in a system container ("lxc", ...).
+	Container string   `json:"container,omitempty"`
+	Tools     Tools    `json:"tools"`
+	Host      HostInfo `json:"host"`
+	Presets   []Preset `json:"presets"`
 }
 
 // Console is what the screen window needs: a VNC port on 127.0.0.1 that the

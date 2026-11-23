@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"alfaos/alfad/internal/virt"
 )
 
 // ErrUnsupported means this host can't do that (no NetworkManager, inside a
@@ -54,6 +56,10 @@ func InContainer() bool {
 	return false
 }
 
+// systemContainer reports a system container (LXC, ...), where the host sets
+// up the network (swappable in tests).
+var systemContainer = virt.System
+
 // runCmd runs a command and returns its trimmed output (swappable in tests).
 var runCmd = run
 
@@ -90,6 +96,8 @@ func Network(ctx context.Context) NetworkState {
 		reason = "Switching adapters on Windows needs an elevated (administrator) process"
 	case InContainer():
 		reason = "NoCapOS is running in a container, so it can't switch the host's network"
+	case systemContainer() && !hasNmcli():
+		reason = virt.NetworkReason
 	case hasNmcli():
 		st.Manager = "networkmanager"
 		if out, err := runCmd(ctx, "nmcli", "-t", "-f", "WIFI,NETWORKING", "general"); err == nil {
