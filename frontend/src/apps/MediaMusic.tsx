@@ -129,6 +129,9 @@ function useVisualizer(audio: React.RefObject<HTMLAudioElement | null>, canvas: 
       const span = w * 0.1;
       draw2d.lineCap = 'round';
       draw2d.lineWidth = Math.max(2, w / 140);
+      // The ring is a tint of the system accent; a colour the canvas can't
+      // read leaves the white set just before it.
+      draw2d.strokeStyle = '#fff';
       draw2d.strokeStyle = accent;
       for (let i = 0; i < n; i++) {
         const k = i <= n / 2 ? i : n - i;
