@@ -113,6 +113,7 @@ type Server struct {
 	dohS             dohState           // Shield on the phone: DNS-over-HTTPS for linked devices
 	osImg            *osState           // image install: whole-system updates (nil on a script install)
 	noteFeed         noteFeed           // Sticky Notes changes and reminders, live
+	prefsFeed        prefsFeed          // a person's preferences changed in one of their windows
 	squad            squadState         // Your Squad: link requests between servers, and from phones
 	failover         failoverState      // failover pair: keeping a linked server in sync
 	failoverFiles    failoverFilesState // and its files (failover_files.go)

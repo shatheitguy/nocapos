@@ -60,6 +60,7 @@ func (s *Server) wsConnect(w http.ResponseWriter, r *http.Request) {
 //	account.sessions         any user   new sign-ins to their account, session list changes
 //	link.phone               any user   their phones' notifications and state changed, links handed over
 //	notes                    any user   their Sticky Notes changed, or a reminder came due
+//	me.prefs                 any user   their preferences changed in another window
 func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, error) {
 	// Re-read the person: a connection outlives role changes.
 	cur, err := s.currentUser(context.Background(), u.ID, "", false)
@@ -82,6 +83,9 @@ func (s *Server) resolveTopic(topic string, u *store.User) (ws.Subscription, err
 	}
 	if name == "notes" && arg == "" {
 		return ws.Subscription{Shared: false, Source: s.notesSource(u.ID)}, nil
+	}
+	if name == "me.prefs" && arg == "" {
+		return ws.Subscription{Shared: false, Source: s.prefsSource(u.ID)}, nil
 	}
 	if u.Role != store.RoleAdmin {
 		return ws.Subscription{}, errForbidden

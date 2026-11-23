@@ -510,7 +510,8 @@ func (s *Server) prefsGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) prefsPut(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Prefs json.RawMessage `json:"prefs"`
+		Prefs  json.RawMessage `json:"prefs"`
+		Client string          `json:"client"` // the saving window's tag (prefsEvent)
 	}
 	if !decodeJSONLimit(w, r, &req, maxPrefsBytes+1024) {
 		return
@@ -521,9 +522,15 @@ func (s *Server) prefsPut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "prefs must be a JSON object under 32 KB")
 		return
 	}
-	if err := s.Store.SetUserPrefs(r.Context(), userFrom(r.Context()).ID, string(raw)); err != nil {
+	uid := userFrom(r.Context()).ID
+	if err := s.Store.SetUserPrefs(r.Context(), uid, string(raw)); err != nil {
 		s.internalError(w, r, err)
 		return
 	}
+	client := req.Client
+	if !prefsClientRe.MatchString(client) {
+		client = ""
+	}
+	s.prefsFeed.publish(uid, prefsEvent{Client: client})
 	w.WriteHeader(http.StatusNoContent)
 }

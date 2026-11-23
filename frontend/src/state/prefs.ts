@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
+import { subscribe } from '../api/socket';
 import { tr } from '../i18n';
 import { toast } from './toasts';
 import { flushSaves, saveLater } from '../lib/saveLater';
@@ -249,7 +250,7 @@ function syncLater() {
   window.clearTimeout(serverTimer);
   serverTimer = window.setTimeout(() => {
     if (!userId) return;
-    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot() } }).then((r) => {
+    void api('/api/v1/me/prefs', { method: 'PUT', body: { prefs: snapshot(), client: WINDOW_TAG } }).then((r) => {
       // The change is kept in this browser either way; say once that the server didn't take it.
       if (r.ok || r.status === 404) syncWarned = false;
       else if (!syncWarned && r.status !== 401) {
@@ -258,6 +259,28 @@ function syncLater() {
       }
     });
   }, 1500);
+}
+
+/** This page's own tag: its saves come back on the live feed, and are skipped. */
+const WINDOW_TAG = Math.random().toString(36).slice(2, 12) || 'window';
+
+/**
+ * Follow the person's preferences live: when another window or desktop saves
+ * them (on NoCap Desktop every app is a page of its own), load them again, so
+ * a change in Settings shows in Files straight away. Returns a stop function.
+ */
+export function followPrefs(): () => void {
+  return subscribe('me.prefs', (data) => {
+    const from = (data as { client?: string } | null)?.client;
+    if (!userId || from === WINDOW_TAG) return;
+    const id = userId;
+    void api<{ prefs: Record<string, unknown> | null }>('/api/v1/me/prefs').then((r) => {
+      if (userId !== id || !r.ok || !r.data.prefs) return;
+      window.clearTimeout(serverTimer); // nothing of ours to send back
+      usePrefs.setState({ ...DEFAULT_PREFS, ...sanitize(r.data.prefs) });
+      writeStore(userKey(KEY), JSON.stringify(snapshot()));
+    });
+  });
 }
 
 /**
