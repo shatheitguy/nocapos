@@ -27,13 +27,21 @@ export interface TerminalSocket {
 
 /**
  * Opens a terminal WebSocket: output arrives as binary frames (onData),
- * input is sent as binary, resize as a JSON text frame.
+ * input is sent as binary, resize as a JSON text frame. onClose always
+ * comes once the connection ends or can't be made (never a thrown error).
  */
 export function openTerminal(
   ticket: string,
   handlers: { onData: (text: string) => void; onClose: (reason: string) => void; onOpen: () => void },
 ): TerminalSocket {
-  const ws = new WebSocket(`${wsBase()}/ws/terminal?ticket=${encodeURIComponent(ticket)}`);
+  let ws: WebSocket;
+  try {
+    ws = new WebSocket(`${wsBase()}/ws/terminal?ticket=${encodeURIComponent(ticket)}`);
+  } catch {
+    // Some engines refuse a connection by throwing instead of closing.
+    queueMicrotask(() => handlers.onClose(''));
+    return { send: () => false, resize: () => false, close: () => {} };
+  }
   ws.binaryType = 'arraybuffer';
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();

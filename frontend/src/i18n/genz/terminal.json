@@ -1,0 +1,10 @@
+{
+  "term.connecting": "Connecting…",
+  "term.disconnected": "Disconnected",
+  "term.ended": "session over",
+  "term.retry": "Run it back",
+  "term.err.start": "The terminal didn't boot up.",
+  "term.err.noAnswer": "NoCapOS left us on read, so the terminal couldn't open.",
+  "term.err.timeout": "The shell ghosted us: nothing after {seconds} seconds.",
+  "term.err.unreachable": "Couldn't link up with the shell."
+}

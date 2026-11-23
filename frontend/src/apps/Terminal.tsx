@@ -6,6 +6,8 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
 import { openTerminal, terminalApi, type TerminalInfo, type TerminalSocket } from '../api/terminal';
 import { Icon } from '../components/Icon';
+import { tr, useT } from '../i18n';
+import { isNative } from '../native/platform';
 import { usePrefs } from '../state/prefs';
 import { useWM, type WinState } from '../state/windows';
 
@@ -19,6 +21,26 @@ interface HistoryItem {
 
 const MIN_FONT = 10;
 const MAX_FONT = 24;
+/** How long to wait for NoCapOS to hand out a terminal, then for the shell's connection. */
+const TICKET_TIMEOUT_MS = 20_000;
+const OPEN_TIMEOUT_MS = 15_000;
+
+/** p, or null if it hasn't settled within ms. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => resolve(null), ms);
+    p.then(
+      (v) => {
+        window.clearTimeout(timer);
+        resolve(v);
+      },
+      (e: unknown) => {
+        window.clearTimeout(timer);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
+}
 
 /** Terminal colors that follow the desktop theme. */
 function xtermTheme(uiTheme: string, accent: string): ITheme {
@@ -35,14 +57,33 @@ const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*(\x07|\x1b\\)|\x1b[@-_]/g;
 const SECRET_PROMPT = /(password|passphrase|passcode|pin)[^\n]*:\s*$/i;
 const PRIVILEGED = /^(sudo|su|doas)\b/;
 
+// GL renderers that run on the processor: drawing there is no faster than the
+// 2D canvas, and the WebGL terminal can stay blank on them.
+const SOFTWARE_GL = /llvmpipe|softpipe|swiftshader|software|swrast/i;
+
 let webgl2: boolean | undefined;
-/** Whether this browser can draw with WebGL 2 at all (checked once). */
+/**
+ * Whether the terminal should draw with WebGL 2 (checked once): in a browser
+ * with a real graphics card. Never on NoCap Desktop's own windows: there the
+ * WebGL terminal can receive the shell's output and still show nothing (seen
+ * in the live session from the USB stick, which often draws in software), so
+ * it looks like it's loading forever. The 2D canvas always draws.
+ */
 function hasWebgl2() {
   if (webgl2 === undefined) {
-    try {
-      webgl2 = !!document.createElement('canvas').getContext('webgl2');
-    } catch {
-      webgl2 = false;
+    webgl2 = false;
+    if (!isNative()) {
+      try {
+        const gl = document.createElement('canvas').getContext('webgl2');
+        if (gl) {
+          const info = gl.getExtension('WEBGL_debug_renderer_info');
+          const renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
+          webgl2 = !SOFTWARE_GL.test(renderer);
+          gl.getExtension('WEBGL_lose_context')?.loseContext(); // only a probe
+        }
+      } catch {
+        webgl2 = false;
+      }
     }
   }
   return webgl2;
@@ -105,6 +146,7 @@ export function Terminal({ win }: { win: WinState }) {
   const target = win.props?.target ?? 'host';
   const label = win.props?.label ?? target;
   const isHost = target === 'host';
+  const t = useT();
   const accent = usePrefs((s) => s.accent);
   const uiTheme = usePrefs((s) => s.uiTheme);
   const fontSize = usePrefs((s) => s.termFontSize);
@@ -122,6 +164,7 @@ export function Terminal({ win }: { win: WinState }) {
 
   const [status, setStatus] = useState<Status>('connecting');
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0); // "Try again" opens a new session
   const [info, setInfo] = useState<TerminalInfo | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -213,19 +256,44 @@ export function Terminal({ win }: { win: WinState }) {
       else pending += d;
     });
 
+    // Never "connecting…" forever: whatever goes wrong ends in a message
+    // saying so, with a way to try again.
+    let opened = false;
+    let failed = false;
+    let openTimer = 0;
+    const fail = (msg: string) => {
+      if (disposed || failed) return;
+      failed = true;
+      window.clearTimeout(openTimer);
+      live = false;
+      setStatus('closed');
+      setError(msg);
+    };
+
     (async () => {
       const password = shellTarget === 'host-root' ? rootPwRef.current : undefined;
       rootPwRef.current = ''; // used once, never kept
-      const t = await terminalApi.ticket(shellTarget, term.cols, term.rows, password);
+      const res = await withTimeout(terminalApi.ticket(shellTarget, term.cols, term.rows, password), TICKET_TIMEOUT_MS);
       if (disposed) return;
-      if (!t.ok) {
-        setStatus('closed');
-        setError(t.error ?? 'Couldn’t start the terminal');
+      if (!res) {
+        fail(tr('term.err.noAnswer'));
+        return;
+      }
+      if (!res.ok) {
+        fail(res.error ?? tr('term.err.start'));
         if (shellTarget === 'host-root') setRootMode(false); // back to your own shell
         return;
       }
-      sockRef.current = openTerminal(t.data.ticket, {
+      openTimer = window.setTimeout(() => {
+        if (opened) return;
+        fail(tr('term.err.timeout', { seconds: OPEN_TIMEOUT_MS / 1000 }));
+        sockRef.current?.close();
+      }, OPEN_TIMEOUT_MS);
+      sockRef.current = openTerminal(res.data.ticket, {
         onOpen: () => {
+          if (failed) return;
+          opened = true;
+          window.clearTimeout(openTimer);
           live = true;
           setStatus('open');
           sockRef.current?.resize(term.cols, term.rows);
@@ -239,13 +307,20 @@ export function Terminal({ win }: { win: WinState }) {
           outTail.current = (outTail.current + text).slice(-240);
         },
         onClose: (reason) => {
+          window.clearTimeout(openTimer);
+          if (failed || disposed) return;
+          if (!opened) {
+            // The shell never came up: say why instead of a bare "disconnected".
+            fail(reason || tr('term.err.unreachable'));
+            return;
+          }
           live = false;
           setStatus('closed');
           if (reason) setError(reason);
-          term.write('\r\n\x1b[90m[session ended]\x1b[0m\r\n');
+          term.write(`\r\n\x1b[90m[${tr('term.ended')}]\x1b[0m\r\n`);
         },
       });
-    })();
+    })().catch(() => fail(tr('term.err.start')));
 
     // Window resizes arrive in bursts; fit once per frame at most.
     let frame = 0;
@@ -264,6 +339,7 @@ export function Terminal({ win }: { win: WinState }) {
 
     return () => {
       disposed = true;
+      window.clearTimeout(openTimer);
       ro.disconnect();
       cancelAnimationFrame(frame);
       input.dispose();
@@ -274,9 +350,9 @@ export function Terminal({ win }: { win: WinState }) {
       term.dispose();
       window.clearTimeout(flashTimer.current);
     };
-    // Re-mount only when the target (or root shell) changes.
+    // Re-mount only when the target (or root shell) changes, or on "Try again".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellTarget]);
+  }, [shellTarget, attempt]);
 
   // Bringing the window to the front puts the keyboard back in the terminal
   // (unless something inside it, like the history filter, already has focus).
@@ -344,8 +420,8 @@ export function Terminal({ win }: { win: WinState }) {
           </span>
         )}
         <span className="spacer" />
-        {status === 'connecting' && <span className="muted small">connecting…</span>}
-        {status === 'closed' && <span className="muted small">{error ?? 'disconnected'}</span>}
+        {status === 'connecting' && <span className="muted small">{t('term.connecting')}</span>}
+        {status === 'closed' && <span className="muted small term-status-text">{error ?? t('term.disconnected')}</span>}
         <div className="term-tools">
           {isHost && info?.root_available && !info.host_root && (
             <button
@@ -421,8 +497,22 @@ export function Terminal({ win }: { win: WinState }) {
               </div>
             </form>
           )}
-          {isHost && status === 'closed' && info?.host_error && !rootMode && (
-            <p className="term-root-prompt note">{info.host_error}</p>
+          {status === 'closed' && !askRoot && (error || (isHost && info?.host_error && !rootMode)) && (
+            <div className="term-root-prompt note" role="alert">
+              <p>{isHost && info?.host_error && !rootMode ? info.host_error : error}</p>
+              <div className="term-root-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setStatus('connecting');
+                    setAttempt((n) => n + 1);
+                  }}
+                >
+                  {t('term.retry')}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
