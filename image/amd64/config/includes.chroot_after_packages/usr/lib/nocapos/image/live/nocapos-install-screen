@@ -3,15 +3,72 @@
 # desktop starts (boot menu "Install NoCapOS", kernel option
 # nocapos.install). greetd runs it as root in place of the sign-in screen:
 # a kiosk compositor (cage) with only the installer on the whole screen.
-# Closing the installer brings it back; "Try NoCapOS" in the boot menu is the
-# live desktop.
+#
+# Safety net, so setup always shows:
+#  1. graphics hardware rendering;
+#  2. when that ends within seconds (the graphics hardware can't be used),
+#     software rendering;
+#  3. when that ends quickly too, the "Try NoCapOS" desktop starts instead
+#     and opens setup there.
+# Closing the installer brings it back. The log is
+# /run/nocapos/install-screen.log.
 set -u
+LIVE=/usr/lib/nocapos/image/live
+STATE=/run/nocapos
+LOG=$STATE/install-screen.log
+mkdir -p "$STATE"
+
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 export QT_QPA_PLATFORM=wayland
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
-# Safe graphics (nomodeset) and virtual machines have no GPU renderer.
-export WLR_RENDERER_ALLOW_SOFTWARE=1
 export XCURSOR_SIZE=24
-# -s: switching to a text console stays possible (Ctrl+Alt+F2).
-exec cage -s -- calamares
+
+# One start of the setup screen; succeeds when it stayed up long enough to
+# have been on the screen (it then ended because setup was closed or done).
+show() {
+  start=$(date +%s)
+  echo "== $(date) setup screen, $1 rendering" >>"$LOG"
+  # -s: switching to a text console stays possible (Ctrl+Alt+F2).
+  cage -s -- calamares >>"$LOG" 2>&1
+  code=$?
+  took=$(($(date +%s) - start))
+  echo "== ended (code $code) after $took s" >>"$LOG"
+  [ "$took" -ge 20 ]
+}
+
+hardware() {
+  unset WLR_RENDERER WLR_NO_HARDWARE_CURSORS LIBGL_ALWAYS_SOFTWARE QT_QUICK_BACKEND
+  export WLR_RENDERER_ALLOW_SOFTWARE=1
+}
+software() {
+  export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1 LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
+}
+
+mode=hardware
+quick=0
+while :; do
+  "$mode"
+  if show "$mode"; then
+    quick=0
+    continue
+  fi
+  quick=$((quick + 1))
+  if [ "$mode" = hardware ]; then
+    mode=software
+    quick=0
+    continue
+  fi
+  [ "$quick" -ge 2 ] && break
+done
+
+# Setup can't show on its own on this screen: the "Try NoCapOS" desktop
+# starts instead (it opens setup once it's up).
+echo "== $(date) setup screen can't start here; starting the desktop" >>"$LOG"
+if [ -f /etc/greetd/config-try.toml ]; then
+  cat /etc/greetd/config-try.toml >/etc/greetd/config.toml
+  systemd-run --no-block --collect systemctl restart greetd.service >>"$LOG" 2>&1 ||
+    systemctl --no-block restart greetd.service >>"$LOG" 2>&1
+fi
+# Keep greetd's screen still until the restart takes over.
+sleep 30

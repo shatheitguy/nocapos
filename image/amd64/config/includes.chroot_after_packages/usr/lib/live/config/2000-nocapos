@@ -21,27 +21,6 @@ if [ -f /usr/share/applications/calamares-install-debian.desktop ]; then
     /usr/share/applications/calamares-install-debian.desktop >/usr/local/share/applications/calamares-install-debian.desktop
 fi
 
-# "Install NoCapOS" in the boot menu (nocapos.install): the full-screen
-# setup starts before any desktop, in place of the sign-in screen, and comes
-# back if it's closed. Nothing else of the live session is set up.
-case " $(cat /proc/cmdline) " in
-  *" nocapos.install "*)
-    if [ -f /etc/greetd/config.toml ]; then
-      cat >/etc/greetd/config.toml <<TOML
-# NoCapOS setup from the USB stick (written by the live session): the
-# installer on the whole screen, no desktop.
-[terminal]
-vt = 1
-
-[default_session]
-command = "$LIVE/nocapos-install-screen"
-user = "root"
-TOML
-    fi
-    exit 0
-    ;;
-esac
-
 # "Try NoCapOS": the live desktop; the installer opens once, at sign-in.
 mkdir -p /etc/xdg/autostart
 cat >/etc/xdg/autostart/nocapos-live-welcome.desktop <<DESKTOP
@@ -51,12 +30,39 @@ Name=Install NoCapOS
 Exec=$LIVE/live-welcome
 NoDisplay=true
 DESKTOP
-
-# NoCap Desktop signs the live user in without the sign-in screen (greetd's
-# initial session, once per boot), and never locks the live session.
-if id "$user" >/dev/null 2>&1 && [ -f /etc/greetd/config.toml ] && ! grep -q '^\[initial_session\]' /etc/greetd/config.toml; then
-  printf '\n[initial_session]\ncommand = "/usr/libexec/nocapos/nocap-session"\nuser = "%s"\n' "$user" >>/etc/greetd/config.toml
-fi
+# The live session is never locked.
 mkdir -p /etc/systemd/user
 ln -sf /dev/null /etc/systemd/user/nocap-idle.service
+
+[ -f /etc/greetd/config.toml ] || exit 0
+
+# NoCap Desktop signs the live user in without the sign-in screen (greetd's
+# initial session, once per boot). Kept aside as config-try.toml: the
+# setup screen falls back to it when it can't start on this screen.
+if [ ! -f /etc/greetd/config-try.toml ]; then
+  cp /etc/greetd/config.toml /etc/greetd/config-try.toml
+  if id "$user" >/dev/null 2>&1 && ! grep -q '^\[initial_session\]' /etc/greetd/config-try.toml; then
+    printf '\n[initial_session]\ncommand = "/usr/libexec/nocapos/nocap-session"\nuser = "%s"\n' "$user" >>/etc/greetd/config-try.toml
+  fi
+fi
+
+case " $(cat /proc/cmdline) " in
+  *" nocapos.install "*)
+    # "Install NoCapOS" in the boot menu: the full-screen setup starts
+    # before any desktop, in place of the sign-in screen.
+    cat >/etc/greetd/config.toml <<TOML
+# NoCapOS setup from the USB stick (written by the live session): the
+# installer on the whole screen, no desktop.
+[terminal]
+vt = 1
+
+[default_session]
+command = "$LIVE/nocapos-install-screen"
+user = "root"
+TOML
+    ;;
+  *)
+    cat /etc/greetd/config-try.toml >/etc/greetd/config.toml
+    ;;
+esac
 exit 0
