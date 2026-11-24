@@ -1,0 +1,4 @@
+# On the install medium (its package pool, not the live system): the boot
+# loader for BIOS PCs, which the installer puts into the new system, so it
+# works without internet.
+grub-pc

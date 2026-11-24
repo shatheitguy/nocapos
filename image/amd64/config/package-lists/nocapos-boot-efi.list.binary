@@ -1,0 +1,10 @@
+# On the install medium (its package pool, not the live system): the boot
+# loader for UEFI PCs, Debian's signed one (shim) so Secure Boot works,
+# which the installer puts into the new system, so it works without
+# internet. A list of its own: it can't be installed together with the
+# BIOS one.
+grub-efi
+grub-efi-amd64
+grub-efi-amd64-signed
+shim-signed
+efibootmgr

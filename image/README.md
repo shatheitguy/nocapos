@@ -93,6 +93,9 @@ rebuilds NoCapOS's version after every dpkg run
      in with the machine's Linux accounts); no root password
    - **Summary** → **Install** (a slideshow shows what NoCapOS does) →
      **Finished**: "Restart now" is ticked
+   The boot loader (BIOS or UEFI, Debian's signed one on UEFI) comes from
+   the package pool on the medium, so installing needs no internet. If an
+   install doesn't finish, the setup screen says so and setup starts again.
 3. **The installed system** boots NoCapOS GRUB → Plymouth splash → the
    NoCapOS sign-in screen → NoCap Desktop, with NoCapOS running and every
    feature's packages already in place. Open `http://nocap.local` (or the

@@ -24,3 +24,7 @@ wl-clipboard
 firmware-linux-free
 rsync
 cryptsetup
+# UEFI PCs: the EFI system partition is FAT (made and checked with
+# dosfstools), and the boot entry is written with efibootmgr.
+dosfstools
+efibootmgr
