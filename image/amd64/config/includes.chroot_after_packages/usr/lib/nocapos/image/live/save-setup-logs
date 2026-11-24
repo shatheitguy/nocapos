@@ -1,0 +1,26 @@
+#!/bin/sh
+# Copies the setup logs into the new system (/var/log/nocapos there), so
+# they're still there after the restart: the setup screen's log, the
+# installer's log of this run and of earlier runs.
+#   save-setup-logs ROOT     (ROOT: where the new system is mounted)
+# Run by the installer (shellprocess@nocapos-logs) just before it unmounts
+# the new system. Never fails the install.
+set -u
+# The setup screen restarts into the new system when setup closes now.
+mkdir -p /run/nocapos && : >/run/nocapos/setup-installed
+root=${1:-}
+[ -n "$root" ] && [ -d "$root" ] && [ "$root" != / ] || exit 0
+dest=$root/var/log/nocapos
+mkdir -p "$dest" 2>/dev/null || exit 0
+if [ -d /var/log/nocapos ]; then
+  cp -f /var/log/nocapos/* "$dest/" 2>/dev/null
+fi
+for f in "${HOME:-/root}/.cache/calamares/session.log" /root/.cache/calamares/session.log; do
+  if [ -s "$f" ]; then
+    cp -f "$f" "$dest/setup.log" 2>/dev/null
+    break
+  fi
+done
+chmod 0700 "$dest" 2>/dev/null
+chmod 0600 "$dest"/* 2>/dev/null
+exit 0

@@ -426,7 +426,10 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	}
 	now := d.now()
 	d.hs.mu.Lock()
-	if in.ShellRunning || (in.DMActive != "active" && in.DMActive != "reloading") {
+	// greetd may run something else full screen on purpose (the USB stick's
+	// setup screen runs the installer there): no NoCap Desktop then isn't a
+	// black screen, and restarting greetd would throw that program away.
+	if in.ShellRunning || !in.HaveGreeter || (in.DMActive != "active" && in.DMActive != "reloading") {
 		d.hs.noShellSince = time.Time{}
 	} else if d.hs.noShellSince.IsZero() {
 		d.hs.noShellSince = now

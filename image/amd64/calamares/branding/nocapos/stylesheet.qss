@@ -79,6 +79,51 @@ QCheckBox {
   spacing: 8px;
 }
 
+/* The choices themselves, clearly visible on the dark background. */
+QRadioButton::indicator,
+QCheckBox::indicator {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #8a8a96;
+  background-color: #14141b;
+}
+
+QRadioButton::indicator {
+  border-radius: 9px;
+}
+
+QCheckBox::indicator {
+  border-radius: 4px;
+}
+
+QRadioButton::indicator:hover,
+QCheckBox::indicator:hover {
+  border-color: #e5383b;
+}
+
+QRadioButton::indicator:checked {
+  border-color: #e5383b;
+  background-color: qradialgradient(cx: 0.5, cy: 0.5, radius: 0.5, fx: 0.5, fy: 0.5,
+    stop: 0 #e5383b, stop: 0.55 #e5383b, stop: 0.65 #14141b, stop: 1 #14141b);
+}
+
+QCheckBox::indicator:checked {
+  border-color: #e5383b;
+  background-color: #e5383b;
+}
+
+QRadioButton::indicator:disabled,
+QCheckBox::indicator:disabled {
+  border-color: #3a3a44;
+}
+
+/* The disk legend under the partition bars writes its names in dark text:
+   it sits on a light panel so they stay readable. */
+PartitionLabelsView {
+  background-color: #d9d9e0;
+  border-radius: 6px;
+}
+
 QProgressBar {
   background-color: #1c1c24;
   border: none;
@@ -102,6 +147,13 @@ QScrollBar::handle:vertical {
   background: #2c2c36;
   border-radius: 5px;
   min-height: 24px;
+}
+
+/* Questions and messages: an outline, so they stand out from the page
+   behind them (they have no title bar on the setup screen). */
+QMessageBox,
+QDialog {
+  border: 1px solid #3a3a44;
 }
 
 QToolTip {

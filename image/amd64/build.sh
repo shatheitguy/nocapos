@@ -106,7 +106,8 @@ cp config/nocapos-art/calamares-welcome.png "$cal/branding/nocapos/welcome.png"
 chmod 0755 config/includes.chroot_after_packages/usr/lib/live/config/2000-nocapos \
   config/includes.chroot_after_packages/usr/lib/nocapos/image/live/nocapos-install \
   config/includes.chroot_after_packages/usr/lib/nocapos/image/live/live-welcome \
-  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/nocapos-install-screen
+  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/nocapos-install-screen \
+  config/includes.chroot_after_packages/usr/lib/nocapos/image/live/save-setup-logs
 
 # The NoCapOS layer (release bundle, checked against SHA256SUMS).
 bash "$COMMON/stage-overlay.sh" "$VERSION" amd64 pc config/includes.chroot_after_packages config/nocapos-art

@@ -8,6 +8,14 @@ Presentation
 {
     id: presentation
 
+    // The whole slideshow area in NoCapOS's dark look (no light frame
+    // around the slides).
+    Rectangle {
+        anchors.fill: parent
+        z: -1
+        color: "#0b0b10"
+    }
+
     Timer {
         id: advance
         interval: 9000
