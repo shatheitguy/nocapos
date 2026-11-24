@@ -27,6 +27,8 @@ command -v lb >/dev/null || need+=(live-build)
 command -v debootstrap >/dev/null || need+=(debootstrap)
 command -v curl >/dev/null || need+=(curl ca-certificates)
 command -v cpio >/dev/null || need+=(cpio)
+# The boot loaders' package pool on the medium (package-lists/*.list.binary).
+command -v apt-ftparchive >/dev/null || need+=(apt-utils)
 # The guacd container image (save-guacd.sh), fetched without a Docker daemon.
 command -v skopeo >/dev/null || need+=(skopeo)
 command -v zstd >/dev/null || need+=(zstd)
@@ -117,6 +119,16 @@ echo "==> lb build (this takes a while)"
 lb build 2>&1 | tee "$OUT/build-amd64.log"
 iso="$(find . -maxdepth 1 -name "*.iso" | head -1)"
 [ -n "$iso" ] || { echo "lb build produced no ISO; see $OUT/build-amd64.log" >&2; exit 1; }
+# The installer puts the boot loader into the new system from the medium's
+# package pool: both kinds must be there, or installs need internet (or
+# fail on UEFI PCs).
+for p in grub-pc grub-efi-amd64 grub-efi-amd64-signed shim-signed efibootmgr; do
+  if [ -z "$(find binary/pool -name "${p}_*.deb" 2>/dev/null | head -1)" ]; then
+    echo "the ISO's package pool has no $p" >&2
+    exit 1
+  fi
+done
+[ -f binary/dists/trixie/Release ] || { echo "the ISO's package pool has no index" >&2; exit 1; }
 mv "$iso" "$OUT/nocapos-$VERSION-amd64.iso"
 (cd "$OUT" && sha256sum "nocapos-$VERSION-amd64.iso" >"nocapos-$VERSION-amd64.iso.sha256")
 size="$(stat -c %s "$OUT/nocapos-$VERSION-amd64.iso")"

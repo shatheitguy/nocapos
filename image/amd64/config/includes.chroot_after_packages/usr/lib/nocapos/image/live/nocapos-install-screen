@@ -15,7 +15,8 @@
 #  3. when that ends quickly too, the "Try NoCapOS" desktop starts instead
 #     and opens setup there.
 # Closing the installer brings it back (after an install: the computer
-# restarts into NoCapOS). When it stops unexpectedly (it crashed), the
+# restarts into NoCapOS; after an install that didn't finish, the screen
+# says so first). When it stops unexpectedly (it crashed), the
 # screen says so before setup starts again.
 #
 # Logs: /var/log/nocapos (install-screen.log, the installer's own log of
@@ -34,7 +35,9 @@ RC=$STATE/setup-exit-code
 if [ "${1:-}" = --setup ]; then
   # -D6: the installer's log on its output too (it also keeps it in
   # ~/.cache/calamares/session.log). Higher levels add a debug button.
-  calamares -D6
+  # -stylesheet: NoCapOS's look on every window, the installer's own
+  # messages too (they're separate windows, outside its main window).
+  calamares -D6 -stylesheet /etc/calamares/branding/nocapos/stylesheet.qss
   rc=$?
   echo "$rc" >"$RC"
   exit "$rc"
@@ -101,7 +104,7 @@ say() {
 # ended within seconds (it couldn't show on this screen).
 show() {
   start=$(date +%s)
-  rm -f "$RC"
+  rm -f "$RC" "$STATE/setup-installing"
   echo "== $(date) setup screen, $1 rendering" >>"$LOG"
   # -s: switching to a text console stays possible (Ctrl+Alt+F2).
   # -d: no title bars on the installer's windows.
@@ -133,6 +136,13 @@ while :; do
         say "NoCapOS is installed." "The computer restarts into it in a few seconds."
         systemctl reboot >>"$LOG" 2>&1
         sleep 30
+      fi
+      # Closed after an install that didn't finish (the installer said
+      # why): say so, then setup starts over.
+      if [ -e "$STATE/setup-installing" ]; then
+        rm -f "$STATE/setup-installing"
+        echo "== $(date) the install didn't finish; starting setup again" >>"$LOG"
+        say "NoCapOS setup didn't finish installing." "It starts again in a few seconds." "Choose Install again to try once more."
       fi
       continue
       ;;
