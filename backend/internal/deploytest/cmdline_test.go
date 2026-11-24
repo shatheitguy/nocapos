@@ -102,6 +102,23 @@ GRUB_CMDLINE_LINUX=""
 	}
 }
 
+// The splash draws at the screen's own pixels: DeviceScale=1 in Plymouth's
+// [Daemon] section, and out again on uninstall.
+func TestPlymouthConfScale(t *testing.T) {
+	conf := "# Administrator customizations go in this file\n#[Daemon]\n#Theme=ceratopsian\n[Daemon]\nTheme=nocapos\n"
+	got := run(t, "plymouth_conf_with_scale", conf)
+	want := "# Administrator customizations go in this file\n#[Daemon]\n#Theme=ceratopsian\n[Daemon]\nDeviceScale=1\nTheme=nocapos\n"
+	if got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+	if back := run(t, "plymouth_conf_without_scale", got); back != conf {
+		t.Errorf("without: %q", back)
+	}
+	if got := run(t, "plymouth_conf_with_scale", ""); got != "[Daemon]\nDeviceScale=1\n" {
+		t.Errorf("empty: %q", got)
+	}
+}
+
 func TestTokensMissing(t *testing.T) {
 	if got := run(t, "tokens_missing", "", "quiet loglevel=3", "quiet", "splash"); got != "splash\n" {
 		t.Errorf("got %q", got)

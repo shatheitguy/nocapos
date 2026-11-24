@@ -90,6 +90,15 @@ printf '\nNoCapOS — manage this machine from https://%s/ (or http://nocap.loca
 # ---------------------------------------------------------------- boot splash
 if command -v plymouth-set-default-theme >/dev/null 2>&1 && [ -f /usr/share/plymouth/themes/nocapos/nocapos.plymouth ]; then
   plymouth-set-default-theme nocapos
+  # The splash draws at the screen's own pixels (it sizes itself to the
+  # screen), as install.sh sets it on installed systems.
+  if ! grep -qs '^[[:space:]]*DeviceScale[[:space:]]*=' /etc/plymouth/plymouthd.conf; then
+    if grep -qs '^\[Daemon\]' /etc/plymouth/plymouthd.conf; then
+      sed -i '0,/^\[Daemon\]/s//[Daemon]\nDeviceScale=1/' /etc/plymouth/plymouthd.conf
+    else
+      printf '[Daemon]\nDeviceScale=1\n' >>/etc/plymouth/plymouthd.conf
+    fi
+  fi
 fi
 # The silent boot (the installer's nocap-boot): the quiet kernel line in
 # the Raspberry Pi's cmdline.txt and GRUB's settings; boot menus and the
