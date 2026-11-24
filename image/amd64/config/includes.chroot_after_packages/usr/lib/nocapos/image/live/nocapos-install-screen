@@ -4,58 +4,148 @@
 # nocapos.install). greetd runs it as root in place of the sign-in screen:
 # a kiosk compositor (cage) with only the installer on the whole screen.
 #
+# Drawing: with the processor (software rendering) first. Setup doesn't
+# need the graphics hardware, and software rendering draws the same on
+# every PC (no leftover or garbled areas from a graphics driver). The
+# whole screen is redrawn on every change for the same reason.
+#
 # Safety net, so setup always shows:
-#  1. graphics hardware rendering;
-#  2. when that ends within seconds (the graphics hardware can't be used),
-#     software rendering;
+#  1. software rendering;
+#  2. when that ends within seconds, graphics hardware rendering;
 #  3. when that ends quickly too, the "Try NoCapOS" desktop starts instead
 #     and opens setup there.
-# Closing the installer brings it back. The log is
-# /run/nocapos/install-screen.log.
+# Closing the installer brings it back (after an install: the computer
+# restarts into NoCapOS). When it stops unexpectedly (it crashed), the
+# screen says so before setup starts again.
+#
+# Logs: /var/log/nocapos (install-screen.log, the installer's own log of
+# every run). The installer copies them into the installed system
+# (save-setup-logs), so they're there after the restart too.
+# /run/nocapos/install-screen.log points at the same file.
 set -u
 LIVE=/usr/lib/nocapos/image/live
 STATE=/run/nocapos
-LOG=$STATE/install-screen.log
-mkdir -p "$STATE"
+LOGDIR=/var/log/nocapos
+LOG=$LOGDIR/install-screen.log
+RC=$STATE/setup-exit-code
+
+# Inside the compositor: the installer itself, with its exit code kept for
+# the loop below (cage's own code can't tell a crash from a close).
+if [ "${1:-}" = --setup ]; then
+  # -D6: the installer's log on its output too (it also keeps it in
+  # ~/.cache/calamares/session.log). Higher levels add a debug button.
+  calamares -D6
+  rc=$?
+  echo "$rc" >"$RC"
+  exit "$rc"
+fi
+
+mkdir -p "$STATE" "$LOGDIR"
+ln -sf "$LOG" "$STATE/install-screen.log"
 
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/0}"
 mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
 export QT_QPA_PLATFORM=wayland
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export XCURSOR_SIZE=24
+# The installer's windows (its questions and messages too) without title
+# bars of their own: the compositor places them, nothing to drag or resize.
+export QT_WAYLAND_DISABLE_WINDOWDECORATION=1
+# Safe drawing on any graphics hardware: the pointer drawn with the
+# picture (no cursor plane), the screen always composed (never handed to
+# the installer's buffer directly), and every frame drawn in full (no
+# stale areas left from an earlier frame).
+export WLR_NO_HARDWARE_CURSORS=1
+export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1
+export WLR_SCENE_DEBUG_DAMAGE=rerender
 
-# One start of the setup screen; succeeds when it stayed up long enough to
-# have been on the screen (it then ended because setup was closed or done).
-show() {
-  start=$(date +%s)
-  echo "== $(date) setup screen, $1 rendering" >>"$LOG"
-  # -s: switching to a text console stays possible (Ctrl+Alt+F2).
-  cage -s -- calamares >>"$LOG" 2>&1
-  code=$?
-  took=$(($(date +%s) - start))
-  echo "== ended (code $code) after $took s" >>"$LOG"
-  [ "$took" -ge 20 ]
+software() {
+  export WLR_RENDERER=pixman LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
+  unset WLR_RENDERER_ALLOW_SOFTWARE
 }
-
 hardware() {
-  unset WLR_RENDERER WLR_NO_HARDWARE_CURSORS LIBGL_ALWAYS_SOFTWARE QT_QUICK_BACKEND
+  unset WLR_RENDERER LIBGL_ALWAYS_SOFTWARE QT_QUICK_BACKEND
   export WLR_RENDERER_ALLOW_SOFTWARE=1
 }
-software() {
-  export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1 LIBGL_ALWAYS_SOFTWARE=1 QT_QUICK_BACKEND=software
+
+# Keep each run's own installer log (a new run starts a new one).
+runs=0
+keep_session_log() {
+  for f in "${HOME:-/root}/.cache/calamares/session.log" /root/.cache/calamares/session.log; do
+    if [ -s "$f" ]; then
+      runs=$((runs + 1))
+      cp -f "$f" "$LOGDIR/setup-run-$runs.log" 2>/dev/null
+      return
+    fi
+  done
 }
 
-mode=hardware
+# A few lines on the screen (the text console under setup) between two
+# starts of setup, for a few seconds.
+say() {
+  tty=/dev/tty1
+  [ -w "$tty" ] || return 0
+  setfont -C "$tty" Lat15-TerminusBold32x16 >/dev/null 2>&1 ||
+    setfont -C "$tty" Lat15-Terminus32x16 >/dev/null 2>&1 || true
+  printf 'c[?25l
+
+' >"$tty" 2>/dev/null
+  for line in "$@"; do printf '  %s
+' "$line" >"$tty" 2>/dev/null; done
+  sleep 8
+  printf 'c[?25l' >"$tty" 2>/dev/null
+}
+
+# One start of the setup screen. 0: it was on the screen and closed (or
+# setup finished); 1: it was on the screen and stopped unexpectedly; 2: it
+# ended within seconds (it couldn't show on this screen).
+show() {
+  start=$(date +%s)
+  rm -f "$RC"
+  echo "== $(date) setup screen, $1 rendering" >>"$LOG"
+  # -s: switching to a text console stays possible (Ctrl+Alt+F2).
+  # -d: no title bars on the installer's windows.
+  cage -s -d -- "$0" --setup >>"$LOG" 2>&1
+  code=$?
+  took=$(($(date +%s) - start))
+  rc=$(cat "$RC" 2>/dev/null || echo none)
+  echo "== ended after $took s (compositor $code, installer $rc)" >>"$LOG"
+  keep_session_log
+  [ "$took" -ge 20 ] || return 2
+  [ "$rc" = 0 ] && return 0
+  return 1
+}
+
+trap 'exit 0' TERM HUP INT
+
+mode=software
 quick=0
 while :; do
   "$mode"
-  if show "$mode"; then
-    quick=0
-    continue
-  fi
+  show "$mode"
+  case $? in
+    0)
+      quick=0
+      # Closed after NoCapOS was installed (without restarting): restart
+      # into it now; there's nothing else to do here.
+      if [ -e "$STATE/setup-installed" ]; then
+        echo "== $(date) NoCapOS is installed; restarting" >>"$LOG"
+        say "NoCapOS is installed." "The computer restarts into it in a few seconds."
+        systemctl reboot >>"$LOG" 2>&1
+        sleep 30
+      fi
+      continue
+      ;;
+    1)
+      quick=0
+      echo "== $(date) setup stopped unexpectedly; starting it again" >>"$LOG"
+      say "NoCapOS setup stopped unexpectedly." "It starts again in a few seconds." "If it was installing, choose Install again."
+      continue
+      ;;
+  esac
   quick=$((quick + 1))
-  if [ "$mode" = hardware ]; then
-    mode=software
+  if [ "$mode" = software ]; then
+    mode=hardware
     quick=0
     continue
   fi

@@ -69,7 +69,11 @@ rebuilds NoCapOS's version after every dpkg run
    default, after 5 seconds). The NoCapOS splash plays, then the setup fills
    the whole screen straight away, before any desktop (greetd runs
    `live/nocapos-install-screen` as root: the installer alone in a kiosk
-   compositor; closing it brings it back). "Try NoCapOS" instead signs the
+   compositor, drawn with the processor so it looks the same on every
+   graphics card; closing it brings it back, and if it stops by itself the
+   screen says so before it starts again). Its logs (`/var/log/nocapos`)
+   are copied into the installed system at the end of the install, so
+   they're still there after the restart. "Try NoCapOS" instead signs the
    live session in to **NoCap Desktop**: NoCapOS wallpaper, dark theme, red accent, dock
    of native apps. NoCapOS itself runs too (`https://localhost`).
 2. **"Install NoCapOS"** is first in the dock and on the desktop, and opens

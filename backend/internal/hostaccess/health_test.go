@@ -172,6 +172,29 @@ func TestEnsureRelinksAndFallsBackToSoftware(t *testing.T) {
 	}
 }
 
+// The USB stick's setup screen: greetd runs the installer full screen, with
+// no NoCap Desktop. That's no black screen; greetd is never restarted under
+// it (setup would start over at its first page).
+func TestEnsureLeavesTheSetupScreenAlone(t *testing.T) {
+	f, d, now := screenHost(t)
+	ctx := context.Background()
+	f.linked, f.target = "greetd.service", "graphical.target"
+	f.files[GreetdConfPath] = "[terminal]\nvt = 1\n\n[default_session]\ncommand = \"/usr/lib/nocapos/image/live/nocapos-install-screen\"\nuser = \"root\"\n"
+	for i := 0; i < 5; i++ {
+		*now = now.Add(2 * time.Minute)
+		d.Ensure(ctx)
+	}
+	if calls := strings.Join(f.calls, "\n"); strings.Contains(calls, "restart greetd") || strings.Contains(calls, "start greetd") {
+		t.Fatalf("greetd restarted under the setup screen: %v", f.calls)
+	}
+	if d.Fallback() != FallbackNone {
+		t.Fatalf("fallback = %q", d.Fallback())
+	}
+	if h := d.Health(ctx); h.Has(ProblemNoShell) {
+		t.Fatalf("health = %+v", h)
+	}
+}
+
 func TestEnsureStartsAStoppedSignInScreen(t *testing.T) {
 	f, d, now := screenHost(t)
 	ctx := context.Background()
