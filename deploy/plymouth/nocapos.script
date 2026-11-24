@@ -5,49 +5,41 @@
 # shows at shutdown and restart, with a line saying which, and asks for the
 # disk password on encrypted machines. The artwork comes from
 # scripts/make-boot-art.py.
+#
+# Screens can change while the splash runs: the graphics driver takes the
+# screen over from the firmware, a monitor wakes up late or changes its
+# mode, a second one is plugged in. layout() places everything again
+# whenever that happens, so the logo never stays at the old size or place.
+# Plymouth draws every screen on one canvas as large as the largest screen,
+# with each screen centred on it; the splash is laid out on the smallest
+# screen, so it is whole and centred on every one.
 
 Window.SetBackgroundTopColor(0.02, 0.02, 0.03);
 Window.SetBackgroundBottomColor(0.02, 0.02, 0.03);
 
-sw = Window.GetWidth();
-sh = Window.GetHeight();
-wx = Window.GetX();
-wy = Window.GetY();
-
-# ---- the logo: 20% of the screen's height, its middle at 42% from the top
+# ---- the artwork, loaded once (layout() scales it to the screen)
 logo_src = Image("logo.png");
-lh = Math.Int(sh * 0.2);
-if (lh > logo_src.GetHeight()) lh = logo_src.GetHeight();
-if (lh < 120) lh = 120;
-lw = Math.Int(logo_src.GetWidth() * lh / logo_src.GetHeight());
-if (lw > sw * 0.8) {
-  lw = Math.Int(sw * 0.8);
-  lh = Math.Int(logo_src.GetHeight() * lw / logo_src.GetWidth());
-}
-lx = Math.Int(wx + sw / 2 - lw / 2);
-ly = Math.Int(wy + sh * 0.42 - lh / 2);
-logo = Sprite(logo_src.Scale(lw, lh));
-logo.SetPosition(lx, ly, 10);
-
-# ---- the light sweep: one frame per step, already cut to the logo's shape
 shine_n = 20;
-for (i = 0; i < shine_n; i++)
-  shine_img[i] = Image("shine-" + i + ".png").Scale(lw, lh);
-shine = Sprite();
-shine.SetPosition(lx, ly, 11);
-shine.SetOpacity(0);
+for (i = 0; i < shine_n; i++) {
+  shine_src[i] = Image("shine-" + i + ".png");
+  shine_img[i] = shine_src[i];
+}
+halo_src = Image("halo.png");
+shadow_src = Image("shadow.png");
+entry_src = Image("entry.png");
+lock_src = Image("lock.png");
+bullet_src = Image("bullet.png");
 
-# ---- the soft red glow behind the mark, and the shadow the logo floats over
-halo_size = Math.Int(lh * 2.2);
-halo = Sprite(Image("halo.png").Scale(halo_size, halo_size));
-halo.SetPosition(Math.Int(wx + sw / 2 - halo_size / 2), Math.Int(ly + lh * 0.38 - halo_size / 2), 5);
-shadow_w = Math.Int(lw * 0.62);
-shadow_h = Math.Int(shadow_w * 0.2);
-shadow = Sprite(Image("shadow.png").Scale(shadow_w, shadow_h));
-shadow.SetPosition(Math.Int(wx + sw / 2 - shadow_w / 2), Math.Int(ly + lh * 1.02), 4);
+# ---- the sprites (the logo floats over a soft red glow and its shadow)
+logo = Sprite();
+shine = Sprite();
+shine.SetOpacity(0);
+halo = Sprite();
+halo.SetOpacity(0.75);
+shadow = Sprite();
+shadow.SetOpacity(0.6);
 
 # ---- shutting down, restarting or installing updates: say so
-text_y = Math.Int(ly + lh + sh * 0.07);
 mode = Plymouth.GetMode();
 status_text = "";
 if (mode == "shutdown") status_text = "Shutting down";
@@ -55,17 +47,150 @@ if (mode == "reboot") status_text = "Restarting";
 if (mode == "updates" || mode == "system-upgrade") status_text = "Installing updates. Keep the power on.";
 if (mode == "firmware-upgrade") status_text = "Updating firmware. Keep the power on.";
 status = Sprite();
-if (status_text != "") {
-  status_img = Image.Text(status_text, 0.92, 0.93, 0.96);
-  status.SetImage(status_img);
-  status.SetPosition(Math.Int(wx + sw / 2 - status_img.GetWidth() / 2), text_y, 10);
+msg = Sprite();
+msg_text = "";
+
+# ---- the disk password (encrypted disks): the question above a dark field
+# with a red edge, a lock and one dot per character typed
+entry = Sprite();
+entry.SetOpacity(0);
+lock = Sprite();
+lock.SetOpacity(0);
+prompt = Sprite();
+prompt.SetOpacity(0);
+prompt_text = "";
+max_bullets = Math.Int((entry_src.GetWidth() - 64) / 16);
+for (i = 0; i < max_bullets; i++) {
+  bullet[i] = Sprite();
+  bullet[i].SetOpacity(0);
 }
+
+# ---- layout: the logo 20% of the screen's height, its middle at 42% from
+# the top; text and the password field below it, sized to the screen
+lay_w = 0;
+lay_h = 0;
+lay_x = 0;
+lay_y = 0;
+k = 1;
+font = "Sans 12";
+lx = 0;
+ly = 0;
+lw = 1;
+lh = 1;
+cx = 0;
+text_y = 0;
+
+fun center_x(img) {
+  return Math.Int(cx - img.GetWidth() / 2);
+}
+
+fun layout() {
+  # the smallest screen, and where it sits on the canvas
+  sw = 0;
+  sh = 0;
+  sx = 0;
+  sy = 0;
+  for (d = 0; d < 16 && Window.GetWidth(d); d++) {
+    if (sw == 0 || Window.GetWidth(d) < sw) {
+      sw = Window.GetWidth(d);
+      sx = Window.GetX(d);
+    }
+    if (sh == 0 || Window.GetHeight(d) < sh) {
+      sh = Window.GetHeight(d);
+      sy = Window.GetY(d);
+    }
+  }
+  if (sw < 1 || sh < 1) return;
+  if (sw == lay_w && sh == lay_h && sx == lay_x && sy == lay_y) return;
+  lay_w = sw;
+  lay_h = sh;
+  lay_x = sx;
+  lay_y = sy;
+
+  # text and the password field grow with the screen (as at 1080 lines)
+  k = sh / 1080;
+  if (k < 1) k = 1;
+  font = "Sans " + Math.Int(12 * k + 0.5);
+
+  lh = Math.Int(sh * 0.2);
+  if (lh > logo_src.GetHeight()) lh = logo_src.GetHeight();
+  if (lh < 120) lh = 120;
+  lw = Math.Int(logo_src.GetWidth() * lh / logo_src.GetHeight());
+  if (lw > sw * 0.8) {
+    lw = Math.Int(sw * 0.8);
+    lh = Math.Int(logo_src.GetHeight() * lw / logo_src.GetWidth());
+  }
+  cx = sx + sw / 2;
+  lx = Math.Int(cx - lw / 2);
+  ly = Math.Int(sy + sh * 0.42 - lh / 2);
+  logo.SetImage(logo_src.Scale(lw, lh));
+  logo.SetPosition(lx, ly, 10);
+
+  # the light sweep: one frame per step, already cut to the logo's shape
+  for (i = 0; i < shine_n; i++) shine_img[i] = shine_src[i].Scale(lw, lh);
+  shine.SetPosition(lx, ly, 11);
+
+  halo_size = Math.Int(lh * 2.2);
+  halo.SetImage(halo_src.Scale(halo_size, halo_size));
+  halo.SetPosition(Math.Int(cx - halo_size / 2), Math.Int(ly + lh * 0.38 - halo_size / 2), 5);
+  shadow_w = Math.Int(lw * 0.62);
+  shadow_h = Math.Int(shadow_w * 0.2);
+  shadow.SetImage(shadow_src.Scale(shadow_w, shadow_h));
+  shadow.SetPosition(Math.Int(cx - shadow_w / 2), Math.Int(ly + lh * 1.02), 4);
+
+  text_y = Math.Int(ly + lh + sh * 0.07);
+  if (status_text != "") {
+    status_img = Image.Text(status_text, 0.92, 0.93, 0.96, 1, font);
+    status.SetImage(status_img);
+    status.SetPosition(center_x(status_img), text_y, 10);
+  }
+  if (msg_text != "") show_message();
+  if (prompt_text != "") show_prompt();
+
+  if (k == 1) {
+    entry_img = entry_src;
+    lock_img = lock_src;
+    bullet_img = bullet_src;
+  } else {
+    entry_img = entry_src.Scale(Math.Int(entry_src.GetWidth() * k), Math.Int(entry_src.GetHeight() * k));
+    lock_img = lock_src.Scale(Math.Int(lock_src.GetWidth() * k), Math.Int(lock_src.GetHeight() * k));
+    bullet_img = bullet_src.Scale(Math.Int(bullet_src.GetWidth() * k), Math.Int(bullet_src.GetHeight() * k));
+  }
+  ew = entry_img.GetWidth();
+  eh = entry_img.GetHeight();
+  ex = center_x(entry_img);
+  ey = Math.Int(text_y + 34 * k);
+  entry.SetImage(entry_img);
+  entry.SetPosition(ex, ey, 20);
+  lock.SetImage(lock_img);
+  lock.SetPosition(Math.Int(ex + 14 * k), Math.Int(ey + (eh - lock_img.GetHeight()) / 2), 21);
+  for (i = 0; i < max_bullets; i++) {
+    bullet[i].SetImage(bullet_img);
+    bullet[i].SetPosition(Math.Int(ex + 48 * k + i * 16 * k), Math.Int(ey + (eh - bullet_img.GetHeight()) / 2), 21);
+  }
+}
+
+fun show_message() {
+  msg_img = Image.Text(msg_text, 0.6, 0.63, 0.7, 1, font);
+  msg.SetImage(msg_img);
+  msg.SetPosition(center_x(msg_img), Math.Int(text_y + 30 * k), 10);
+}
+
+fun show_prompt() {
+  prompt_img = Image.Text(prompt_text, 0.92, 0.93, 0.96, 1, font);
+  prompt.SetImage(prompt_img);
+  prompt.SetPosition(center_x(prompt_img), text_y, 21);
+}
+
+layout();
+Plymouth.SetDisplayHotplugFunction(layout);
 
 # ---- animation (Plymouth calls this 50 times a second): the logo floats
 # over 3.2 s, the sweep crosses it in 1.4 s and rests for 1.2 s, the glow
 # breathes slowly.
 t = 0;
 fun refresh_cb() {
+  layout();
   t++;
   f = (1 - Math.Cos(t * 6.28318 / 160)) / 2;
   y = ly - Math.Int(lh * 0.03 * f);
@@ -84,42 +209,15 @@ fun refresh_cb() {
 Plymouth.SetRefreshFunction(refresh_cb);
 
 # ---- messages (e.g. from a service that needs a moment)
-msg = Sprite();
 fun message_cb(text) {
-  msg_img = Image.Text(text, 0.6, 0.63, 0.7);
-  msg.SetImage(msg_img);
-  msg.SetPosition(Math.Int(wx + sw / 2 - msg_img.GetWidth() / 2), text_y + 30, 10);
+  msg_text = text;
+  show_message();
 }
 Plymouth.SetMessageFunction(message_cb);
 
-# ---- the disk password (encrypted disks): the question above a dark field
-# with a red edge, a lock and one dot per character typed
-entry_img = Image("entry.png");
-ew = entry_img.GetWidth();
-eh = entry_img.GetHeight();
-ex = Math.Int(wx + sw / 2 - ew / 2);
-ey = Math.Int(text_y + 34);
-entry = Sprite(entry_img);
-entry.SetPosition(ex, ey, 20);
-entry.SetOpacity(0);
-lock_img = Image("lock.png");
-lock = Sprite(lock_img);
-lock.SetPosition(ex + 14, Math.Int(ey + (eh - lock_img.GetHeight()) / 2), 21);
-lock.SetOpacity(0);
-prompt = Sprite();
-prompt.SetOpacity(0);
-bullet_img = Image("bullet.png");
-max_bullets = Math.Int((ew - 64) / 16);
-for (i = 0; i < max_bullets; i++) {
-  bullet[i] = Sprite(bullet_img);
-  bullet[i].SetPosition(ex + 48 + i * 16, Math.Int(ey + (eh - bullet_img.GetHeight()) / 2), 21);
-  bullet[i].SetOpacity(0);
-}
-
 fun password_cb(text, count) {
-  prompt_img = Image.Text(text, 0.92, 0.93, 0.96);
-  prompt.SetImage(prompt_img);
-  prompt.SetPosition(Math.Int(wx + sw / 2 - prompt_img.GetWidth() / 2), text_y, 21);
+  prompt_text = text;
+  show_prompt();
   prompt.SetOpacity(1);
   entry.SetOpacity(1);
   lock.SetOpacity(1);

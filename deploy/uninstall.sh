@@ -255,6 +255,12 @@ grub_default_without() {
 }
 if [ -d "$SPLASH_DIR" ] || [ -d /usr/share/plymouth/themes/nocapos ]; then
   info "Restoring the boot splash"
+  # The splash's own-pixels setting (install.sh added DeviceScale=1).
+  if [ -f "$SPLASH_DIR/device-scale-added" ] && [ -f /etc/plymouth/plymouthd.conf ]; then
+    awk '!/^DeviceScale=1$/' /etc/plymouth/plymouthd.conf >/etc/plymouth/plymouthd.conf.nocap.tmp &&
+      cat /etc/plymouth/plymouthd.conf.nocap.tmp >/etc/plymouth/plymouthd.conf
+    rm -f /etc/plymouth/plymouthd.conf.nocap.tmp
+  fi
   if has plymouth-set-default-theme; then
     prev="$(cat "$SPLASH_DIR/theme" 2>/dev/null || true)"
     [ -n "$prev" ] && [ "$prev" != nocapos ] || prev=""

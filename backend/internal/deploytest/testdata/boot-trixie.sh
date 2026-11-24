@@ -161,6 +161,25 @@ edge="$(convert "$OUT/splash-boot.png" -crop 200x200+0+0 -format '%[fx:maxima.r]
 awk -v r="$red" -v e="$edge" 'BEGIN { exit !(r > 0.6 && e < 0.05) }' && ok "splash shows the logo (red $red, edge $edge)" || fail "splash looks wrong (red $red, edge $edge)"
 cmp -s "$OUT/splash-boot.png" "$OUT/splash-boot-2.png" && fail "splash doesn't animate" || ok "splash animates"
 
+# Two screens of different sizes (the test renderer's 800x600 and 640x480,
+# side by side): the logo centred on each, not shifted toward one side.
+PLY_CREATE_FAKE_MULTI_HEAD_SETUP=1 plymouthd --mode=boot --debug --debug-file="$OUT/plymouth-two-screens.log" \
+  --kernel-command-line="quiet splash plymouth.ignore-serial-consoles plymouth.ignore-udev"
+sleep 1
+plymouth show-splash
+sleep 2
+shot splash-two-screens
+plymouth quit
+sleep 1
+logo_mid() { # GEOMETRY: the middle (x) of the logo's bright part in that part of the shot
+  convert "$OUT/splash-two-screens.png" -crop "$1" +repage -colorspace gray -threshold 35% -format '%@' info: |
+    awk -F'[x+]' '{ print int($3 + $1 / 2) }'
+}
+m1="$(logo_mid 800x600+0+0)"
+m2="$(logo_mid 640x480+800+0)"
+awk -v a="$m1" -v b="$m2" 'BEGIN { exit !(a >= 392 && a <= 408 && b >= 312 && b <= 328) }' &&
+  ok "two screens: logo centred on each ($m1 of 800, $m2 of 640)" || fail "two screens: logo off centre ($m1 of 800, $m2 of 640)"
+
 echo
 if [ "$FAILS" -gt 0 ]; then echo "$FAILS check(s) failed"; exit 1; fi
 echo "all boot checks passed"

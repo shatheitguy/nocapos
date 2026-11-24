@@ -1061,6 +1061,7 @@ brand_console() {
 # uninstall.sh puts them back.
 SPLASH_DIR="$DATA/bootsplash-backup"
 SPLASH_THEME=/usr/share/plymouth/themes/nocapos
+PLYMOUTH_CONF=/etc/plymouth/plymouthd.conf
 
 # >>> cmdline helpers (pure; tested by backend/internal/deploytest)
 # cmdline_with TOKEN...: reads a kernel command line (Raspberry Pi
@@ -1143,6 +1144,21 @@ tokens_missing() (
   for tok in "$@"; do case "$line" in *" $tok "*) ;; *) out="$out $tok" ;; esac; done
   printf '%s\n' "${out# }"
 )
+
+# plymouth_conf_with_scale: reads plymouthd.conf on stdin and prints it with
+# DeviceScale=1 in its [Daemon] section (the section added if missing).
+plymouth_conf_with_scale() {
+  awk '
+    { print }
+    /^[[:space:]]*\[Daemon\][[:space:]]*$/ && !done { print "DeviceScale=1"; done = 1 }
+    END { if (!done) { print "[Daemon]"; print "DeviceScale=1" } }
+  '
+}
+
+# plymouth_conf_without_scale: the opposite, for uninstalling.
+plymouth_conf_without_scale() {
+  awk '!/^DeviceScale=1$/'
+}
 # <<< cmdline helpers
 
 # pi_cmdline: the Raspberry Pi's kernel command line file, if this is one.
@@ -1167,6 +1183,17 @@ setup_splash_theme() {
     mkdir -p "$SPLASH_THEME"
     cp -R "$BUNDLE_DIR/plymouth/." "$SPLASH_THEME/"
     chmod -R a+rX "$SPLASH_THEME"
+    changed=1
+  fi
+  # The splash draws at the screen's own pixels (it sizes itself to the
+  # screen): with Plymouth's 2x scaling on sharp screens the logo and text
+  # came out soft and blocky. A DeviceScale someone set stays as it is.
+  if ! grep -qs '^[[:space:]]*DeviceScale[[:space:]]*=' "$PLYMOUTH_CONF"; then
+    mkdir -p "$(dirname "$PLYMOUTH_CONF")"
+    [ -f "$PLYMOUTH_CONF" ] || : >"$PLYMOUTH_CONF"
+    plymouth_conf_with_scale <"$PLYMOUTH_CONF" >"$PLYMOUTH_CONF.nocap.tmp" &&
+      cat "$PLYMOUTH_CONF.nocap.tmp" >"$PLYMOUTH_CONF" && touch "$SPLASH_DIR/device-scale-added"
+    rm -f "$PLYMOUTH_CONF.nocap.tmp"
     changed=1
   fi
   if [ "$current" != nocapos ] || [ "$changed" -eq 1 ]; then

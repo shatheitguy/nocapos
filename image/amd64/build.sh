@@ -55,7 +55,10 @@ for f in sorted(pathlib.Path(sys.argv[1]).rglob("*")):
 sys.exit(bad)
 PY
 
-LIVE_APPEND="boot=live components quiet splash hostname=nocap username=nocap"
+# The same quiet kernel line as installed systems (deploy/desktop/lib.sh,
+# SPLASH_TOKENS): no kernel or service text and no blinking cursor over the
+# boot splash or before it shows.
+LIVE_APPEND="boot=live components quiet splash loglevel=3 rd.systemd.show_status=false systemd.show_status=false rd.udev.log_level=3 vt.global_cursor_default=0 logo.nologo hostname=nocap username=nocap"
 
 if [ -d "$WORK" ]; then (cd "$WORK" && lb clean --purge >/dev/null 2>&1 || true); fi
 rm -rf "$WORK"
