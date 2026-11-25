@@ -7,8 +7,8 @@ import { APPS, winTitle } from '../apps/meta';
 import { Window } from '../shell/Window';
 import { followPrefs, usePrefs } from '../state/prefs';
 import { api } from '../api/client';
-import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
-import type { Snapshot, SystemInfo } from '../api/types';
+import { connect, disconnect, onSocketStatus } from '../api/socket';
+import type { SystemInfo } from '../api/types';
 import { ConfirmHost } from '../components/ConfirmHost';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PowerOverlay } from '../shell/PowerOverlay';
@@ -95,23 +95,21 @@ export function NativeAppWindow() {
 
   // Settings changed in another window (Settings itself, say) show here
   // straight away: alfad's live feed says when to load them again.
-  // Like the desktop: the machine's details and live metrics (Settings shows
-  // the name, version and uptime; widgets and charts use the metrics).
+  // Like the desktop: the machine's details (Settings shows the name and
+  // version). Live metrics come only while a part that shows them is open
+  // (Monitor, Settings; see useLive), not to every app window.
   useEffect(() => {
     if (!meta) return;
     void connect();
     const offPrefs = followPrefs();
     const sys = useSystem.getState();
     void api<SystemInfo>('/api/v1/system/info').then((r) => r.ok && sys.setInfo(r.data));
-    void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
     const offStatus = onSocketStatus(sys.setOnline);
-    const offMetrics = subscribe('system.metrics', (d) => sys.push(d as Snapshot));
     // The shared stores the desktop keeps in step: notes, App Store apps,
     // the machine's own apps.
     const offWatch = [watchNotes(), watchStoreApps(), watchNativeApps()];
     return () => {
       offWatch.forEach((f) => f?.());
-      offMetrics();
       offStatus();
       offPrefs();
       disconnect();

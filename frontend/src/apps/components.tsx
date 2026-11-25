@@ -15,30 +15,41 @@ const app = (load: () => Promise<AppBody>) =>
     }
   });
 
-export const APP_COMPONENTS: Record<string, AppBody> = {
-  assistant: app(() => import('./assistant/Assistant').then((m) => m.Assistant)),
-  nativeapp: app(() => import('./NativeAppWindow').then((m) => m.NativeAppWindow)),
-  backups: app(() => import('./Backups').then((m) => m.Backups)),
-  remotedesktop: app(() => import('./RemoteDesktop').then((m) => m.RemoteDesktop)),
-  nocapdesktop: app(() => import('./NocapDesktop').then((m) => m.NocapDesktop)),
-  files: app(() => import('./Files').then((m) => m.Files)),
-  terminal: app(() => import('./Terminal').then((m) => m.Terminal)),
-  monitor: app(() => import('./Monitor').then((m) => m.Monitor)),
-  photos: app(() => import('./Photos').then((m) => m.Photos)),
-  containers: app(() => import('./Containers').then((m) => m.Containers)),
-  appcenter: app(() => import('./AppCenter').then((m) => m.AppCenter)),
-  settings: app(() => import('./Settings').then((m) => m.Settings)),
-  shield: app(() => import('./Shield').then((m) => m.Shield)),
-  storage: app(() => import('./Storage').then((m) => m.Storage)),
-  virtualdesk: app(() => import('./VirtualDesk').then((m) => m.VirtualDesk)),
-  vmscreen: app(() => import('./VirtualDeskScreen').then((m) => m.VmScreen)),
-  scripts: app(() => import('./Scripts').then((m) => m.Scripts)),
-  viewer: app(() => import('./Viewer').then((m) => m.Viewer)),
-  imageviewer: app(() => import('./MediaImage').then((m) => m.ImageViewerApp)),
-  videoplayer: app(() => import('./MediaVideo').then((m) => m.VideoPlayerApp)),
-  musicplayer: app(() => import('./MediaMusic').then((m) => m.MusicPlayerApp)),
-  logs: app(() => import('./Logs').then((m) => m.Logs)),
-  phone: app(() => import('./Phone').then((m) => m.Phone)),
-  notes: app(() => import('./notes/Notes').then((m) => m.Notes)),
-  note: app(() => import('./notes/Notes').then((m) => m.NoteWindow)),
+const LOADERS: Record<string, () => Promise<AppBody>> = {
+  assistant: () => import('./assistant/Assistant').then((m) => m.Assistant),
+  nativeapp: () => import('./NativeAppWindow').then((m) => m.NativeAppWindow),
+  backups: () => import('./Backups').then((m) => m.Backups),
+  remotedesktop: () => import('./RemoteDesktop').then((m) => m.RemoteDesktop),
+  nocapdesktop: () => import('./NocapDesktop').then((m) => m.NocapDesktop),
+  files: () => import('./Files').then((m) => m.Files),
+  terminal: () => import('./Terminal').then((m) => m.Terminal),
+  monitor: () => import('./Monitor').then((m) => m.Monitor),
+  photos: () => import('./Photos').then((m) => m.Photos),
+  containers: () => import('./Containers').then((m) => m.Containers),
+  appcenter: () => import('./AppCenter').then((m) => m.AppCenter),
+  settings: () => import('./Settings').then((m) => m.Settings),
+  shield: () => import('./Shield').then((m) => m.Shield),
+  storage: () => import('./Storage').then((m) => m.Storage),
+  virtualdesk: () => import('./VirtualDesk').then((m) => m.VirtualDesk),
+  vmscreen: () => import('./VirtualDeskScreen').then((m) => m.VmScreen),
+  scripts: () => import('./Scripts').then((m) => m.Scripts),
+  viewer: () => import('./Viewer').then((m) => m.Viewer),
+  imageviewer: () => import('./MediaImage').then((m) => m.ImageViewerApp),
+  videoplayer: () => import('./MediaVideo').then((m) => m.VideoPlayerApp),
+  musicplayer: () => import('./MediaMusic').then((m) => m.MusicPlayerApp),
+  logs: () => import('./Logs').then((m) => m.Logs),
+  phone: () => import('./Phone').then((m) => m.Phone),
+  notes: () => import('./notes/Notes').then((m) => m.Notes),
+  note: () => import('./notes/Notes').then((m) => m.NoteWindow),
 };
+
+export const APP_COMPONENTS: Record<string, AppBody> = Object.fromEntries(Object.entries(LOADERS).map(([id, load]) => [id, app(load)]));
+
+/**
+ * Starts fetching an app's code before its window needs it (NoCap Desktop's
+ * app windows do this while they sign in), so it's ready sooner. The module
+ * loader keeps the result: the window's own load gets the same module.
+ */
+export function preloadApp(id: string) {
+  void LOADERS[id]?.().catch(() => undefined);
+}

@@ -62,6 +62,8 @@ static Surface surf[SURF_COUNT];
 static WebKitWebContext *web_ctx;
 static WebKitSettings *web_settings;
 static WebKitWebView *first_view;
+/* The pages are painted by the processor (see make_settings). */
+static gboolean soft_render;
 static GtkWidget *zone_win[4]; /* top, bottom, left, right */
 static int zone_size[4];       /* what the page asked for (kept across screen changes) */
 static guint replace_id;
@@ -596,12 +598,14 @@ surface_uri(SurfaceId id)
   if (id == SURF_APP) {
     char *app = g_uri_escape_string(shell.app_id ? shell.app_id : "", NULL, FALSE);
     char *props = g_uri_escape_string(shell.app_props ? shell.app_props : "", NULL, FALSE);
-    char *u = g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=app&app=%s&props=%s", app, props);
+    char *u = g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=app&app=%s&props=%s%s", app, props,
+                              soft_render ? "&render=software" : "");
     g_free(app);
     g_free(props);
     return u;
   }
-  return g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=%s", conf[id].name);
+  return g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=%s%s", conf[id].name,
+                         soft_render ? "&render=software" : "");
 }
 
 static gboolean
@@ -659,6 +663,22 @@ on_web_process_terminated(WebKitWebView *v, WebKitWebProcessTerminationReason re
     why = "web process ended";
 #endif
   picker_drop(s->id);
+  /* The graphics card's path keeps crashing the pages (a driver WebKit
+   * can't use): from now on they're painted by the processor. */
+  if (reason == WEBKIT_WEB_PROCESS_CRASHED && !soft_render && web_settings != NULL) {
+    static gint64 first_crash;
+    static guint crashes;
+    gint64 now = g_get_monotonic_time();
+    if (crashes == 0 || now - first_crash > 120 * G_USEC_PER_SEC) {
+      first_crash = now;
+      crashes = 0;
+    }
+    if (++crashes >= 2) {
+      g_warning("the web process keeps crashing with the graphics card; painting in software");
+      soft_render = TRUE;
+      webkit_settings_set_hardware_acceleration_policy(web_settings, WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER);
+    }
+  }
   schedule_reload(s, why);
 }
 
@@ -784,12 +804,13 @@ make_settings(void)
   webkit_settings_set_enable_smooth_scrolling(st, TRUE);
   /* The graphics card draws the pages, except when the screen itself is
    * drawn by the processor (the software rendering fallback): then WebKit
-   * paints in software too, which always works. */
+   * paints in software too, which always works, and the pages hear so
+   * (render=software) and draw with fewer effects. */
   const char *renderer = g_getenv("WLR_RENDERER");
-  gboolean software = g_strcmp0(renderer, "pixman") == 0 || g_strcmp0(g_getenv("LIBGL_ALWAYS_SOFTWARE"), "1") == 0 ||
-                      g_file_test("/etc/nocapos/desktop-software-rendering", G_FILE_TEST_EXISTS);
+  soft_render = g_strcmp0(renderer, "pixman") == 0 || g_strcmp0(g_getenv("LIBGL_ALWAYS_SOFTWARE"), "1") == 0 ||
+                g_file_test("/etc/nocapos/desktop-software-rendering", G_FILE_TEST_EXISTS);
   webkit_settings_set_hardware_acceleration_policy(
-      st, software ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
+      st, soft_render ? WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER : WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS);
 #if WEBKIT_CHECK_VERSION(2, 38, 0)
   webkit_settings_set_enable_webrtc(st, FALSE);
 #endif

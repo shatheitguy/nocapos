@@ -1,0 +1,40 @@
+/* NoCap Desktop: keeping the screen smooth (see native/platform.ts).
+
+   The chrome surface is see-through and has nothing of its own below its
+   panels: a backdrop blur there blurs empty space, yet still costs a blur
+   pass whenever the dock, menu bar or a panel changes. It looks the same
+   without one. */
+:root[data-native-surface='chrome'] *,
+:root[data-native-surface='chrome'] *::before,
+:root[data-native-surface='chrome'] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Drawn by the processor (render=software): no blur anywhere (the costliest
+   effect to paint without a graphics card), and decorative animations that
+   would run forever play once. Busy indicators (spinners, progress bars,
+   the assistant's typing dots) keep moving. */
+:root[data-render='software'] *,
+:root[data-render='software'] *::before,
+:root[data-render='software'] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation-iteration-count: 1 !important;
+}
+:root[data-render='software'] :is(.spinner, .brand-bar-fill, .ai-thinking span, .ai-caret, .store-tile.jiggle .store-tile-icon),
+:root[data-render='software'] :is(.brand-bar-fill, .sysupd-bar)::after {
+  animation-iteration-count: infinite !important;
+}
+/* Live gauges (rings and bars of the widgets, Settings, Storage) jump to
+   each new value: their sweep would repaint the whole surface for most of
+   the time between two readings. */
+:root[data-render='software'] :is(.ring-fill, .bar > i, .set-meter > span, .st-meter > span, .ld-meter-fill, .xfer-ring .value) {
+  transition: none !important;
+}
+/* Without the blur, the desktop's glass widgets get a denser tint so their
+   text stays as easy to read over the wallpaper (the dark themes). */
+:root[data-render='software'][data-native-surface='desktop']:is([data-ui='glass'], [data-ui='cyberdeck']) {
+  --glass: rgba(26, 27, 32, 0.82);
+  --glass-strong: rgba(24, 25, 30, 0.9);
+}

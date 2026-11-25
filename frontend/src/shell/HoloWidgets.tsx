@@ -6,7 +6,7 @@ import { openApp } from '../apps/meta';
 import { Icon } from '../components/Icon';
 import { clamp, fmtBytes, fmtRate } from '../lib/format';
 import { usePrefs } from '../state/prefs';
-import { HISTORY, useSystem } from '../state/system';
+import { HISTORY, useLive } from '../state/system';
 
 // ---------- theme colors for canvas ----------
 
@@ -92,8 +92,8 @@ function Empty({ icon, text }: { icon: 'cpu' | 'network' | 'disk' | 'memory'; te
 // ---------- CPU per-core heatmap ----------
 
 export function CoreHeatmapWidget() {
-  const history = useSystem((s) => s.history);
-  const latest = useSystem((s) => s.latest);
+  const history = useLive((s) => s.history);
+  const latest = useLive((s) => s.latest);
   const theme = useThemeKey();
   const cores = latest?.cpu.per_core ?? [];
   const n = cores.length;
@@ -178,7 +178,7 @@ function RingArc({ r, value, className }: { r: number; value: number; className:
 }
 
 export function MemoryRingsWidget() {
-  const m = useSystem((s) => s.latest?.memory);
+  const m = useLive((s) => s.latest?.memory);
   if (!m) return <div className="widget glass skeleton" />;
   const swapPct = m.swap_total ? (m.swap_used / m.swap_total) * 100 : 0;
   return (
@@ -222,8 +222,8 @@ export function MemoryRingsWidget() {
 // ---------- network waveform ----------
 
 export function NetWaveWidget() {
-  const history = useSystem((s) => s.history);
-  const nics = useSystem((s) => s.latest?.network ?? NONE);
+  const history = useLive((s) => s.history);
+  const nics = useLive((s) => s.latest?.network ?? NONE);
   const theme = useThemeKey();
   const last = history[history.length - 1];
   const peak = Math.max(1024, ...history.map((s) => Math.max(s.rx, s.tx)));
@@ -331,7 +331,7 @@ function Gauge({ pct }: { pct: number }) {
 }
 
 export function StorageGaugesWidget() {
-  const disks = useSystem((s) => s.latest?.disks ?? NONE);
+  const disks = useLive((s) => s.latest?.disks ?? NONE);
   return (
     <button type="button" className="widget glass holo gauges-widget" onClick={() => openApp('monitor')}>
       <div className="widget-head">

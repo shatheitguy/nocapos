@@ -14,7 +14,7 @@ import { displayTitle, sortNotes } from '../apps/notes/noteDoc';
 import { useNotes } from '../apps/notes/notesStore';
 import { useT } from '../i18n';
 import { userKey } from '../state/prefs';
-import { useSystem } from '../state/system';
+import { useLive, useSystem } from '../state/system';
 
 // ---- Analog clock ----
 export function AnalogClock() {
@@ -145,7 +145,7 @@ export function NotesWidget() {
 
 // ---- Storage (disks) ----
 export function StorageWidget() {
-  const latest = useSystem((s) => s.latest);
+  const latest = useLive((s) => s.latest);
   const disks = latest?.disks ?? [];
   return (
     <button type="button" className="widget glass widget-col storage-widget" onClick={() => openApp('monitor')}>
@@ -173,7 +173,7 @@ export function StorageWidget() {
 
 // ---- Uptime + load ----
 export function UptimeWidget() {
-  const latest = useSystem((s) => s.latest);
+  const latest = useLive((s) => s.latest);
   const info = useSystem((s) => s.info);
   if (!latest) return <div className="widget glass skeleton" />;
   return (

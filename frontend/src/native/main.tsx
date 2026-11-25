@@ -9,13 +9,18 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { startBridge } from '../deskshell/bridge';
 import '../styles/all';
 import './native.css';
+import './perf.css';
 import { startFrost } from './frost';
-import { hostCall, nativeSurface } from './platform';
+import { preloadApp } from '../apps/components';
+import { hostCall, nativeSurface, softwareRendering } from './platform';
 
 startBridge(); // window.__nocap must exist before the host talks to the page
 
 const surface = nativeSurface();
 document.documentElement.dataset.nativeSurface = surface ?? 'none';
+if (softwareRendering()) document.documentElement.dataset.render = 'software';
+// An app's window: its code loads while the window signs in.
+if (surface === 'app') preloadApp(new URLSearchParams(location.search).get('app') ?? '');
 
 async function start() {
   const root = createRoot(document.getElementById('root')!);

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Bar, Sparkline } from '../components/Charts';
 import { Icon, type IconName } from '../components/Icon';
 import { fmtBytes, fmtPct, fmtRate, fmtUptime } from '../lib/format';
-import { useSystem } from '../state/system';
+import { useLive, useSystem } from '../state/system';
 
 type Tab = 'overview' | 'cpu' | 'memory' | 'network' | 'storage' | 'accelerators';
 const TABS: { id: Tab; label: string; icon: IconName }[] = [
@@ -16,8 +16,8 @@ const TABS: { id: Tab; label: string; icon: IconName }[] = [
 
 export function Monitor() {
   const [tab, setTab] = useState<Tab>('overview');
-  const latest = useSystem((s) => s.latest);
-  const history = useSystem((s) => s.history);
+  const latest = useLive((s) => s.latest);
+  const history = useLive((s) => s.history);
   const info = useSystem((s) => s.info);
 
   if (!latest) {

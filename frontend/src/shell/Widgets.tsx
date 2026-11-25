@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { fmtBytes, fmtRate, fmtUptime } from '../lib/format';
 import { useClock } from '../lib/hooks';
 import { fmtDate, fmtTime, useTimePrefs } from '../lib/time';
-import { useSystem } from '../state/system';
+import { useLive, useSystem } from '../state/system';
 
 /** The Clock widget: the time and date, added from Edit widgets. */
 export function ClockWidget() {
@@ -19,8 +19,8 @@ export function ClockWidget() {
 }
 
 export function SystemWidget() {
-  const latest = useSystem((s) => s.latest);
-  const history = useSystem((s) => s.history);
+  const latest = useLive((s) => s.latest);
+  const history = useLive((s) => s.history);
   const info = useSystem((s) => s.info);
   if (!latest) return <div className="widget glass skeleton" />;
   const disks = latest.disks ?? [];
@@ -63,8 +63,8 @@ export function SystemWidget() {
 }
 
 export function NetworkWidget() {
-  const history = useSystem((s) => s.history);
-  const latest = useSystem((s) => s.latest);
+  const history = useLive((s) => s.history);
+  const latest = useLive((s) => s.latest);
   const nics = latest?.network ?? [];
   if (!latest || !nics.length) return null;
   const last = history[history.length - 1];
@@ -90,7 +90,7 @@ export function NetworkWidget() {
 }
 
 export function AcceleratorWidget() {
-  const latest = useSystem((s) => s.latest);
+  const latest = useLive((s) => s.latest);
   const gpus = (latest?.accelerators ?? []).filter((a) => a.kind !== 'display');
   if (!gpus.length) return null;
   return (

@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { loadAvatar } from './lib/avatar';
 import { Logo } from './components/Logo';
 import { confirmNetwork, getUser, linkSignIn, logout, onSessionChange, refresh, setupRequired } from './api/client';
 import { useT } from './i18n';
 import type { User } from './api/types';
 import { AuthScreen, type AuthMode } from './shell/AuthScreen';
-import { Desktop } from './shell/Desktop';
 import { UpdateOverlay } from './shell/UpdateOverlay';
 import { resumeRememberedUpdate, resumeRunningUpdate } from './state/update';
 import { installUiFeedback, playCue } from './lib/uiSound';
@@ -15,6 +14,13 @@ import { hostSend, nativeSurface } from './native/platform';
 import { nativeSignIn } from './native/session';
 import { NativeAppWindow } from './native/AppWindow';
 import { NativeFilePicker } from './native/FilePicker';
+
+// The desktop is its own chunk: NoCap Desktop's app windows (and its
+// sign-in screen) never load it. The browser and the screen's desktop and
+// chrome start loading it at once, next to signing in.
+const loadDesktop = () => import('./shell/Desktop');
+if ([null, 'desktop', 'chrome'].includes(nativeSurface())) void loadDesktop().catch(() => undefined);
+const Desktop = lazy(() => loadDesktop().then((m) => ({ default: m.Desktop })));
 
 type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string; lockedUserId?: string } | { kind: 'desktop'; user: User };
 
@@ -131,7 +137,12 @@ export function App() {
   if (phase.kind === 'boot') screen = nativeSurface() ? null : <div className="boot"><Logo size={110} /></div>;
   else if (phase.kind === 'auth') screen = <AuthScreen key={phase.mode} mode={phase.mode} lockedUser={phase.lockedUser} lockedUserId={phase.lockedUserId} />;
   else if (nativeSurface() === 'app') screen = <NativeAppWindow />;
-  else screen = <Desktop user={phase.user} onLock={() => void lock()} />;
+  else
+    screen = (
+      <Suspense fallback={null}>
+        <Desktop user={phase.user} onLock={() => void lock()} />
+      </Suspense>
+    );
   // On NoCap Desktop the update screen and network notice show once, on the chrome.
   const once = !nativeSurface() || nativeSurface() === 'chrome';
   return (

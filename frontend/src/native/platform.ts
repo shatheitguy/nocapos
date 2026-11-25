@@ -40,6 +40,15 @@ export function nativeSurface(): NativeSurface | null {
 
 export const isNative = () => nativeSurface() !== null;
 
+/**
+ * NoCap Desktop drawn by the processor (no usable graphics card): the host
+ * says so (render=software) and the pages leave out their costliest
+ * effects (blur, endless decorative animations).
+ */
+export function softwareRendering(): boolean {
+  return isNative() && new URLSearchParams(location.search).get('render') === 'software';
+}
+
 /** For tests: pretend to be a surface (or a browser with null). */
 export function setNativeSurfaceForTest(s: NativeSurface | null) {
   surface = s;
