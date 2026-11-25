@@ -12,9 +12,9 @@ import { MOD, NoteEditor } from './NoteEditor';
 import { ColorDots, NoteBody, Popover, ReminderMenu, agoLabel, whenLabel } from './NoteParts';
 import { MAX_TITLE, displayTitle, isEmptyNote, nextDeskSpot, todoProgress, visibleNotes, type Note, type NoteSort, type NoteView } from './noteDoc';
 import { flushNote, useNotes, type SaveStatus } from './notesStore';
-import { openNote } from './openNote';
+import { openNote, popOutNote } from './openNote';
 
-export { openNote };
+export { openNote, popOutNote };
 
 // Sticky Notes: a board (or list) of your notes with search, pins, colours,
 // archive and trash; a note opens in a sheet where it's edited in place and
@@ -47,6 +47,8 @@ export function Notes({ win }: { win: WinState }) {
   const [query, setQuery] = useState('');
   const [sort, setSortState] = useState<NoteSort>(() => readPref('nocap.notes.sort', ['edited', 'created'] as const, 'edited'));
   const [layout, setLayoutState] = useState<Layout>(() => readPref('nocap.notes.layout', ['board', 'list'] as const, 'board'));
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
 
   const setSort = (s: NoteSort) => {
@@ -61,15 +63,17 @@ export function Notes({ win }: { win: WinState }) {
   // Opened for a note (a reminder, a sticky, the widget).
   const wantNote = win.props?.note;
   const wantAt = win.props?.at;
+  const wantFresh = win.props?.fresh === '1';
   useEffect(() => {
     if (!wantNote) return;
-    openNote(wantNote);
+    setFresh(wantFresh ? wantNote : null);
+    setOpenId(wantNote);
     setView('notes');
-  }, [wantNote, wantAt]);
+  }, [wantNote, wantAt, wantFresh]);
   const focusId = useNotes((s) => s.focusId);
   useEffect(() => {
     if (!focusId) return;
-    openNote(focusId);
+    setOpenId(focusId);
     useNotes.getState().setFocus(null);
   }, [focusId]);
 
@@ -85,12 +89,33 @@ export function Notes({ win }: { win: WinState }) {
     }
     return { notes: active, archive: archived, trash };
   }, [notes]);
+  const open = openId ? (notes.find((n) => n.id === openId) ?? null) : null;
 
   const newNote = () => {
     const n = useNotes.getState().create();
     setView('notes');
     setQuery('');
-    openNote(n.id, true);
+    setFresh(n.id);
+    setOpenId(n.id);
+  };
+
+  /** Closes the open note; keep: it lives on (popped out), even if empty. */
+  const close = (keep = false) => {
+    if (open) {
+      flushNote(open.id);
+      // A note opened fresh and left empty isn't kept.
+      if (!keep && open.id === fresh && isEmptyNote(open) && !open.pinned && open.remind_at == null) void useNotes.getState().removeForever(open.id);
+    }
+    setFresh(null);
+    setOpenId(null);
+  };
+
+  const popOut = () => {
+    if (!open) return;
+    const id = open.id;
+    const wasFresh = id === fresh;
+    close(true);
+    popOutNote(id, wasFresh);
   };
 
   const onKeyDown = (e: RKeyboardEvent<HTMLDivElement>) => {
@@ -101,10 +126,14 @@ export function Notes({ win }: { win: WinState }) {
       newNote();
     } else if ((mod && e.key.toLowerCase() === 'f') || (!typing && e.key === '/')) {
       e.preventDefault();
+      if (open) close();
       search.current?.focus();
       search.current?.select();
     } else if (e.key === 'Escape' && !e.defaultPrevented) {
-      if (query) {
+      if (open) {
+        e.preventDefault();
+        close();
+      } else if (query) {
         e.preventDefault();
         setQuery('');
       }
@@ -144,6 +173,7 @@ export function Notes({ win }: { win: WinState }) {
                 className={view === v ? 'on' : ''}
                 onClick={() => {
                   setView(v);
+                  setOpenId(null);
                 }}
               >
                 <Icon name={icon} size={16} />
@@ -204,16 +234,17 @@ export function Notes({ win }: { win: WinState }) {
                 {pinned.length > 0 && (
                   <>
                     <h3 className="nt-section">{t('notes.pinned')}</h3>
-                    <Grid notes={pinned} layout={layout} onOpen={openNote} />
+                    <Grid notes={pinned} layout={layout} onOpen={setOpenId} />
                     <h3 className="nt-section">{t('notes.others')}</h3>
                   </>
                 )}
-                <Grid notes={others} layout={layout} onOpen={openNote} />
+                <Grid notes={others} layout={layout} onOpen={setOpenId} />
               </>
             )}
           </div>
         </main>
 
+        {open && <NoteSheet key={open.id} note={open} fresh={open.id === fresh} onClose={close} onPopOut={popOut} />}
       </div>
     </div>
   );
@@ -367,13 +398,30 @@ export function NoteWindow({ win }: { win: WinState }) {
     },
     [id, fresh],
   );
+  // The window is named after the note, and follows it as it's written.
+  const title = (note && displayTitle(note, 40)) || t('notes.untitled');
+  useEffect(() => {
+    if (win.title !== title) useWM.setState((s) => ({ windows: s.windows.map((w) => (w.id === win.id ? { ...w, title } : w)) }));
+  }, [title, win.id, win.title]);
   if (!note) {
     return <div className="nt-window-empty muted">{loaded ? t('notes.gone') : t('notes.loading')}</div>;
   }
   return <NoteSheet note={note} fresh={fresh} onClose={close} standalone />;
 }
 
-function NoteSheet({ note, fresh, onClose, standalone = false }: { note: Note; fresh: boolean; onClose: () => void; standalone?: boolean }) {
+function NoteSheet({
+  note,
+  fresh,
+  onClose,
+  onPopOut,
+  standalone = false,
+}: {
+  note: Note;
+  fresh: boolean;
+  onClose: () => void;
+  onPopOut?: () => void;
+  standalone?: boolean;
+}) {
   const t = useT();
   const status = useNotes((s) => s.status[note.id]);
   const s = useNotes.getState();
@@ -437,6 +485,11 @@ function NoteSheet({ note, fresh, onClose, standalone = false }: { note: Note; f
               }
             }}
           />
+          {onPopOut && (
+            <button type="button" className="ne-btn nt-popout" title={t('notes.openWindow')} aria-label={t('notes.openWindow')} onClick={onPopOut}>
+              <Icon name="maximize" size={15} />
+            </button>
+          )}
           {/* In a window of its own, the window's close button is right above. */}
           {!standalone && <WinClose onClick={onClose} label={`${t('notes.close')} (Esc)`} />}
         </div>

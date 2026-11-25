@@ -92,8 +92,8 @@ function DeskNote({ note, area }: { note: Note; area: { w: number; h: number } }
           <button
             type="button"
             className="ne-btn"
-            title={t('notes.openWindow')}
-            aria-label={t('notes.openWindow')}
+            title={t('notes.openInApp')}
+            aria-label={t('notes.openInApp')}
             onClick={() => openNote(note.id)}
           >
             <Icon name="maximize" size={14} />

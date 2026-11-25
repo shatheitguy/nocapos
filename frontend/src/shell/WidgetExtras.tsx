@@ -106,7 +106,7 @@ export function NotesWidget() {
               </span>
             )}
             {note && (
-              <button type="button" className="ne-btn" title={t('notes.openWindow')} aria-label={t('notes.openWindow')} onClick={() => openNote(note.id)}>
+              <button type="button" className="ne-btn" title={t('notes.openInApp')} aria-label={t('notes.openInApp')} onClick={() => openNote(note.id)}>
                 <Icon name="external" size={13} />
               </button>
             )}
