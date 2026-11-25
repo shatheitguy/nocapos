@@ -67,7 +67,7 @@ html[data-native-surface='chrome'] .menubar-hot { height: 3px; }
    filter, so their see-through glass (and the Transparency slider's
    !important tint) let the app behind read through, sharp. Here they are
    opaque: the same frosted wallpaper as the window, under the tint. */
-:root[data-native-surface='app'] :is(.dialog, .st-sheet, .ug-sheet) {
+:root[data-native-surface='app'][data-ui] :is(.dialog.dialog, .st-sheet.st-sheet, .ug-sheet.ug-sheet) {
   --frost-veil: color-mix(in srgb, var(--tint) var(--a, 100%), transparent);
   background:
     linear-gradient(var(--frost-veil), var(--frost-veil)),
