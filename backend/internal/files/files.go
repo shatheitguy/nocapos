@@ -670,3 +670,26 @@ func randHex() string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+// LocalPath returns where a file of a storage location is on this machine,
+// with symbolic links followed, for NoCap Desktop's file picker. It is ""
+// when that isn't a regular file, or when a link leads out of the location.
+func (s *Service) LocalPath(rootID, rel string) (string, error) {
+	rt, err := s.Root(rootID)
+	if err != nil {
+		return "", err
+	}
+	base, err := filepath.EvalSymlinks(rt.Path)
+	if err != nil {
+		return "", err
+	}
+	p, err := filepath.EvalSymlinks(filepath.Join(base, native(rel)))
+	if err != nil || !within(p, base) {
+		return "", nil
+	}
+	st, err := os.Stat(p)
+	if err != nil || !st.Mode().IsRegular() {
+		return "", nil
+	}
+	return p, nil
+}

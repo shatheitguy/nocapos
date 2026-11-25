@@ -1,0 +1,21 @@
+{
+  "picker.title": "Choose a file",
+  "picker.titleMany": "Choose files",
+  "picker.open": "Open",
+  "picker.openMany": "Open {n} files",
+  "picker.back": "Back",
+  "picker.search": "Search",
+  "picker.searchHint": "Type to filter this folder; press Enter to search everywhere",
+  "picker.results": "Search: “{q}”",
+  "picker.empty": "Nothing in here",
+  "picker.folder": "Folder",
+  "picker.cantLoad": "Couldn’t open this location",
+  "picker.failed": "Couldn’t open that file. Try another one.",
+  "picker.showAll": "Show all files",
+  "picker.wants.images": "Images",
+  "picker.wants.videos": "Videos",
+  "picker.wants.audio": "Audio files",
+  "picker.wants.media": "Photos and videos",
+  "picker.wantsEndings": "Files ending in {list}",
+  "picker.wantsSome": "Only some kinds of files"
+}

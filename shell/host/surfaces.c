@@ -514,6 +514,15 @@ on_permission(WebKitWebView *v, WebKitPermissionRequest *req, gpointer u)
 }
 
 /* NoCap OS draws its own menus; WebKit's never shows. */
+/* Files for an <input type=file>: NoCap OS's own picker in the page, never
+ * the toolkit's dialog (picker.c). */
+static gboolean
+on_file_chooser(WebKitWebView *v, WebKitFileChooserRequest *req, gpointer data)
+{
+  Surface *s = data;
+  return picker_run(s->id, req);
+}
+
 static gboolean
 on_context_menu(WebKitWebView *v, WebKitContextMenu *menu, GdkEvent *ev, WebKitHitTestResult *hit, gpointer u)
 {
@@ -547,6 +556,7 @@ on_load_changed(WebKitWebView *v, WebKitLoadEvent ev, gpointer data)
   if (ev == WEBKIT_LOAD_STARTED) {
     s->loaded = FALSE;
     s->info_called = FALSE;
+    picker_drop(s->id);
   } else if (ev == WEBKIT_LOAD_FINISHED) {
     s->loaded = TRUE;
     if (s->want_visible)
@@ -648,6 +658,7 @@ on_web_process_terminated(WebKitWebView *v, WebKitWebProcessTerminationReason re
   else if (reason == WEBKIT_WEB_PROCESS_TERMINATED_BY_API)
     why = "web process ended";
 #endif
+  picker_drop(s->id);
   schedule_reload(s, why);
 }
 
@@ -895,6 +906,7 @@ setup_view(Surface *s)
   g_signal_connect(s->view, "decide-policy", G_CALLBACK(on_decide_policy), s);
   g_signal_connect(s->view, "permission-request", G_CALLBACK(on_permission), s);
   g_signal_connect(s->view, "context-menu", G_CALLBACK(on_context_menu), s);
+  g_signal_connect(s->view, "run-file-chooser", G_CALLBACK(on_file_chooser), s);
   g_signal_connect(s->view, "create", G_CALLBACK(on_create), s);
   g_signal_connect(s->view, "show-notification", G_CALLBACK(on_block2), s);
   g_signal_connect(s->view, "enter-fullscreen", G_CALLBACK(on_block1), s);

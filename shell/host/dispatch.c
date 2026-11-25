@@ -172,6 +172,11 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
   } else if (strcmp(m, "window.title") == 0) {
     app_window_title(bridge_param_str(call, "title"));
     shell_reply_ok(r, NULL);
+  } else if (strcmp(m, "files.pick") == 0) {
+    picker_pick(surface, bridge_param_int(call, "request", 0), bridge_param_array(call, "paths"),
+                bridge_param_array(call, "urls"), bridge_param_array(call, "names"), r);
+  } else if (strcmp(m, "files.cancel") == 0) {
+    picker_cancel(surface, bridge_param_int(call, "request", 0), r);
   } else if (strcmp(m, "audio.get") == 0) {
     audio_get(audio_reply, r);
   } else if (strcmp(m, "audio.set") == 0) {
