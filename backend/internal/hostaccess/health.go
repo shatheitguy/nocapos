@@ -282,6 +282,9 @@ type healthState struct {
 	started      time.Time
 	noShellSince time.Time
 	lastFallback time.Time
+	// hardwareSince: since when the compositor has drawn with the graphics
+	// card during a hardware retry.
+	hardwareSince time.Time
 }
 
 func (d *Desktop) now() time.Time {
@@ -324,14 +327,142 @@ func (d *Desktop) fallbackPath() string {
 // Fallback is the fallback stage in use. (Earlier versions' "xorg" stage
 // doesn't exist any more: the screen starts over on the normal setup.)
 func (d *Desktop) Fallback() string {
+	return d.fallbackRecord().stage
+}
+
+// fallbackRecord is what the desktop-fallback file says: the stage, the
+// boot it was chosen on and how many boots in a row the graphics card
+// failed. A stage of "hardware-retry" means the graphics card is being
+// tried again after a software fallback (no fallback in use).
+type fallbackRecord struct {
+	stage string
+	boot  string
+	tries int
+}
+
+const stageHardwareRetry = "hardware-retry"
+
+// maxHardwareRetries: after this many boots on which the graphics card
+// failed again, software rendering stays (until Settings resets it).
+const maxHardwareRetries = 3
+
+func (d *Desktop) fallbackRecord() fallbackRecord {
+	var r fallbackRecord
 	b, err := d.readFile(d.fallbackPath())
 	if err != nil {
-		return FallbackNone
+		return r
 	}
-	if strings.TrimSpace(string(b)) == FallbackSoftware {
-		return FallbackSoftware
+	for i, l := range strings.Split(string(b), "\n") {
+		l = strings.TrimSpace(l)
+		switch {
+		case i == 0 && l == FallbackSoftware:
+			r.stage = FallbackSoftware
+		case strings.HasPrefix(l, "boot="):
+			r.boot = strings.TrimPrefix(l, "boot=")
+		case strings.HasPrefix(l, "tries="):
+			r.tries, _ = strconv.Atoi(strings.TrimPrefix(l, "tries="))
+		}
 	}
-	return FallbackNone
+	return r
+}
+
+func (r fallbackRecord) text(stage string) string {
+	return fmt.Sprintf("%s\nboot=%s\ntries=%d\n", stage, r.boot, r.tries)
+}
+
+// bootID tells this boot from the earlier ones ("" when unknown).
+func (d *Desktop) bootID() string {
+	b, err := d.readFile("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return ""
+	}
+	id := strings.TrimSpace(string(b))
+	if len(id) > 64 || strings.ContainsAny(id, " \n=") {
+		return ""
+	}
+	return id
+}
+
+// retryHardware: software rendering chosen on an earlier boot is taken back
+// once per boot (up to maxHardwareRetries boots that fail again), so a
+// machine whose graphics card works isn't left drawing with the processor
+// after one bad start (a slow first boot or first sign-in, a driver an
+// update has fixed since). Nothing restarts: the next sign-in screen or
+// sign-in uses the graphics card, the session scripts still fall back by
+// themselves when it can't start, and Ensure falls back again (counting
+// the try) when the screen stays empty.
+func (d *Desktop) retryHardware(ctx context.Context) bool {
+	r := d.fallbackRecord()
+	boot := d.bootID()
+	if r.stage != FallbackSoftware || boot == "" || r.boot == boot || r.tries >= maxHardwareRetries {
+		return false
+	}
+	if err := d.setRendering(false); err != nil {
+		return false
+	}
+	r.boot = boot
+	return d.writeFile(d.fallbackPath(), []byte(r.text(stageHardwareRetry)), 0o644) == nil
+}
+
+// hardwareProvenAfter: how long the compositor must have drawn with the
+// graphics card before a hardware retry counts as a success.
+const hardwareProvenAfter = 10 * time.Minute
+
+// hardwareProven: a hardware retry that has worked for a while ends it (the
+// failed boots are forgotten). Reports whether it did.
+func (d *Desktop) hardwareProven(now time.Time) bool {
+	if d.fallbackRecord().stage != FallbackNone {
+		return false
+	}
+	b, err := d.readFile(d.fallbackPath())
+	if err != nil || !strings.HasPrefix(string(b), stageHardwareRetry) {
+		return false
+	}
+	d.hs.mu.Lock()
+	defer d.hs.mu.Unlock()
+	if !hardwareCompositor(d.procRoot()) {
+		d.hs.hardwareSince = time.Time{}
+		return false
+	}
+	if d.hs.hardwareSince.IsZero() {
+		d.hs.hardwareSince = now
+	}
+	if now.Sub(d.hs.hardwareSince) < hardwareProvenAfter {
+		return false
+	}
+	return d.remove(d.fallbackPath()) == nil
+}
+
+// hardwareCompositor: a compositor (labwc) runs, drawing with the graphics
+// card (not started with WLR_RENDERER=pixman).
+func hardwareCompositor(procRoot string) bool {
+	entries, err := os.ReadDir(procRoot)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if _, err := strconv.Atoi(e.Name()); err != nil {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(procRoot, e.Name(), "comm"))
+		if err != nil || strings.TrimSpace(string(b)) != "labwc" {
+			continue
+		}
+		env, err := os.ReadFile(filepath.Join(procRoot, e.Name(), "environ"))
+		if err != nil {
+			continue
+		}
+		soft := false
+		for _, kv := range strings.Split(string(env), "\x00") {
+			if kv == "WLR_RENDERER=pixman" {
+				soft = true
+			}
+		}
+		if !soft {
+			return true
+		}
+	}
+	return false
 }
 
 // wantOn: the owner didn't switch NoCap Desktop off.
@@ -501,9 +632,27 @@ func nextFallback(cur string) string {
 	return ""
 }
 
-// applyFallback switches the sign-in screen and sessions to stage.
+// applyFallback switches the sign-in screen and sessions to stage. Software
+// rendering counts one more boot on which the graphics card failed.
 func (d *Desktop) applyFallback(ctx context.Context, stage string) error {
-	soft := stage == FallbackSoftware
+	if err := d.setRendering(stage == FallbackSoftware); err != nil {
+		return err
+	}
+	if stage == FallbackNone {
+		if err := d.remove(d.fallbackPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	r := d.fallbackRecord()
+	r.boot = d.bootID()
+	r.tries++
+	return d.writeFile(d.fallbackPath(), []byte(r.text(stage)), 0o644)
+}
+
+// setRendering puts the software rendering switches (the flag the session
+// scripts and NoCap Shell read, /etc/environment's line) on or off.
+func (d *Desktop) setRendering(soft bool) error {
 	if soft {
 		if err := d.writeFile(SoftwareRenderingFlag, []byte("# NoCap Desktop draws with the processor here (NoCapOS repair).\n"), 0o644); err != nil {
 			return err
@@ -518,13 +667,7 @@ func (d *Desktop) applyFallback(ctx context.Context, stage string) error {
 			return err
 		}
 	}
-	if stage == FallbackNone {
-		if err := d.remove(d.fallbackPath()); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		return nil
-	}
-	return d.writeFile(d.fallbackPath(), []byte(stage+"\n"), 0o644)
+	return nil
 }
 
 // EnvironmentWithSoftwareRendering is /etc/environment with NoCapOS's
@@ -570,13 +713,19 @@ func (d *Desktop) Ensure(ctx context.Context) []string {
 	}
 	settled := now.Sub(d.hs.started) >= startDelay
 	d.hs.mu.Unlock()
+	var did []string
+	if d.retryHardware(ctx) {
+		did = append(did, "graphics card retried")
+	}
 	in := d.gather(ctx)
 	h := EvaluateHealth(in)
 	if h.Status != "broken" {
-		return nil
+		if h.Status == "ok" && d.hardwareProven(now) {
+			did = append(did, "graphics card works")
+		}
+		return did
 	}
 	c := d.conf()
-	var did []string
 	if h.Has(ProblemNotAtBoot) {
 		if err := d.linkDisplayManager(ctx, c.DMUnit); err == nil {
 			did = append(did, "boot link")
@@ -827,6 +976,9 @@ func (d *Desktop) Diagnostics(ctx context.Context) string {
 	h := EvaluateHealth(in)
 	var hs strings.Builder
 	fmt.Fprintf(&hs, "status: %s\nfallback: %s\n", h.Status, orNone(h.Fallback))
+	if rec, err := d.readFile(d.fallbackPath()); err == nil {
+		fmt.Fprintf(&hs, "fallback record: %s\n", strings.Join(strings.Fields(string(rec)), " "))
+	}
 	for _, p := range h.Problems {
 		fmt.Fprintf(&hs, "problem: %s %s\n", p.Code, p.Detail)
 	}

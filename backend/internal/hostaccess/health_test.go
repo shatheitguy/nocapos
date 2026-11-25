@@ -2,6 +2,7 @@ package hostaccess
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -287,5 +288,93 @@ func TestGPULines(t *testing.T) {
 	want := "00:02.0 VGA compatible controller [0300]: Intel UHD [8086:3e92]\n\tSubsystem: Dell\n\tKernel driver in use: i915"
 	if got := gpuLines(lspci); got != want {
 		t.Fatalf("gpu = %q", got)
+	}
+}
+
+// Software rendering chosen on one boot is taken back on the next one, so a
+// machine whose graphics card works isn't stuck drawing with the processor;
+// a graphics card that keeps failing keeps it after a few boots.
+func TestSoftwareRenderingIsRetriedOnTheNextBoot(t *testing.T) {
+	f, d, now := screenHost(t)
+	ctx := context.Background()
+	const bootFile = "/proc/sys/kernel/random/boot_id"
+	f.files[bootFile] = "boot-1\n"
+	d.Ensure(ctx)
+	*now = now.Add(61 * time.Second)
+	d.Ensure(ctx)
+	if r := d.fallbackRecord(); r.stage != FallbackSoftware || r.tries != 1 || r.boot != "boot-1" {
+		t.Fatalf("record = %+v", r)
+	}
+	// alfad restarts on the same boot (an update): nothing changes.
+	d.hs = healthState{}
+	d.Ensure(ctx)
+	if d.Fallback() != FallbackSoftware {
+		t.Fatal("retried on the same boot")
+	}
+
+	// The next boots: the graphics card again, then software when the screen
+	// stays empty, until maxHardwareRetries boots have failed.
+	for boot := 2; boot <= maxHardwareRetries+1; boot++ {
+		f.files[bootFile] = fmt.Sprintf("boot-%d\n", boot)
+		d.hs = healthState{}
+		f.calls = nil
+		d.Ensure(ctx)
+		if boot > maxHardwareRetries {
+			if d.Fallback() != FallbackSoftware {
+				t.Fatalf("boot %d: gave software up after %d failures", boot, maxHardwareRetries)
+			}
+			break
+		}
+		if d.Fallback() != FallbackNone {
+			t.Fatalf("boot %d: not retried: %+v", boot, d.fallbackRecord())
+		}
+		if _, ok := f.files[SoftwareRenderingFlag]; ok || strings.Contains(f.files["/etc/environment"], "LIBGL") {
+			t.Fatalf("boot %d: software switches left on", boot)
+		}
+		if strings.Contains(strings.Join(f.calls, "\n"), "restart") {
+			t.Fatalf("boot %d: the retry restarted the screen: %v", boot, f.calls)
+		}
+		*now = now.Add(61 * time.Second)
+		d.Ensure(ctx)
+		if r := d.fallbackRecord(); r.stage != FallbackSoftware || r.tries != boot {
+			t.Fatalf("boot %d: record = %+v", boot, r)
+		}
+	}
+
+	// An earlier version's record (no boot, no count) is retried too.
+	f.files["/var/lib/nocapos/desktop-fallback"] = "software\n"
+	f.files[SoftwareRenderingFlag] = ""
+	f.files["/etc/environment"] = swRenderMark + "\nLIBGL_ALWAYS_SOFTWARE=1\n"
+	d.hs = healthState{}
+	d.Ensure(ctx)
+	if d.Fallback() != FallbackNone || f.files["/etc/environment"] != "" {
+		t.Fatalf("legacy: %q %q", d.Fallback(), f.files["/etc/environment"])
+	}
+}
+
+// A hardware retry that keeps working for a while ends: the failed boots
+// are forgotten.
+func TestHardwareRetryProven(t *testing.T) {
+	f, d, now := screenHost(t)
+	ctx := context.Background()
+	f.linked, f.target = "greetd.service", "graphical.target"
+	const rec = "/var/lib/nocapos/desktop-fallback"
+	f.files[rec] = "hardware-retry\nboot=b\ntries=2\n"
+	proc := filepath.Join(d.ProcRoot, "812")
+	_ = os.MkdirAll(proc, 0o755)
+	_ = os.WriteFile(filepath.Join(proc, "comm"), []byte("labwc\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(proc, "environ"), []byte("HOME=/home/sam\x00WLR_RENDERER=pixman\x00"), 0o644)
+	d.Ensure(ctx)
+	*now = now.Add(20 * time.Minute)
+	d.Ensure(ctx)
+	if _, ok := f.files[rec]; !ok {
+		t.Fatal("a compositor drawing in software proved the graphics card")
+	}
+	_ = os.WriteFile(filepath.Join(proc, "environ"), []byte("HOME=/home/sam\x00"), 0o644)
+	d.Ensure(ctx)
+	*now = now.Add(11 * time.Minute)
+	d.Ensure(ctx)
+	if _, ok := f.files[rec]; ok {
+		t.Fatalf("record kept: %q", f.files[rec])
 	}
 }

@@ -2,18 +2,18 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { tr } from '../i18n';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../api/client';
-import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
-import type { Snapshot, SystemInfo, User } from '../api/types';
+import { connect, disconnect, onSocketStatus } from '../api/socket';
+import type { SystemInfo, User } from '../api/types';
 import { openApp } from '../apps/meta';
 import { ContextMenu, type MenuItem } from '../components/ContextMenu';
-import { useDocumentVisible, useViewport } from '../lib/hooks';
+import { useViewport } from '../lib/hooks';
 import { takeHubApp } from '../lib/hub';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { followPrefs, usePrefs, usePrefsSynced } from '../state/prefs';
 import { useDesktopIcons } from '../state/desktopIcons';
 import { useFolders } from '../state/folders';
 import { useDock } from '../state/dock';
-import { useSystem } from '../state/system';
+import { useMetricsFeed, useSystem } from '../state/system';
 import { useWM } from '../state/windows';
 import { useWidgets } from '../state/widgets';
 import { ConfirmHost } from '../components/ConfirmHost';
@@ -106,7 +106,6 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     useFolders.getState().restore(user.id);
     const sys = useSystem.getState();
     void api<SystemInfo>('/api/v1/system/info').then((r) => r.ok && sys.setInfo(r.data));
-    void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
     void connect();
     const offPrefs = followPrefs();
     const offStatus = onSocketStatus(sys.setOnline);
@@ -124,13 +123,10 @@ export function Desktop({ user, onLock }: { user: User; onLock: () => void }) {
     };
   }, [user.id]);
 
-  // Live metrics only while the tab is visible; nothing on screen needs them otherwise.
-  const visible = useDocumentVisible();
-  useEffect(() => {
-    if (!visible) return;
-    const sys = useSystem.getState();
-    return subscribe('system.metrics', (d) => sys.push(d as Snapshot));
-  }, [visible, user.id]);
+  // Live metrics while the tab is visible: in the browser the desktop keeps
+  // a history for Monitor's charts; NoCap Desktop's surfaces take them only
+  // where a widget shows them (useLive).
+  useMetricsFeed(!surface);
 
   // System notifications (admins): updates, app problems, disk health, failed backups.
   // On NoCap Desktop these run once, in the chrome (it shows them); the

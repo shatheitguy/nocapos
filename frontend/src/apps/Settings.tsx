@@ -10,7 +10,7 @@ import { powerHost } from '../lib/hostActions';
 import { fmtTime, useTimePrefs } from '../lib/time';
 import { LANGUAGES, usePrefs } from '../state/prefs';
 import { notifyApi, type NotifySettings } from '../state/notifications';
-import { useSystem } from '../state/system';
+import { useLive, useSystem } from '../state/system';
 import { toast } from '../state/toasts';
 import type { WinState } from '../state/windows';
 import type { Snapshot, SystemInfo } from '../api/types';
@@ -227,7 +227,7 @@ function CatBody({ cat, sub, isAdmin, start2fa, open }: {
 /** A category's page: grouped rows that open its sub-pages, with the current value on the right. */
 function CatHome({ cat, isAdmin, open }: { cat: Cat; isAdmin: boolean; open: (s: Sub) => void }) {
   const prefs = usePrefs();
-  const latest = useSystem((s) => s.latest);
+  const latest = useLive((s) => s.latest);
   const info = useSystem((s) => s.info);
   const now = useClock(30000);
   const tp = useTimePrefs();
@@ -335,7 +335,7 @@ function SubBody({ sub, isAdmin, start2fa }: { sub: Sub; isAdmin: boolean; start
 function Hero({ isAdmin }: { isAdmin: boolean }) {
   const t = useT();
   const info = useSystem((s) => s.info);
-  const uptime = useSystem((s) => s.latest?.uptime);
+  const uptime = useLive((s) => s.latest?.uptime);
   const [power, setPower] = useState<PowerInfo | null>(null);
   useEffect(() => {
     if (isAdmin) void hostApi.power().then((r) => setPower(r.ok && !missing(r) ? r.data : { supported: false, reason: tr('set.notAvailable') }));
@@ -577,7 +577,7 @@ function HostnameEdit({ name }: { name: string }) {
 // ---------------- Storage ----------------
 
 function StoragePage({ isAdmin }: { isAdmin: boolean }) {
-  const latest = useSystem((s) => s.latest);
+  const latest = useLive((s) => s.latest);
   const disks = latest?.disks ?? [];
   const total = storageTotals(latest);
   const t = useT();
