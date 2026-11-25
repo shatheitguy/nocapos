@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { api } from '../../api/client';
 import { onSocketStatus, subscribe } from '../../api/socket';
+import { nativeSurface } from '../../native/platform';
 import { tr } from '../../i18n';
 import { userKey } from '../../state/prefs';
 import { showLocalNotice } from '../../state/notifications';
@@ -307,7 +308,9 @@ export function watchNotes(): () => void {
     }
     if (!e.note) return;
     const n = fromWire(e.note);
-    if (e.type === 'reminder') remind(n);
+    // NoCap Desktop runs this in every window (the desktop, the panels, each
+    // app): the reminder shows once, from the panels that show notifications.
+    if (e.type === 'reminder' && remindsHere()) remind(n);
     if (e.client === CLIENT && e.type === 'upsert') return; // ours: already applied
     const merged = mergeNote(s.notes, n);
     const p = pending.get(n.id);
@@ -334,6 +337,11 @@ export function watchNotes(): () => void {
 
 let localIds = -1;
 
+function remindsHere(): boolean {
+  const surface = nativeSurface();
+  return !surface || surface === 'chrome';
+}
+
 /** A reminder came due: a NoCapOS notification that opens the note. */
 function remind(n: Note) {
   const title = displayTitle(n) || tr('notes.untitled');
@@ -345,7 +353,7 @@ function remind(n: Note) {
     title: tr('notes.reminderTitle', { title }),
     body: n.title ? n.text.split('\n').find((l) => l.trim())?.slice(0, 160) : undefined,
     icon: 'notes',
-    action: { app: 'note', props: { note: n.id } },
+    action: { app: 'notes', props: { note: n.id, at: String(Date.now()) } },
     created_at: new Date().toISOString(),
   });
 }
