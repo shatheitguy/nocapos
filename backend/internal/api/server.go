@@ -392,6 +392,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/v1/files/transfer", s.authed(s.touchIndex(s.filesTransfer)))
 	mux.Handle("POST /api/v1/files/upload", s.authed(s.touchIndex(s.filesUpload)))
 	mux.Handle("POST /api/v1/files/ticket", s.authed(s.filesTicket))
+	mux.Handle("POST /api/v1/files/local", s.authed(s.filesLocal))
 	mux.Handle("GET /api/v1/files/recent", s.authed(s.filesRecent))
 	mux.Handle("GET /api/v1/files/favorites", s.authed(s.filesFavorites))
 	mux.Handle("PUT /api/v1/files/favorites", s.authed(s.filesSetFavorites))

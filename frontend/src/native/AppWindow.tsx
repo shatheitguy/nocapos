@@ -5,6 +5,7 @@
 import { useEffect } from 'react';
 import { APPS, winTitle } from '../apps/meta';
 import { Window } from '../shell/Window';
+import { ConfirmHost } from '../components/ConfirmHost';
 import { followPrefs, usePrefs } from '../state/prefs';
 import { connect, disconnect } from '../api/socket';
 import { useWM } from '../state/windows';
@@ -95,5 +96,12 @@ export function NativeAppWindow() {
   }, [meta]);
 
   if (!meta) return null;
-  return <Window id={NATIVE_WINDOW_ID} compact={false} />;
+  // The app's own questions (replace or keep both on an upload, delete for
+  // good, ...) show in its window: the desktop's copy is in another process.
+  return (
+    <>
+      <Window id={NATIVE_WINDOW_ID} compact={false} />
+      <ConfirmHost />
+    </>
+  );
 }

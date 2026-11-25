@@ -29,4 +29,5 @@ import './photos.css';
 import './media.css';
 // After every app's styles: the shared dialog frame and its close button win.
 import './modal.css';
+import './picker.css';
 import './mobile.css';

@@ -14,6 +14,7 @@ import { useRecents } from './state/recents';
 import { hostSend, nativeSurface } from './native/platform';
 import { nativeSignIn } from './native/session';
 import { NativeAppWindow } from './native/AppWindow';
+import { NativeFilePicker } from './native/FilePicker';
 
 type Phase = { kind: 'boot' } | { kind: 'auth'; mode: AuthMode; lockedUser?: string; lockedUserId?: string } | { kind: 'desktop'; user: User };
 
@@ -136,6 +137,7 @@ export function App() {
   return (
     <>
       {screen}
+      {nativeSurface() && phase.kind === 'desktop' && <NativeFilePicker />}
       {once && <UpdateOverlay />}
       {once && <NetConfirm />}
     </>

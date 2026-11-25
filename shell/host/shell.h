@@ -150,6 +150,12 @@ void control_osd(const char *what);
 void idle_init(void);
 guint idle_inhibit_count(void);
 
+/* ---- picking files: NoCap OS's own picker, never the toolkit's (picker.c) ---- */
+gboolean picker_run(SurfaceId surface, WebKitFileChooserRequest *req);
+void picker_drop(SurfaceId surface); /* the page went away: the request ends */
+void picker_pick(SurfaceId surface, gint64 request, JsonArray *paths, JsonArray *urls, JsonArray *names, ShellReply *r);
+void picker_cancel(SurfaceId surface, gint64 request, ShellReply *r);
+
 /* ---- app windows (appwin.c) ---- */
 int appwin_run(const char *app, const char *props, gboolean single, int argc, char **argv);
 gboolean app_id_valid(const char *id);

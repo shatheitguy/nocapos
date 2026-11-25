@@ -1,0 +1,21 @@
+/* NoCap Desktop's file picker (native/FilePicker.tsx): Files' own sidebar
+   and tiles in the shared dialog frame. */
+:root .dialog.modal.nocap-picker { width: min(980px, calc(100% - 32px)); height: min(640px, calc(100% - 40px)); }.nocap-picker .modal-body.np-body { padding: 0; gap: 0; flex: 1; overflow: hidden; }
+.nocap-picker .np-files { flex: 1 1 auto; min-height: 0; height: 100%; }
+.nocap-picker .np-main { min-height: 0; }
+/* The dialog's title says what this is; the sidebar's own "Files" heading would repeat it. */
+.nocap-picker .np-files .fs-title-row { display: none; }
+.nocap-picker .np-pane { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; outline: none; }
+.nocap-picker .fx-tile { cursor: pointer; }
+.nocap-picker .fx-tile.np-off { opacity: 0.38; cursor: default; }
+.nocap-picker .fx-tile.np-off:hover { background: transparent; }
+.nocap-picker .fx-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nocap-picker .fx-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px 16px; text-align: center; }
+.nocap-picker .modal-foot { padding: 10px 14px; }
+.np-foot { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+.np-foot-left { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.np-wants { color: var(--muted); }
+.np-all { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+.np-failed { color: var(--bad); }
+.np-open { display: inline-flex; align-items: center; gap: 6px; }
+@container fwin (max-width: 620px) { .nocap-picker .np-files .fs-side { display: none; } }
