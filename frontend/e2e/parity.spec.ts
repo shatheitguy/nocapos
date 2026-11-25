@@ -63,6 +63,11 @@ const BACKDROP = `
   :root, :root body, html[data-native-surface] body, html[data-native-surface] { background: #1d2733 !important; background-image: none !important; }
   .desktop-surface, .desktop-icons, .widget-layer, .stuck-notes, .window-layer, .welcome { display: none !important; }
   *, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }
+  /* The dock's and tray's glass differs on purpose: the browser blurs what's
+     behind them, while on the screen (separate windows that can't blur each
+     other) they are opaque, frosted with the wallpaper (native/native.css).
+     The same plain glass on both, so the comparison is about what's on them. */
+  :root:root:root:root :is(.dock, .tray) { background: #262b35 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 `;
 
 async function openWeb(page: Page) {
@@ -149,7 +154,7 @@ const steps: Step[] = [
       // can't blur another) it's a dark sheet (native/native.css). Give both
       // the same plain backdrop so the comparison is about the app list
       // itself: icons, labels, search, pages and layout.
-      await p.addStyleTag({ content: '.launcher { background: #0b0d12 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }' });
+      await p.addStyleTag({ content: ':root:root:root:root .launcher { background: #0b0d12 !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }' });
     },
     shot: (p) => p.screenshot(),
   },
