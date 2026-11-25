@@ -204,6 +204,16 @@ test_value_checks(void)
   expect_err("chrome", "{\"id\":1,\"method\":\"nocap.open\",\"params\":{\"app\":\"files\",\"props\":\"a\\nb\"}}",
              "invalid value");
   expect_err("app", "{\"id\":1,\"method\":\"window.title\",\"params\":{\"title\":\"a\\u0007\"}}", "invalid value");
+  /* Picked files: never on the sign-in screen or the password prompt, and
+   * file names without control characters. */
+  expect_err("greeter", "{\"id\":1,\"method\":\"files.pick\",\"params\":{\"request\":1,\"paths\":[],\"urls\":[],\"names\":[]}}",
+             "not allowed");
+  expect_err("polkit", "{\"id\":1,\"method\":\"files.cancel\",\"params\":{\"request\":1}}", "not allowed");
+  expect_err("app", "{\"id\":1,\"method\":\"files.pick\",\"params\":{\"request\":1,\"paths\":[\"/a\\nb\"],\"urls\":[\"\"],\"names\":[\"a\"]}}",
+             "invalid value");
+  expect_err("app", "{\"id\":1,\"method\":\"files.pick\",\"params\":{\"request\":0,\"paths\":[],\"urls\":[],\"names\":[]}}",
+             "out of range");
+  expect_err("app", "{\"id\":1,\"method\":\"files.pick\",\"params\":{\"request\":1,\"paths\":[]}}", "missing");
 }
 
 static void
@@ -237,6 +247,9 @@ test_valid_calls(void)
     {"app", "{\"id\":6,\"method\":\"window.action\",\"params\":{\"action\":\"move\"}}"},
     {"app", "{\"id\":6,\"method\":\"window.action\",\"params\":{\"action\":\"resize-se\"}}"},
     {"app", "{\"id\":6,\"method\":\"window.title\",\"params\":{\"title\":\"Files \\u2014 Documents\"}}"},
+    {"app", "{\"id\":6,\"method\":\"files.pick\",\"params\":{\"request\":1,\"paths\":[\"/home/sam/cat.png\"],\"urls\":[\"/api/v1/files/raw?root=home&path=%2Fcat.png&t=x\"],\"names\":[\"cat.png\"]}}"},
+    {"desktop", "{\"id\":6,\"method\":\"files.pick\",\"params\":{\"request\":4294967295,\"paths\":[\"\",\"\"],\"urls\":[\"\",\"\"],\"names\":[\"a\",\"b\"]}}"},
+    {"chrome", "{\"id\":6,\"method\":\"files.cancel\",\"params\":{\"request\":2}}"},
     {"chrome", "{\"id\":7,\"method\":\"audio.get\"}"},
     {"chrome", "{\"id\":7,\"method\":\"audio.set\",\"params\":{\"volume\":150,\"muted\":false}}"},
     {"chrome", "{\"id\":7,\"method\":\"audio.set\",\"params\":{\"volume\":40.0}}"},

@@ -416,7 +416,10 @@ proxy_api(WebKitURISchemeRequest *req, const char *path, const char *query)
 #if WEBKIT_CHECK_VERSION(2, 40, 0)
   GInputStream *body = webkit_uri_scheme_request_get_http_body(req);
   if (body != NULL) {
-    soup_message_set_request_body(msg, in ? soup_message_headers_get_content_type(in, NULL) : NULL, body, -1);
+    /* The Content-Type forwarded above stays as the page sent it: setting
+     * the body's type here would keep only "multipart/form-data" and drop
+     * its boundary, and alfad couldn't read an upload. */
+    soup_message_set_request_body(msg, NULL, body, -1);
     g_object_unref(body);
   }
 #endif

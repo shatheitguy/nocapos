@@ -100,6 +100,7 @@ unknown parameters, wrong types or out-of-range values are refused with
 - `window.action` `{action: minimize|maximize|restore|close|move|resize-<edge>|fullscreen|unfullscreen}`, `window.title` `{title}` [app]
 - `audio.get/set`, `brightness.get/set`, `network.get`, `power.action` [chrome] (`power.action` reboot/poweroff on the greeter)
 - `notify.list|dismiss|invoke|clear|read` [chrome] (other apps' desktop notifications)
+- `files.pick` `{request, paths: [...], urls: [...], names: [...]}` (≤ 256 files), `files.cancel` `{request}` [os] (answers to `files.choose`, below)
 - `polkit.respond|cancel` [polkit]; `greeter.users|login|respond|cancel` [greeter]
 
 ### Events
@@ -107,7 +108,30 @@ unknown parameters, wrong types or out-of-range values are refused with
 `windows.changed`, `ui.command` `{name, action}`, `osd.show`, `audio.changed`,
 `brightness.changed`, `network.changed`, `notify.*`, `polkit.request`,
 `polkit.done`, `apps.changed`, `settings.changed`, `app.props` (app),
-`window.state` `{maximized, fullscreen, focused, tiled}` (app).
+`window.state` `{maximized, fullscreen, focused, tiled}` (app),
+`files.choose` `{request, multiple, accept: [...]}` (the surface that asked).
+
+## Picking files
+
+An `<input type=file>` (an Upload button, a wallpaper, a key file) never
+opens the toolkit's file dialog. The host takes WebKit's `run-file-chooser`
+(`host/picker.c`) and sends `files.choose` to the page that asked, with the
+input's `multiple` flag and its accept list (MIME types like `image/*` and
+name patterns like `*.pub`). The page shows NoCap OS's own picker
+(`frontend/src/native/FilePicker.tsx`): Files' sidebar, icons, thumbnails
+and theme, with files that don't fit the accept list dimmed.
+
+The page answers with `files.pick`: for each file, where alfad says it is
+on this machine (`POST /api/v1/files/local`, desktop listener only, links
+followed but never out of the location), and a ticketed
+`/api/v1/files/raw` link with its name. A path the signed-in account can
+read is handed to WebKit as is; anything else (a file only NoCap OS itself
+may read) is fetched from alfad into
+`~/.cache/nocapos/picked/pick-*/N/<name>` (private, removed after a day)
+and handed over from there. `files.cancel`, a reload or a crashed page
+ends the request with nothing picked. The sign-in screen and the password
+prompt never pick files. Downloads don't open a save dialog (they are
+refused, as before), and WebKit asks for files only, never folders.
 
 ## Control
 

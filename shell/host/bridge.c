@@ -113,6 +113,16 @@ static const ParamSpec P_POLKIT_CANCEL[] = {
   {"cookie", PT_STRING, TRUE, 1, 512, NULL, 0, PF_PRINTABLE}, {NULL}};
 static const ParamSpec P_LOGIN[] = {{"username", PT_STRING, TRUE, 1, 64, NULL, 0, PF_USERNAME}, {NULL}};
 static const ParamSpec P_RESPOND[] = {{"response", PT_STRING, FALSE, 0, 1024, NULL, 0, 0}, {NULL}};
+/* The page's file picker answers a file request (files.choose): for each
+ * picked file, where it is on this machine ("" if unknown), and a link the
+ * host may fetch it from (alfad's ticketed /api/v1/files/raw) with its name. */
+static const ParamSpec P_FILES_PICK[] = {
+  {"request", PT_INT, TRUE, 1, G_MAXUINT32, NULL, 0, 0},
+  {"paths", PT_STRV, TRUE, 0, 4096, NULL, 256, PF_TEXT},
+  {"urls", PT_STRV, TRUE, 0, 4096, NULL, 256, PF_TEXT},
+  {"names", PT_STRV, TRUE, 0, 255, NULL, 256, PF_TEXT},
+  {NULL}};
+static const ParamSpec P_FILES_CANCEL[] = {{"request", PT_INT, TRUE, 1, G_MAXUINT32, NULL, 0, 0}, {NULL}};
 
 /* A method may appear more than once with different surfaces and params
  * (power.action is narrower on the greeter). */
@@ -134,6 +144,8 @@ static const MethodSpec methods[] = {
   {"windows.maximize", S_CHROME, P_WINDOW},
   {"window.action", S_APP, P_WINDOW_ACTION},
   {"window.title", S_APP, P_WINDOW_TITLE},
+  {"files.pick", S_OS, P_FILES_PICK},
+  {"files.cancel", S_OS, P_FILES_CANCEL},
   {"audio.get", S_CHROME, P_NONE},
   {"audio.set", S_CHROME, P_AUDIO_SET},
   {"brightness.get", S_CHROME, P_NONE},
