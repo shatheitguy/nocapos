@@ -47,6 +47,9 @@ type updateAll struct {
 	Target     string   `json:"target,omitempty"` // NoCapOS version to install ("" none)
 	OK         bool     `json:"ok"`
 	Error      string   `json:"error,omitempty"`
+	// PhaseStarted: when each phase began, so a slow update shows which
+	// part took the time.
+	PhaseStarted map[string]time.Time `json:"phase_started,omitempty"`
 }
 
 // updateAllStatus is GET /api/v1/system/update/all.
@@ -79,6 +82,12 @@ func (s *Server) readUpdateAll() *updateAll {
 }
 
 func (s *Server) writeUpdateAll(u *updateAll) {
+	if _, ok := u.PhaseStarted[u.Phase]; !ok && u.Phase != "" {
+		if u.PhaseStarted == nil {
+			u.PhaseStarted = map[string]time.Time{}
+		}
+		u.PhaseStarted[u.Phase] = time.Now().UTC()
+	}
 	b, err := json.Marshal(u)
 	if err != nil {
 		return
