@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { tr } from '../i18n';
 import { Icon, type IconName } from './Icon';
 import { WinClose } from './WinClose';
+import { startDialogDrag } from './dialogDrag';
 
 // The one frame for dialogs and sheets that have a title: the title, and the
 // close button windows have, placed the way window title bars place it. With
@@ -83,7 +84,7 @@ export function useModalHost(appRoot?: string) {
   return { anchorEl, host, style, fixed: host === document.body };
 }
 
-/** A dialog's title row: optional icon, the title (and a line under it), extra buttons, and the window close button. */
+/** A dialog's title row: optional icon, the title (and a line under it), extra buttons, and the window close button. Dragging it moves the dialog. */
 export function ModalHead({
   title,
   sub,
@@ -108,7 +109,7 @@ export function ModalHead({
   children?: ReactNode;
 }) {
   return (
-    <header className={`modal-head ${className}`}>
+    <header className={`modal-head ${className}`} onPointerDown={startDialogDrag}>
       <span className="modal-grabber" aria-hidden="true" />
       {lead ?? (icon && <span className="modal-head-icon"><Icon name={icon} size={18} /></span>)}
       <span className="modal-head-titles">

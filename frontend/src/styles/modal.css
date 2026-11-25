@@ -36,6 +36,9 @@
   color: var(--accent); background: var(--accent-soft);
 }
 .modal-head > .win-close-solo { margin: 0; }
+/* The title row moves the dialog (components/dialogDrag.ts), like a title bar. */
+:root:not([data-compact]) .modal-head { touch-action: none; -webkit-user-select: none; user-select: none; }
+:is(.dialog, .st-sheet, .ug-sheet).dragging { transition: none; }
 .modal-grabber { display: none; }
 /* Under the title row, a hairline like the title bar's. */
 .dialog.modal > .modal-head, .st-sheet > .modal-head, .ug-sheet > .modal-head { border-bottom: 1px solid var(--border); }

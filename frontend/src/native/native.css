@@ -37,19 +37,72 @@ html[data-native-surface='chrome'] .menubar-hot { height: 3px; }
 
 /* Each part of NoCap Desktop is its own window on the screen, and a window
    can't blur another one: glass that looks frosted in the browser comes out
-   clear here, with the desktop's clock, widgets and greeting showing
-   through sharply behind app windows, the app list and panels. On the
-   screen, panels and windows get nearly solid backgrounds instead. */
+   clear here, with the text and icons of the windows behind showing through
+   sharply. So on the screen glass is opaque, frosted with the wallpaper:
+   --frost is a tiny, colour-rich copy of it (native/frost.ts) that scales up
+   as soft as a heavy blur, under the theme's tint at the Transparency the
+   owner picked (--a, glass.css). Nothing behind ever reads through, and no
+   backdrop filter runs, which a software-drawn screen pays for per frame. */
 :root[data-native-surface='chrome'][data-ui],
 :root[data-native-surface='app'][data-ui] {
   --sheet: rgba(22, 23, 28, 0.97);
   --glass: rgba(26, 27, 32, 0.93);
   --glass-strong: rgba(24, 25, 30, 0.97);
 }
-:root[data-native-surface='app'] .window { backdrop-filter: none; -webkit-backdrop-filter: none; }
-/* The app list covers the desktop like a dimmed sheet. */
-:root[data-native-surface='chrome'] .launcher {
-  background: rgba(8, 10, 16, 0.9);
+/* An app's window: the frost fills the window, as if the wallpaper were
+   right behind it. */
+:root[data-native-surface='app'] .window.native-window {
+  /* Declared here, where the slider's --a is. */
+  --frost-veil: color-mix(in srgb, var(--tint) var(--a, 100%), transparent);
+  background:
+    linear-gradient(var(--frost-veil), var(--frost-veil)),
+    var(--frost, none) center / cover no-repeat,
+    var(--bg) !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+:root[data-native-surface='app'] .window { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* Dialogs and sheets inside an app's window (the file picker, Settings and
+   Users sheets, a note): a screen drawn in software runs no backdrop
+   filter, so their see-through glass (and the Transparency slider's
+   !important tint) let the app behind read through, sharp. Here they are
+   opaque: the same frosted wallpaper as the window, under the tint. */
+:root[data-native-surface='app'][data-ui] :is(.dialog.dialog, .st-sheet.st-sheet, .ug-sheet.ug-sheet) {
+  --frost-veil: color-mix(in srgb, var(--tint) var(--a, 100%), transparent);
+  background:
+    linear-gradient(var(--frost-veil), var(--frost-veil)),
+    var(--frost, none) center / cover no-repeat,
+    var(--bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* A note's own colour wash lies over a solid sheet. */
+:root[data-native-surface][data-ui='glass'] { --sheet-solid: rgb(26, 27, 33); }
+:root[data-native-surface] .nt-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* The chrome covers the whole screen, so its panels show the part of the
+   wallpaper that is really behind them (fixed, like the wallpaper). */
+:root[data-native-surface='chrome'] :is(.dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x, .launcher-panel) {
+  --frost-veil: color-mix(in srgb, var(--tint) var(--a, 100%), transparent);
+  background:
+    linear-gradient(var(--frost-veil), var(--frost-veil)),
+    var(--frost, none) center / cover no-repeat fixed,
+    var(--bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Sheets over the whole screen (the app list, first-run setup): the frosted
+   wallpaper, dimmed, so the windows under them don't show. */
+:root[data-native-surface='chrome'] :is(.launcher, .welcome) {
+  background:
+    linear-gradient(rgba(6, 8, 14, 0.55), rgba(6, 8, 14, 0.55)),
+    var(--frost, none) center / cover no-repeat fixed,
+    var(--bg) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-native-surface='chrome'] .welcome-card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* First-run setup on the screen: words rise without the blur (a blurred,
+   moving line leaves smudges behind when the screen is drawn in software),
+   and the logo's glow stays still instead of re-blurring every frame. */
+:root[data-native-surface] :is(.wiz-word, .wiz-intro-sub) { animation-name: wiz-rise; }
+:root[data-native-surface] .wiz-logo-stage::before { animation: none; }

@@ -157,10 +157,16 @@
 .wiz-intro-title, .wiz-finish h1 { margin: 0; font-size: clamp(28px, 5vw, 42px); font-weight: 750; letter-spacing: -0.035em; line-height: 1.1; }
 .wiz-word { display: inline-block; animation: wiz-word 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(0.55s + var(--i) * 0.09s); }
 @keyframes wiz-word { from { opacity: 0; transform: translateY(14px); filter: blur(4px); } }
+/* The same rise without the blur, for the buttons: a blurred, moving
+   control leaves smudges behind on screens drawn in software. */
+@keyframes wiz-rise { from { opacity: 0; transform: translateY(14px); } }
 .wiz-intro-sub, .wiz-finish p { margin: 0; max-width: 480px; color: var(--muted); font-size: 15px; line-height: 1.5; }
 .wiz-intro-sub { animation: wiz-word 0.6s ease-out 0.95s both; }
-.wiz-intro-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 8px; animation: wiz-word 0.6s ease-out 1.1s both; }
-.wiz-go { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; border-radius: 999px; font-weight: 650; box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 40%, transparent); }
+.wiz-intro-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 8px; animation: wiz-rise 0.6s ease-out 1.1s both; }
+/* A tight accent glow that stays around the button: a wide, soft one spilled
+   over the button below it and came out banded on software-drawn screens. */
+.wiz-go { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; border-radius: 999px; font-weight: 650;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* ---- choices (voice) ---- */
 .wiz-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
