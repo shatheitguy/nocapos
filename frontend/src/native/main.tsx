@@ -9,6 +9,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { startBridge } from '../deskshell/bridge';
 import '../styles/all';
 import './native.css';
+import { startFrost } from './frost';
 import { hostCall, nativeSurface } from './platform';
 
 startBridge(); // window.__nocap must exist before the host talks to the page
@@ -26,6 +27,7 @@ async function start() {
     root.render(<View />);
     return;
   }
+  if (surface === 'app' || surface === 'chrome') startFrost();
   root.render(
     <StrictMode>
       <ErrorBoundary title="NoCapOS" fallback="screen">

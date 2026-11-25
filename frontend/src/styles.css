@@ -79,9 +79,10 @@ body {
   background: var(--bg);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
   user-select: none;
 }
-input, textarea, .log-view, .kv dd, .mono { user-select: text; }
+input, textarea, .log-view, .kv dd, .mono { -webkit-user-select: text; user-select: text; }
 h1, h2, h3 { margin: 0 0 6px; font-weight: 650; letter-spacing: -0.01em; }
 h1 { font-size: 22px; }
 h2 { font-size: 18px; }
@@ -370,7 +371,26 @@ button.widget:active { transform: none; }
 }
 .win-buttons button:hover:not(:disabled) { background: var(--surface-3); color: var(--text); filter: none; }
 .win-buttons button.close:hover:not(:disabled) { background: #e5484d; color: #fff; }
-.window-body { flex: 1; min-height: 0; overflow: auto; position: relative; user-select: text; }
+.window-body { flex: 1; min-height: 0; overflow: auto; position: relative; -webkit-user-select: text; user-select: text; }
+/* An app's own chrome is not text: its sidebar, title rows, toolbars, tabs,
+   buttons, labels and empty or loading notes don't get selected (and then
+   dragged around as a picture of the text) when someone presses on them to
+   move a window or a dialog. What the app shows as content (notes, editors,
+   fields, the terminal, logs, details) stays selectable. */
+.window-body :is(button, label, nav, aside, menu, header, footer, h1, h2, h3, h4, legend, summary, img, svg,
+  [role='toolbar'], [role='tablist'], [role='tab'], [role='menu'], [role='menubar'], [role='radiogroup'], [role='switch'],
+  .sidebar, .toolbar, .modal-head, .modal-foot, .segmented, .chip, .badge, .empty, .spinner,
+  [class*='-head'], [class*='-nav'], [class*='-side'], [class*='-tabs'], [class*='-toolbar'], [class*='-crumbs'], [class*='-empty'], [class*='-loading']) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Nothing in the chrome starts a drag of its own: no ghost of a label or an
+   icon follows the pointer (things made to be dragged say draggable). */
+.window-body :is(a, img, svg, button, label, header, nav, aside):not([draggable='true']) { -webkit-user-drag: none; }
+.window-body :is(input, textarea, [contenteditable]:not([contenteditable='false'])) {
+  -webkit-user-select: text;
+  user-select: text;
+}
 
 .resize { position: absolute; z-index: 2; touch-action: none; }
 .resize-n, .resize-s { left: 8px; right: 8px; height: 6px; cursor: ns-resize; }

@@ -42,7 +42,7 @@
 button.ug-add {
   flex: none; padding: 10px 16px; border-radius: 99px; font-size: 13.5px;
   background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 72%, #ff8a3d));
-  color: #fff; box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 35%, transparent);
+  color: #fff; box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 /* ---------- toolbar: tabs, search, filters ---------- */
