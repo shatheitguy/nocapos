@@ -6,7 +6,18 @@ import { useEffect } from 'react';
 import { APPS, winTitle } from '../apps/meta';
 import { Window } from '../shell/Window';
 import { followPrefs, usePrefs } from '../state/prefs';
-import { connect, disconnect } from '../api/socket';
+import { api } from '../api/client';
+import { connect, disconnect, onSocketStatus, subscribe } from '../api/socket';
+import type { Snapshot, SystemInfo } from '../api/types';
+import { ConfirmHost } from '../components/ConfirmHost';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { PowerOverlay } from '../shell/PowerOverlay';
+import { Toasts } from '../shell/Toasts';
+import { useSystem } from '../state/system';
+import { watchNotes } from '../apps/notes/notesStore';
+import { watchStoreApps } from '../state/storeApps';
+import { watchNativeApps } from '../state/nativeApps';
+import { DragGhost } from '../shell/DragGhost';
 import { useWM } from '../state/windows';
 import { hostOn, hostSend } from './platform';
 
@@ -84,16 +95,41 @@ export function NativeAppWindow() {
 
   // Settings changed in another window (Settings itself, say) show here
   // straight away: alfad's live feed says when to load them again.
+  // Like the desktop: the machine's details and live metrics (Settings shows
+  // the name, version and uptime; widgets and charts use the metrics).
   useEffect(() => {
     if (!meta) return;
     void connect();
     const offPrefs = followPrefs();
+    const sys = useSystem.getState();
+    void api<SystemInfo>('/api/v1/system/info').then((r) => r.ok && sys.setInfo(r.data));
+    void api<Snapshot>('/api/v1/system/metrics').then((r) => r.ok && sys.push(r.data));
+    const offStatus = onSocketStatus(sys.setOnline);
+    const offMetrics = subscribe('system.metrics', (d) => sys.push(d as Snapshot));
+    // The shared stores the desktop keeps in step: notes, App Store apps,
+    // the machine's own apps.
+    const offWatch = [watchNotes(), watchStoreApps(), watchNativeApps()];
     return () => {
+      offWatch.forEach((f) => f?.());
+      offMetrics();
+      offStatus();
       offPrefs();
       disconnect();
     };
   }, [meta]);
 
   if (!meta) return null;
-  return <Window id={NATIVE_WINDOW_ID} compact={false} />;
+  // The questions an app asks ("Restart this machine?"), its messages and the
+  // restart/shut down screen show in the app's own window.
+  return (
+    <>
+      <Window id={NATIVE_WINDOW_ID} compact={false} />
+      <DragGhost />
+      <ConfirmHost />
+      <PowerOverlay />
+      <ErrorBoundary title="Toasts" fallback="hidden">
+        <Toasts />
+      </ErrorBoundary>
+    </>
+  );
 }
