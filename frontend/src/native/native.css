@@ -81,7 +81,7 @@ html[data-native-surface='chrome'] .menubar-hot { height: 3px; }
 :root[data-native-surface] .nt-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* The chrome covers the whole screen, so its panels show the part of the
    wallpaper that is really behind them (fixed, like the wallpaper). */
-:root[data-native-surface='chrome'] :is(.dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x, .launcher-panel) {
+:root[data-native-surface='chrome'] :is(.dock, .tray, .toast, .update-ready, .spotlight, .context-menu, .popover, .dialog, .nb, .nc.windows, .nc-card.mac, .nc-peek, .nc-none, .nc-pill, .nc-round, .nb-x) {
   --frost-veil: color-mix(in srgb, var(--tint) var(--a, 100%), transparent);
   background:
     linear-gradient(var(--frost-veil), var(--frost-veil)),
@@ -91,10 +91,12 @@ html[data-native-surface='chrome'] .menubar-hot { height: 3px; }
   -webkit-backdrop-filter: none !important;
 }
 /* Sheets over the whole screen (the app list, first-run setup): the frosted
-   wallpaper, dimmed, so the windows under them don't show. */
+   wallpaper under the same dim as in the browser, so the windows under
+   them don't show. The app list's panel has no box of its own, as in the
+   browser: its icons sit right on the sheet. */
 :root[data-native-surface='chrome'] :is(.launcher, .welcome) {
   background:
-    linear-gradient(rgba(6, 8, 14, 0.55), rgba(6, 8, 14, 0.55)),
+    linear-gradient(rgba(8, 12, 24, 0.35), rgba(8, 12, 24, 0.35)),
     var(--frost, none) center / cover no-repeat fixed,
     var(--bg) !important;
   backdrop-filter: none;
