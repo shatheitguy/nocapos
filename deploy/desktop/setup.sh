@@ -218,6 +218,9 @@ desk_install_shell() {
   install -m 0755 "$DESK_SRC/labwc/autostart" "$SHELL_CONF/autostart"
   install -m 0644 "$DESK_SRC/greeter/rc.xml" "$DESK_SRC/labwc/environment" "$GREETER_CONF/"
   install -m 0644 "$DESK_SRC/theme/openbox-3/themerc" /usr/share/themes/NoCap/openbox-3/themerc
+  # The title bar buttons: NoCap OS's own minimize / maximize / restore /
+  # close glyphs (frontend Icon.tsx), close red under the pointer.
+  install -m 0644 "$DESK_SRC"/theme/openbox-3/*.svg /usr/share/themes/NoCap/openbox-3/
 }
 
 # desk_session_files FAMILY: the session's services, its entry for tools
@@ -449,6 +452,41 @@ desk_hide_updaters() {
   return 0
 }
 
+# desk_app_windows: other apps' windows get NoCap's title bar and buttons.
+# Firefox draws its tabs in a title bar of its own unless told otherwise:
+# a default (not locked) policy turns its system title bar on, so NoCap
+# Desktop draws minimize / maximize / close the NoCap way. Apps that always
+# draw their own title bar show all three buttons (not just close). A file
+# is only written where there's none, or where it's ours (DESK_APPWIN_MARK).
+DESK_APPWIN_MARK=/var/lib/nocapos/app-windows
+FIREFOX_POLICY='{"policies":{"Preferences":{"browser.tabs.inTitlebar":{"Value":0,"Status":"default"}}}}'
+GTK_BUTTONS='# NoCap Desktop: every window shows minimize, maximize and close (written by NoCapOS).
+[Settings]
+gtk-decoration-layout=icon:minimize,maximize,close'
+desk_flatpak_arch() {
+  case "$(uname -m)" in
+    x86_64) echo x86_64 ;; aarch64) echo aarch64 ;; armv7* | armhf) echo arm ;; *) return 1 ;;
+  esac
+}
+desk_own_file() { # $1 = path, $2 = content: writes it when it's absent or ours
+  local f="$1"
+  if [ -e "$f" ] && ! grep -qxF "$f" "$DESK_APPWIN_MARK" 2>/dev/null; then return 0; fi
+  mkdir -p "$(dirname "$f")" "$(dirname "$DESK_APPWIN_MARK")"
+  printf '%s\n' "$2" >"$f.nocap.tmp" && chmod 0644 "$f.nocap.tmp" && mv -f "$f.nocap.tmp" "$f"
+  grep -qxF "$f" "$DESK_APPWIN_MARK" 2>/dev/null || echo "$f" >>"$DESK_APPWIN_MARK"
+}
+desk_app_windows() {
+  local arch
+  desk_own_file /etc/firefox/policies/policies.json "$FIREFOX_POLICY"
+  desk_own_file /etc/firefox-esr/policies/policies.json "$FIREFOX_POLICY"
+  if arch="$(desk_flatpak_arch)"; then
+    desk_own_file "/var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/$arch/stable/policies/policies.json" "$FIREFOX_POLICY"
+  fi
+  desk_own_file /etc/gtk-3.0/settings.ini "$GTK_BUTTONS"
+  desk_own_file /etc/gtk-4.0/settings.ini "$GTK_BUTTONS"
+  return 0
+}
+
 # Identity: the machine's pretty name and, on apt systems installed from a
 # plain distribution, /etc/os-release (the About page).
 desk_identity() {
@@ -660,6 +698,7 @@ install_full_desktop() {
   desk_clipboard
   desk_units
   desk_hide_updaters
+  desk_app_windows
   desk_identity
   desk_take_display_manager
   desk_greetd "$family" || return 1
