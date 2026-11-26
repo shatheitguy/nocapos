@@ -135,10 +135,18 @@ dpkg -s cowsay >/dev/null 2>&1 || fail "cowsay should be installed"
 dpkg --purge nocap-test-postinst2 >/dev/null 2>&1 || true
 
 echo "== a package tool holding the lock"
-cp "$(command -v sleep)" "$W/dpkg"
-"$W/dpkg" 3 &
+flock /var/lib/dpkg/lock-frontend sleep 3 &
+sleep 0.5
 APT_LOCK_POLL=1 helpers 'apt_wait_lock && echo FREE'
-expect "$W/out" "Waiting for another package tool to finish (dpkg pid" "apt is free again" FREE
+expect "$W/out" "Waiting for another package tool to finish (" "pid" "apt is free again" FREE
+wait
+
+echo "== a lock file that is only open is not a busy package tool"
+# (Debian's shutdown helper for automatic updates keeps one open all the time.)
+sleep 3 </var/lib/dpkg/lock-frontend &
+APT_LOCK_POLL=1 helpers 'apt_wait_lock && echo FREE'
+expect "$W/out" FREE
+reject "$W/out" "Waiting for another package tool"
 wait
 
 if [ "$FAILS" -gt 0 ]; then
