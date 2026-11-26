@@ -14,13 +14,14 @@ import { startFrost } from './frost';
 import { startVersionWatch } from './versionWatch';
 import { startWmStyle } from './wmStyle';
 import { preloadApp } from '../apps/components';
-import { hostCall, nativeSurface, softwareRendering } from './platform';
+import { compositorBlur, hostCall, nativeSurface, softwareRendering } from './platform';
 
 startBridge(); // window.__nocap must exist before the host talks to the page
 
 const surface = nativeSurface();
 document.documentElement.dataset.nativeSurface = surface ?? 'none';
 if (softwareRendering()) document.documentElement.dataset.render = 'software';
+if (compositorBlur()) document.documentElement.dataset.blur = 'compositor';
 // An app's window: its code loads while the window signs in.
 if (surface === 'app') preloadApp(new URLSearchParams(location.search).get('app') ?? '');
 
