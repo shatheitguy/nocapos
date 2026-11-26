@@ -187,9 +187,10 @@ func newFakeSys(t *testing.T) *fakeSys {
 	}
 	lock := filepath.Join(f.dir, "dpkg-lock")
 	f.write("dpkg-lock", "")
+	f.write("proc-locks", "") // the kernel's lock table: nobody holds a lock
 	f.env = append(os.Environ(),
 		"PATH="+f.bin+string(os.PathListSeparator)+os.Getenv("PATH"),
-		"FAKE="+f.dir, "APT_LOCKS="+lock, "APT_LOCK_POLL=1", "APT_LOCK_TIMEOUT=30",
+		"FAKE="+f.dir, "APT_LOCKS="+lock, "APT_PROC_LOCKS="+filepath.Join(f.dir, "proc-locks"), "APT_LOCK_POLL=1", "APT_LOCK_TIMEOUT=30",
 		"NOCAP_TTY=/nonexistent-tty")
 	return f
 }
@@ -256,22 +257,42 @@ func mustNotContain(t *testing.T, out string, bad ...string) {
 	}
 }
 
+// holdLock: a script line that makes a live process (sleep) the holder of
+// apt's lock in the fake lock table; $h is its pid.
+const holdLock = `sleep 30 & h=$!; echo "1: POSIX  ADVISORY  WRITE $h $(apt_lock_key "$APT_LOCKS") 0 EOF" >"$FAKE/proc-locks"; `
+
 func TestAptWaitsForTheLock(t *testing.T) {
 	f := newFakeSys(t)
+	// A lock file some process merely has open (what fuser reports) isn't a
+	// held lock: no wait (this made every update wait ten minutes).
+	f.write("lock", "forever")
+	out, _ := f.run(`apt_wait_lock && echo FREE`)
+	mustNotContain(t, out, "Waiting")
+	mustContain(t, out, "FREE")
+
+	// Held by a live process: waits, and gives up at the timeout.
+	out, _ = f.run(holdLock+`apt_wait_lock || echo GAVE-UP; kill $h`, "APT_LOCK_TIMEOUT=2")
+	mustContain(t, out, "Waiting for another package tool to finish (", "apt is still busy after 2 seconds", "GAVE-UP")
+
+	// Released while waiting: carries on.
+	out, err := f.run(holdLock + `(sleep 2; kill $h) & apt_wait_lock && echo FREE`)
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	mustContain(t, out, "Waiting for another package tool", "apt is free again", "FREE")
+
+	// A lock left in the table by a process that's gone doesn't count.
+	out, _ = f.run(holdLock + `kill $h; wait $h 2>/dev/null; apt_wait_lock && echo FREE`)
+	mustNotContain(t, out, "Waiting")
+	mustContain(t, out, "FREE")
+
+	// No lock table: the processes that have a lock file open (fuser).
 	f.write("lock", "2")
-	out, err := f.run(`apt_wait_lock && echo FREE`)
+	out, err = f.run(`apt_wait_lock && echo FREE`, "APT_PROC_LOCKS=/nonexistent")
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
 	mustContain(t, out, "Waiting for another package tool to finish (pid 4242", "apt is free again", "FREE")
-
-	f.write("lock", "forever")
-	out, _ = f.run(`apt_wait_lock || echo GAVE-UP`, "APT_LOCK_TIMEOUT=2")
-	mustContain(t, out, "apt is still busy after 2 seconds", "GAVE-UP")
-
-	f.write("lock", "0")
-	out, _ = f.run(`apt_wait_lock && echo FREE`)
-	mustNotContain(t, out, "Waiting")
 }
 
 func TestAptUpdateFailureIsReported(t *testing.T) {

@@ -290,8 +290,39 @@ pkg_reason() {
 }
 
 # apt_lock_holder: prints what holds an apt/dpkg lock; fails when nothing does.
+# apt_lock_key FILE: the file as /proc/locks names it (MAJ:MIN:INODE, the
+# device numbers in hex).
+apt_lock_key() {
+  local st
+  st="$(stat -c '%Hd %Ld %i' "$1" 2>/dev/null)" || return 1
+  # shellcheck disable=SC2086 # three numbers
+  printf '%02x:%02x:%s' $st
+}
+
+# apt_lock_holder: who holds one of apt's locks right now ("name pid N"),
+# failing when nobody does. A lock counts only while a process really holds
+# it (the kernel's lock table): a file that's merely open isn't one (Debian's
+# shutdown helper for automatic updates keeps one open all the time, and
+# counting that made every update wait its full ten minutes).
+APT_PROC_LOCKS="${APT_PROC_LOCKS:-/proc/locks}"
 apt_lock_holder() {
-  local f pids names
+  local f key pid pids="" names
+  if [ -r "$APT_PROC_LOCKS" ]; then
+    for f in $APT_LOCKS; do
+      [ -e "$f" ] || continue
+      key="$(apt_lock_key "$f")" || continue
+      for pid in $(awk -v k="$key" '{ for (i = 1; i <= NF; i++) if ($i == k) { print $5; next } }' "$APT_PROC_LOCKS" 2>/dev/null); do
+        [ "$pid" -gt 0 ] 2>/dev/null && kill -0 "$pid" 2>/dev/null && pids="$pids $pid"
+      done
+      [ -z "$pids" ] || break
+    done
+    [ -n "$pids" ] || return 1
+    pids="$(echo $pids)"
+    names="$(ps -o comm= -p "${pids// /,}" 2>/dev/null | sort -u | tr '\n' ' ' || true)"
+    echo "${names}pid $pids"
+    return 0
+  fi
+  # No lock table: the processes that have a lock file open.
   if has fuser; then
     for f in $APT_LOCKS; do
       [ -e "$f" ] || continue
@@ -304,7 +335,7 @@ apt_lock_holder() {
     done
     return 1
   fi
-  # No fuser (psmisc): look for the package tools themselves.
+  # Neither: look for the package tools themselves.
   local d c found=""
   for d in /proc/[0-9]*; do
     c="$(cat "$d/comm" 2>/dev/null || true)"
