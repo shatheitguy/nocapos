@@ -1,3 +1,4 @@
+import { isNative } from '../native/platform';
 import { tr } from '../i18n';
 import { create } from 'zustand';
 import { fetchNativeIcon, nativeApi, type NativeApp, type NativeJob, type NativeStatus } from '../api/nativeApps';
@@ -69,7 +70,8 @@ export async function launchNativeApp(app: Pick<NativeApp, 'id' | 'name'>) {
     return;
   }
   if (r.data.where === 'screen') {
-    toast('success', "Opened on the server's screen", `${app.name} is up on the monitor plugged into this server.`);
+    // On NoCap Desktop that screen is this one: the app's window is the answer.
+    if (!isNative()) toast('success', "Opened on the server's screen", `${app.name} is up on the monitor plugged into this server.`);
     return;
   }
   openApp('nativeapp', {

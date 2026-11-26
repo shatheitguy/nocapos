@@ -29,6 +29,15 @@ func TestShellSocketNeedsTheShellProgram(t *testing.T) {
 		if !shellProgramAllowed(p) {
 			t.Errorf("%s isn't allowed", p)
 		}
+		// The screen's session still running it after an update replaced it.
+		if !shellProgramAllowed(p + " (deleted)") {
+			t.Errorf("%s (deleted) isn't allowed", p)
+		}
+	}
+	for _, p := range []string{"/usr/bin/python3", "/tmp/nocap-shell", "/tmp/nocap-shell (deleted)", " (deleted)", ""} {
+		if shellProgramAllowed(p) {
+			t.Errorf("%q is allowed", p)
+		}
 	}
 }
 

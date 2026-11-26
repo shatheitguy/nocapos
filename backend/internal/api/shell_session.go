@@ -47,6 +47,12 @@ func shellPeerFrom(ctx context.Context) (shellPeer, bool) {
 }
 
 func shellProgramAllowed(exe string) bool {
+	// An update replaces nocap-shell while the screen's session keeps
+	// running it: the kernel then names the running program
+	// "<path> (deleted)". It's still NoCapOS's own program (only root can
+	// write where it lives), and refusing it left the desktop signed out
+	// after every update: apps wouldn't open and new ones never showed up.
+	exe = strings.TrimSuffix(exe, " (deleted)")
 	for _, p := range ShellPrograms {
 		if exe == p {
 			return true
