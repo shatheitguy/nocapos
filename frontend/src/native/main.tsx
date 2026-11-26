@@ -11,6 +11,8 @@ import '../styles/all';
 import './native.css';
 import './perf.css';
 import { startFrost } from './frost';
+import { startVersionWatch } from './versionWatch';
+import { startWmStyle } from './wmStyle';
 import { preloadApp } from '../apps/components';
 import { hostCall, nativeSurface, softwareRendering } from './platform';
 
@@ -33,6 +35,9 @@ async function start() {
     return;
   }
   if (surface === 'app' || surface === 'chrome') startFrost();
+  // The desktop and the chrome keep running across updates: they follow a new version by themselves.
+  if (surface === 'desktop' || surface === 'chrome') startVersionWatch();
+  if (surface === 'chrome') startWmStyle();
   root.render(
     <StrictMode>
       <ErrorBoundary title="NoCapOS" fallback="screen">

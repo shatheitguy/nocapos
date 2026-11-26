@@ -1,19 +1,19 @@
 # NoCap: window decorations for NoCap Desktop (labwc), matching NoCap OS's
 # own window chrome: dark title bars, the app's title on the left,
-# minimize / maximize / close on the right, NoCap red for the close button
-# and for focus. Written by NoCapOS; replaced on updates.
+# minimize / maximize / close on the right as round glass buttons (close
+# turns red under the pointer), NoCap red for focus. Written by NoCapOS; replaced on updates.
 
 border.width: 1
-padding.width: 10
-padding.height: 11
+padding.width: 14
+padding.height: 14
 corner.radius: 10
 
 window.active.border.color: #2a2d36
 window.inactive.border.color: #1c1e25
 window.active.indicator.toggled-keybind.color: #e5383b
 
-window.active.title.bg.color: #16181e
-window.inactive.title.bg.color: #101217
+window.active.title.bg.color: #18191e
+window.inactive.title.bg.color: #141519
 window.active.label.text.color: #f2f3f5
 window.inactive.label.text.color: #7c8190
 window.label.text.justify: left
@@ -24,8 +24,8 @@ window.active.button.hover.image.color: #ffffff
 window.active.button.close.unpressed.image.color: #ff6b6e
 window.inactive.button.close.unpressed.image.color: #5d6270
 window.active.button.close.hover.image.color: #ffffff
-window.button.width: 30
-window.button.spacing: 4
+window.button.width: 28
+window.button.spacing: 6
 window.button.hover.bg.corner-radius: 8
 
 window.active.shadow.size: 28

@@ -30,6 +30,10 @@ if ! command -v labwc >/dev/null 2>&1 && [ -x "$LIB/labwc" ]; then LABWC="$LIB/l
 
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/nocapos"
 mkdir -p "$STATE" 2>/dev/null
+# This person's window settings: NoCap Desktop's, with the title bar
+# following Settings → title buttons (nocap-wm-style). The shared ones if
+# that fails.
+if "$LIB/nocap-wm-style" >/dev/null 2>&1 && [ -f "$STATE/labwc/rc.xml" ]; then CONF="$STATE/labwc"; fi
 LOG="$STATE/session.log"
 [ -f "$LOG" ] && [ "$(wc -c <"$LOG" 2>/dev/null || echo 0)" -gt 1048576 ] && mv -f "$LOG" "$LOG.old"
 

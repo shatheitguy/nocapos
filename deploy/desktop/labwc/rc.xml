@@ -27,8 +27,8 @@
     <cornerRadius>10</cornerRadius>
     <keepBorder>yes</keepBorder>
     <dropShadows>yes</dropShadows>
-    <font place="ActiveWindow"><name>sans</name><size>10</size><weight>bold</weight></font>
-    <font place="InactiveWindow"><name>sans</name><size>10</size><weight>bold</weight></font>
+    <font place="ActiveWindow"><name>sans</name><size>11</size><weight>bold</weight></font>
+    <font place="InactiveWindow"><name>sans</name><size>11</size><weight>bold</weight></font>
     <font place="MenuItem"><name>sans</name><size>10</size></font>
     <font place="OnScreenDisplay"><name>sans</name><size>10</size></font>
   </theme>

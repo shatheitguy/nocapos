@@ -65,7 +65,7 @@ fi
 # NoCap Shell: its programs, the session's services, the lock screen's
 # password check, the portal choice, the window decorations, the sign-in
 # service's start order and the software rendering switch.
-rm -rf /usr/libexec/nocapos /usr/local/lib/nocapos/shell /usr/share/themes/NoCap
+rm -rf /usr/libexec/nocapos /usr/local/lib/nocapos/shell /usr/share/themes/NoCap /usr/share/themes/NoCap-Dots
 # Other apps' title bar settings NoCapOS wrote (setup.sh desk_app_windows).
 if [ -f /var/lib/nocapos/app-windows ]; then
   while IFS= read -r f; do case "$f" in /etc/* | /var/lib/flatpak/extension/*) rm -f "$f" ;; esac; done </var/lib/nocapos/app-windows
