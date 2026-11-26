@@ -5,8 +5,7 @@
 
 border.width: 1
 padding.width: 10
-padding.height: 9
-titlebar.height: 36
+padding.height: 11
 corner.radius: 10
 
 window.active.border.color: #2a2d36

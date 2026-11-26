@@ -93,9 +93,14 @@ func TestDesktopOnLinksTheDisplayManager(t *testing.T) {
 	if regexp.MustCompile(`apt-get (remove|purge)[^\n]*(gdm|gnome)`).MatchString(setup) {
 		t.Error("setup.sh removes the earlier desktop's packages")
 	}
-	// No third-party default apps or browser.
+	// No third-party default apps or browser. (desk_app_windows only gives a
+	// browser the person installed NoCap's title bar; it installs nothing.)
+	installs := regexp.MustCompile(`(?s)FIREFOX_POLICY=[^\n]*\n|desk_app_windows\(\) \{.*?\n\}\n`).ReplaceAllString(setup, "")
+	if regexp.MustCompile(`(?m)^\s*(pkg_install|apt-get install|flatpak install)[^\n]*firefox`).MatchString(setup) {
+		t.Error("setup.sh installs a browser")
+	}
 	for _, never := range []string{"desk_install_browser", "firefox", "thunar", "mousepad"} {
-		if strings.Contains(setup, never) {
+		if strings.Contains(installs, never) {
 			t.Errorf("setup.sh still has %q", never)
 		}
 	}

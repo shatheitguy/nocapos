@@ -52,7 +52,12 @@ MDNS_NAME=nocap
 DESKTOP=auto
 ARGS=("$@")
 
-info() { printf '\033[1;31m==>\033[0m %s\n' "$*"; }
+# During a Glow Up update every step also says when it started (seconds into
+# the run), so the update log shows which step takes the time.
+info() {
+  [ -z "${NOCAP_UPDATER:-}" ] || printf '  (%ss)\n' "$SECONDS"
+  printf '\033[1;31m==>\033[0m %s\n' "$*"
+}
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 has() { command -v "$1" >/dev/null 2>&1; }

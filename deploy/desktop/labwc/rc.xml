@@ -35,8 +35,7 @@
 
   <windowSwitcher show="yes" preview="yes" outlines="yes" allWorkspaces="no">
     <fields>
-      <field content="icon" width="5%" />
-      <field content="title" width="95%" />
+      <field content="title" width="100%" />
     </fields>
   </windowSwitcher>
 
