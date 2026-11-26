@@ -200,7 +200,7 @@ desk_install_shell() {
     done
   fi
   [ -z "$built" ] || rm -rf "$built"
-  for f in nocap-session nocap-greeter-session nocap-lock-start nocap-open; do
+  for f in nocap-session nocap-greeter-session nocap-lock-start nocap-open nocap-wm-style; do
     install -m 0755 "$DESK_SRC/session/$f" "$SHELL_LIB/$f"
   done
   # The pages: local files only (the host refuses anything else).
@@ -213,7 +213,7 @@ desk_install_shell() {
   mv "$SHELL_UI.new" "$SHELL_UI"
   # labwc: NoCap Desktop's settings for sessions and for the sign-in screen,
   # and the window decorations.
-  mkdir -p "$SHELL_CONF" "$GREETER_CONF" /usr/share/themes/NoCap/openbox-3
+  mkdir -p "$SHELL_CONF" "$GREETER_CONF" /usr/share/themes/NoCap/openbox-3 /usr/share/themes/NoCap-Dots/openbox-3
   install -m 0644 "$DESK_SRC/labwc/rc.xml" "$DESK_SRC/labwc/menu.xml" "$DESK_SRC/labwc/environment" "$SHELL_CONF/"
   install -m 0755 "$DESK_SRC/labwc/autostart" "$SHELL_CONF/autostart"
   install -m 0644 "$DESK_SRC/greeter/rc.xml" "$DESK_SRC/labwc/environment" "$GREETER_CONF/"
@@ -221,6 +221,8 @@ desk_install_shell() {
   # The title bar buttons: NoCap OS's own minimize / maximize / restore /
   # close glyphs (frontend Icon.tsx), close red under the pointer.
   install -m 0644 "$DESK_SRC"/theme/openbox-3/*.svg /usr/share/themes/NoCap/openbox-3/
+  # Title buttons on the left (Settings): coloured dots, the title centred.
+  install -m 0644 "$DESK_SRC"/theme/dots/openbox-3/themerc "$DESK_SRC"/theme/dots/openbox-3/*.svg /usr/share/themes/NoCap-Dots/openbox-3/
 }
 
 # desk_session_files FAMILY: the session's services, its entry for tools
@@ -708,8 +710,27 @@ install_full_desktop() {
     EXTRA_BOOT_TOKENS="${EXTRA_BOOT_TOKENS:-} nvidia-drm.modeset=1"
   fi
   desk_write_conf
+  desk_reconfigure_sessions
   first_user_hint
   return 0
+}
+
+# desk_reconfigure_sessions: screens already running pick up the new window
+# settings and title bar theme now, not at the next sign-in (labwc reloads
+# them on SIGHUP). The pages follow by themselves (native/versionWatch.ts).
+desk_reconfigure_sessions() {
+  local pid user home
+  # Each person's own copy of the window settings (nocap-wm-style) first.
+  for pid in $(pgrep -x labwc 2>/dev/null); do
+    tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -q "$SHELL_CONF" || continue
+    user="$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')"
+    [ -n "$user" ] && [ "$user" != root ] || continue
+    home="$(getent passwd "$user" | cut -d: -f6)"
+    [ -d "$home" ] || continue
+    runuser -u "$user" -- env HOME="$home" "$SHELL_LIB/nocap-wm-style" >/dev/null 2>&1 || true
+  done
+  has pkill || return 0
+  pkill -HUP -x labwc >/dev/null 2>&1 || true
 }
 
 # desk_pi_kms: a Raspberry Pi gets its KMS graphics driver (the compositor

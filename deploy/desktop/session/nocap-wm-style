@@ -1,0 +1,42 @@
+#!/bin/sh
+# NoCap Desktop: the window title bars other apps get follow the person's
+# Settings → title buttons (written by NoCapOS to /usr/libexec/nocapos).
+#   nocap-wm-style            write this person's window settings (sign-in)
+#   nocap-wm-style left|right remember the choice, write them, and have the
+#                             running compositor pick them up
+# right: round glass buttons on the right (theme NoCap); left: coloured
+# dots on the left, title in the middle (theme NoCap-Dots).
+set -u
+CONF=/usr/share/nocapos/labwc
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/nocapos"
+OUT="$STATE/labwc"
+mkdir -p "$OUT" || exit 1
+
+live=0
+case "${1:-}" in
+  left | right) echo "$1" >"$STATE/title-buttons"; live=1 ;;
+  '') ;;
+  *) echo "usage: nocap-wm-style [left|right]" >&2; exit 2 ;;
+esac
+side="$(cat "$STATE/title-buttons" 2>/dev/null || echo right)"
+
+# Everything as NoCap Desktop ships it, except rc.xml's title bar.
+for f in "$CONF"/*; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in rc.xml) continue ;; esac
+  ln -sfn "$f" "$OUT/$(basename "$f")"
+done
+if [ "$side" = left ]; then
+  sed -e 's#<layout>[^<]*</layout>#<layout>close,iconify,max:</layout>#' \
+    -e 's#<name>NoCap</name>#<name>NoCap-Dots</name>#' "$CONF/rc.xml" >"$OUT/rc.xml.tmp"
+else
+  cp "$CONF/rc.xml" "$OUT/rc.xml.tmp"
+fi && mv -f "$OUT/rc.xml.tmp" "$OUT/rc.xml"
+
+# The running compositor reloads its settings and theme.
+if [ "$live" -eq 1 ]; then
+  if [ -n "${LABWC_PID:-}" ]; then kill -HUP "$LABWC_PID" 2>/dev/null || true
+  else pkill -HUP -u "$(id -u)" -x labwc 2>/dev/null || true
+  fi
+fi
+exit 0

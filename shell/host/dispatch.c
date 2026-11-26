@@ -172,6 +172,15 @@ dispatch_call(SurfaceId surface, BridgeCall *call)
   } else if (strcmp(m, "window.title") == 0) {
     app_window_title(bridge_param_str(call, "title"));
     shell_reply_ok(r, NULL);
+  } else if (strcmp(m, "wm.style") == 0) {
+    /* Other apps' title bars follow Settings: nocap-wm-style writes this
+     * person's window settings and has labwc reload them ("left" or
+     * "right", checked by the bridge). */
+    const char *argv[] = {"/usr/libexec/nocapos/nocap-wm-style", bridge_param_str(call, "buttons"), NULL};
+    if (spawn_detached(argv, &err))
+      shell_reply_ok(r, NULL);
+    else
+      reply_error(r, err, "couldn't change the title bars");
   } else if (strcmp(m, "files.pick") == 0) {
     picker_pick(surface, bridge_param_int(call, "request", 0), bridge_param_array(call, "paths"),
                 bridge_param_array(call, "urls"), bridge_param_array(call, "names"), r);

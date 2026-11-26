@@ -65,6 +65,8 @@ static const char *const WINDOW_ACTIONS[] = {"minimize", "maximize", "restore", 
                                              "fullscreen", "unfullscreen", NULL};
 static const char *const POWER_SESSION[] = {"lock", "logout", "suspend", "reboot", "poweroff", NULL};
 static const char *const POWER_GREETER[] = {"reboot", "poweroff", NULL};
+/* Settings → title buttons: where other apps' title bar buttons go. */
+static const char *const WM_BUTTONS[] = {"left", "right", NULL};
 
 static const ParamSpec P_NONE[] = {{NULL}};
 static const ParamSpec P_INPUT[] = {
@@ -95,6 +97,7 @@ static const ParamSpec P_AUDIO_SET[] = {
   {"volume", PT_INT, FALSE, 0, 150, NULL, 0, 0},
   {"muted", PT_BOOL, FALSE, 0, 0, NULL, 0, 0},
   {NULL}};
+static const ParamSpec P_WM_STYLE[] = {{"buttons", PT_STRING, TRUE, 1, 8, WM_BUTTONS, 0, 0}, {NULL}};
 static const ParamSpec P_BRIGHTNESS_SET[] = {{"percent", PT_INT, TRUE, 1, 100, NULL, 0, 0}, {NULL}};
 static const ParamSpec P_POWER[] = {{"action", PT_STRING, TRUE, 1, 16, POWER_SESSION, 0, 0}, {NULL}};
 static const ParamSpec P_POWER_GREETER[] = {
@@ -144,6 +147,7 @@ static const MethodSpec methods[] = {
   {"windows.maximize", S_CHROME, P_WINDOW},
   {"window.action", S_APP, P_WINDOW_ACTION},
   {"window.title", S_APP, P_WINDOW_TITLE},
+  {"wm.style", S_CHROME, P_WM_STYLE},
   {"files.pick", S_OS, P_FILES_PICK},
   {"files.cancel", S_OS, P_FILES_CANCEL},
   {"audio.get", S_CHROME, P_NONE},
