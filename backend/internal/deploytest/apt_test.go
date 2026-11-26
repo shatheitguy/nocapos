@@ -282,7 +282,7 @@ func TestAptWaitsForTheLock(t *testing.T) {
 	mustContain(t, out, "Waiting for another package tool", "apt is free again", "FREE")
 
 	// A lock left in the table by a process that's gone doesn't count.
-	out, _ = f.run(holdLock + `kill $h; wait $h 2>/dev/null; apt_wait_lock && echo FREE`)
+	out, _ = f.run(holdLock + `kill $h; wait $h 2>/dev/null || true; apt_wait_lock && echo FREE`)
 	mustNotContain(t, out, "Waiting")
 	mustContain(t, out, "FREE")
 
