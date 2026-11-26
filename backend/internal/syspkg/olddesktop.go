@@ -53,7 +53,7 @@ var OldDesktopPackages = []string{
 // nocapDesktopNeeds are packages NoCap Desktop runs on: never removed here,
 // whatever apt thinks.
 var nocapDesktopNeeds = map[string]bool{
-	"labwc": true, "greetd": true, "xwayland": true, "wayvnc": true, "swayidle": true,
+	"labwc": true, "wayfire": true, "greetd": true, "xwayland": true, "wayvnc": true, "swayidle": true,
 	"libgtk-3-0t64": true, "libgtk-3-0": true, "libgtk-layer-shell0": true, "libwebkit2gtk-4.1-0": true,
 	"libjson-glib-1.0-0": true, "libpolkit-agent-1-0": true, "libxkbcommon0": true, "libpam0g": true,
 	"polkitd": true, "policykit-1": true, "xdg-desktop-portal": true, "xdg-desktop-portal-wlr": true,

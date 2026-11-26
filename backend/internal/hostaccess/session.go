@@ -138,7 +138,7 @@ func (d *Desktop) ScreenSession(ctx context.Context) (Session, bool) {
 // sessionPrograms are the processes whose environment describes a NoCap
 // Desktop session: NoCap Shell (started with the session's Wayland display
 // and bus), then the compositor.
-var sessionPrograms = []string{"nocap-shell", "labwc"}
+var sessionPrograms = []string{"nocap-shell", "wayfire", "labwc"}
 
 // FindSessionEnv reads the environment of the session's own programs for
 // uid (the one whose XDG_SESSION_ID is sessionID when it says), from

@@ -58,6 +58,7 @@ desktop_package_list() {
     debian | ubuntu)
       cat <<'EOF2'
 labwc                                   # the compositor: windows, input, screens
+?wayfire                                # the compositor with real blur and animated windows, like the web OS (labwc runs where it can't)
 greetd                                  # the sign-in service (NoCap's sign-in screen runs in it)
 xwayland                                # apps that only speak X11 open in the session
 wayvnc                                  # "Open screen" in NoCapOS shows this screen in the browser
@@ -718,6 +719,7 @@ NOCAP_SESSION=nocapos
 SHELL_LIB=/usr/libexec/nocapos
 SHELL_UI=/usr/share/nocapos/shell
 SHELL_CONF=/usr/share/nocapos/labwc
+WAYFIRE_CONF_DIR=/usr/share/nocapos/wayfire # the compositor with blur and animations (labwc when it can't start)
 GREETER_CONF=/usr/share/nocapos/greeter/labwc
 GREETD_CONF=/etc/greetd/config.toml
 NOCAP_WALLPAPER=/usr/share/backgrounds/nocapos/tide.jpg

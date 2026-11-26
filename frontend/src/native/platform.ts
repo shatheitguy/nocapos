@@ -49,6 +49,14 @@ export function softwareRendering(): boolean {
   return isNative() && new URLSearchParams(location.search).get('render') === 'software';
 }
 
+/**
+ * NoCap Desktop on a compositor that blurs what's behind NoCap OS's windows
+ * (the host says so: blur=1): glass stays see-through, as in the browser.
+ */
+export function compositorBlur(): boolean {
+  return isNative() && !softwareRendering() && new URLSearchParams(location.search).get('blur') === '1';
+}
+
 /** For tests: pretend to be a surface (or a browser with null). */
 export function setNativeSurfaceForTest(s: NativeSurface | null) {
   surface = s;

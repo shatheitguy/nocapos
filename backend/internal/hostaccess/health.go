@@ -254,8 +254,8 @@ var journalHints = []struct {
 	{"seat", regexp.MustCompile(`(?i)libseat|could not (open|take) (seat|session)|failed to open seat|no seat`)},
 	{"greeter_crash", regexp.MustCompile(`(?i)greetd.*(error|failed)|nocap-greeter-session.*(failed|exited)|greeter.*(crash|exited|died)`)},
 	{"gave_up", regexp.MustCompile(`(?i)start request repeated too quickly|too many (restarts|failures)|giving up`)},
-	{"shell_crash", regexp.MustCompile(`(?i)(labwc|nocap-shell|WebKitWebProcess).*(segfault|segmentation fault|core dumped|aborted|dumped core|trap)|traps: (labwc|nocap-shell)`)},
-	{"memory", regexp.MustCompile(`(?i)out of memory|oom-kill|killed process \d+ \((labwc|nocap-shell|WebKitWebProces)`)},
+	{"shell_crash", regexp.MustCompile(`(?i)(labwc|wayfire|nocap-shell|WebKitWebProcess).*(segfault|segmentation fault|core dumped|aborted|dumped core|trap)|traps: (labwc|nocap-shell)`)},
+	{"memory", regexp.MustCompile(`(?i)out of memory|oom-kill|killed process \d+ \((labwc|wayfire|nocap-shell|WebKitWebProces)`)},
 }
 
 // JournalHints finds the known causes in journal text (codes, sorted).
@@ -433,7 +433,7 @@ func (d *Desktop) hardwareProven(now time.Time) bool {
 	return d.remove(d.fallbackPath()) == nil
 }
 
-// hardwareCompositor: a compositor (labwc) runs, drawing with the graphics
+// hardwareCompositor: a compositor (labwc or Wayfire) runs, drawing with the graphics
 // card (not started with WLR_RENDERER=pixman).
 func hardwareCompositor(procRoot string) bool {
 	entries, err := os.ReadDir(procRoot)
@@ -445,7 +445,7 @@ func hardwareCompositor(procRoot string) bool {
 			continue
 		}
 		b, err := os.ReadFile(filepath.Join(procRoot, e.Name(), "comm"))
-		if err != nil || strings.TrimSpace(string(b)) != "labwc" {
+		if c := strings.TrimSpace(string(b)); err != nil || (c != "labwc" && c != "wayfire") {
 			continue
 		}
 		env, err := os.ReadFile(filepath.Join(procRoot, e.Name(), "environ"))
@@ -543,7 +543,7 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	in.LinkedUnit = d.linkedUnit(ctx)
 	in.DefaultTarget = d.systemctl(ctx, "get-default")
 	in.DMActive = d.systemctl(ctx, "is-active", c.DMUnit)
-	in.ShellRunning = processRunning(d.procRoot(), "labwc")
+	in.ShellRunning = processRunning(d.procRoot(), "labwc") || processRunning(d.procRoot(), "wayfire")
 	in.HaveCompositor = d.haveCompositor()
 	in.HaveNocapShell = d.haveNocapShell()
 	in.HaveGreeter = d.haveGreeter()
@@ -570,7 +570,7 @@ func (d *Desktop) gather(ctx context.Context) HealthInputs {
 	}
 	d.hs.mu.Unlock()
 	if (in.DMActive == "failed" || in.NoShellFor >= ShellGrace) && in.Display {
-		in.Hints = JournalHints(d.journal(ctx, "-u", c.DMUnit, "-n", "300") + d.journal(ctx, "_COMM=labwc", "-n", "200"))
+		in.Hints = JournalHints(d.journal(ctx, "-u", c.DMUnit, "-n", "300") + d.journal(ctx, "_COMM=labwc", "-n", "200") + d.journal(ctx, "_COMM=wayfire", "-n", "200"))
 	}
 	return in
 }
@@ -986,7 +986,8 @@ func (d *Desktop) Diagnostics(ctx context.Context) string {
 		unit, orNone(in.LinkedUnit), orNone(in.DMActive), orNone(in.DefaultTarget), in.Display, in.ShellRunning)
 	section("NoCap Desktop health", hs.String())
 	logs := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "-u", unit, "-n", "300")
-	comp := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=labwc", "-n", "300")
+	comp := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=labwc", "-n", "300") +
+		run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=wayfire", "-n", "300")
 	shellLog := run("journalctl", "-b", "--no-pager", "-o", "short-monotonic", "_COMM=nocap-shell", "-n", "200")
 	if hints := JournalHints(logs + "\n" + comp + "\n" + shellLog); len(hints) > 0 {
 		section("Likely causes (from the journal)", strings.Join(hints, "\n"))
@@ -1021,7 +1022,7 @@ func (d *Desktop) Diagnostics(ctx context.Context) string {
 	}
 	section("Screens", strings.Join(screens, "\n"))
 	section("Kernel command line", file("/proc/cmdline", 0))
-	section("Versions", run("labwc", "--version")+run(ShellLibDir+"/nocap-shell", "--version"))
+	section("Versions", run("labwc", "--version")+run("wayfire", "--version")+run(ShellLibDir+"/nocap-shell", "--version"))
 	var parts []string
 	for _, p := range []string{sessionFilePath, sessionCmd, greeterCmd, ShellLibDir + "/nocap-shell", ShellLibDir + "/nocap-lock", ShellUIDir + "/shell.html"} {
 		state := "missing"

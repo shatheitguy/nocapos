@@ -217,6 +217,10 @@ desk_install_shell() {
   install -m 0644 "$DESK_SRC/labwc/rc.xml" "$DESK_SRC/labwc/menu.xml" "$DESK_SRC/labwc/environment" "$SHELL_CONF/"
   install -m 0755 "$DESK_SRC/labwc/autostart" "$SHELL_CONF/autostart"
   install -m 0644 "$DESK_SRC/greeter/rc.xml" "$DESK_SRC/labwc/environment" "$GREETER_CONF/"
+  # Wayfire: the same desktop with real blur behind NoCap OS's glass and
+  # animated windows (nocap-session uses it when it can start).
+  mkdir -p "$WAYFIRE_CONF_DIR"
+  install -m 0644 "$DESK_SRC/wayfire/wayfire.ini" "$WAYFIRE_CONF_DIR/"
   install -m 0644 "$DESK_SRC/theme/openbox-3/themerc" /usr/share/themes/NoCap/openbox-3/themerc
   # The title bar buttons: NoCap OS's own minimize / maximize / restore /
   # close glyphs (frontend Icon.tsx), close red under the pointer.

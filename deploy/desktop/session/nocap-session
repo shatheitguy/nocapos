@@ -1,12 +1,16 @@
 #!/bin/sh
 # NoCap Desktop: the session greetd starts for whoever signs in (installed
-# by NoCapOS to /usr/libexec/nocapos). labwc runs the windows with
-# NoCap Desktop's own settings (/usr/share/nocapos/labwc); its autostart
+# by NoCapOS to /usr/libexec/nocapos). Wayfire runs the windows with
+# NoCap Desktop's own settings (/usr/share/nocapos/wayfire): real blur behind
+# NoCap OS's glass and animated windows, like the web OS. Its autostart
 # brings up NoCap Shell.
 #
-# Safety net: when the compositor can't start on this graphics hardware (it
-# ends within a few seconds), it's started again with software rendering,
-# so the screen is never left black.
+# Safety net: when Wayfire can't start on this graphics hardware (it ends
+# within a few seconds), labwc runs the session instead
+# (/usr/share/nocapos/labwc), and when that can't either, labwc with
+# software rendering, so the screen is never left black. Software rendering
+# (/etc/nocapos/desktop-software-rendering) and an explicit choice of labwc
+# (/etc/nocapos/desktop-compositor) go straight to labwc.
 
 export XDG_CURRENT_DESKTOP=NoCap:wlroots
 export XDG_SESSION_DESKTOP=nocap
@@ -37,13 +41,17 @@ if "$LIB/nocap-wm-style" >/dev/null 2>&1 && [ -f "$STATE/labwc/rc.xml" ]; then C
 LOG="$STATE/session.log"
 [ -f "$LOG" ] && [ "$(wc -c <"$LOG" 2>/dev/null || echo 0)" -gt 1048576 ] && mv -f "$LOG" "$LOG.old"
 
+WAYFIRE_CONF=/usr/share/nocapos/wayfire/wayfire.ini
+
+# run COMPOSITOR ARGS...: the compositor until the session ends; fails when
+# it ended within a few seconds (it couldn't start).
 run() {
   start=$(date +%s)
-  echo "== $(date) starting $LABWC ${WLR_RENDERER:+(renderer $WLR_RENDERER)}" >>"$LOG"
+  echo "== $(date) starting $1 ${WLR_RENDERER:+(renderer $WLR_RENDERER)}" >>"$LOG"
   if [ -n "$DBUS_SESSION_BUS_ADDRESS" ] || [ -S "${XDG_RUNTIME_DIR:-/nonexistent}/bus" ]; then
-    "$LABWC" -C "$CONF" >>"$LOG" 2>&1
+    "$@" >>"$LOG" 2>&1
   else
-    dbus-run-session -- "$LABWC" -C "$CONF" >>"$LOG" 2>&1
+    dbus-run-session -- "$@" >>"$LOG" 2>&1
   fi
   code=$?
   end=$(date +%s)
@@ -55,10 +63,19 @@ run() {
 }
 
 if [ -f /etc/nocapos/desktop-software-rendering ]; then export WLR_RENDERER=pixman; fi
-run && exit 0
+# Wayfire draws with the graphics card only: not with software rendering.
+if [ "${WLR_RENDERER:-}" != pixman ] && [ "$(cat /etc/nocapos/desktop-compositor 2>/dev/null)" != labwc ] &&
+  command -v wayfire >/dev/null 2>&1 && [ -f "$WAYFIRE_CONF" ]; then
+  # NoCap Shell's pages hear the screen blurs (glass stays see-through).
+  export NOCAP_COMPOSITOR=wayfire
+  run wayfire -c "$WAYFIRE_CONF" && exit 0
+  echo "== Wayfire didn't start; NoCap Desktop runs on labwc" >>"$LOG"
+  unset NOCAP_COMPOSITOR
+fi
+run "$LABWC" -C "$CONF" && exit 0
 if [ "${WLR_RENDERER:-}" != pixman ]; then
   echo "== the compositor didn't start; trying software rendering" >>"$LOG"
   export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1
-  run && exit 0
+  run "$LABWC" -C "$CONF" && exit 0
 fi
 exit 1

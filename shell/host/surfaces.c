@@ -592,20 +592,32 @@ on_load_failed(WebKitWebView *v, WebKitLoadEvent ev, char *uri, GError *err, gpo
   return FALSE;
 }
 
+/* How the page should draw: "&render=software" when the processor paints
+ * it (fewer effects), "&blur=1" when the compositor blurs what's behind NoCap
+ * OS's windows (Wayfire, with the graphics card): then glass stays
+ * see-through, as in the browser, instead of frosted with the wallpaper. */
+static const char *
+render_query(void)
+{
+  if (soft_render)
+    return "&render=software";
+  if (g_strcmp0(g_getenv("NOCAP_COMPOSITOR"), "wayfire") == 0)
+    return "&blur=1";
+  return "";
+}
+
 static char *
 surface_uri(SurfaceId id)
 {
   if (id == SURF_APP) {
     char *app = g_uri_escape_string(shell.app_id ? shell.app_id : "", NULL, FALSE);
     char *props = g_uri_escape_string(shell.app_props ? shell.app_props : "", NULL, FALSE);
-    char *u = g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=app&app=%s&props=%s%s", app, props,
-                              soft_render ? "&render=software" : "");
+    char *u = g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=app&app=%s&props=%s%s", app, props, render_query());
     g_free(app);
     g_free(props);
     return u;
   }
-  return g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=%s%s", conf[id].name,
-                         soft_render ? "&render=software" : "");
+  return g_strdup_printf(SHELL_PAGE_PREFIX "shell.html?surface=%s%s", conf[id].name, render_query());
 }
 
 static gboolean
