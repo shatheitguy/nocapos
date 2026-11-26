@@ -33,6 +33,25 @@ else
   cp "$CONF/rc.xml" "$OUT/rc.xml.tmp"
 fi && mv -f "$OUT/rc.xml.tmp" "$OUT/rc.xml"
 
+# Apps that draw their own title bar (GTK, also from the App Store): the
+# same buttons, in the same order. Written where there's no file of the
+# person's own (ours start with "NoCap Desktop"); Flatpak apps may read them
+# (setup.sh lets them).
+GTK=/usr/share/nocapos/gtk
+own() { [ ! -e "$1" ] || head -c 200 "$1" 2>/dev/null | grep -q "NoCap Desktop"; }
+if [ "$side" = left ]; then layout="close,minimize,maximize:"; else layout="icon:minimize,maximize,close"; fi
+for v in gtk-3.0 gtk-4.0; do
+  d="${XDG_CONFIG_HOME:-$HOME/.config}/$v"
+  mkdir -p "$d" 2>/dev/null || continue
+  if [ -f "$GTK/$side.css" ] && own "$d/gtk.css"; then
+    cp "$GTK/$side.css" "$d/gtk.css.tmp" && mv -f "$d/gtk.css.tmp" "$d/gtk.css"
+  fi
+  if own "$d/settings.ini"; then
+    printf '# NoCap Desktop: window buttons follow Settings (written by NoCapOS).\n[Settings]\ngtk-decoration-layout=%s\n' "$layout" >"$d/settings.ini.tmp" &&
+      mv -f "$d/settings.ini.tmp" "$d/settings.ini"
+  fi
+done
+
 # The running compositor reloads its settings and theme.
 if [ "$live" -eq 1 ]; then
   if [ -n "${LABWC_PID:-}" ]; then kill -HUP "$LABWC_PID" 2>/dev/null || true

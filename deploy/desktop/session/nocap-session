@@ -16,7 +16,8 @@ export XDG_CURRENT_DESKTOP=NoCap:wlroots
 export XDG_SESSION_DESKTOP=nocap
 export XDG_SESSION_TYPE=wayland
 export MOZ_ENABLE_WAYLAND=1
-export QT_QPA_PLATFORM="wayland;xcb"
+# No QT_QPA_PLATFORM: Qt 6 apps pick Wayland by themselves, and apps that
+# refuse it (VLC 3 quits with "no suitable interface module") get X11.
 export GDK_BACKEND="wayland,x11"
 export _JAVA_AWT_WM_NONREPARENTING=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto

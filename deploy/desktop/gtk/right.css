@@ -1,0 +1,29 @@
+/* NoCap Desktop: window buttons like NoCap OS's own windows (written by NoCapOS; your own gtk.css is never replaced).
+   Round glass buttons on the right: minimize, maximize, close; close turns red under the pointer. */
+windowcontrols > button,
+headerbar button.titlebutton {
+  min-width: 28px;
+  min-height: 28px;
+  margin: 0 3px;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  box-shadow: none;
+  background: alpha(currentColor, 0.08);
+  color: alpha(currentColor, 0.75);
+}
+windowcontrols > button > image {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+}
+windowcontrols > button:hover,
+headerbar button.titlebutton:hover {
+  background: alpha(currentColor, 0.18);
+  color: currentColor;
+}
+windowcontrols > button.close:hover,
+headerbar button.titlebutton.close:hover {
+  background: #ff5f57;
+  color: #ffffff;
+}

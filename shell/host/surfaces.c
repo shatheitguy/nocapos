@@ -401,6 +401,18 @@ on_button_press(GtkWidget *w, GdkEventButton *ev, gpointer data)
   return FALSE;
 }
 
+/* The pointer left the chrome (onto a window under it): WebKit can keep
+ * the menu bar :hover after that, so a menu bar that slides away over a
+ * maximized window stayed down. The page hears it and lets the bar go. */
+static gboolean
+on_leave(GtkWidget *w, GdkEventCrossing *ev, gpointer data)
+{
+  Surface *s = data;
+  if (ev->mode == GDK_CROSSING_NORMAL && ev->detail != GDK_NOTIFY_INFERIOR)
+    shell_emit(SM(s->id), "pointer.left", json_node_new(JSON_NODE_NULL));
+  return FALSE;
+}
+
 static gboolean
 on_window_state(GtkWidget *w, GdkEventWindowState *ev, gpointer data)
 {
@@ -948,6 +960,8 @@ setup_view(Surface *s)
   g_signal_connect(s->view, "load-failed", G_CALLBACK(on_load_failed), s);
   g_signal_connect(s->view, "web-process-terminated", G_CALLBACK(on_web_process_terminated), s);
   g_signal_connect(s->view, "button-press-event", G_CALLBACK(on_button_press), s);
+  if (s->id == SURF_CHROME)
+    g_signal_connect(s->view, "leave-notify-event", G_CALLBACK(on_leave), s);
   gtk_container_add(GTK_CONTAINER(s->win), GTK_WIDGET(s->view));
   gtk_widget_show(GTK_WIDGET(s->view));
 
