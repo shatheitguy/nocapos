@@ -94,7 +94,7 @@ const menubarAuto = () => document.documentElement.hasAttribute('data-menubar-au
  * in use, the bar's whole box does, even while it is still sliding in.
  */
 function peekingBar(): DOMRect | null {
-  if (!menubarAuto()) return null;
+  if (!menubarAuto() || barAway()) return null;
   const bar = document.querySelector('.menubar');
   if (!bar) return null;
   const peek =
@@ -153,6 +153,31 @@ function updateZones(w: number, h: number) {
   }
 }
 
+// ---------- the menu bar letting go ----------
+// WebKit can keep the menu bar :hover (and a clicked button :focus-within)
+// after the pointer has left the chrome for a window under it, so a bar that
+// slides away over a maximized window stayed down. NoCap Shell says when the
+// pointer leaves (pointer.left): the bar goes away (data-bar-away, see
+// native.css) unless one of its menus is open, and comes back as soon as the
+// pointer is at the top again.
+
+const barAway = () => document.documentElement.hasAttribute('data-bar-away');
+
+/** The pointer left the chrome: let a sliding menu bar go. */
+export function letBarGo(doc: Document = document) {
+  const bar = doc.querySelector('.menubar');
+  if (!bar || bar.querySelector("[aria-expanded='true']")) return;
+  doc.documentElement.setAttribute('data-bar-away', '');
+  const focused = doc.activeElement;
+  if (focused instanceof HTMLElement && bar.contains(focused)) focused.blur();
+}
+
+/** The pointer is on the top strip or the bar again. */
+export function barBack(doc: Document, target: EventTarget | null) {
+  if (!doc.documentElement.hasAttribute('data-bar-away')) return;
+  if (target instanceof Element && target.closest('.menubar, .menubar-hot')) doc.documentElement.removeAttribute('data-bar-away');
+}
+
 /** Keeps the input region, keyboard and zones up to date until stopped. */
 export function watchChromeRegion(): () => void {
   let timer = 0;
@@ -169,6 +194,16 @@ export function watchChromeRegion(): () => void {
     const t = e.target as Element | null;
     if (t?.closest?.('.menubar, .menubar-hot')) soon();
   };
+  const offLeft = hostOn('pointer.left', () => {
+    letBarGo();
+    soon();
+  });
+  const back = (e: Event) => {
+    if (!barAway()) return;
+    barBack(document, e.target);
+    if (!barAway()) soon();
+  };
+  document.addEventListener('pointermove', back, true);
   const mo = new MutationObserver(soon);
   mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-menubar-auto'] });
@@ -182,6 +217,8 @@ export function watchChromeRegion(): () => void {
   const tick = window.setInterval(soon, 2000);
   soon();
   return () => {
+    offLeft();
+    document.removeEventListener('pointermove', back, true);
     mo.disconnect();
     document.removeEventListener('pointerover', nearBar, true);
     document.removeEventListener('pointerout', nearBar, true);

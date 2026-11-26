@@ -258,8 +258,13 @@ function syncLater() {
         toast('error', tr('set.syncFail'), tr('set.syncFailBody'));
       }
     });
-  }, 1500);
+  }, SYNC_MS);
 }
+
+// On NoCap Desktop the desktop, the top bar and dock, and every app are
+// separate windows that follow the server's copy: they catch up at once,
+// so a new theme or wallpaper doesn't show in one window before the others.
+const SYNC_MS = typeof location !== 'undefined' && /[?&]surface=/.test(location.search) ? 150 : 1500;
 
 /** This page's own tag: its saves come back on the live feed, and are skipped. */
 const WINDOW_TAG = Math.random().toString(36).slice(2, 12) || 'window';
@@ -573,6 +578,7 @@ export function applyPrefs(p: PrefValues) {
   const body = document.body;
   const custom = isCustomWallpaper(wallId) ? loadCustomWallpaper(wallId) : null;
   body.dataset.wallpaper = custom ? 'custom' : wallId;
+  root.toggleAttribute('data-wall-custom', !!custom);
   const bg = custom ? `url("${custom}")` : '';
   // Re-assigning a multi-MB data URL on every slider tick is expensive.
   if (bg !== appliedBg) {

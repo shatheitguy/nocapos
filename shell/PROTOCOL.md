@@ -110,6 +110,7 @@ unknown parameters, wrong types or out-of-range values are refused with
 `brightness.changed`, `network.changed`, `notify.*`, `polkit.request`,
 `polkit.done`, `apps.changed`, `settings.changed`, `app.props` (app),
 `window.state` `{maximized, fullscreen, focused, tiled}` (app),
+`pointer.left` (chrome: the pointer left it for a window under it),
 `files.choose` `{request, multiple, accept: [...]}` (the surface that asked).
 
 ## Picking files

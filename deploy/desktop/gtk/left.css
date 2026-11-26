@@ -1,0 +1,25 @@
+/* NoCap Desktop: window buttons like NoCap OS's own windows (written by NoCapOS; your own gtk.css is never replaced).
+   Coloured dots on the left: close, minimize, maximize; their icons show under the pointer. */
+windowcontrols > button,
+headerbar button.titlebutton {
+  min-width: 13px;
+  min-height: 13px;
+  margin: 0 4px;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  color: transparent;
+}
+windowcontrols > button > image {
+  background: none;
+  box-shadow: none;
+  padding: 0;
+}
+windowcontrols > button.close, headerbar button.titlebutton.close { background: #ff5f57; }
+windowcontrols > button.minimize, headerbar button.titlebutton.minimize { background: #febc2e; }
+windowcontrols > button.maximize, headerbar button.titlebutton.maximize { background: #28c840; }
+windowcontrols:hover > button,
+headerbar:hover button.titlebutton { color: rgba(0, 0, 0, 0.6); }
+windowcontrols:backdrop > button,
+headerbar:backdrop button.titlebutton { background: #4b4d55; }

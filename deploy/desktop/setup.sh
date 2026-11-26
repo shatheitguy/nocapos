@@ -490,6 +490,14 @@ desk_app_windows() {
   fi
   desk_own_file /etc/gtk-3.0/settings.ini "$GTK_BUTTONS"
   desk_own_file /etc/gtk-4.0/settings.ini "$GTK_BUTTONS"
+  # The NoCap window buttons for apps that draw their own title bar: each
+  # person's session copies the right style into their GTK settings
+  # (nocap-wm-style). App Store (Flatpak) apps may read those, read-only.
+  mkdir -p /usr/share/nocapos/gtk
+  install -m 0644 "$DESK_SRC"/gtk/right.css "$DESK_SRC"/gtk/left.css /usr/share/nocapos/gtk/
+  if has flatpak; then
+    flatpak override --system --filesystem=xdg-config/gtk-3.0:ro --filesystem=xdg-config/gtk-4.0:ro >/dev/null 2>&1 || true
+  fi
   return 0
 }
 
