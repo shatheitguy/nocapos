@@ -98,6 +98,7 @@ unknown parameters, wrong types or out-of-range values are refused with
 - `apps.list`, `apps.launch` `{id: *.desktop}` [chrome, desktop] (installed Linux apps)
 - `windows.list`, `windows.focus|minimize|close|maximize` `{id}` [chrome] (the screen's windows)
 - `window.action` `{action: minimize|maximize|restore|close|move|resize-<edge>|fullscreen|unfullscreen}`, `window.title` `{title}` [app]
+- `wm.style` `{buttons: left|right}` [chrome] (other apps' title bars follow Settings → title buttons)
 - `audio.get/set`, `brightness.get/set`, `network.get`, `power.action` [chrome] (`power.action` reboot/poweroff on the greeter)
 - `notify.list|dismiss|invoke|clear|read` [chrome] (other apps' desktop notifications)
 - `files.pick` `{request, paths: [...], urls: [...], names: [...]}` (≤ 256 files), `files.cancel` `{request}` [os] (answers to `files.choose`, below)
