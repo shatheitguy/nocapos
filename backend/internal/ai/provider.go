@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	KindOllama    = "ollama"
-	KindOpenAI    = "openai"
+	KindOllama = "ollama"
+	KindOpenAI = "openai"
 )
 
 type Message struct {
@@ -71,9 +71,9 @@ type MemoryManager interface {
 var KeepAliveOptions = []string{"30m", "2h", "4h", "-1"}
 
 const (
-	DefaultKeepAlive        = "4h"
-	DefaultOllamaContext    = 8192
-	DefaultOpenAIContext    = 128000
+	DefaultKeepAlive     = "4h"
+	DefaultOllamaContext = 8192
+	DefaultOpenAIContext = 128000
 )
 
 // ---------- secret box for API keys ----------
