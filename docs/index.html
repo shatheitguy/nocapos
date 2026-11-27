@@ -3,17 +3,146 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NoCapOS — freedom to do more</title>
-<meta name="description" content="NoCapOS is a full Linux OS built on Debian 13: a native NoCap Desktop on the screen, a web OS from any browser, ZFS storage, a firewall and ad blocker, virtual machines, an App Store, file sharing, backups, AI agents and the NoCap OS phone app. Free and open source (MIT), no data collection.">
+<title>NoCapOS — Free Open-Source Home Server OS, NAS &amp; Personal Cloud (Debian 13)</title>
+<meta name="description" content="NoCapOS is a free, open-source home server OS built on Debian 13: a self-hosted NAS and personal cloud with a web desktop, ZFS storage, firewall and ad blocker, virtual machines, Docker App Store, file sharing, backups, AI agents and a phone app. Runs on PCs and Raspberry Pi. No data collection.">
 <meta name="theme-color" content="#0b0b0e">
 <link rel="canonical" href="https://shatheitguy.github.io/nocapos/">
 <link rel="sitemap" type="application/xml" href="sitemap.xml">
 <meta name="robots" content="index, follow">
 <meta property="og:url" content="https://shatheitguy.github.io/nocapos/">
-<meta property="og:title" content="NoCapOS">
+<meta property="og:title" content="NoCapOS — free open-source home server OS">
+<meta property="og:site_name" content="NoCapOS">
+<meta property="og:locale" content="en_US">
 <meta property="og:description" content="A full Linux OS for your server, your screen and your phone. Built on Debian 13. Free & open source.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://shatheitguy.github.io/nocapos/screenshots/desktop.jpg">
+<meta property="og:image:width" content="1440">
+<meta property="og:image:height" content="900">
+<meta property="og:image:alt" content="The NoCapOS desktop with system widgets and the dock">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@Sha_The_IT_Guy">
+<meta name="twitter:title" content="NoCapOS — free open-source home server OS">
+<meta name="twitter:description" content="Self-hosted NAS and personal cloud on Debian 13, for PCs and Raspberry Pi. Free, MIT licensed, no data collection.">
+<meta name="twitter:image" content="https://shatheitguy.github.io/nocapos/screenshots/desktop.jpg">
+<meta name="author" content="Sharqan Ahamed">
+<meta name="keywords" content="home server OS, NAS OS, self-hosted, personal cloud, homelab, Raspberry Pi server, Debian server, ZFS, Docker app store, open source NAS, web desktop, NoCapOS">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "WebSite",
+ "name": "NoCapOS",
+ "url": "https://shatheitguy.github.io/nocapos/"
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "SoftwareApplication",
+ "name": "NoCapOS",
+ "alternateName": "NoCap OS",
+ "description": "NoCapOS is a free, open-source home server OS built on Debian 13: a self-hosted NAS and personal cloud with a web desktop, ZFS storage, firewall and ad blocker, virtual machines, Docker App Store, file sharing, backups, AI agents and a phone app. Runs on PCs and Raspberry Pi. No data collection.",
+ "url": "https://shatheitguy.github.io/nocapos/",
+ "image": "https://shatheitguy.github.io/nocapos/screenshots/desktop.jpg",
+ "applicationCategory": "OperatingSystem",
+ "applicationSubCategory": "Home server operating system",
+ "operatingSystem": "Linux (Debian 13); amd64, arm64, armv7; Raspberry Pi 4 and 5",
+ "softwareVersion": "0.14",
+ "license": "https://opensource.org/licenses/MIT",
+ "isAccessibleForFree": true,
+ "offers": {
+  "@type": "Offer",
+  "price": "0",
+  "priceCurrency": "USD"
+ },
+ "downloadUrl": "https://github.com/shatheitguy/nocapos/releases/latest",
+ "installUrl": "https://shatheitguy.github.io/nocapos/#download",
+ "codeRepository": "https://github.com/shatheitguy/nocapos",
+ "screenshot": [
+  "https://shatheitguy.github.io/nocapos/screenshots/desktop.jpg",
+  "https://shatheitguy.github.io/nocapos/screenshots/storage.jpg",
+  "https://shatheitguy.github.io/nocapos/screenshots/settings.jpg",
+  "https://shatheitguy.github.io/nocapos/screenshots/linked-devices.jpg",
+  "https://shatheitguy.github.io/nocapos/screenshots/ai-agents.jpg"
+ ],
+ "featureList": [
+  "Web desktop and native desktop",
+  "ZFS storage and file sharing",
+  "Firewall and network ad blocker",
+  "Virtual machines",
+  "Docker App Store",
+  "Backups",
+  "Local AI agents",
+  "Phone app"
+ ],
+ "author": {
+  "@type": "Person",
+  "name": "Sharqan Ahamed",
+  "url": "https://shatheitguy.in",
+  "sameAs": [
+   "https://github.com/shatheitguy",
+   "https://www.youtube.com/@shatheitguy",
+   "https://x.com/Sha_The_IT_Guy",
+   "https://ae.linkedin.com/in/sharqan-ahamed-8555b8169"
+  ]
+ }
+}
+</script>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "What is NoCapOS?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "NoCapOS is a free, open-source Linux operating system for home servers, built on Debian 13. It turns a PC, mini PC or Raspberry Pi into your own personal cloud and NAS, with a desktop on the screen and the same desktop from any web browser."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is NoCapOS free?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. NoCapOS is free and open source under the MIT licence, with no subscription, no account and no data collection."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What hardware does NoCapOS run on?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Any 64-bit PC or mini PC (amd64) with the ISO installer, a Raspberry Pi 4 or 5 with the Pi image, and existing Debian, Ubuntu or Raspberry Pi OS machines (amd64, arm64, armv7) with the one-line installer. It also runs as a Proxmox VE container."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "How do I install NoCapOS on a server I already have?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "On Debian, Ubuntu or Raspberry Pi OS, run: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash. It picks the right build for your CPU, checks its SHA-256 checksum and starts the nocapos service."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What can a NoCapOS home server do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Store and share files on ZFS, back them up, block ads and trackers for your whole network, run virtual machines and Docker apps from an App Store, manage users, and link your phone for notifications, files and clipboard."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Is NoCapOS an alternative to other NAS operating systems?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. It covers the same home NAS and home lab jobs, storage, sharing, apps and backups, and adds a full desktop, a phone app and local AI agents, all open source."
+   }
+  }
+ ]
+}
+</script>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="assets/brand-mark.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -199,6 +328,13 @@ footer a:hover{color:#fff}
   footer{margin-top:64px}
   footer .wrap{flex-direction:column;text-align:center}
 }
+.faqs{display:grid;gap:10px;max-width:860px;margin:0 auto}
+.faq{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:16px 20px}
+.faq summary{cursor:pointer;font-weight:600;font-size:17px;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";float:right;color:var(--red);font-weight:700}
+.faq[open] summary::after{content:"–"}
+.faq p{margin-top:10px;color:var(--text2)}
 </style>
 </head>
 <body>
@@ -401,6 +537,21 @@ footer a:hover{color:#fff}
       <tr><td><code>--uninstall</code></td><td>Remove NoCapOS; your files are never deleted (<code>--purge</code> also removes accounts and settings)</td></tr>
     </table></div>
   </details>
+</section>
+
+<section id="faq" class="wrap">
+  <div class="head">
+    <h2>Questions, <span>answered.</span></h2>
+    <p>The short version of what NoCapOS is and how to get it running.</p>
+  </div>
+  <div class="faqs">
+    <details class="faq"><summary>What is NoCapOS?</summary><p>NoCapOS is a free, open-source Linux operating system for home servers, built on Debian 13. It turns a PC, mini PC or Raspberry Pi into your own personal cloud and NAS, with a desktop on the screen and the same desktop from any web browser.</p></details>
+    <details class="faq"><summary>Is NoCapOS free?</summary><p>Yes. NoCapOS is free and open source under the MIT licence, with no subscription, no account and no data collection.</p></details>
+    <details class="faq"><summary>What hardware does NoCapOS run on?</summary><p>Any 64-bit PC or mini PC (amd64) with the ISO installer, a Raspberry Pi 4 or 5 with the Pi image, and existing Debian, Ubuntu or Raspberry Pi OS machines (amd64, arm64, armv7) with the one-line installer. It also runs as a Proxmox VE container.</p></details>
+    <details class="faq"><summary>How do I install NoCapOS on a server I already have?</summary><p>On Debian, Ubuntu or Raspberry Pi OS, run: curl -fsSL https://github.com/shatheitguy/nocapos/releases/latest/download/install.sh | sudo bash. It picks the right build for your CPU, checks its SHA-256 checksum and starts the nocapos service.</p></details>
+    <details class="faq"><summary>What can a NoCapOS home server do?</summary><p>Store and share files on ZFS, back them up, block ads and trackers for your whole network, run virtual machines and Docker apps from an App Store, manage users, and link your phone for notifications, files and clipboard.</p></details>
+    <details class="faq"><summary>Is NoCapOS an alternative to other NAS operating systems?</summary><p>Yes. It covers the same home NAS and home lab jobs, storage, sharing, apps and backups, and adds a full desktop, a phone app and local AI agents, all open source.</p></details>
+  </div>
 </section>
 
 <section id="privacy" class="wrap">
