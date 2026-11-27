@@ -13,7 +13,7 @@ const CONTEXTS = [4096, 8192, 16384, 32768];
 
 const blank: ProviderInput = { name: '', kind: 'ollama', base_url: 'http://127.0.0.1:11434', api_key: '', default_model: '', keep_alive: '4h', context_size: 8192 };
 
-/** Admin panel: configure AI providers (local Ollama, Provider, OpenAI-compatible). */
+/** Admin panel: configure AI providers (local Ollama, OpenAI-compatible). */
 export function Providers({ providers, isAdmin, onChanged }: { providers: Provider[]; isAdmin: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState<{ id: string | null; form: ProviderInput } | null>(null);
 
@@ -72,7 +72,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
           <label>
             Type
             <div className="segmented wide">
-              {(['ollama', 'provider', 'openai'] as ProviderKind[]).map((k) => (
+              {(['ollama', 'openai'] as ProviderKind[]).map((k) => (
                 <button key={k} type="button" className={f.kind === k ? 'on' : ''} onClick={() => set({ kind: k })}>
                   {kindLabel(k)}
                 </button>
@@ -83,7 +83,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
             Name
             <input value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Local Ollama" />
           </label>
-          {f.kind !== 'provider' && (
+          {(
             <label>
               Server address
               <input
@@ -100,7 +100,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
             </label>
           )}
           <label>
-            Default model {f.kind === 'provider' && <span className="muted small">(e.g. ai-opus-5-5)</span>}
+            Default model
             <input value={f.default_model} onChange={(e) => set({ default_model: e.target.value })} placeholder={f.kind === 'ollama' ? 'llama3.1' : ''} />
           </label>
           {f.kind === 'ollama' && (
@@ -151,7 +151,7 @@ export function Providers({ providers, isAdmin, onChanged }: { providers: Provid
         </div>
         {providers.length === 0 ? (
           <p className="muted small">
-            No providers yet. Add a local Ollama server, Provider, or any OpenAI-compatible API.
+            No providers yet. Add a local Ollama server or any OpenAI-compatible API.
           </p>
         ) : (
           providers.map((p) => (

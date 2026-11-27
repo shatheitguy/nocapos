@@ -2,7 +2,7 @@
 CREATE TABLE ai_providers (
     id            TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
-    kind          TEXT NOT NULL CHECK (kind IN ('ollama', 'provider', 'openai')),
+    kind          TEXT NOT NULL CHECK (kind IN ('ollama', 'openai')),
     base_url      TEXT NOT NULL DEFAULT '',
     api_key_enc   BLOB,
     default_model TEXT NOT NULL DEFAULT '',

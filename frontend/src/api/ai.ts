@@ -1,7 +1,7 @@
 import { api, getAccessToken, refresh } from './client';
 import { tr } from '../i18n';
 
-export type ProviderKind = 'ollama' | 'provider' | 'openai';
+export type ProviderKind = 'ollama' | 'openai';
 
 export interface Provider {
   id: string;
@@ -174,5 +174,5 @@ export async function sendMessage(conversationId: string, text: string, cb: Send
 }
 
 export function kindLabel(kind: ProviderKind): string {
-  return kind === 'ollama' ? 'Ollama (local)' : kind === 'provider' ? 'Provider' : 'OpenAI-compatible';
+  return kind === 'ollama' ? 'Ollama (local)' : 'OpenAI-compatible';
 }

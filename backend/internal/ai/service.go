@@ -93,9 +93,9 @@ func (s *Service) Providers(ctx context.Context) ([]ProviderView, error) {
 func (s *Service) SaveProvider(ctx context.Context, id string, in ProviderInput) (*ProviderView, error) {
 	in.Name, in.BaseURL, in.DefaultModel = strings.TrimSpace(in.Name), strings.TrimSpace(in.BaseURL), strings.TrimSpace(in.DefaultModel)
 	switch in.Kind {
-	case KindOllama, KindProvider, KindOpenAI:
+	case KindOllama, KindOpenAI:
 	default:
-		return nil, fmt.Errorf("%w: kind must be ollama, provider or openai", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: kind must be ollama or openai", ErrInvalidInput)
 	}
 	if in.Name == "" || len(in.Name) > 80 {
 		return nil, fmt.Errorf("%w: name is required (max 80 characters)", ErrInvalidInput)
@@ -138,9 +138,6 @@ func (s *Service) SaveProvider(ctx context.Context, id string, in ProviderInput)
 	}
 	if k := strings.TrimSpace(in.APIKey); k != "" {
 		p.APIKeyEnc = s.box.Seal(k)
-	}
-	if p.Kind == KindProvider && len(p.APIKeyEnc) == 0 {
-		return nil, fmt.Errorf("%w: Provider needs an API key", ErrInvalidInput)
 	}
 	var err error
 	if id == "" {
@@ -193,8 +190,6 @@ func (s *Service) client(p *store.AIProvider) (Provider, error) {
 	switch p.Kind {
 	case KindOllama:
 		return newOllama(p.BaseURL), nil
-	case KindProvider:
-		return newProvider(p.BaseURL, key), nil
 	case KindOpenAI:
 		return newOpenAICompat(p.BaseURL, key), nil
 	default:
@@ -209,12 +204,7 @@ func (s *Service) pickModel(p *store.AIProvider, requested string) string {
 	if p.DefaultModel != "" {
 		return p.DefaultModel
 	}
-	switch p.Kind {
-	case KindProvider:
-		return DefaultProviderModel
-	default:
-		return ""
-	}
+	return ""
 }
 
 // Models lists a provider's models, cached briefly so the UI can poll.

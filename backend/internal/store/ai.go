@@ -11,7 +11,7 @@ import (
 type AIProvider struct {
 	ID           string
 	Name         string
-	Kind         string // ollama | provider | openai
+	Kind         string // ollama | openai
 	BaseURL      string
 	APIKeyEnc    []byte // AES-GCM sealed; never leaves the server
 	DefaultModel string

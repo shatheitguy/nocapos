@@ -1,4 +1,4 @@
-// Package ai runs the AI Assistant: provider clients (local Ollama, Provider,
+// Package ai runs the AI Assistant: provider clients (local Ollama and
 // OpenAI-compatible APIs), chat orchestration with saved history, context
 // window management and long-term memory.
 package ai
@@ -16,7 +16,6 @@ import (
 
 const (
 	KindOllama    = "ollama"
-	KindProvider = "provider"
 	KindOpenAI    = "openai"
 )
 
@@ -75,8 +74,6 @@ const (
 	DefaultKeepAlive        = "4h"
 	DefaultOllamaContext    = 8192
 	DefaultOpenAIContext    = 128000
-	DefaultProviderContext = 200000
-	DefaultProviderModel   = "ai-opus-5-5"
 )
 
 // ---------- secret box for API keys ----------
